@@ -1,0 +1,481 @@
+{
+  "name": "hue-console",
+  "displayName": "DevSnip Pro",
+  "description": "🚀 Generate Custom Snippets and Preloaded Multi-Language Snippet Support.",
+  "version": "8.36.92",
+  "license": "MIT",
+  "author": "Sayaib Sarkar",
+  "publisher": "sayaib",
+  "icon": "logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/sayaib.osl/prism-snippets-and-logger"
+  },
+  "engines": {
+    "vscode": "^1.86.0"
+  },
+  "galleryBanner": {
+    "color": "#101D26",
+    "theme": "dark"
+  },
+  "sponsor": {
+    "url": "https://github.com/sponsors/sayaib"
+  },
+  "categories": [
+    "Snippets"
+  ],
+  "keywords": [
+    "code snippets",
+    "javascript code snippets",
+    "snippets",
+    "code",
+    "programming",
+    "language",
+    "all-languages",
+    "autocomplete",
+    "productivity",
+    "developer-tools",
+    "templates",
+    "boilerplate",
+    "multi-language",
+    "web-development",
+    "backend",
+    "frontend",
+    "java",
+    "python",
+    "javascript",
+    "typescript",
+    "csharp",
+    "c++",
+    "html",
+    "css",
+    "php",
+    "ruby",
+    "go",
+    "kotlin",
+    "dart",
+    "flutter",
+    "react",
+    "angular",
+    "vue",
+    "swift",
+    "rust",
+    "shell",
+    "bash",
+    "yaml",
+    "json",
+    "markdown",
+    "sql",
+    "database",
+    "framework",
+    "tools",
+    "coding",
+    "code snippets",
+    "code examples",
+    "programming snippets",
+    "developer tools",
+    "snippet manager",
+    "reusable code",
+    "programming resources",
+    "coding best practices",
+    "syntax highlighting",
+    "auto-complete code",
+    "multi-language support",
+    "JavaScript snippets",
+    "Python snippets",
+    "Java snippets",
+    "C# snippets",
+    "PHP snippets",
+    "Ruby snippets",
+    "HTML snippets",
+    "CSS snippets",
+    "Swift snippets",
+    "Kotlin snippets",
+    "Go snippets",
+    "TypeScript snippets",
+    "React snippets",
+    "Angular snippets",
+    "Vue.js snippets",
+    "Node.js snippets",
+    "Django snippets",
+    "Flask snippets",
+    "ASP.NET snippets",
+    "mobile development snippets",
+    "web development tools",
+    "debugging tools",
+    "performance optimization code",
+    "algorithm examples",
+    "data structure examples",
+    "machine learning code examples",
+    "API integration code examples",
+    "database queries snippets",
+    "RESTful API code examples",
+    "GraphQL code examples",
+    "unit testing code examples",
+    "integration testing code examples",
+    "front-end development snippets",
+    "back-end development snippets",
+    "full-stack development tools",
+    "version control integration tools",
+    "Git commands snippets",
+    "shell scripting examples",
+    "automation scripts examples",
+    "DevOps tools snippets",
+    "cloud computing code examples",
+    "containerization code examples",
+    "microservices architecture examples",
+    "data visualization code examples",
+    "data analysis scripts",
+    "data processing scripts",
+    "web scraping scripts",
+    "game development code examples",
+    "desktop application code examples",
+    "IoT device programming",
+    "embedded systems programming",
+    "blockchain development snippets",
+    "smart contract examples",
+    "cryptocurrency API integration",
+    "natural language processing code",
+    "image processing scripts",
+    "video processing scripts",
+    "UI/UX design code examples",
+    "responsive design techniques",
+    "CSS grid layout examples",
+    "CSS flexbox layout examples",
+    "JavaScript ES6 features",
+    "Java concurrency examples",
+    "C# LINQ queries",
+    "Python decorators",
+    "Python generators",
+    "Python context managers",
+    "JavaScript async/await patterns",
+    "React hooks examples",
+    "Angular services and components",
+    "Vue.js directives and components",
+    "Node.js middleware functions",
+    "Django models and views",
+    "Flask routing and templates",
+    "PHP OOP principles"
+  ],
+  "contributes": {
+    "languages": [],
+    "snippets": [
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_js.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_js.json"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/snippets_js.json"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/snippets_php.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_react.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_nodejs.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_react_query.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_react_redux.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_react_router.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_typescript.json"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./snippets/snippets_typescript.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_react.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_react_query.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_react_redux.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_react_router.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_javascript.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_mongoaggr.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_mongodb.json"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/snippets_html.json"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/snippets_html.json"
+      },
+      {
+        "language": "ruby",
+        "path": "./snippets/snippets_html.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/snippets_html.json"
+      },
+      {
+        "language": "python",
+        "path": "./snippets/snippets_python.json"
+      },
+      {
+        "language": "dart",
+        "path": "./snippets/snippets_flutter.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./custom/custom_typescript.json"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./custom/custom_typescriptreact.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./custom/custom_javascript.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./custom/custom_javascriptreact.json"
+      },
+      {
+        "language": "html",
+        "path": "./custom/custom_html.json"
+      },
+      {
+        "language": "css",
+        "path": "./custom/custom_css.json"
+      },
+      {
+        "language": "scss",
+        "path": "./custom/custom_scss.json"
+      },
+      {
+        "language": "json",
+        "path": "./custom/custom_json.json"
+      },
+      {
+        "language": "yaml",
+        "path": "./custom/custom_yaml.json"
+      },
+      {
+        "language": "markdown",
+        "path": "./custom/custom_markdown.json"
+      },
+      {
+        "language": "python",
+        "path": "./custom/custom_python.json"
+      },
+      {
+        "language": "java",
+        "path": "./custom/custom_java.json"
+      },
+      {
+        "language": "c",
+        "path": "./custom/custom_c.json"
+      },
+      {
+        "language": "cpp",
+        "path": "./custom/custom_cpp.json"
+      },
+      {
+        "language": "csharp",
+        "path": "./custom/custom_csharp.json"
+      },
+      {
+        "language": "php",
+        "path": "./custom/custom_php.json"
+      },
+      {
+        "language": "ruby",
+        "path": "./custom/custom_ruby.json"
+      },
+      {
+        "language": "go",
+        "path": "./custom/custom_go.json"
+      },
+      {
+        "language": "shellscript",
+        "path": "./custom/custom_shellscript.json"
+      },
+      {
+        "language": "bat",
+        "path": "./custom/custom_bat.json"
+      },
+      {
+        "language": "powershell",
+        "path": "./custom/custom_powershell.json"
+      },
+      {
+        "language": "swift",
+        "path": "./custom/custom_swift.json"
+      },
+      {
+        "language": "rust",
+        "path": "./custom/custom_rust.json"
+      },
+      {
+        "language": "dart",
+        "path": "./custom/custom_dart.json"
+      },
+      {
+        "language": "lua",
+        "path": "./custom/custom_lua.json"
+      },
+      {
+        "language": "sql",
+        "path": "./custom/custom_sql.json"
+      },
+      {
+        "language": "r",
+        "path": "./custom/custom_r.json"
+      },
+      {
+        "language": "perl",
+        "path": "./custom/custom_perl.json"
+      },
+      {
+        "language": "xml",
+        "path": "./custom/custom_xml.json"
+      },
+      {
+        "language": "plaintext",
+        "path": "./custom/custom_plaintext.json"
+      },
+      {
+        "language": "log",
+        "path": "./custom/custom_log.json"
+      },
+      {
+        "language": "ini",
+        "path": "./custom/custom_ini.json"
+      },
+      {
+        "language": "dockerfile",
+        "path": "./custom/custom_dockerfile.json"
+      },
+      {
+        "language": "toml",
+        "path": "./custom/custom_toml.json"
+      },
+      {
+        "language": "makefile",
+        "path": "./custom/custom_makefile.json"
+      },
+      {
+        "language": "gradle",
+        "path": "./custom/custom_gradle.json"
+      },
+      {
+        "language": "groovy",
+        "path": "./custom/custom_groovy.json"
+      },
+      {
+        "language": "vb",
+        "path": "./custom/custom_vb.json"
+      },
+      {
+        "language": "coffeescript",
+        "path": "./custom/custom_coffeescript.json"
+      },
+      {
+        "language": "vue",
+        "path": "./custom/custom_vue.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "sayaib.hue-console.showSnippets",
+        "title": " 🚀 DevSnip Pro: Show Custom Snippets"
+      },
+      {
+        "command": "sayaib.hue-console.createCustomSnippet",
+        "title": "🚀 DevSnip Pro: Create Your Own Perfect Code Snippet"
+      },
+      {
+        "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
+        "title": "🚀 DevSnip Pro: List and Remove Console Logs"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "sayaib.hue-console.createCustomSnippet",
+          "group": "navigation"
+        },
+        {
+          "command": "sayaib.hue-console.showSnippets",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        }
+      ]
+    }
+  },
+  "activationEvents": [
+    "onCommand:extension.snippet-test",
+    "onCommand:extension.showSnippets"
+  ],
+  "browser": "./out/extention.js",
+  "main": "./out/extention.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.60.0",
+    "@types/glob": "^7.1.3",
+    "@types/mocha": "^8.2.2",
+    "@types/node": "14.x",
+    "eslint": "^7.27.0",
+    "@typescript-eslint/eslint-plugin": "^4.26.0",
+    "@typescript-eslint/parser": "^4.26.0",
+    "glob": "^7.1.7",
+    "mocha": "^8.4.0",
+    "typescript": "^4.3.2",
+    "vscode-test": "^1.5.2"
+  }
+}
