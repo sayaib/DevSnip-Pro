@@ -166,14 +166,7 @@ function generateWebviewContent(snippetsData) {
     <td>✅ ES6</td>
     <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/ES6">Click Here</a></td>
   </tr>
-  <tr>
-    <td>✅ MongoDB</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongodb">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ Mongo Aggregation</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongo-aggregation">Click Here</a></td>
-  </tr>
+
 </table>
 
     </div>

@@ -84,7 +84,7 @@
 
 ## Version 7.33.86 && 7.33.87 - 2024-12-23
 
-- Updated the reactJS , MongoDB and MongoDB aggregation snippets with more snippets example.
+- Updated the reactJS snippets with more snippets example.
 
 ## Version 7.32.86 - 2024-12-19
 

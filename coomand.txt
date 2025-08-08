@@ -19,11 +19,7 @@
           "group": "navigation",
           "when": "editorTextFocus"
         },
-        {
-          "command": "sayaib.hue-console.connectMongoDB",
-          "group": "navigation",
-          "when": "editorTextFocus"
-        },
+
         {
           "command": "sayaib.hue-console.openGUI",
           "group": "navigation",

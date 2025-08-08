@@ -1,7 +1,7 @@
 {
   "name": "hue-console",
   "displayName": "DevSnip Pro",
-  "description": "⚡The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.",
+  "description": "⚡The ultimate toolkit for API testing, console log cleanup, and snippet management in VS Code.",
   "version": "10.43.126",
   "license": "MIT",
   "author": "Sayaib Sarkar",
@@ -188,14 +188,7 @@
         "language": "javascript",
         "path": "./snippets/snippets_javascript.json"
       },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_mongoaggr.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_mongodb.json"
-      },
+
       {
         "language": "javascript",
         "path": "./snippets/snippets_html.json"
@@ -534,14 +527,12 @@
         "command": "sayaib.hue-console.captureCode",
         "title": "📸 DevSnip Pro: Create a Code Snapshot."
       },
-      {
-        "command": "sayaib.hue-console.connectMongoDB",
-        "title": "🛢 DevSnip Pro: MongoDB "
-      },
+
       {
         "command": "sayaib.hue-console.openGUI",
         "title": "🛢 DevSnip Pro: Rest API Client "
       }
+
     ],
     "viewsContainers": {
       "activitybar": [
@@ -593,7 +584,6 @@
     "@vscode/vsce": "^3.6.0",
     "axios": "^1.8.3",
     "dom-to-image": "^2.6.0",
-    "file-saver": "^2.0.5",
-    "mongodb": "^6.13.0"
+    "file-saver": "^2.0.5"
   }
 }

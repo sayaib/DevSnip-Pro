@@ -9,7 +9,7 @@
 <img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/react_icon.png" alt="ReactJS" width="35" height="35" />
 <img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/javascript_icon.png" alt="JavaScript" width="35" height="35" />
 <img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/typescript_icon.png" alt="TypeScript" width="35" height="35" />
-<img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/mongodb_icon.png" alt="MongoDB" width="35" height="35" />
+
 <img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/html_icon.png" alt="HTML" width="35" height="35" />
 <img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/python_icon.png" alt="Python" width="35" height="35" />
 <img src="https://gitlab.com/sayaib.osl/opensource/-/raw/main/icon/flutter_icon.png" alt="Flutter" width="35" height="35" />
@@ -21,7 +21,7 @@
 # Extension Features
 
 1. [🌏 Test REST API](#test-rest-apis-using-devsnip-pro)
-1. [💽 Connect MongoDB Database](#connect-mongodb-database-using-devsnip-pro)
+
 1. [🚀 One-Click Console Log Cleanup](#search--delete-console-logs-in-the-entire-project-with-devsnip-pro)
 1. [📸 Take a snapshot of your code](#take-code-snap-shot-with-devsnip-pro)
 1. [✨ Effortless Custom Snippet Creation ](#how-to-create-and-use-custom-snippets-with-devsnip-pro)
@@ -38,9 +38,7 @@
 
 ![Rest API Test](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/restapi.gif)
 
-## Connect MongoDB Database using DevSnip Pro.
 
-![Connect mongoDB](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/mongodb.gif)
 
 ## Search & Delete console logs in the entire project with DevSnip Pro.
 
@@ -85,8 +83,7 @@ Now you can easily create and use your own perfect code snippets with 🚀 DevSn
 | ✅ Flutter           | <div align="center">[Click Here](https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/flutter)</div>           |
 | ✅ Node.js           | <div align="center">[Click Here](https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/nodejs)</div>            |
 | ✅ ES6               | <div align="center">[Click Here](https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/ES6)</div>               |
-| ✅ MongoDB           | <div align="center">[Click Here](https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongodb)</div>           |
-| ✅ Mongo Aggregation | <div align="center">[Click Here](https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongo-aggregation)</div> |
+
 
 ## Screenshots
 
@@ -97,7 +94,7 @@ Now you can easily create and use your own perfect code snippets with 🚀 DevSn
 | **React Snippets**            | ![React Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/react.gif)            |
 | **Javascript (ES6) Snippets** | ![Javascript Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/javascript.gif)  |
 | **TypeScript Snippets**       | ![TypeScript Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/typescript.gif)  |
-| **Mongo Snippets**            | ![Mongo  Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/mongo.gif)           |
+
 | **HTML5 Snippets**            | ![HTML5 Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/html.gif)             |
 | **Python Snippets**           | ![Python Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/python.gif)          |
 | **Flutter Snippets**          | ![Flutter Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/flutter.gif)        |
@@ -144,11 +141,7 @@ Essential ES6 JavaScript snippets for streamlined coding. These snippets include
 
 Key TypeScript snippets for enhancing your code with type safety. This collection includes type definitions, interfaces, generics, decorators, and utility types, making it easier to manage complex TypeScript projects and reduce runtime errors.
 
-## MongoDB Snippets
 
-![MongoDB Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/mongo.gif)
-
-Useful snippets for simplifying MongoDB aggregation tasks. These snippets provide templates for common aggregation operations like `$match`, `$group`, `$project`, `$sort`, and more, helping you to write efficient and effective MongoDB queries.
 
 ## HTML5 Snippets
 
