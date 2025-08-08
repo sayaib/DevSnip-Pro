@@ -11,35 +11,68 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerListAndRemoveConsoleLogsCommand = void 0;
 const vscode = require("vscode");
+const fs = require("fs/promises");
+const path = require("path");
 function registerListAndRemoveConsoleLogsCommand(context) {
     const command = vscode.commands.registerCommand("sayaib.hue-console.listAndRemoveConsoleLogs", () => __awaiter(this, void 0, void 0, function* () {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) {
+        if (!vscode.workspace.workspaceFolders) {
             vscode.window.showErrorMessage("No workspace is open.");
             return;
         }
-        const allConsoleLogs = [];
         const panel = vscode.window.createWebviewPanel("listConsoleLogs", "List Console Logs", vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = generateWebviewContentConsoleLoading("Analyzing your project to retrieve all console logs. Please wait...");
-        for (const folder of workspaceFolders) {
-            const files = yield vscode.workspace.findFiles(new vscode.RelativePattern(folder, "**/*.{ts,tsx,js,jsx}"), "**/node_modules/**");
-            for (const file of files) {
-                const document = yield vscode.workspace.openTextDocument(file);
-                const text = document.getText();
-                const regex = /console\.log\(([\s\S]*?)\);/g;
+        const iconPath = path.resolve(context.extensionPath, "logo.png");
+        panel.iconPath = vscode.Uri.file(iconPath);
+        panel.webview.html = generateWebviewContentConsoleLoading("Searching for console logs. Please wait...");
+        const allConsoleLogs = [];
+        // Define file search pattern
+        const searchPattern = "**/*.{ts,tsx,js,jsx,php,html}";
+        const excludePattern = "{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/coverage/**,**/temp/**,**/.next/**}";
+        // Fast file search
+        const files = yield vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], searchPattern), excludePattern);
+        // Optimized log search
+        yield Promise.all(files.map((file) => __awaiter(this, void 0, void 0, function* () {
+            // try {
+            //   const content = await fs.readFile(file.fsPath, "utf8");
+            //   // const regex = /console\.log\s*\((.*)\);?/g;
+            //   const regex = /console\.log\s*\(([\s\S]*?)\);?/g;
+            //   let match;
+            //   let lineNumber = 0;
+            //   const lines = content.split("\n");
+            //   for (const line of lines) {
+            //     match = regex.exec(line);
+            //     if (match) {
+            //       allConsoleLogs.push({
+            //         filePath: file.fsPath,
+            //         lineNumber,
+            //         text: match[0],
+            //       });
+            //     }
+            //     lineNumber++;
+            //   }
+            // } catch (error) {
+            //   console.error(`Error reading file ${file.fsPath}:`, error);
+            // }
+            try {
+                const content = yield fs.readFile(file.fsPath, "utf8");
+                const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
                 let match;
-                while ((match = regex.exec(text)) !== null) {
-                    const lineNumber = document.positionAt(match.index).line;
+                while ((match = regex.exec(content)) !== null) {
+                    // Get line number by counting newlines before the match
+                    const beforeMatch = content.substring(0, match.index);
+                    const lineNumber = beforeMatch.split("\n").length;
                     allConsoleLogs.push({
                         filePath: file.fsPath,
-                        lineNumber,
+                        lineNumber: lineNumber,
                         text: match[0],
                     });
                 }
             }
-        }
+            catch (error) {
+                console.error(`Error reading file ${file.fsPath}:`, error);
+            }
+        })));
         if (allConsoleLogs.length === 0) {
-            panel.webview.html = generateWebviewContentConsoleLoading("Great job! No `console.log` statements were found in your project. You've successfully optimized your project's performance!");
+            panel.webview.html = generateWebviewContentConsoleLoading("No `console.log` statements found.");
             vscode.window.showInformationMessage("No console.log statements found.");
             return;
         }
@@ -47,47 +80,103 @@ function registerListAndRemoveConsoleLogsCommand(context) {
         panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
             console.log(message);
             if (message.command === "removeSelectedLogs") {
-                yield removeSelectedLogs(message.selectedLogs);
+                yield removeSelectedLogs(message.selectedLogs, panel);
             }
             else if (message.command === "removeAllLogs") {
-                console.log(allConsoleLogs);
-                yield removeSelectedLogs(allConsoleLogs);
+                yield removeSelectedLogs(allConsoleLogs, panel);
             }
         }), undefined, context.subscriptions);
     }));
     context.subscriptions.push(command);
 }
 exports.registerListAndRemoveConsoleLogsCommand = registerListAndRemoveConsoleLogsCommand;
-function removeSelectedLogs(selectedLogs) {
+// **Optimized Remove Function**
+// async function removeSelectedLogs(
+//   selectedLogs: ConsoleLog[],
+//   panel: vscode.WebviewPanel
+// ) {
+//   const workspaceEdit = new vscode.WorkspaceEdit();
+//   for (const log of selectedLogs) {
+//     try {
+//       const uri = vscode.Uri.file(log.filePath);
+//       const document = await vscode.workspace.openTextDocument(uri);
+//       const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
+//       workspaceEdit.delete(uri, line.range);
+//     } catch (error) {
+//       console.error(`Error processing log in file ${log.filePath}:`, error);
+//     }
+//   }
+//   await vscode.workspace.applyEdit(workspaceEdit);
+//   vscode.window.showInformationMessage(
+//     `Removed ${selectedLogs.length} console.log statements.`
+//   );
+//   // Re-fetch the updated list of console logs
+//   const updatedConsoleLogs = await fetchConsoleLogs();
+//   // Update the webview content with the updated list
+//   panel.webview.html = generateWebviewContentConsole(updatedConsoleLogs);
+// }
+function removeSelectedLogs(selectedLogs, panel) {
     return __awaiter(this, void 0, void 0, function* () {
+        const workspaceEdit = new vscode.WorkspaceEdit();
+        // Track the files that have been modified
+        const modifiedFiles = new Set();
         for (const log of selectedLogs) {
             try {
-                const document = yield vscode.workspace.openTextDocument(log.filePath);
-                const editor = yield vscode.window.showTextDocument(document, {
-                    preview: false,
-                });
-                // Fetch the line text and range
-                const actualLineText = document.lineAt(log.lineNumber).text;
-                const actualLineRange = document.lineAt(log.lineNumber).range;
-                console.log(`Processing file: ${log.filePath}`);
-                console.log(`Expected log text: "${log.text.trim()}"`);
-                console.log(`Actual line text: "${actualLineText.trim()}"`);
-                // Match the expected text with the actual line text
-                if (actualLineText.includes(log.text.trim())) {
-                    yield editor.edit((editBuilder) => {
-                        editBuilder.delete(actualLineRange);
-                    });
-                    console.log(`Removed log at line ${log.lineNumber + 1}`);
-                }
-                else {
-                    console.log(`No match for log at line ${log.lineNumber + 1}`);
-                }
+                const uri = vscode.Uri.file(log.filePath);
+                const document = yield vscode.workspace.openTextDocument(uri);
+                const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
+                workspaceEdit.delete(uri, line.range);
+                // Add the file to the set of modified files
+                modifiedFiles.add(log.filePath);
             }
             catch (error) {
                 console.error(`Error processing log in file ${log.filePath}:`, error);
             }
         }
+        // Apply the workspace edit
+        yield vscode.workspace.applyEdit(workspaceEdit);
+        // Save all modified files
+        for (const filePath of modifiedFiles) {
+            const uri = vscode.Uri.file(filePath);
+            const document = yield vscode.workspace.openTextDocument(uri);
+            yield document.save();
+        }
         vscode.window.showInformationMessage(`Removed ${selectedLogs.length} console.log statements.`);
+        // Re-fetch the updated list of console logs
+        const updatedConsoleLogs = yield fetchConsoleLogs();
+        // Update the webview content with the updated list
+        panel.webview.html = generateWebviewContentConsole(updatedConsoleLogs);
+    });
+}
+function fetchConsoleLogs() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const allConsoleLogs = [];
+        if (!vscode.workspace.workspaceFolders) {
+            return allConsoleLogs;
+        }
+        const searchPattern = "**/*.{ts,tsx,js,jsx,php,html}";
+        const excludePattern = "{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/coverage/**,**/temp/**,**/.next/**}";
+        const files = yield vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], searchPattern), excludePattern);
+        yield Promise.all(files.map((file) => __awaiter(this, void 0, void 0, function* () {
+            try {
+                const content = yield fs.readFile(file.fsPath, "utf8");
+                const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
+                let match;
+                while ((match = regex.exec(content)) !== null) {
+                    const beforeMatch = content.substring(0, match.index);
+                    const lineNumber = beforeMatch.split("\n").length;
+                    allConsoleLogs.push({
+                        filePath: file.fsPath,
+                        lineNumber: lineNumber,
+                        text: match[0],
+                    });
+                }
+            }
+            catch (error) {
+                console.error(`Error reading file ${file.fsPath}:`, error);
+            }
+        })));
+        return allConsoleLogs;
     });
 }
 function generateWebviewContentConsoleLoading(message) {
@@ -279,32 +368,249 @@ function generateWebviewContentConsole(consoleLogs) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Viewer</title>
     <style>
+        /* General Styles */
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
             margin: 0;
             background-color: #0C1118;
             color: #FFFFFF;
             text-align: center;
         }
+
         h1 {
             margin-top: 30px;
             font-size: 2rem;
             color: #FFFFFF;
+            font-weight: 600;
         }
+
         h1 span {
             color: #19C8D9;
         }
+
+        /* Search Input */
         #searchInput {
             margin: 20px auto;
             width: 80%;
-            padding: 10px;
-            border-radius: 5px;
-            border: none;
+            max-width: 600px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid #273341;
+            background-color: #1C2630;
+            color: #FFFFFF;
             font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #searchInput:focus {
+            border-color: #19C8D9;
+        }
+
+        /* Table Styles */
+        table {
+            width: 95%;
+            max-width: 1200px;
+            margin: 30px auto;
+            border-collapse: collapse;
+            background-color: #1C2630;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        thead {
+            background-color: #273341;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid #303A45;
+        }
+
+        th {
+            font-weight: 600;
+            color: #19C8D9;
+        }
+
+        tbody tr:hover {
+            background-color: #303A45;
+            transition: background-color 0.3s;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Button Styles */
+        button {
+            background-color: #A61E1E;
+            color: white;
+            font-weight: bold;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #8A1A1A;
+        }
+
+        .remove-log-btn {
+            background-color: #273341;
+            color: #FFFFFF;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: 1px solid #19C8D9;
+            transition: background-color 0.3s;
+        }
+
+        .remove-log-btn:hover {
+            background-color: #19C8D9;
             color: #0C1118;
         }
-        table {
-            width: 90%;
+
+
+
+
+        /* Container for Actions */
+        .actions {
+            margin-top: 20px;
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Active <span>Console Log Statements</span> in the Project</h1>
+    <input type="text" id="searchInput" placeholder="Search logs..." oninput="filterTable()"/>
+
+    <div class="container">
+        <table id="consoleTable">
+            <thead>
+                <tr>
+                    <th>Sr. No.</th>
+                    <th>Action</th>
+                    <th>File Path</th>
+                    <th>Line Number</th>
+                    <th>Log Text</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${consoleLogs
+        .map((log, key) => `
+                        <tr>
+                            <td>${key + 1}</td>
+                            <td><button class="remove-log-btn" data-log='${JSON.stringify(log)}'>Remove</button></td>
+                            <td>${log.filePath}</td>
+                            <td>${log.lineNumber + 1}</td>
+                            <td><pre>${log.text}</pre></td>
+                        </tr>`)
+        .join("")}
+            </tbody>
+        </table>
+
+        <div class="actions">
+            <button type="button" onclick="removeAllLogs()">Remove All Logs</button>
+        </div>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        function filterTable() {
+            const searchInput = document.getElementById("searchInput").value.trim();
+            const rows = document.querySelectorAll("#consoleTable tbody tr");
+            const regex = new RegExp(searchInput, "i");
+
+            rows.forEach((row) => {
+                const cells = Array.from(row.querySelectorAll("td"));
+                const matches = cells.some((cell) => regex.test(cell.textContent));
+                row.style.display = matches ? "" : "none";
+            });
+        }
+
+        document.querySelectorAll('.remove-log-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const log = JSON.parse(this.getAttribute('data-log'));
+                const selectedLogs = [{
+                    lineNumber: log.lineNumber,
+                    text: log.text,
+                    filePath: log.filePath
+                }];
+                vscode.postMessage({ command: "removeSelectedLogs", selectedLogs });
+            });
+        });
+
+        function removeAllLogs() {
+            vscode.postMessage({ command: "removeAllLogs" });
+        }
+    </script>
+</body>
+</html>
+
+  `;
+}
+function generateWebviewContentConsoleDeleteConfirm(consoleLogs) {
+    return `
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Success Alert Box</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            flex-direction:column;
+            align-items: center;
+            height: 80vh;
+            background-color: #121212;
+            font-family: Arial, sans-serif;
+        }
+
+        .alert-box {
+            background-color: #1e1e1e;
+            color: #4caf50;
+            padding: 15px 20px;
+            border-left: 5px solid #4caf50;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-icon {
+            font-size: 20px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #4caf50;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            color: #81c784;
+        }
+              .table-container {
+              margin-top:10px;
+            width: 80%;
+            max-height: 65vh;
+            overflow-y: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+                table {
+            width: 100%;
             margin: 30px auto;
             border-collapse: collapse;
             background-color: #1C2630;
@@ -316,41 +622,31 @@ function generateWebviewContentConsole(consoleLogs) {
             background-color: #273341;
             font-weight: bold;
         }
-        th, td {
-            padding: 15px;
-            text-align: center;
-            border-bottom: 1px solid #2F3D4A;
-        }
+       th, td {
+    padding: 15px;
+    text-align: center;
+font-size:10px;
+}
+
+
         tbody tr:hover {
             background-color: #303A45;
-        }
-        button {
-            background-color: #D62828;
-            color: white;
-            font-weight: bold;
-            padding: 8px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #A61E1E;
-        }
-        tbody tr:last-child td {
-            border-bottom: none;
         }
     </style>
 </head>
 <body>
-    <h1>Console Log Viewer <span>Dashboard</span></h1>
-    <input type="text" id="searchInput" placeholder="Search logs..." oninput="filterTable()"/>
+    <div class="alert-box">
+        <span class="alert-icon">✔</span>
+        <span>Success! Your delete action was completed successfully. Console Log Deleted: ${consoleLogs.length}</span>
+        <button class="close-btn" onclick="this.parentElement.style.display='none';">✖</button>
+    </div>
 
-    <div class="container">
-        <table id="consoleTable">
+    <div class="table-container">
+   <table id="consoleTable">
           <thead>
-              <tr>
-                  <th>Select</th>
+              <tr>'
+              <th>Sr. No.</th>
+             
                   <th>File Path</th>
                   <th>Line Number</th>
                   <th>Log Text</th>
@@ -358,49 +654,22 @@ function generateWebviewContentConsole(consoleLogs) {
           </thead>
           <tbody>
               ${consoleLogs
-        .map((log) => `
+        .map((log, key) => `
               <tr>
-                  <td><input type="checkbox" name="log" value="${log.lineNumber}" data-log='${JSON.stringify(log)}' /></td>
+              <td>${key + 1}
+                
                   <td>${log.filePath}</td>
                   <td>${log.lineNumber + 1}</td>
-                  <td>${log.text}</td>
+                  <td>
+                  <pre style="white-space: pre-wrap;">
+                    ${log.text}
+               </pre>
+                  </td>
               </tr>`)
         .join("")}
           </tbody>
       </table>
-
-      <div class="actions">
-          <button type="button" onclick="removeSelectedLogs()">Remove Selected Logs</button>
-          <button type="button" onclick="removeAllLogs()">Remove All Logs</button>
-      </div>
     </div>
-
-    <script>
-      const vscode = acquireVsCodeApi();
-      function filterTable() {
-                const searchInput = document.getElementById("searchInput").value.trim();
-                const rows = document.querySelectorAll("#consoleTable tbody tr");
-                const regex = new RegExp(searchInput, "i");
-
-                rows.forEach((row) => {
-                    const cells = Array.from(row.querySelectorAll("td"));
-                    const matches = cells.some((cell) => regex.test(cell.textContent));
-                    row.style.display = matches ? "" : "none";
-                });
-            }
-      function removeSelectedLogs() {
-          const selectedCheckboxes = document.querySelectorAll('input[name="log"]:checked');
-          const selectedLogs = Array.from(selectedCheckboxes).map(cb => {
-              return JSON.parse(cb.getAttribute("data-log"));
-          });
-          
-          vscode.postMessage({ command: "removeSelectedLogs", selectedLogs });
-      }
-
-      function removeAllLogs() {
-          vscode.postMessage({ command: "removeAllLogs" });
-      }
-    </script>
 </body>
 </html>
 

@@ -2,3 +2,15 @@
 .vscode-test/**
 .gitignore
 vsc-extension-quickstart.md
+src
+.git
+.vscode
+*.vsix
+*.log
+*.ts
+*.map
+data
+final_logo.png
+node_modules/*
+!node_modules/essential-package
+access_token.txt

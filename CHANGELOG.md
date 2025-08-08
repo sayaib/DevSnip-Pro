@@ -1,5 +1,66 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.43.119 - 2025-04-03
+
+- Rest API status code issue fixed in test REST API section
+
+## Version 10.42.118 - 10.42.119 - 2025-04-03
+
+- Solved Snippets visibility error to jsx components in react
+
+## Version 10.42.116 - 10.42.117 - 2025-03-26
+
+- Update readme and fixed bugs of activity bar (added all features there)
+
+## Version 10.41.107 - 10.41.116 - 2025-03-24
+
+- Update readme and fixed bugs of activity bar (added all features there)
+
+## Version 10.41.107 - 2025-03-21
+
+- Added DevSnip pro in activity bar for easy access
+
+## Version 10.40.101 - 10.40.103 - 2025-02-20
+
+- Added code capture snapshot in right menu bar.
+
+## Version 9.40.101 - 2025-02-18
+
+- fixed minor bugs
+
+## Version 9.40.100 - 2025-02-17
+
+- Replace the selected console.log with a direct removal of the console.log in the row, accompanied by a remove button.
+
+## Version 9.39.99 - 9.39.100 - 2025-02-05
+
+- Added multiline console log search and update readme features section.
+
+## Version 9.39.98 - 2025-02-04
+
+- Optimized code for large project (faster console log searching)
+
+## Version 9.38.97 - 9.38.98 - 2025-02-04
+
+- Logo changed
+
+## Version 9.38.95 - 9.38.96 - 2025-02-03
+
+- Added Tailwind CSS v4 and Bootstrap v5
+- fixed language bugs and activation errors
+
+## Version 8.38.93 - 8.38.95 - 2025-01-30
+
+- Exclude all the temps file while searching.
+
+## Version 8.37.93 - 2025-01 -28
+
+- Updated user manual index
+
+## Version 8.37.92 - 2025-01-24
+
+- Optimized code performance by removing unnessary line any apply reusable component and changed description.
+
 ## Version 8.36.89 - 9.36.92 - 2025-01-24
 
 - Optimized code performance by removing unnessary line any apply reusable component.

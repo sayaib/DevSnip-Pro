@@ -21,7 +21,7 @@ function registerCreateSnippetCommand(context) {
             const selection = editor.selection;
             const selectedText = editor.document.getText(selection);
             if (!selectedText)
-                throw new Error("No text selected!");
+                throw new Error("No code selected!");
             const language = (0, snippet_utils_1.getLanguageFromFileName)(editor.document.fileName);
             const snippetPrefix = yield vscode.window.showInputBox({
                 prompt: "Enter the trigger prefix for your snippet.",

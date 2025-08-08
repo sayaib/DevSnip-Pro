@@ -1,0 +1,34 @@
+"editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "sayaib.hue-console.createCustomSnippet",
+          "group": "navigation"
+        },
+        {
+          "command": "sayaib.hue-console.showSnippets",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "sayaib.hue-console.captureCode",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "sayaib.hue-console.connectMongoDB",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "sayaib.hue-console.openGUI",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        }
+      ]
+
+      inside menus

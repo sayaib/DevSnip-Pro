@@ -22,7 +22,7 @@ export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
 
         const selection = editor.selection;
         const selectedText = editor.document.getText(selection);
-        if (!selectedText) throw new Error("No text selected!");
+        if (!selectedText) throw new Error("No code selected!");
 
         const language = getLanguageFromFileName(editor.document.fileName);
 

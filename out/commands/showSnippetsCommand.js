@@ -16,6 +16,8 @@ function registerShowSnippetsCommand(context, snippetsFolderPath) {
     const command = vscode.commands.registerCommand("sayaib.hue-console.showSnippets", () => {
         const snippetsData = loadSnippets();
         const panel = vscode.window.createWebviewPanel("showSnippets", "Custom Snippets", vscode.ViewColumn.One, { enableScripts: true });
+        const iconPath = path.resolve(context.extensionPath, "logo.png");
+        panel.iconPath = vscode.Uri.file(iconPath);
         panel.webview.html = generateWebviewContent(snippetsData);
         panel.webview.onDidReceiveMessage((message) => {
             if (message.command === "deleteSnippet") {
@@ -200,49 +202,88 @@ function generateWebviewContent(snippetsData) {
             h1 span {
                 color: #19C8D9;
             }
-            #searchInput {
-                margin: 20px auto;
-                width: 80%;
-                padding: 10px;
-                border-radius: 5px;
-                border: none;
-                font-size: 1rem;
-                color: #0C1118;
-            }
-            table {
-                width: 90%;
-                margin: 30px auto;
-                border-collapse: collapse;
-                background-color: #1C2630;
-                border-radius: 10px;
-                overflow: hidden;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-            }
-            thead {
-                background-color: #273341;
-                font-weight: bold;
-            }
-            th, td {
-                padding: 15px;
-                text-align: center;
-                border-bottom: 1px solid #2F3D4A;
-            }
-            tbody tr:hover {
-                background-color: #303A45;
-            }
-            button {
-                background-color: #D62828;
-                color: white;
-                font-weight: bold;
-                padding: 8px 20px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                transition: background-color 0.3s;
-            }
-            button:hover {
-                background-color: #A61E1E;
-            }
+            /* Search Input */
+        #searchInput {
+            margin: 20px auto;
+            width: 80%;
+            max-width: 600px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid #273341;
+            background-color: #1C2630;
+            color: #FFFFFF;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #searchInput:focus {
+            border-color: #19C8D9;
+        }
+
+             table {
+            width: 95%;
+            max-width: 1200px;
+            margin: 30px auto;
+            border-collapse: collapse;
+            background-color: #1C2630;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        thead {
+            background-color: #273341;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid #303A45;
+        }
+
+        th {
+            font-weight: 600;
+            color: #19C8D9;
+        }
+
+        tbody tr:hover {
+            background-color: #303A45;
+            transition: background-color 0.3s;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+              button {
+            background-color: #A61E1E;
+            color: white;
+            font-weight: bold;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #8A1A1A;
+        }
+               .remove-log-btn {
+            background-color: #273341;
+            color: #FFFFFF;
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: 1px solid #19C8D9;
+            transition: background-color 0.3s;
+        }
+
+        .remove-log-btn:hover {
+            background-color: #19C8D9;
+            color: #0C1118;
+        }
+
             tbody tr:last-child td {
                 border-bottom: none;
             }
@@ -273,11 +314,11 @@ function generateWebviewContent(snippetsData) {
         .map(([key, snippet]) => `
                         <tr>
                         
-                            <td>${snippet.prefix}</td>
+                            <td><pre>${snippet.prefix}</pre></td>
                             <td>${key}</td>
                             <td>${snippet.description || ""}</td>
                             <td>
-                                <button onclick="deleteSnippet('${group.language}', '${key}')">
+                                <button class="remove-log-btn" onclick="deleteSnippet('${group.language}', '${key}')">
                                     Delete
                                 </button>
                             </td>

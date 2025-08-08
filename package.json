@@ -1,15 +1,15 @@
 {
   "name": "hue-console",
   "displayName": "DevSnip Pro",
-  "description": "🚀 Generate Custom Snippets and Preloaded Multi-Language Snippet Support.",
-  "version": "8.36.92",
+  "description": "⚡The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.",
+  "version": "10.43.125",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
   "icon": "logo.png",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/sayaib.osl/prism-snippets-and-logger"
+    "url": "https://github.com/sayaib/DevSnip-Pro"
   },
   "engines": {
     "vscode": "^1.86.0"
@@ -165,18 +165,6 @@
         "path": "./snippets/snippets_js.json"
       },
       {
-        "language": "typescript",
-        "path": "./snippets/snippets_js.json"
-      },
-      {
-        "language": "html",
-        "path": "./snippets/snippets_js.json"
-      },
-      {
-        "language": "php",
-        "path": "./snippets/snippets_php.json"
-      },
-      {
         "language": "javascript",
         "path": "./snippets/snippets_react.json"
       },
@@ -197,30 +185,6 @@
         "path": "./snippets/snippets_react_router.json"
       },
       {
-        "language": "typescript",
-        "path": "./snippets/snippets_typescript.json"
-      },
-      {
-        "language": "typescriptreact",
-        "path": "./snippets/snippets_typescript.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_react.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_react_query.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_react_redux.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_react_router.json"
-      },
-      {
         "language": "javascript",
         "path": "./snippets/snippets_javascript.json"
       },
@@ -233,28 +197,40 @@
         "path": "./snippets/snippets_mongodb.json"
       },
       {
-        "language": "html",
-        "path": "./snippets/snippets_html.json"
-      },
-      {
-        "language": "php",
-        "path": "./snippets/snippets_html.json"
-      },
-      {
-        "language": "ruby",
-        "path": "./snippets/snippets_html.json"
-      },
-      {
         "language": "javascript",
         "path": "./snippets/snippets_html.json"
       },
       {
-        "language": "python",
-        "path": "./snippets/snippets_python.json"
+        "language": "javascript",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
       },
       {
-        "language": "dart",
-        "path": "./snippets/snippets_flutter.json"
+        "language": "javascript",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "javascript",
+        "path": "./custom/custom_javascript.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_js.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_typescript.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/snippets_react.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/tailwind_snippets.code-snippets"
       },
       {
         "language": "typescript",
@@ -262,11 +238,43 @@
       },
       {
         "language": "typescriptreact",
+        "path": "./snippets/snippets_typescript.json"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "typescriptreact",
         "path": "./custom/custom_typescriptreact.json"
       },
       {
-        "language": "javascript",
-        "path": "./custom/custom_javascript.json"
+        "language": "javascriptreact",
+        "path": "./snippets/snippets_react_query.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./snippets/snippets_react_redux.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./snippets/snippets_react_router.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./snippets/snippets_react.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./snippets/tailwind_snippets.code-snippets"
       },
       {
         "language": "javascriptreact",
@@ -274,15 +282,75 @@
       },
       {
         "language": "html",
+        "path": "./snippets/snippets_js.json"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/snippets_html.json"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "html",
         "path": "./custom/custom_html.json"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/snippets_php.json"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/snippets_html.json"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "php",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "php",
+        "path": "./custom/custom_php.json"
+      },
+      {
+        "language": "python",
+        "path": "./snippets/snippets_python.json"
+      },
+      {
+        "language": "python",
+        "path": "./custom/custom_python.json"
+      },
+      {
+        "language": "dart",
+        "path": "./snippets/snippets_flutter.json"
+      },
+      {
+        "language": "dart",
+        "path": "./custom/custom_dart.json"
       },
       {
         "language": "css",
         "path": "./custom/custom_css.json"
       },
       {
+        "language": "css",
+        "path": "./snippets/css.code-snippets"
+      },
+      {
         "language": "scss",
         "path": "./custom/custom_scss.json"
+      },
+      {
+        "language": "scss",
+        "path": "./snippets/css.code-snippets"
       },
       {
         "language": "json",
@@ -293,16 +361,24 @@
         "path": "./custom/custom_yaml.json"
       },
       {
+        "language": "toml",
+        "path": "./custom/custom_toml.json"
+      },
+      {
         "language": "markdown",
         "path": "./custom/custom_markdown.json"
       },
       {
-        "language": "python",
-        "path": "./custom/custom_python.json"
-      },
-      {
         "language": "java",
         "path": "./custom/custom_java.json"
+      },
+      {
+        "language": "gradle",
+        "path": "./custom/custom_gradle.json"
+      },
+      {
+        "language": "groovy",
+        "path": "./custom/custom_groovy.json"
       },
       {
         "language": "c",
@@ -317,8 +393,8 @@
         "path": "./custom/custom_csharp.json"
       },
       {
-        "language": "php",
-        "path": "./custom/custom_php.json"
+        "language": "ruby",
+        "path": "./snippets/snippets_html.json"
       },
       {
         "language": "ruby",
@@ -341,16 +417,16 @@
         "path": "./custom/custom_powershell.json"
       },
       {
+        "language": "makefile",
+        "path": "./custom/custom_makefile.json"
+      },
+      {
         "language": "swift",
         "path": "./custom/custom_swift.json"
       },
       {
         "language": "rust",
         "path": "./custom/custom_rust.json"
-      },
-      {
-        "language": "dart",
-        "path": "./custom/custom_dart.json"
       },
       {
         "language": "lua",
@@ -374,6 +450,14 @@
       },
       {
         "language": "plaintext",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "plaintext",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "plaintext",
         "path": "./custom/custom_plaintext.json"
       },
       {
@@ -389,22 +473,6 @@
         "path": "./custom/custom_dockerfile.json"
       },
       {
-        "language": "toml",
-        "path": "./custom/custom_toml.json"
-      },
-      {
-        "language": "makefile",
-        "path": "./custom/custom_makefile.json"
-      },
-      {
-        "language": "gradle",
-        "path": "./custom/custom_gradle.json"
-      },
-      {
-        "language": "groovy",
-        "path": "./custom/custom_groovy.json"
-      },
-      {
         "language": "vb",
         "path": "./custom/custom_vb.json"
       },
@@ -415,6 +483,38 @@
       {
         "language": "vue",
         "path": "./custom/custom_vue.json"
+      },
+      {
+        "language": "vue",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "vue",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "vue-html",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "vue-html",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "handlebars",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "handlebars",
+        "path": "./snippets/tailwind_snippets.code-snippets"
+      },
+      {
+        "language": "razor",
+        "path": "./snippets/bootstrap_snippets.code-snippets"
+      },
+      {
+        "language": "razor",
+        "path": "./snippets/tailwind_snippets.code-snippets"
       }
     ],
     "commands": [
@@ -428,28 +528,39 @@
       },
       {
         "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-        "title": "🚀 DevSnip Pro: List and Remove Console Logs"
+        "title": "🛠️ DevSnip Pro: List and Remove Console Logs"
+      },
+      {
+        "command": "sayaib.hue-console.captureCode",
+        "title": "📸 DevSnip Pro: Create a Code Snapshot."
+      },
+      {
+        "command": "sayaib.hue-console.connectMongoDB",
+        "title": "🛢 DevSnip Pro: MongoDB "
+      },
+      {
+        "command": "sayaib.hue-console.openGUI",
+        "title": "🛢 DevSnip Pro: Rest API Client "
       }
     ],
-    "menus": {
-      "editor/context": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "when": "editorHasSelection",
-          "command": "sayaib.hue-console.createCustomSnippet",
-          "group": "navigation"
-        },
-        {
-          "command": "sayaib.hue-console.showSnippets",
-          "group": "navigation",
-          "when": "editorTextFocus"
-        },
-        {
-          "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-          "group": "navigation",
-          "when": "editorTextFocus"
+          "id": "myActivityBar",
+          "title": "DevSnip Pro",
+          "icon": "nav_icon.png"
         }
       ]
-    }
+    },
+    "views": {
+      "myActivityBar": [
+        {
+          "id": "myView",
+          "name": "features"
+        }
+      ]
+    },
+    "menus": {}
   },
   "activationEvents": [
     "onCommand:extension.snippet-test",
@@ -466,16 +577,22 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.60.0",
     "@types/glob": "^7.1.3",
     "@types/mocha": "^8.2.2",
     "@types/node": "14.x",
-    "eslint": "^7.27.0",
+    "@types/vscode": "^1.60.0",
     "@typescript-eslint/eslint-plugin": "^4.26.0",
     "@typescript-eslint/parser": "^4.26.0",
+    "eslint": "^7.27.0",
     "glob": "^7.1.7",
     "mocha": "^8.4.0",
     "typescript": "^4.3.2",
     "vscode-test": "^1.5.2"
+  },
+  "dependencies": {
+    "axios": "^1.8.3",
+    "dom-to-image": "^2.6.0",
+    "file-saver": "^2.0.5",
+    "mongodb": "^6.13.0"
   }
 }

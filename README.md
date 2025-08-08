@@ -20,26 +20,41 @@
 
 # Extension Features
 
-## Index
+1. [🌏 Test REST API](#test-rest-apis-using-devsnip-pro)
+1. [💽 Connect MongoDB Database](#connect-mongodb-database-using-devsnip-pro)
+1. [🚀 One-Click Console Log Cleanup](#search--delete-console-logs-in-the-entire-project-with-devsnip-pro)
+1. [📸 Take a snapshot of your code](#take-code-snap-shot-with-devsnip-pro)
+1. [✨ Effortless Custom Snippet Creation ](#how-to-create-and-use-custom-snippets-with-devsnip-pro)
+1. [🗑️ Manage & Delete Snippets](#how-to-view-and-delete-created-custom-snippets)
+1. [📜 Preloaded Snippets Library](#comprehensive-index-of-code-snippets-for-all-supported-languages-and-frameworks)
 
-1. [Search and delete all console logs across your project](#search--delete-console-logs-in-the-entire-project-with-devsnip-pro)
-2. [How to create and use custom snippets with DevSnip Pro](#how-to-create-and-use-custom-snippets-with-devsnip-pro)
-3. [How to view and delete created custom snippets](#how-to-view-and-delete-created-custom-snippets)
-4. [Pre Loaded Snippets List](#comprehensive-index-of-code-snippets-for-all-supported-languages-and-frameworks)
+# How access all Features
+
+- **Click on the Activity Bar**: After installing the extension, you will see the DevSnip Pro logo with its name in the activity bar. Click on it to access all features.
+
+![Access all features](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/tutorial.png)
+
+## Test Rest APIs Using DevSnip Pro.
+
+![Rest API Test](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/restapi.gif)
+
+## Connect MongoDB Database using DevSnip Pro.
+
+![Connect mongoDB](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/mongodb.gif)
 
 ## Search & Delete console logs in the entire project with DevSnip Pro.
 
-- **Right-Click on the Editor**: Open the context menu by right-clicking on the editor.
-- **Choose "🚀 DevSnip Pro: List and Remove Console Logs"**: Select this option from the context menu.
-- **View and Delete Console Log**: Now user can Hunt and Delete Console Logs: Quickly search and remove console logs from your entire project with ease.
+![Console Log Hunt and delete](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/console.gif)
 
-![Console Log Hunter Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/huntlog.gif)
+## Take Code Snap Shot with DevSnip Pro.
+
+![Create custom snippets](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/codesnap.gif)
 
 ## How to create and use custom snippets with DevSnip Pro.
 
 - **Select Your Code**: Highlight the code snippet you want to save in the VS Code editor.
-- **Right-Click on the Editor**: Open the context menu by right-clicking on the selected code.
-- **Choose "🚀 DevSnip Pro: Create Your Own Perfect Code Snippet"**: Select this option from the context menu.
+- **Click on the Activity bar DevSnip pro icon**:
+- **Choose "Create Custom Code Snippets"**: Select this option from the menu.
 - **Enter Snippet Details**: Provide the following information:
   - **Snippet Prefix**: A unique identifier for your snippet.
   - **Snippet Name**: A descriptive name for the snippet.
@@ -48,19 +63,13 @@
 
 Now you can easily create and use your own perfect code snippets with 🚀 DevSnip Pro!
 
-![Custom Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/customsnip.gif)
+![View Saved Custom snippets](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/snippets-create.gif)
 
 ## How to view and delete created custom snippets.
 
-- **Right-Click on the Editor**: Open the context menu by right-clicking on the editor.
-- **Choose "🚀 DevSnip Pro: Show Custom Snippet"**: Select this option from the context menu.
-- **View and Delete Snippets**: Now user can view and delete the custom added snippets from the table.
-
-![Custom Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/viewcustom.gif)
+![Pre loaded Custom Snippets Example](https://gitlab.com/sayaib.osl/opensource/-/raw/main/images/viewcustom.gif)
 
 ## Comprehensive Index of Code Snippets for All Supported Languages and Frameworks:
-
-# User Manual (Snippets Instructions)
 
 | Section              | User Manual (Snippets Instructions)                                                                                         |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
