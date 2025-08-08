@@ -2,10 +2,6 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 
-// Cache for HTML templates
-let emptySnippetsTemplate: string | null = null;
-let snippetsTableTemplate: string | null = null;
-
 interface Snippet {
   prefix: string;
   body: string | string[];
@@ -21,24 +17,17 @@ export function registerShowSnippetsCommand(
   context: vscode.ExtensionContext,
   snippetsFolderPath: string
 ) {
-  // Lazy load snippets only when needed
-  const loadSnippets = (): SnippetFile[] => {
-    try {
-      return fs
-        .readdirSync(snippetsFolderPath)
-        .filter((file) => file.endsWith(".json"))
-        .map((file) => {
-          const language = file.replace("custom_", "").replace(".json", "");
-          const content = JSON.parse(
-            fs.readFileSync(path.join(snippetsFolderPath, file), "utf-8")
-          );
-          return { language, snippets: content };
-        });
-    } catch (error) {
-      vscode.window.showErrorMessage(`Error loading snippets: ${error instanceof Error ? error.message : String(error)}`);
-      return [];
-    }
-  };
+  const loadSnippets = (): SnippetFile[] =>
+    fs
+      .readdirSync(snippetsFolderPath)
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => {
+        const language = file.replace("custom_", "").replace(".json", "");
+        const content = JSON.parse(
+          fs.readFileSync(path.join(snippetsFolderPath, file), "utf-8")
+        );
+        return { language, snippets: content };
+      });
 
   const command = vscode.commands.registerCommand(
     "sayaib.hue-console.showSnippets",
@@ -92,9 +81,7 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
   );
 
   if (nonEmptyGroups.length === 0) {
-    // Use cached template if available
-    if (!emptySnippetsTemplate) {
-      emptySnippetsTemplate = `
+    return `
       <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -222,7 +209,14 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
     <td>✅ ES6</td>
     <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/ES6">Click Here</a></td>
   </tr>
-
+  <tr>
+    <td>✅ MongoDB</td>
+    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongodb">Click Here</a></td>
+  </tr>
+  <tr>
+    <td>✅ Mongo Aggregation</td>
+    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongo-aggregation">Click Here</a></td>
+  </tr>
 </table>
 
     </div>
@@ -230,13 +224,9 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
 </html>
 
     `;
-    }
-    return emptySnippetsTemplate;
   }
 
-  // Use cached template if available
-  if (!snippetsTableTemplate) {
-    snippetsTableTemplate = `
+  return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -351,7 +341,43 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
             placeholder="Search across all the snippet fields in the table."
             oninput="filterTable()"
         />
-        SNIPPET_GROUPS_PLACEHOLDER
+        ${nonEmptyGroups
+          .map(
+            (group) => `
+            <h3>${group.language}</h3>
+            <table id="snippetsTable">
+                <thead>
+                    <tr>
+                        <th>Prefix</th>
+                        <th>Snippet Key</th>
+                        <th>Description</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.entries(group.snippets)
+                      .map(
+                        ([key, snippet]) => `
+                        <tr>
+                        
+                            <td><pre>${snippet.prefix}</pre></td>
+                            <td>${key}</td>
+                            <td>${snippet.description || ""}</td>
+                            <td>
+                                <button class="remove-log-btn" onclick="deleteSnippet('${
+                                  group.language
+                                }', '${key}')">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>`
+                      )
+                      .join("")}
+                </tbody>
+            </table>
+          `
+          )
+          .join("")}
         <script>
             const vscode = acquireVsCodeApi();
 
@@ -374,47 +400,4 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
     </body>
     </html>
   `;
-  }
-  
-  // Generate the snippet groups HTML
-  const snippetGroupsHtml = nonEmptyGroups
-    .map(
-      (group) => `
-      <h3>${group.language}</h3>
-      <table id="snippetsTable">
-          <thead>
-              <tr>
-                  <th>Prefix</th>
-                  <th>Snippet Key</th>
-                  <th>Description</th>
-                  <th>Action</th>
-              </tr>
-          </thead>
-          <tbody>
-              ${Object.entries(group.snippets)
-                .map(
-                  ([key, snippet]) => `
-                  <tr>
-                  
-                      <td><pre>${snippet.prefix}</pre></td>
-                      <td>${key}</td>
-                      <td>${snippet.description || ""}</td>
-                      <td>
-                          <button class="remove-log-btn" onclick="deleteSnippet('${
-                            group.language
-                          }', '${key}')">
-                              Delete
-                          </button>
-                      </td>
-                  </tr>`
-                )
-                .join("")}
-          </tbody>
-      </table>
-    `
-    )
-    .join("");
-  
-  // Replace the placeholder with the actual snippet groups
-  return snippetsTableTemplate.replace('SNIPPET_GROUPS_PLACEHOLDER', snippetGroupsHtml);
 }

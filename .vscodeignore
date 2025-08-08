@@ -13,4 +13,3 @@ data
 final_logo.png
 node_modules/*
 !node_modules/essential-package
-access_token.txt

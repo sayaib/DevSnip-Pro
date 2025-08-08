@@ -4,23 +4,13 @@ import { registerCreateSnippetCommand } from "./commands/createSnippetCommand";
 import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
 import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
 import { codeSnapShot } from "./commands/take-code-snip";
+import { registerMongoDBCommands } from "./commands/mongoDBCommands";
 import { apiTest } from "./commands/api-test";
-
-// Lazy loading helper function
-function registerCommand(context: vscode.ExtensionContext, commandId: string, callback: (...args: any[]) => any) {
-  const disposable = vscode.commands.registerCommand(commandId, async (...args) => {
-    await callback(context, ...args);
-  });
-  context.subscriptions.push(disposable);
-}
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(__dirname, "../custom");
 
-  // Remove console.log for production
-  // console.log("DevSnip Pro extension is now active!");
-  
-  // Initialize tree view
+  console.log("DevSnip Pro extension is now active!");
   const myTreeView = new MyTreeDataProvider();
   vscode.window.registerTreeDataProvider("myView", myTreeView);
 
@@ -28,6 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
   registerCreateSnippetCommand(context);
   registerShowSnippetsCommand(context, snippetsFolderPath);
   registerListAndRemoveConsoleLogsCommand(context);
+  registerMongoDBCommands(context);
   apiTest(context);
   codeSnapShot(context);
 }
@@ -45,7 +36,12 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "cloud",
         new vscode.ThemeColor("terminal.ansiBrightCyan")
       ),
-
+      this.createCommandButton(
+        "Connect to MongoDB",
+        "sayaib.hue-console.connectMongoDB",
+        "database",
+        new vscode.ThemeColor("terminal.ansiBrightGreen")
+      ),
       this.createCommandButton(
         "Capture Code Snapshot",
         "sayaib.hue-console.captureCode",

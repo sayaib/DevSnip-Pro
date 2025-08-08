@@ -420,7 +420,19 @@
     "body": ["${1:column}: Sequelize.ENUM$2,"],
     "description": "sequelizeColumENUM"
   },
-
+  "createBaseMongo": {
+    "prefix": "cfmoo",
+    "body": [
+      "import mongoose from 'mongoose';",
+      "",
+      "const ${1:ExemploSchema} = new mongoose.Schema({",
+      "   ",
+      "});",
+      "",
+      "export default mongoose.model(' $TM_FILENAME_BASE',  ${1:ExemploSchema});"
+    ],
+    "description": " Creates a mongoose schema."
+  },
   "createAMiddlewareGlobal": {
     "prefix": "icgm",
     "body": [

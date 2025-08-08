@@ -1,51 +1,18 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerShowSnippetsCommand = void 0;
-const vscode = __importStar(require("vscode"));
-const fs = __importStar(require("fs"));
-const path = __importStar(require("path"));
-let emptySnippetsTemplate = null;
-let snippetsTableTemplate = null;
+const vscode = require("vscode");
+const fs = require("fs");
+const path = require("path");
 function registerShowSnippetsCommand(context, snippetsFolderPath) {
-    const loadSnippets = () => {
-        try {
-            return fs
-                .readdirSync(snippetsFolderPath)
-                .filter((file) => file.endsWith(".json"))
-                .map((file) => {
-                const language = file.replace("custom_", "").replace(".json", "");
-                const content = JSON.parse(fs.readFileSync(path.join(snippetsFolderPath, file), "utf-8"));
-                return { language, snippets: content };
-            });
-        }
-        catch (error) {
-            vscode.window.showErrorMessage(`Error loading snippets: ${error instanceof Error ? error.message : String(error)}`);
-            return [];
-        }
-    };
+    const loadSnippets = () => fs
+        .readdirSync(snippetsFolderPath)
+        .filter((file) => file.endsWith(".json"))
+        .map((file) => {
+        const language = file.replace("custom_", "").replace(".json", "");
+        const content = JSON.parse(fs.readFileSync(path.join(snippetsFolderPath, file), "utf-8"));
+        return { language, snippets: content };
+    });
     const command = vscode.commands.registerCommand("sayaib.hue-console.showSnippets", () => {
         const snippetsData = loadSnippets();
         const panel = vscode.window.createWebviewPanel("showSnippets", "Custom Snippets", vscode.ViewColumn.One, { enableScripts: true });
@@ -71,8 +38,7 @@ exports.registerShowSnippetsCommand = registerShowSnippetsCommand;
 function generateWebviewContent(snippetsData) {
     const nonEmptyGroups = snippetsData.filter((file) => Object.keys(file.snippets).length > 0);
     if (nonEmptyGroups.length === 0) {
-        if (!emptySnippetsTemplate) {
-            emptySnippetsTemplate = `
+        return `
       <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -200,7 +166,14 @@ function generateWebviewContent(snippetsData) {
     <td>✅ ES6</td>
     <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/ES6">Click Here</a></td>
   </tr>
-
+  <tr>
+    <td>✅ MongoDB</td>
+    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongodb">Click Here</a></td>
+  </tr>
+  <tr>
+    <td>✅ Mongo Aggregation</td>
+    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongo-aggregation">Click Here</a></td>
+  </tr>
 </table>
 
     </div>
@@ -208,11 +181,8 @@ function generateWebviewContent(snippetsData) {
 </html>
 
     `;
-        }
-        return emptySnippetsTemplate;
     }
-    if (!snippetsTableTemplate) {
-        snippetsTableTemplate = `
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -327,7 +297,37 @@ function generateWebviewContent(snippetsData) {
             placeholder="Search across all the snippet fields in the table."
             oninput="filterTable()"
         />
-        SNIPPET_GROUPS_PLACEHOLDER
+        ${nonEmptyGroups
+        .map((group) => `
+            <h3>${group.language}</h3>
+            <table id="snippetsTable">
+                <thead>
+                    <tr>
+                        <th>Prefix</th>
+                        <th>Snippet Key</th>
+                        <th>Description</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.entries(group.snippets)
+        .map(([key, snippet]) => `
+                        <tr>
+                        
+                            <td><pre>${snippet.prefix}</pre></td>
+                            <td>${key}</td>
+                            <td>${snippet.description || ""}</td>
+                            <td>
+                                <button class="remove-log-btn" onclick="deleteSnippet('${group.language}', '${key}')">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>`)
+        .join("")}
+                </tbody>
+            </table>
+          `)
+        .join("")}
         <script>
             const vscode = acquireVsCodeApi();
 
@@ -350,38 +350,5 @@ function generateWebviewContent(snippetsData) {
     </body>
     </html>
   `;
-    }
-    const snippetGroupsHtml = nonEmptyGroups
-        .map((group) => `
-      <h3>${group.language}</h3>
-      <table id="snippetsTable">
-          <thead>
-              <tr>
-                  <th>Prefix</th>
-                  <th>Snippet Key</th>
-                  <th>Description</th>
-                  <th>Action</th>
-              </tr>
-          </thead>
-          <tbody>
-              ${Object.entries(group.snippets)
-        .map(([key, snippet]) => `
-                  <tr>
-                  
-                      <td><pre>${snippet.prefix}</pre></td>
-                      <td>${key}</td>
-                      <td>${snippet.description || ""}</td>
-                      <td>
-                          <button class="remove-log-btn" onclick="deleteSnippet('${group.language}', '${key}')">
-                              Delete
-                          </button>
-                      </td>
-                  </tr>`)
-        .join("")}
-          </tbody>
-      </table>
-    `)
-        .join("");
-    return snippetsTableTemplate.replace('SNIPPET_GROUPS_PLACEHOLDER', snippetGroupsHtml);
 }
 //# sourceMappingURL=showSnippetsCommand.js.map
