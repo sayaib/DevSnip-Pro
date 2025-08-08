@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.",
-  "version": "10.43.125",
+  "version": "10.43.126",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -590,6 +590,7 @@
     "vscode-test": "^1.5.2"
   },
   "dependencies": {
+    "@vscode/vsce": "^3.6.0",
     "axios": "^1.8.3",
     "dom-to-image": "^2.6.0",
     "file-saver": "^2.0.5",
