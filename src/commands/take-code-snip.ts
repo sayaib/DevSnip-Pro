@@ -2,6 +2,9 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 
+// Cache for HTML template to avoid repeated file reads
+let cachedTemplate: string | null = null;
+
 const VIEW_TYPE = "devsnip pro";
 const WEB_VIEW_TITLE = "DevSnip Pro Code Snapshot";
 
@@ -67,9 +70,13 @@ const getTemplate = (
   htmlTemplatePath: string,
   panel: vscode.WebviewPanel
 ): string => {
-  const htmlContent = fs.readFileSync(htmlTemplatePath, "utf-8");
+  // Use cached template if available
+  if (!cachedTemplate) {
+    cachedTemplate = fs.readFileSync(htmlTemplatePath, "utf-8");
+  }
+  
   // Replace placeholders in the HTML template with actual values
-  return htmlContent
+  return cachedTemplate
     .replace(/%CSP_SOURCE%/gu, panel.webview.cspSource)
     .replace(/(src|href)="([^"]*)"/gu, (_, match, src) => {
       let assetsPath = panel.webview.asWebviewUri(
@@ -92,10 +99,12 @@ const hasTextSelected = (selection: vscode.Selection | undefined): boolean =>
   !!selection && !selection.isEmpty;
 
 export const codeSnapShot = (context: vscode.ExtensionContext) => {
-  return context.subscriptions.push(
-    // Register the extension command to capture devsnip pro
-    vscode.commands.registerCommand("sayaib.hue-console.captureCode", () =>
-      init(context)
-    )
+  // Register the extension command to capture devsnip pro
+  const disposable = vscode.commands.registerCommand(
+    "sayaib.hue-console.captureCode", 
+    () => init(context)
   );
+  
+  context.subscriptions.push(disposable);
+  return disposable;
 };

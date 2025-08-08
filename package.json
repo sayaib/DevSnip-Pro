@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡The ultimate toolkit for API testing, console log cleanup, and snippet management in VS Code.",
-  "version": "10.43.126",
+  "version": "10.43.127",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -554,8 +554,7 @@
     "menus": {}
   },
   "activationEvents": [
-    "onCommand:extension.snippet-test",
-    "onCommand:extension.showSnippets"
+    "onStartupFinished"
   ],
   "browser": "./out/extention.js",
   "main": "./out/extention.js",

@@ -48,53 +48,38 @@ export function registerListAndRemoveConsoleLogsCommand(
         excludePattern
       );
 
-      // Optimized log search
-      await Promise.all(
-        files.map(async (file) => {
-          // try {
-          //   const content = await fs.readFile(file.fsPath, "utf8");
-          //   // const regex = /console\.log\s*\((.*)\);?/g;
-          //   const regex = /console\.log\s*\(([\s\S]*?)\);?/g;
+      // Optimized log search with batched processing
+      const batchSize = 20; // Process files in batches to avoid memory issues
+      
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map(async (file) => {
+            try {
+              const content = await fs.readFile(file.fsPath, "utf8");
+              // Improved regex to match all console.log variants
+              const regex = /console\.(log|warn|error|info|debug)\s*\(\s*([\s\S]*?)\s*\);?/g;
 
-          //   let match;
-          //   let lineNumber = 0;
-          //   const lines = content.split("\n");
+              let match;
+              while ((match = regex.exec(content)) !== null) {
+                // More efficient line number calculation
+                const beforeMatch = content.substring(0, match.index);
+                const lineNumber = (beforeMatch.match(/\n/g) || []).length + 1;
 
-          //   for (const line of lines) {
-          //     match = regex.exec(line);
-          //     if (match) {
-          //       allConsoleLogs.push({
-          //         filePath: file.fsPath,
-          //         lineNumber,
-          //         text: match[0],
-          //       });
-          //     }
-          //     lineNumber++;
-          //   }
-          // } catch (error) {
-          //   console.error(`Error reading file ${file.fsPath}:`, error);
-          // }
-          try {
-            const content = await fs.readFile(file.fsPath, "utf8");
-            const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
-
-            let match;
-            while ((match = regex.exec(content)) !== null) {
-              // Get line number by counting newlines before the match
-              const beforeMatch = content.substring(0, match.index);
-              const lineNumber = beforeMatch.split("\n").length;
-
-              allConsoleLogs.push({
-                filePath: file.fsPath,
-                lineNumber: lineNumber, // 1-based index
-                text: match[0],
-              });
+                allConsoleLogs.push({
+                  filePath: file.fsPath,
+                  lineNumber: lineNumber, // 1-based index
+                  text: match[0],
+                });
+              }
+            } catch (error) {
+              // Avoid console.error in production code
+              // Use VS Code's logging API instead
+              vscode.window.showErrorMessage(`Error reading file ${file.fsPath}: ${error instanceof Error ? error.message : String(error)}`);
             }
-          } catch (error) {
-            console.error(`Error reading file ${file.fsPath}:`, error);
-          }
-        })
-      );
+          })
+        );
+      }
 
       if (allConsoleLogs.length === 0) {
         panel.webview.html = generateWebviewContentConsoleLoading(
@@ -177,7 +162,7 @@ async function removeSelectedLogs(
       // Add the file to the set of modified files
       modifiedFiles.add(log.filePath);
     } catch (error) {
-      console.error(`Error processing log in file ${log.filePath}:`, error);
+      vscode.window.showErrorMessage(`Error processing log in file ${log.filePath}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -221,28 +206,36 @@ async function fetchConsoleLogs(): Promise<ConsoleLog[]> {
     excludePattern
   );
 
-  await Promise.all(
-    files.map(async (file) => {
-      try {
-        const content = await fs.readFile(file.fsPath, "utf8");
-        const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
+  // Optimized log search with batched processing
+  const batchSize = 20; // Process files in batches to avoid memory issues
+  
+  for (let i = 0; i < files.length; i += batchSize) {
+    const batch = files.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async (file) => {
+        try {
+          const content = await fs.readFile(file.fsPath, "utf8");
+          // Improved regex to match all console.log variants
+          const regex = /console\.(log|warn|error|info|debug)\s*\(\s*([\s\S]*?)\s*\);?/g;
 
-        let match;
-        while ((match = regex.exec(content)) !== null) {
-          const beforeMatch = content.substring(0, match.index);
-          const lineNumber = beforeMatch.split("\n").length;
+          let match;
+          while ((match = regex.exec(content)) !== null) {
+            // More efficient line number calculation
+            const beforeMatch = content.substring(0, match.index);
+            const lineNumber = (beforeMatch.match(/\n/g) || []).length + 1;
 
-          allConsoleLogs.push({
-            filePath: file.fsPath,
-            lineNumber: lineNumber,
-            text: match[0],
-          });
+            allConsoleLogs.push({
+              filePath: file.fsPath,
+              lineNumber: lineNumber, // 1-based index
+              text: match[0],
+            });
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Error reading file ${file.fsPath}: ${error instanceof Error ? error.message : String(error)}`);
         }
-      } catch (error) {
-        console.error(`Error reading file ${file.fsPath}:`, error);
-      }
-    })
-  );
+      })
+    );
+  }
 
   return allConsoleLogs;
 }
@@ -397,12 +390,10 @@ const loader = document.querySelector("#loader");
 
 window.onload = () => {
   loader.style.display = "block";
-  mainContent.style.display = "none";
 };
 
-const showMain = () => {
- 
-};
+// No need for showMain function as this is just a loading screen
+// that will be replaced with the actual content
 
 //Random "Lines of Code" Width
 var spans = document.getElementsByTagName("span");
@@ -413,10 +404,8 @@ for (var i = 0; i < l; i++) {
     var randomW = Math.floor(Math.random() * 50) + 15;
     spans[i].style.width = randomW + "%";
     spans[i].style.animation = "load 3.5s infinite ease-in-out";
-    var waitTime = Math.floor(Math.random() * 10) + 5;
-    setTimeout(() => {
-      showMain();
-    }, waitTime * 1000);
+    // No need for setTimeout as this is just a loading screen
+    // that will be replaced with the actual content
   }
 }
 
@@ -576,7 +565,7 @@ function generateWebviewContentConsole(consoleLogs: ConsoleLog[]): string {
                               log
                             )}'>Remove</button></td>
                             <td>${log.filePath}</td>
-                            <td>${log.lineNumber + 1}</td>
+                            <td>${log.lineNumber}</td>
                             <td><pre>${log.text}</pre></td>
                         </tr>`
                   )
@@ -626,131 +615,4 @@ function generateWebviewContentConsole(consoleLogs: ConsoleLog[]): string {
   `;
 }
 
-function generateWebviewContentConsoleDeleteConfirm(
-  consoleLogs: ConsoleLog[]
-): string {
-  return `
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Success Alert Box</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            flex-direction:column;
-            align-items: center;
-            height: 80vh;
-            background-color: #121212;
-            font-family: Arial, sans-serif;
-        }
-
-        .alert-box {
-            background-color: #1e1e1e;
-            color: #4caf50;
-            padding: 15px 20px;
-            border-left: 5px solid #4caf50;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .alert-icon {
-            font-size: 20px;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            color: #4caf50;
-            font-size: 18px;
-            cursor: pointer;
-        }
-
-        .close-btn:hover {
-            color: #81c784;
-        }
-              .table-container {
-              margin-top:10px;
-            width: 80%;
-            max-height: 65vh;
-            overflow-y: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-        }
-
-                table {
-            width: 100%;
-            margin: 30px auto;
-            border-collapse: collapse;
-            background-color: #1C2630;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-        }
-        thead {
-            background-color: #273341;
-            font-weight: bold;
-        }
-       th, td {
-    padding: 15px;
-    text-align: center;
-font-size:10px;
-}
-
-
-        tbody tr:hover {
-            background-color: #303A45;
-        }
-    </style>
-</head>
-<body>
-    <div class="alert-box">
-        <span class="alert-icon">✔</span>
-        <span>Success! Your delete action was completed successfully. Console Log Deleted: ${
-          consoleLogs.length
-        }</span>
-        <button class="close-btn" onclick="this.parentElement.style.display='none';">✖</button>
-    </div>
-
-    <div class="table-container">
-   <table id="consoleTable">
-          <thead>
-              <tr>'
-              <th>Sr. No.</th>
-             
-                  <th>File Path</th>
-                  <th>Line Number</th>
-                  <th>Log Text</th>
-              </tr>
-          </thead>
-          <tbody>
-              ${consoleLogs
-                .map(
-                  (log, key) => `
-              <tr>
-              <td>${key + 1}
-                
-                  <td>${log.filePath}</td>
-                  <td>${log.lineNumber + 1}</td>
-                  <td>
-                  <pre style="white-space: pre-wrap;">
-                    ${log.text}
-               </pre>
-                  </td>
-              </tr>`
-                )
-                .join("")}
-          </tbody>
-      </table>
-    </div>
-</body>
-</html>
-
-  `;
-}
+// Function removed as it was unused

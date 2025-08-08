@@ -1,29 +1,57 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.apiTest = void 0;
-const vscode = require("vscode");
-const axios_1 = require("axios");
-const path = require("path");
+const vscode = __importStar(require("vscode"));
+const axios_1 = __importDefault(require("axios"));
+const path = __importStar(require("path"));
 function apiTest(context) {
-    let history = [];
-    let cookies = {};
-    let savedRequests = [];
-    // Load cookies, history, and saved requests from global state when the extension is activated
-    const storedCookies = context.globalState.get("cookies", {});
-    cookies = storedCookies;
-    const storedHistory = context.globalState.get("apiHistory", []);
-    history = storedHistory;
-    const storedRequests = context.globalState.get("savedApiRequests", []);
-    savedRequests = storedRequests;
+    let _history = null;
+    let _cookies = null;
+    let _savedRequests = null;
+    const getHistory = () => {
+        if (_history === null) {
+            _history = context.globalState.get("apiHistory", []);
+        }
+        return _history;
+    };
+    const getCookies = () => {
+        if (_cookies === null) {
+            _cookies = context.globalState.get("cookies", {});
+        }
+        return _cookies;
+    };
+    const getSavedRequests = () => {
+        if (_savedRequests === null) {
+            _savedRequests = context.globalState.get("savedApiRequests", []);
+        }
+        return _savedRequests;
+    };
     let disposable = vscode.commands.registerCommand("sayaib.hue-console.openGUI", () => {
         const panel = vscode.window.createWebviewPanel("apiTester", "API Tester", vscode.ViewColumn.One, {
             enableScripts: true,
@@ -31,9 +59,8 @@ function apiTest(context) {
         });
         const iconPath = path.resolve(context.extensionPath, "logo.png");
         panel.iconPath = vscode.Uri.file(iconPath);
-        panel.webview.html = getWebviewContent(history);
-        panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
-            var _a, _b;
+        panel.webview.html = getWebviewContent(getHistory());
+        panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case "testAPI":
                     try {
@@ -41,27 +68,25 @@ function apiTest(context) {
                         const config = {
                             method: message.method,
                             url: message.url,
-                            validateStatus: () => true, // Ensure we get all responses including error statuses
+                            validateStatus: () => true,
                         };
-                        // Only include data for POST, PUT, PATCH methods
                         if (["POST", "PUT", "PATCH"].includes(message.method)) {
                             try {
-                                // Try to parse as JSON if possible
                                 config.data = JSON.parse(message.data);
                             }
-                            catch (_c) {
-                                // If not valid JSON, send as raw data
+                            catch {
                                 config.data = message.data;
                             }
                         }
-                        // Remove all previous cookies before making the request
-                        cookies = {}; // Clear the entire cookies object
-                        context.globalState.update("cookies", cookies);
-                        // Handle authentication based on the selected type
+                        _cookies = {};
+                        context.globalState.update("cookies", _cookies);
                         if (message.authType) {
                             switch (message.authType) {
                                 case "Bearer":
-                                    config.headers = Object.assign(Object.assign({}, config.headers), { Authorization: `Bearer ${message.authToken}` });
+                                    config.headers = {
+                                        ...config.headers,
+                                        Authorization: `Bearer ${message.authToken}`,
+                                    };
                                     break;
                                 case "Basic":
                                     config.auth = {
@@ -70,48 +95,54 @@ function apiTest(context) {
                                     };
                                     break;
                                 default:
-                                    // No Auth
                                     break;
                             }
                         }
-                        // Add cookies to the request if they exist for the domain
                         const domain = new URL(message.url).hostname;
-                        if (cookies[domain]) {
-                            config.headers = Object.assign(Object.assign({}, config.headers), { Cookie: cookies[domain].join("; ") });
+                        const currentCookies = getCookies();
+                        if (currentCookies[domain]) {
+                            config.headers = {
+                                ...config.headers,
+                                Cookie: currentCookies[domain].join("; "),
+                            };
                         }
-                        // Process custom headers if provided
                         if (message.headers) {
                             try {
                                 const customHeaders = JSON.parse(message.headers);
-                                config.headers = Object.assign(Object.assign({}, config.headers), customHeaders);
+                                config.headers = {
+                                    ...config.headers,
+                                    ...customHeaders
+                                };
                             }
                             catch (error) {
-                                // If headers are not valid JSON, ignore them
                                 console.error('Invalid headers JSON:', error);
-                                // Set default Content-Type header for POST/PUT requests with data
                                 if (["POST", "PUT", "PATCH"].includes(message.method) &&
                                     message.data) {
-                                    config.headers = Object.assign(Object.assign({}, config.headers), { "Content-Type": "application/json" });
+                                    config.headers = {
+                                        ...config.headers,
+                                        "Content-Type": "application/json",
+                                    };
                                 }
                             }
                         }
                         else {
-                            // Set default Content-Type header for POST/PUT requests with data if no custom headers
                             if (["POST", "PUT", "PATCH"].includes(message.method) &&
                                 message.data) {
-                                config.headers = Object.assign(Object.assign({}, config.headers), { "Content-Type": "application/json" });
+                                config.headers = {
+                                    ...config.headers,
+                                    "Content-Type": "application/json",
+                                };
                             }
                         }
-                        const response = yield (0, axios_1.default)(config);
+                        const response = await (0, axios_1.default)(config);
                         const endTime = Date.now();
                         const responseTime = endTime - startTime;
-                        // Store cookies from the response
                         if (response.headers["set-cookie"]) {
                             const domain = new URL(message.url).hostname;
-                            cookies[domain] = response.headers["set-cookie"];
-                            context.globalState.update("cookies", cookies);
+                            const currentCookies = getCookies();
+                            currentCookies[domain] = response.headers["set-cookie"];
+                            context.globalState.update("cookies", currentCookies);
                         }
-                        // Add to history with proper status code
                         const historyItem = {
                             url: message.url,
                             method: message.method,
@@ -120,23 +151,24 @@ function apiTest(context) {
                             name: message.requestName || "",
                             duration: responseTime
                         };
-                        history.unshift(historyItem);
-                        if (history.length > 10) {
-                            history.pop();
+                        const currentHistory = getHistory();
+                        currentHistory.unshift(historyItem);
+                        if (currentHistory.length > 10) {
+                            currentHistory.pop();
                         }
-                        context.globalState.update("apiHistory", history);
+                        context.globalState.update("apiHistory", currentHistory);
                         panel.webview.postMessage({
                             command: "apiResponse",
                             status: response.status,
                             headers: response.headers,
                             data: response.data,
-                            history: history,
+                            history: getHistory(),
                             responseTime: responseTime,
                         });
                     }
                     catch (error) {
-                        const errorStatus = ((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) || 0;
-                        const errorData = ((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || error.message;
+                        const errorStatus = error.response?.status || 0;
+                        const errorData = error.response?.data || error.message;
                         panel.webview.postMessage({
                             command: "apiError",
                             error: error.message,
@@ -148,41 +180,37 @@ function apiTest(context) {
                 case "getCookies":
                     panel.webview.postMessage({
                         command: "showCookies",
-                        cookies: cookies,
+                        cookies: getCookies(),
                     });
                     break;
                 case "getSavedRequests":
                     panel.webview.postMessage({
                         command: "showSavedRequests",
-                        requests: savedRequests,
+                        requests: getSavedRequests(),
                     });
                     break;
                 case "saveRequest":
-                    // Add the new request to the saved requests array
-                    savedRequests.push(message.request);
-                    // Update the global state
-                    context.globalState.update("savedApiRequests", savedRequests);
-                    // Refresh the saved requests list
+                    const currentSavedRequests = getSavedRequests();
+                    currentSavedRequests.push(message.request);
+                    context.globalState.update("savedApiRequests", currentSavedRequests);
                     panel.webview.postMessage({
                         command: "showSavedRequests",
-                        requests: savedRequests,
+                        requests: currentSavedRequests,
                     });
                     break;
                 case "deleteRequest":
-                    // Remove the request at the specified index
-                    if (message.index >= 0 && message.index < savedRequests.length) {
-                        savedRequests.splice(message.index, 1);
-                        // Update the global state
-                        context.globalState.update("savedApiRequests", savedRequests);
-                        // Refresh the saved requests list
+                    const savedRequestsList = getSavedRequests();
+                    if (message.index >= 0 && message.index < savedRequestsList.length) {
+                        savedRequestsList.splice(message.index, 1);
+                        context.globalState.update("savedApiRequests", savedRequestsList);
                         panel.webview.postMessage({
                             command: "showSavedRequests",
-                            requests: savedRequests,
+                            requests: savedRequestsList,
                         });
                     }
                     break;
             }
-        }), undefined, context.subscriptions);
+        }, undefined, context.subscriptions);
     });
     context.subscriptions.push(disposable);
 }
@@ -1779,7 +1807,6 @@ button:active {
     </body>
     </html>
     `;
-    // Helper function to determine status class
     function getStatusClass(status) {
         if (!status)
             return "";

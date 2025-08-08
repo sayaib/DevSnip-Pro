@@ -24,28 +24,32 @@ interface SavedRequest {
 }
 
 export function apiTest(context: vscode.ExtensionContext) {
-  let history: ApiHistoryItem[] = [];
-  let cookies: { [domain: string]: string[] } = {};
-  let savedRequests: SavedRequest[] = [];
+  // Use lazy initialization pattern to defer loading until needed
+  let _history: ApiHistoryItem[] | null = null;
+  let _cookies: { [domain: string]: string[] } | null = null;
+  let _savedRequests: SavedRequest[] | null = null;
 
-  // Load cookies, history, and saved requests from global state when the extension is activated
-  const storedCookies = context.globalState.get<{ [domain: string]: string[] }>(
-    "cookies",
-    {}
-  );
-  cookies = storedCookies;
+  // Getter functions with lazy loading
+  const getHistory = () => {
+    if (_history === null) {
+      _history = context.globalState.get<ApiHistoryItem[]>("apiHistory", []);
+    }
+    return _history;
+  };
 
-  const storedHistory = context.globalState.get<ApiHistoryItem[]>(
-    "apiHistory",
-    []
-  );
-  history = storedHistory;
-  
-  const storedRequests = context.globalState.get<SavedRequest[]>(
-    "savedApiRequests",
-    []
-  );
-  savedRequests = storedRequests;
+  const getCookies = () => {
+    if (_cookies === null) {
+      _cookies = context.globalState.get<{ [domain: string]: string[] }>("cookies", {});
+    }
+    return _cookies;
+  };
+
+  const getSavedRequests = () => {
+    if (_savedRequests === null) {
+      _savedRequests = context.globalState.get<SavedRequest[]>("savedApiRequests", []);
+    }
+    return _savedRequests;
+  };
 
   let disposable = vscode.commands.registerCommand(
     "sayaib.hue-console.openGUI",
@@ -61,7 +65,7 @@ export function apiTest(context: vscode.ExtensionContext) {
       );
       const iconPath = path.resolve(context.extensionPath, "logo.png");
       panel.iconPath = vscode.Uri.file(iconPath);
-      panel.webview.html = getWebviewContent(history);
+      panel.webview.html = getWebviewContent(getHistory());
 
       panel.webview.onDidReceiveMessage(
         async (message) => {
@@ -87,8 +91,8 @@ export function apiTest(context: vscode.ExtensionContext) {
                 }
 
                 // Remove all previous cookies before making the request
-                cookies = {}; // Clear the entire cookies object
-                context.globalState.update("cookies", cookies);
+                _cookies = {}; // Clear the entire cookies object
+                context.globalState.update("cookies", _cookies);
 
                 // Handle authentication based on the selected type
                 if (message.authType) {
@@ -113,10 +117,11 @@ export function apiTest(context: vscode.ExtensionContext) {
 
                 // Add cookies to the request if they exist for the domain
                 const domain = new URL(message.url).hostname;
-                if (cookies[domain]) {
+                const currentCookies = getCookies();
+                if (currentCookies[domain]) {
                   config.headers = {
                     ...config.headers,
-                    Cookie: cookies[domain].join("; "),
+                    Cookie: currentCookies[domain].join("; "),
                   };
                 }
 
@@ -163,8 +168,9 @@ export function apiTest(context: vscode.ExtensionContext) {
                 // Store cookies from the response
                 if (response.headers["set-cookie"]) {
                   const domain = new URL(message.url).hostname;
-                  cookies[domain] = response.headers["set-cookie"];
-                  context.globalState.update("cookies", cookies);
+                  const currentCookies = getCookies();
+                  currentCookies[domain] = response.headers["set-cookie"];
+                  context.globalState.update("cookies", currentCookies);
                 }
 
                 // Add to history with proper status code
@@ -177,18 +183,19 @@ export function apiTest(context: vscode.ExtensionContext) {
                   duration: responseTime
                 };
 
-                history.unshift(historyItem);
-                if (history.length > 10) {
-                  history.pop();
+                const currentHistory = getHistory();
+                currentHistory.unshift(historyItem);
+                if (currentHistory.length > 10) {
+                  currentHistory.pop();
                 }
-                context.globalState.update("apiHistory", history);
+                context.globalState.update("apiHistory", currentHistory);
 
                 panel.webview.postMessage({
                   command: "apiResponse",
                   status: response.status,
                   headers: response.headers,
                   data: response.data,
-                  history: history,
+                  history: getHistory(),
                   responseTime: responseTime,
                 });
               } catch (error: any) {
@@ -207,39 +214,41 @@ export function apiTest(context: vscode.ExtensionContext) {
             case "getCookies":
               panel.webview.postMessage({
                 command: "showCookies",
-                cookies: cookies,
+                cookies: getCookies(),
               });
               break;
               
             case "getSavedRequests":
               panel.webview.postMessage({
                 command: "showSavedRequests",
-                requests: savedRequests,
+                requests: getSavedRequests(),
               });
               break;
               
             case "saveRequest":
               // Add the new request to the saved requests array
-              savedRequests.push(message.request);
+              const currentSavedRequests = getSavedRequests();
+              currentSavedRequests.push(message.request);
               // Update the global state
-              context.globalState.update("savedApiRequests", savedRequests);
+              context.globalState.update("savedApiRequests", currentSavedRequests);
               // Refresh the saved requests list
               panel.webview.postMessage({
                 command: "showSavedRequests",
-                requests: savedRequests,
+                requests: currentSavedRequests,
               });
               break;
               
             case "deleteRequest":
               // Remove the request at the specified index
-              if (message.index >= 0 && message.index < savedRequests.length) {
-                savedRequests.splice(message.index, 1);
+              const savedRequestsList = getSavedRequests();
+              if (message.index >= 0 && message.index < savedRequestsList.length) {
+                savedRequestsList.splice(message.index, 1);
                 // Update the global state
-                context.globalState.update("savedApiRequests", savedRequests);
+                context.globalState.update("savedApiRequests", savedRequestsList);
                 // Refresh the saved requests list
                 panel.webview.postMessage({
                   command: "showSavedRequests",
-                  requests: savedRequests,
+                  requests: savedRequestsList,
                 });
               }
               break;

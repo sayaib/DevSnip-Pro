@@ -6,10 +6,21 @@ import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemov
 import { codeSnapShot } from "./commands/take-code-snip";
 import { apiTest } from "./commands/api-test";
 
+// Lazy loading helper function
+function registerCommand(context: vscode.ExtensionContext, commandId: string, callback: (...args: any[]) => any) {
+  const disposable = vscode.commands.registerCommand(commandId, async (...args) => {
+    await callback(context, ...args);
+  });
+  context.subscriptions.push(disposable);
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(__dirname, "../custom");
 
-  console.log("DevSnip Pro extension is now active!");
+  // Remove console.log for production
+  // console.log("DevSnip Pro extension is now active!");
+  
+  // Initialize tree view
   const myTreeView = new MyTreeDataProvider();
   vscode.window.registerTreeDataProvider("myView", myTreeView);
 
