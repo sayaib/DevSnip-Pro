@@ -63,8 +63,8 @@ function apiTest(context) {
         panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case "testAPI":
+                    const startTime = Date.now();
                     try {
-                        const startTime = Date.now();
                         const config = {
                             method: message.method,
                             url: message.url,
@@ -78,8 +78,6 @@ function apiTest(context) {
                                 config.data = message.data;
                             }
                         }
-                        _cookies = {};
-                        context.globalState.update("cookies", _cookies);
                         if (message.authType) {
                             switch (message.authType) {
                                 case "Bearer":
@@ -140,7 +138,14 @@ function apiTest(context) {
                         if (response.headers["set-cookie"]) {
                             const domain = new URL(message.url).hostname;
                             const currentCookies = getCookies();
-                            currentCookies[domain] = response.headers["set-cookie"];
+                            if (!currentCookies[domain]) {
+                                currentCookies[domain] = [];
+                            }
+                            response.headers["set-cookie"].forEach((newCookie) => {
+                                const cookieName = newCookie.split("=")[0];
+                                currentCookies[domain] = currentCookies[domain].filter((existingCookie) => !existingCookie.startsWith(`${cookieName}=`));
+                                currentCookies[domain].push(newCookie);
+                            });
                             context.globalState.update("cookies", currentCookies);
                         }
                         const historyItem = {
@@ -169,11 +174,29 @@ function apiTest(context) {
                     catch (error) {
                         const errorStatus = error.response?.status || 0;
                         const errorData = error.response?.data || error.message;
+                        const endTime = Date.now();
+                        const responseTime = endTime - startTime;
+                        const historyItem = {
+                            url: message.url,
+                            method: message.method,
+                            timestamp: Date.now(),
+                            status: errorStatus,
+                            name: message.requestName || "",
+                            duration: responseTime
+                        };
+                        const currentHistory = getHistory();
+                        currentHistory.unshift(historyItem);
+                        if (currentHistory.length > 10) {
+                            currentHistory.pop();
+                        }
+                        context.globalState.update("apiHistory", currentHistory);
                         panel.webview.postMessage({
                             command: "apiError",
                             error: error.message,
                             status: errorStatus,
                             response: errorData,
+                            history: getHistory(),
+                            responseTime: responseTime,
                         });
                     }
                     break;
@@ -1710,7 +1733,9 @@ button:active {
                     // Update status with error styling
                     statusCode.textContent = event.data.status || 'Error';
                     statusCode.className = 'status-error';
-                    responseTime.textContent = '-';
+                    
+                    // Update response time if available
+                    responseTime.textContent = event.data.responseTime ? event.data.responseTime + ' ms' : '-';
                     
                     let errorContent = 'Error: ' + event.data.error;
                     if (event.data.response) {
@@ -1723,6 +1748,28 @@ button:active {
                     setTimeout(() => {
                         responseContainer.classList.remove('response-fade-in');
                     }, 500);
+                    
+                    // Update history table if history is provided
+                    if (event.data.history) {
+                        const historyTableBody = document.getElementById('historyTableBody');
+                        const fragment = document.createDocumentFragment();
+                        
+                        event.data.history.forEach(item => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = \`
+                                <td>\${item.name || 'Unnamed'}</td>
+                                <td>\${item.method}</td>
+                                <td>\${item.url}</td>
+                                <td class="\${getStatusClass(item.status)}">\${item.status || '-'}</td>
+                                <td>\${item.duration || '-'} ms</td>
+                                <td>\${new Date(item.timestamp).toLocaleTimeString()}</td>
+                            \`;
+                            fragment.appendChild(row);
+                        });
+                        
+                        historyTableBody.innerHTML = '';
+                        historyTableBody.appendChild(fragment);
+                    }
                 } else if (event.data.command === 'showCookies') {
                     const cookieList = document.getElementById('cookieList');
                     cookieList.innerHTML = '';
