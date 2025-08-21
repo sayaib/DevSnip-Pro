@@ -535,12 +535,44 @@
         "title": "📸 DevSnip Pro: Create a Code Snapshot."
       },
       {
-        "command": "sayaib.hue-console.connectMongoDB",
-        "title": "🛢 DevSnip Pro: MongoDB "
-      },
-      {
         "command": "sayaib.hue-console.openGUI",
         "title": "🛢 DevSnip Pro: Rest API Client "
+      },
+      {
+        "command": "sayaib.hue-console.advancedToolsHub",
+        "title": "🧰 DevSnip Pro: Advanced Developer Tools Hub"
+      },
+      {
+        "command": "sayaib.hue-console.regexBuilder",
+        "title": "🔍 DevSnip Pro: Regex Builder & Tester"
+      },
+      {
+        "command": "sayaib.hue-console.jsonFormatter",
+        "title": "📝 DevSnip Pro: JSON/XML Formatter"
+      },
+      {
+        "command": "sayaib.hue-console.hashGenerator",
+        "title": "🔐 DevSnip Pro: Hash Generator"
+      },
+      {
+        "command": "sayaib.hue-console.base64Encoder",
+        "title": "🔤 DevSnip Pro: Base64 Encoder/Decoder"
+      },
+      {
+        "command": "sayaib.hue-console.colorPalette",
+        "title": "🎨 DevSnip Pro: Color Palette Manager"
+      },
+      {
+        "command": "sayaib.hue-console.urlEncoder",
+        "title": "🔗 DevSnip Pro: URL Encoder/Decoder"
+      },
+      {
+        "command": "sayaib.hue-console.timestampConverter",
+        "title": "⏰ DevSnip Pro: Timestamp Converter"
+      },
+      {
+        "command": "sayaib.hue-console.loremGenerator",
+        "title": "📄 DevSnip Pro: Lorem Ipsum Generator"
       }
     ],
     "viewsContainers": {

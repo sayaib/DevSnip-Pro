@@ -4,8 +4,9 @@ import { registerCreateSnippetCommand } from "./commands/createSnippetCommand";
 import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
 import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
 import { codeSnapShot } from "./commands/take-code-snip";
-import { registerMongoDBCommands } from "./commands/mongoDBCommands";
+
 import { apiTest } from "./commands/api-test";
+import { registerAdvancedToolsCommands } from "./commands/advancedTools";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(__dirname, "../custom");
@@ -18,9 +19,12 @@ export function activate(context: vscode.ExtensionContext) {
   registerCreateSnippetCommand(context);
   registerShowSnippetsCommand(context, snippetsFolderPath);
   registerListAndRemoveConsoleLogsCommand(context);
-  registerMongoDBCommands(context);
+
   apiTest(context);
   codeSnapShot(context);
+  
+  // Register advanced tools commands
+  registerAdvancedToolsCommands(context);
 }
 
 class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -36,12 +40,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "cloud",
         new vscode.ThemeColor("terminal.ansiBrightCyan")
       ),
-      this.createCommandButton(
-        "Connect to MongoDB",
-        "sayaib.hue-console.connectMongoDB",
-        "database",
-        new vscode.ThemeColor("terminal.ansiBrightGreen")
-      ),
+
       this.createCommandButton(
         "Capture Code Snapshot",
         "sayaib.hue-console.captureCode",
@@ -65,6 +64,24 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "sayaib.hue-console.showSnippets",
         "file-code",
         new vscode.ThemeColor("terminal.ansiBrightMagenta")
+      ),
+      this.createCommandButton(
+        "🧰 Advanced Developer Tools",
+        "sayaib.hue-console.advancedToolsHub",
+        "tools",
+        new vscode.ThemeColor("terminal.ansiBrightWhite")
+      ),
+      this.createCommandButton(
+        "🔍 Regex Builder & Tester",
+        "sayaib.hue-console.regexBuilder",
+        "search",
+        new vscode.ThemeColor("terminal.ansiBrightCyan")
+      ),
+      this.createCommandButton(
+        "📝 JSON/XML Formatter",
+        "sayaib.hue-console.jsonFormatter",
+        "json",
+        new vscode.ThemeColor("terminal.ansiBrightGreen")
       ),
     ];
   }
