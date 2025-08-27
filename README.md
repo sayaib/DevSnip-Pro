@@ -5,15 +5,15 @@
 
 ## Supported Code Snippets
 
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/nodejs_icon.png" alt="NodeJS" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/react_icon.png" alt="ReactJS" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/javascript_icon.png" alt="JavaScript" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/typescript_icon.png" alt="TypeScript" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/mongodb_icon.png" alt="MongoDB" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/html_icon.png" alt="HTML" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/python_icon.png" alt="Python" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/flutter_icon.png" alt="Flutter" width="35" height="35" />
-<img src="https://github.com/sayaib/devsnip-pro-data/blob/main/icons/php_icon.png" alt="PHP" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/nodejs_icon.png" alt="NodeJS" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/react_icon.png" alt="ReactJS" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/javascript_icon.png" alt="JavaScript" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/typescript_icon.png" alt="TypeScript" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/mongodb_icon.png" alt="MongoDB" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/html_icon.png" alt="HTML" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/python_icon.png" alt="Python" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/flutter_icon.png" alt="Flutter" width="35" height="35" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/php_icon.png" alt="PHP" width="35" height="35" />
 
 <h1><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en" align="center">Click Here For DevSnip Pro Full Documentation 
 <img src="https://img.shields.io/static/v1?label=%F0%9F%8C%9F&message=If%20Useful&style=style=flat&color=BC4E99" alt="Star Badge"/></a></h1>
