@@ -3,8 +3,8 @@ import * as path from "path";
 import { registerCreateSnippetCommand } from "./commands/createSnippetCommand";
 import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
 import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
+import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImportsCommand";
 import { codeSnapShot } from "./commands/take-code-snip";
-
 import { apiTest } from "./commands/api-test";
 import { registerAdvancedToolsCommands } from "./commands/advancedTools";
 
@@ -19,6 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
   registerCreateSnippetCommand(context);
   registerShowSnippetsCommand(context, snippetsFolderPath);
   registerListAndRemoveConsoleLogsCommand(context);
+  registerRemoveUnusedImportsCommand(context); // Add this line
 
   apiTest(context);
   codeSnapShot(context);
@@ -40,7 +41,6 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "cloud",
         new vscode.ThemeColor("terminal.ansiBrightCyan")
       ),
-
       this.createCommandButton(
         "Capture Code Snapshot",
         "sayaib.hue-console.captureCode",
@@ -52,6 +52,12 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "sayaib.hue-console.listAndRemoveConsoleLogs",
         "trash",
         new vscode.ThemeColor("terminal.ansiBrightRed")
+      ),
+      this.createCommandButton(
+        "🧹 Remove Unused Imports",
+        "sayaib.hue-console.removeUnusedImports",
+        "symbol-method",
+        new vscode.ThemeColor("terminal.ansiBrightGreen")
       ),
       this.createCommandButton(
         "Create Custom Code Snippet",
