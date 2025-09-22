@@ -1,172 +1,366 @@
 import * as vscode from "vscode";
-import axios from "axios";
+import axios, { AxiosRequestConfig, CancelTokenSource } from "axios";
 import * as path from "path";
 
 interface ApiHistoryItem {
+  id: string;
   url: string;
   method: string;
   timestamp: number;
   status?: number;
+  responseTime?: number;
+  size?: number;
 }
 
+interface RequestHeaders {
+  [key: string]: string;
+}
+
+interface ApiRequest {
+  method: string;
+  url: string;
+  data?: any;
+  headers?: RequestHeaders;
+  authType?: string;
+  authToken?: string;
+  username?: string;
+  password?: string;
+  timeout?: number;
+}
+
+class ApiTester {
+  private history: ApiHistoryItem[] = [];
+  private cookies: { [domain: string]: string[] } = {};
+  private cancelTokenSource: CancelTokenSource | null = null;
+  private readonly MAX_HISTORY_SIZE = 50;
+  private readonly DEFAULT_TIMEOUT = 30000;
+
+  constructor(private context: vscode.ExtensionContext) {
+    this.loadStoredData();
+  }
+
+  private loadStoredData(): void {
+    try {
+      this.cookies = this.context.globalState.get<{ [domain: string]: string[] }>("cookies", {});
+      this.history = this.context.globalState.get<ApiHistoryItem[]>("apiHistory", []);
+    } catch (error) {
+      console.error("Failed to load stored data:", error);
+      this.cookies = {};
+      this.history = [];
+    }
+  }
+
+  private async saveData(): Promise<void> {
+    try {
+      await Promise.all([
+        this.context.globalState.update("cookies", this.cookies),
+        this.context.globalState.update("apiHistory", this.history)
+      ]);
+    } catch (error) {
+      console.error("Failed to save data:", error);
+    }
+  }
+
+  private validateUrl(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private validateJson(jsonString: string): boolean {
+    if (!jsonString.trim()) return true;
+    try {
+      JSON.parse(jsonString);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private addToHistory(item: Omit<ApiHistoryItem, 'id'>): void {
+    const historyItem: ApiHistoryItem = {
+      ...item,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    };
+    
+    this.history.unshift(historyItem);
+    if (this.history.length > this.MAX_HISTORY_SIZE) {
+      this.history = this.history.slice(0, this.MAX_HISTORY_SIZE);
+    }
+    this.saveData();
+  }
+
+  private getDomainFromUrl(url: string): string {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return '';
+    }
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  public async makeRequest(request: ApiRequest): Promise<any> {
+    // Validation
+    if (!this.validateUrl(request.url)) {
+      throw new Error("Invalid URL format");
+    }
+
+    if (request.data && !this.validateJson(request.data)) {
+      throw new Error("Invalid JSON in request body");
+    }
+
+    // Cancel previous request if exists
+    if (this.cancelTokenSource) {
+      this.cancelTokenSource.cancel("New request initiated");
+    }
+
+    this.cancelTokenSource = axios.CancelToken.source();
+    const startTime = Date.now();
+
+    const config: AxiosRequestConfig = {
+      method: request.method as any,
+      url: request.url,
+      timeout: request.timeout || this.DEFAULT_TIMEOUT,
+      validateStatus: () => true,
+      cancelToken: this.cancelTokenSource.token,
+      headers: {
+        'User-Agent': 'DevSnip-Pro API Tester',
+        ...request.headers
+      }
+    };
+
+    // Handle request body for appropriate methods
+    if (["POST", "PUT", "PATCH"].includes(request.method) && request.data) {
+      try {
+        config.data = JSON.parse(request.data);
+        config.headers!['Content-Type'] = 'application/json';
+      } catch {
+        config.data = request.data;
+        config.headers!['Content-Type'] = 'text/plain';
+      }
+    }
+
+    // Handle authentication
+    if (request.authType) {
+      switch (request.authType) {
+        case "Bearer":
+          if (request.authToken) {
+            config.headers!['Authorization'] = `Bearer ${request.authToken}`;
+          }
+          break;
+        case "Basic":
+          if (request.username && request.password) {
+            config.auth = {
+              username: request.username,
+              password: request.password,
+            };
+          }
+          break;
+      }
+    }
+
+    // Add cookies
+    const domain = this.getDomainFromUrl(request.url);
+    if (domain && this.cookies[domain]) {
+      config.headers!['Cookie'] = this.cookies[domain].join("; ");
+    }
+
+    try {
+      const response = await axios(config);
+      const endTime = Date.now();
+      const responseTime = endTime - startTime;
+      
+      // Calculate response size
+      const responseSize = JSON.stringify(response.data).length;
+
+      // Store cookies from response
+      if (response.headers["set-cookie"]) {
+        this.cookies[domain] = response.headers["set-cookie"];
+        this.saveData();
+      }
+
+      // Add to history
+      this.addToHistory({
+        url: request.url,
+        method: request.method,
+        timestamp: Date.now(),
+        status: response.status,
+        responseTime,
+        size: responseSize
+      });
+
+      return {
+        status: response.status,
+        headers: response.headers,
+        data: response.data,
+        responseTime,
+        size: this.formatBytes(responseSize),
+        history: this.history.slice(0, 10) // Only send last 10 for UI
+      };
+    } catch (error: any) {
+      if (axios.isCancel(error)) {
+        throw new Error("Request was cancelled");
+      }
+      
+      const endTime = Date.now();
+      const responseTime = endTime - startTime;
+      const errorStatus = error.response?.status || 0;
+      const errorData = error.response?.data || error.message;
+
+      // Add failed request to history
+      this.addToHistory({
+        url: request.url,
+        method: request.method,
+        timestamp: Date.now(),
+        status: errorStatus,
+        responseTime
+      });
+
+      throw {
+        message: error.message,
+        status: errorStatus,
+        response: errorData,
+        responseTime
+      };
+    }
+  }
+
+  public cancelCurrentRequest(): void {
+    if (this.cancelTokenSource) {
+      this.cancelTokenSource.cancel("Request cancelled by user");
+      this.cancelTokenSource = null;
+    }
+  }
+
+  public getCookies(): { [domain: string]: string[] } {
+    return this.cookies;
+  }
+
+  public clearHistory(): void {
+    this.history = [];
+    this.saveData();
+  }
+
+  public clearCookies(): void {
+    this.cookies = {};
+    this.saveData();
+  }
+
+  public getHistory(): ApiHistoryItem[] {
+    return this.history.slice(0, 10);
+  }
+}
+
+export { ApiTester };
+
 export function apiTest(context: vscode.ExtensionContext) {
-  let history: ApiHistoryItem[] = [];
-  let cookies: { [domain: string]: string[] } = {};
+  const apiTester = new ApiTester(context);
 
-  // Load cookies and history from global state when the extension is activated
-  const storedCookies = context.globalState.get<{ [domain: string]: string[] }>(
-    "cookies",
-    {}
-  );
-  cookies = storedCookies;
-
-  const storedHistory = context.globalState.get<ApiHistoryItem[]>(
-    "apiHistory",
-    []
-  );
-  history = storedHistory;
-
-  let disposable = vscode.commands.registerCommand(
+  const disposable = vscode.commands.registerCommand(
     "sayaib.hue-console.openGUI",
     () => {
       const panel = vscode.window.createWebviewPanel(
         "apiTester",
-        "API Tester",
+        "API Tester Pro",
         vscode.ViewColumn.One,
         {
           enableScripts: true,
           retainContextWhenHidden: true,
+          localResourceRoots: [vscode.Uri.file(context.extensionPath)]
         }
       );
+
       const iconPath = path.resolve(context.extensionPath, "logo.png");
       panel.iconPath = vscode.Uri.file(iconPath);
-      panel.webview.html = getWebviewContent(history);
+      panel.webview.html = getWebviewContent(apiTester.getHistory());
 
       panel.webview.onDidReceiveMessage(
         async (message) => {
-          switch (message.command) {
-            case "testAPI":
-              try {
-                const startTime = Date.now();
-                const config: any = {
-                  method: message.method,
-                  url: message.url,
-                  validateStatus: () => true, // Ensure we get all responses including error statuses
-                };
+          try {
+            switch (message.command) {
+              case "testAPI":
+                try {
+                  panel.webview.postMessage({ command: "requestStarted" });
+                  
+                  const result = await apiTester.makeRequest({
+                    method: message.method,
+                    url: message.url,
+                    data: message.data,
+                    headers: message.headers,
+                    authType: message.authType,
+                    authToken: message.authToken,
+                    username: message.username,
+                    password: message.password,
+                    timeout: message.timeout
+                  });
 
-                // Only include data for POST, PUT, PATCH methods
-                if (["POST", "PUT", "PATCH"].includes(message.method)) {
-                  try {
-                    // Try to parse as JSON if possible
-                    config.data = JSON.parse(message.data);
-                  } catch {
-                    // If not valid JSON, send as raw data
-                    config.data = message.data;
-                  }
+                  panel.webview.postMessage({
+                    command: "apiResponse",
+                    ...result
+                  });
+                } catch (error: any) {
+                  panel.webview.postMessage({
+                    command: "apiError",
+                    error: error.message,
+                    status: error.status || 0,
+                    response: error.response,
+                    responseTime: error.responseTime
+                  });
                 }
+                break;
 
-                // Remove all previous cookies before making the request
-                cookies = {}; // Clear the entire cookies object
-                context.globalState.update("cookies", cookies);
+              case "cancelRequest":
+                apiTester.cancelCurrentRequest();
+                panel.webview.postMessage({ command: "requestCancelled" });
+                break;
 
-                // Handle authentication based on the selected type
-                if (message.authType) {
-                  switch (message.authType) {
-                    case "Bearer":
-                      config.headers = {
-                        ...config.headers,
-                        Authorization: `Bearer ${message.authToken}`,
-                      };
-                      break;
-                    case "Basic":
-                      config.auth = {
-                        username: message.username,
-                        password: message.password,
-                      };
-                      break;
-                    default:
-                      // No Auth
-                      break;
-                  }
-                }
-
-                // Add cookies to the request if they exist for the domain
-                const domain = new URL(message.url).hostname;
-                if (cookies[domain]) {
-                  config.headers = {
-                    ...config.headers,
-                    Cookie: cookies[domain].join("; "),
-                  };
-                }
-
-                // Set Content-Type header for POST/PUT requests with data
-                if (
-                  ["POST", "PUT", "PATCH"].includes(message.method) &&
-                  message.data
-                ) {
-                  config.headers = {
-                    ...config.headers,
-                    "Content-Type": "application/json",
-                  };
-                }
-
-                const response = await axios(config);
-                const endTime = Date.now();
-                const responseTime = endTime - startTime;
-
-                // Store cookies from the response
-                if (response.headers["set-cookie"]) {
-                  const domain = new URL(message.url).hostname;
-                  cookies[domain] = response.headers["set-cookie"];
-                  context.globalState.update("cookies", cookies);
-                }
-
-                // Add to history with proper status code
-                const historyItem: ApiHistoryItem = {
-                  url: message.url,
-                  method: message.method,
-                  timestamp: Date.now(),
-                  status: response.status, // This will now include all status codes
-                };
-
-                history.unshift(historyItem);
-                if (history.length > 10) {
-                  history.pop();
-                }
-                context.globalState.update("apiHistory", history);
-
+              case "getCookies":
                 panel.webview.postMessage({
-                  command: "apiResponse",
-                  status: response.status,
-                  headers: response.headers,
-                  data: response.data,
-                  history: history,
-                  responseTime: responseTime,
+                  command: "showCookies",
+                  cookies: apiTester.getCookies(),
                 });
-              } catch (error: any) {
-                const errorStatus = error.response?.status || 0;
-                const errorData = error.response?.data || error.message;
+                break;
 
+              case "clearHistory":
+                apiTester.clearHistory();
                 panel.webview.postMessage({
-                  command: "apiError",
-                  error: error.message,
-                  status: errorStatus,
-                  response: errorData,
+                  command: "historyCleared",
+                  history: []
                 });
-              }
-              break;
+                break;
 
-            case "getCookies":
-              panel.webview.postMessage({
-                command: "showCookies",
-                cookies: cookies,
-              });
-              break;
+              case "clearCookies":
+                apiTester.clearCookies();
+                panel.webview.postMessage({
+                  command: "cookiesCleared"
+                });
+                break;
+            }
+          } catch (error: any) {
+            panel.webview.postMessage({
+              command: "error",
+              message: error.message || "An unexpected error occurred"
+            });
           }
         },
         undefined,
         context.subscriptions
       );
+
+      // Clean up on panel disposal
+      panel.onDidDispose(() => {
+        apiTester.cancelCurrentRequest();
+      });
     }
   );
 
@@ -180,344 +374,580 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>API Tester</title>
+        <title>API Tester Pro</title>
         <style>
+        :root {
+            --primary-color: #007acc;
+            --primary-hover: #005f99;
+            --success-color: #4CAF50;
+            --error-color: #F44336;
+            --warning-color: #FFC107;
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252526;
+            --bg-tertiary: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #cccccc;
+            --border-color: #444;
+            --json-key: #9cdcfe;
+            --json-string: #ce9178;
+            --json-number: #b5cea8;
+            --json-boolean: #569cd6;
+            --json-null: #569cd6;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    padding: 20px;
-    background-color: #1e1e1e;
-    color: #ffffff;
-    line-height: 1.6;
-    margin: 0;
-}
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            margin: 0;
+        }
 
-h1 {
-    color: #007acc;
-    margin-bottom: 20px;
-}
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
 
-.form-group {
-    margin-bottom: 20px;
-    position: relative;
-}
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 2rem;
+        }
 
-label {
-    display: block;
-    margin-bottom: 8px;
-    color: #cccccc;
-    font-weight: 600;
-}
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
 
-input, select, textarea {
-    width: 100%;
-    padding: 10px;
-    box-sizing: border-box;
-    background-color: #2d2d2d;
-    color: #ffffff;
-    border: 1px solid #444;
-    border-radius: 4px;
-    font-size: 14px;
-}
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
 
-input:focus, select:focus, textarea:focus {
-    border-color: #007acc;
-    outline: none;
-}
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
 
-button {
-    padding: 12px 24px;
-    background-color: #007acc;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    transition: background-color 0.3s ease;
-    margin-right: 10px;
-    margin-bottom: 10px;
-}
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
 
-button:hover {
-    background-color: #005f99;
-}
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+        }
 
-.response {
-    padding: 10px;
-    background-color: #252526;
-    border: 1px solid #444;
-    border-radius: 4px;
-    white-space: pre-wrap;
-    color: #ffffff;
-    max-height: 70vh;
-    overflow-y: auto;
-}
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
 
-.response-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
-    font-weight: bold;
-    color:rgb(31, 140, 212);
-    flex-wrap: wrap;
-    gap: 10px;
-}
+        .input-group input {
+            flex: 1;
+        }
 
-.json-key {
-    color: #9cdcfe;
-}
+        button {
+            padding: 12px 24px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-.json-value {
-    color: #ce9178;
-}
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
 
-.json-string {
-    color: #ce9178;
-}
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
 
-.json-number {
-    color: #b5cea8;
-}
+        .btn-secondary {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
 
-.json-boolean {
-    color: #569cd6;
-}
+        .btn-secondary:hover:not(:disabled) {
+            background-color: var(--bg-tertiary);
+        }
 
-.json-null {
-    color: #569cd6;
-}
+        .btn-danger {
+            background-color: var(--error-color);
+        }
 
-.history {
-    margin-top: 20px;
-}
+        .btn-danger:hover:not(:disabled) {
+            background-color: #d32f2f;
+        }
 
-.history h2 {
-    color: #007acc;
-    margin-bottom: 15px;
-}
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
 
-.history-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-    overflow-x: auto;
-    display: block;
-}
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
 
-.history-table th, .history-table td {
-    padding: 10px;
-    border: 1px solid #444;
-    text-align: left;
-    white-space: nowrap;
-}
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
 
-.history-table th {
-    background-color: #252526;
-    color: #007acc;
-}
+        .response-container {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+        }
 
-.history-table tr:nth-child(even) {
-    background-color: #252526;
-}
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background-color: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
 
-.history-table tr:hover {
-    background-color: #2d2d2d;
-}
+        .response-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
 
-.body-api {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-}
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
 
-@media (min-width: 768px) {
-    .body-api {
-        flex-direction: row;
-    }
-    
-    .body-api > div {
-        flex: 1;
-    }
-    
-    .body-api > div:first-child {
-        max-width: 40%;
-    }
-    
-    .body-api > div:last-child {
-        max-width: 58%;
-    }
-}
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
 
-#responseOutput {
-    background-color: #1e1e1e;
-    padding: 10px;
-    border-radius: 4px;
-}
+        .stat-value {
+            font-weight: bold;
+            font-size: 14px;
+        }
 
-.beautify-btn {
-    position: absolute;
-    right: 0;
-    top: 0;
-    padding: 5px 10px;
-    background-color: #007acc;
-    color: white;
-    border: none;
-    border-radius: 0 4px 0 0;
-    cursor: pointer;
-    font-size: 12px;
-}
+        .response-content {
+            padding: 15px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
 
-/* Status code colors */
-.status-success {
-    color: #4CAF50;
-}
+        .response-output {
+            background-color: var(--bg-primary);
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            overflow-x: auto;
+        }
 
-.status-error {
-    color: #F44336;
-}
+        .json-key { color: var(--json-key); }
+        .json-string { color: var(--json-string); }
+        .json-number { color: var(--json-number); }
+        .json-boolean { color: var(--json-boolean); }
+        .json-null { color: var(--json-null); }
 
-.status-warning {
-    color: #FFC107;
-}
+        .status-success { color: var(--success-color); }
+        .status-error { color: var(--error-color); }
+        .status-warning { color: var(--warning-color); }
 
-/* Popup Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+        }
 
-.modal-content {
-    background-color: #252526;
-    padding: 20px;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 800px;
-    max-height: 80vh;
-    overflow-y: auto;
-}
+        .request-panel, .response-panel {
+            background-color: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
 
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
+        .panel-title {
+            color: var(--primary-color);
+            margin: 0 0 20px 0;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
-.modal-header h2 {
-    margin: 0;
-    color: #007acc;
-}
+        .history-section {
+            margin-top: 30px;
+            background-color: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
 
-.modal-header button {
-    background: none;
-    border: none;
-    color: #ffffff;
-    font-size: 20px;
-    cursor: pointer;
-    padding: 5px;
-}
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
 
-.modal-body {
-    color: #ffffff;
-}
+        .history-table th,
+        .history-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
 
-.cookie-item {
-    margin-bottom: 10px;
-    word-break: break-all;
-}
+        .history-table th {
+            background-color: var(--bg-tertiary);
+            color: var(--primary-color);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
 
-.cookie-item strong {
-    color: #9cdcfe;
-}
+        .history-table tr:hover {
+            background-color: var(--bg-tertiary);
+        }
 
-.copy-button {
-    margin-top: 20px;
-    padding: 10px 20px;
-    background-color: #007acc;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-}
+        .history-table td {
+            font-size: 13px;
+        }
 
-.copy-button:hover {
-    background-color: #005f99;
-}
+        .url-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
-/* Responsive adjustments */
-@media (max-width: 600px) {
-    body {
-        padding: 10px;
-    }
-    
-    button {
-        width: 100%;
-        margin-right: 0;
-    }
-    
-    .history-table {
-        font-size: 14px;
-    }
-    
-    .history-table th, 
-    .history-table td {
-        padding: 8px 5px;
-    }
-    
-    .modal-content {
-        width: 95%;
-        padding: 15px;
-    }
-}
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: var(--bg-secondary);
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        .cookie-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: var(--bg-primary);
+            border-radius: 4px;
+            word-break: break-all;
+        }
+
+        .cookie-domain {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .headers-container {
+            margin-bottom: 20px;
+        }
+
+        .header-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .header-row input {
+            flex: 1;
+        }
+
+        .remove-header-btn {
+            padding: 8px;
+            background-color: var(--error-color);
+            min-width: auto;
+        }
+
+        .add-header-btn {
+            background-color: var(--success-color);
+        }
+
+        .add-header-btn:hover {
+            background-color: #45a049;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            z-index: 1001;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background-color: var(--success-color);
+        }
+
+        .notification.error {
+            background-color: var(--error-color);
+        }
+
+        .notification.info {
+            background-color: var(--primary-color);
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .header-actions {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            
+            .request-panel,
+            .response-panel,
+            .history-section {
+                padding: 15px;
+            }
+            
+            .response-stats {
+                justify-content: center;
+            }
+            
+            .history-table {
+                font-size: 12px;
+            }
+            
+            .history-table th,
+            .history-table td {
+                padding: 8px 6px;
+            }
+            
+            .modal-content {
+                padding: 20px;
+                width: 95%;
+            }
+        }
         </style>
     </head>
     <body>
-        <h1>Rest API</h1>
-        <div class="body-api">
-          <div>
-            <div class="form-group">
-                <label for="method">HTTP Method:</label>
-                <select id="method">
-                    <option value="GET">GET</option>
-                    <option value="POST">POST</option>
-                    <option value="PUT">PUT</option>
-                    <option value="DELETE">DELETE</option>
-                    <option value="PATCH">PATCH</option>
-                </select>
+        <div class="header">
+            <h1>🚀 API Tester Pro</h1>
+            <div class="header-actions">
+                <button id="showCookies" class="btn-secondary">🍪 Cookies</button>
+                <button id="clearHistory" class="btn-secondary">🗑️ Clear History</button>
+                <button id="clearCookies" class="btn-danger btn-small">Clear Cookies</button>
             </div>
-            <div class="form-group">
-                <label for="url">URL:</label>
-                <input type="text" id="url" placeholder="https://example.com/api">
+        </div>
+
+        <div class="main-content">
+            <div class="request-panel">
+                <h2 class="panel-title">📤 Request</h2>
+                
+                <div class="form-group">
+                    <label for="method">HTTP Method</label>
+                    <select id="method">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="HEAD">HEAD</option>
+                        <option value="OPTIONS">OPTIONS</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="url">URL</label>
+                    <input type="text" id="url" placeholder="https://api.example.com/endpoint">
+                </div>
+
+                <div class="form-group">
+                    <label for="timeout">Timeout (ms)</label>
+                    <input type="number" id="timeout" value="30000" min="1000" max="300000">
+                </div>
+
+                <div class="form-group">
+                    <label>Custom Headers</label>
+                    <div class="headers-container" id="headersContainer">
+                        <div class="header-row">
+                            <input type="text" placeholder="Header Name" class="header-key">
+                            <input type="text" placeholder="Header Value" class="header-value">
+                            <button type="button" class="remove-header-btn btn-small">✕</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addHeader" class="add-header-btn btn-small">+ Add Header</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="authType">Authentication</label>
+                    <select id="authType">
+                        <option value="None">No Auth</option>
+                        <option value="Bearer">Bearer Token</option>
+                        <option value="Basic">Basic Auth</option>
+                    </select>
+                </div>
+
+                <div id="authFields"></div>
+
+                <div class="form-group">
+                    <label for="body">Request Body</label>
+                    <div style="position: relative;">
+                        <button id="beautifyJson" class="btn-small" style="position: absolute; top: 10px; right: 10px; z-index: 10;">✨ Format</button>
+                        <textarea id="body" rows="8" placeholder='{"key": "value"}'></textarea>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="sendRequest">
+                        <span class="button-text">🚀 Send Request</span>
+                        <div class="loading-spinner" style="display: none;"></div>
+                    </button>
+                    <button id="cancelRequest" class="btn-danger" style="display: none;">⏹️ Cancel</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="authType">Authentication Type:</label>
-                <select id="authType">
-                    <option value="None">No Auth</option>
-                    <option value="Bearer">Bearer Token</option>
-                    <option value="Basic">Basic Auth</option>
-                </select>
+
+            <div class="response-panel">
+                <h2 class="panel-title">📥 Response</h2>
+                
+                <div class="response-container">
+                    <div class="response-header">
+                        <div class="response-stats">
+                            <div class="stat-item">
+                                <div class="stat-label">Status</div>
+                                <div class="stat-value" id="statusCode">-</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Time</div>
+                                <div class="stat-value" id="responseTime">-</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Size</div>
+                                <div class="stat-value" id="responseSize">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="response-content">
+                        <div class="response-output" id="responseOutput">
+                            <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                                📡 Ready to send your first request
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="authFields">
-                <!-- Dynamic fields for authentication will be injected here -->
+        </div>
+
+        <div class="history-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 class="panel-title">📊 Request History</h2>
+                <span style="color: var(--text-secondary); font-size: 14px;">Last 10 requests</span>
             </div>
-            <div class="form-group">
-                <label for="body">Body (JSON):</label>
-                <button id="beautifyJson" class="beautify-btn">Beautify JSON</button>
-                <textarea id="body" rows="5" placeholder='{"key": "value"}'></textarea>
-            </div>
-            <button id="sendRequest">Send Request</button>
-            <button id="showCookies">Show Cookies</button>
-            <div class="history">
-                <h2>History (Last 10)</h2>
+            <div style="overflow-x: auto;">
                 <table class="history-table">
                     <thead>
                         <tr>
@@ -525,58 +955,56 @@ button:hover {
                             <th>URL</th>
                             <th>Status</th>
                             <th>Time</th>
+                            <th>Size</th>
+                            <th>Timestamp</th>
                         </tr>
                     </thead>
                     <tbody id="historyTableBody">
-                        ${history
-                          .map(
-                            (item) => `
+                        ${history.map(item => `
                             <tr>
-                                <td>${item.method}</td>
-                                <td>${item.url}</td>
-                                <td class="${getStatusClass(item.status)}">${
-                              item.status || "-"
-                            }</td>
-                                <td>${new Date(
-                                  item.timestamp
-                                ).toLocaleTimeString()}</td>
+                                <td><span style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 3px; font-size: 11px;">${item.method}</span></td>
+                                <td class="url-cell" title="${item.url}">${item.url}</td>
+                                <td class="${getStatusClass(item.status)}">${item.status || '-'}</td>
+                                <td>${item.responseTime ? item.responseTime + 'ms' : '-'}</td>
+                                <td>${item.size ? formatBytes(item.size) : '-'}</td>
+                                <td>${new Date(item.timestamp).toLocaleString()}</td>
                             </tr>
-                        `
-                          )
-                          .join("")}
+                        `).join('')}
                     </tbody>
                 </table>
             </div>
-          </div>
-          <div>
-            <div class="response-header">
-                <span>Status: <span id="statusCode" class="${getStatusClass()}">-</span></span>
-                <span>Time: <span id="responseTime">-</span> ms</span>
-            </div>
-            <div class="response">
-                <pre id="responseOutput"></pre>
-            </div>
-          </div>
         </div>
 
-        <!-- Popup Modal for Cookies -->
+        <!-- Cookie Modal -->
         <div id="cookieModal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Stored Cookies</h2>
-                    <button id="closeModal">&times;</button>
+                    <h2>🍪 Stored Cookies</h2>
+                    <button class="close-btn" id="closeModal">×</button>
                 </div>
-                <div class="modal-body" id="cookieList">
-                    <!-- Cookies will be dynamically inserted here -->
-                </div>
-                <button id="copyCookies" class="copy-button">Copy to Clipboard</button>
+                <div id="cookieList"></div>
+                <button id="copyCookies" class="btn-secondary" style="width: 100%; margin-top: 20px;">📋 Copy to Clipboard</button>
             </div>
         </div>
 
         <script>
             const vscode = acquireVsCodeApi();
+            let isRequestInProgress = false;
 
-            // Function to determine status class
+            // Utility functions
+            function showNotification(message, type = 'info') {
+                const notification = document.createElement('div');
+                notification.className = \`notification \${type}\`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => notification.classList.add('show'), 100);
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => document.body.removeChild(notification), 300);
+                }, 3000);
+            }
+
             function getStatusClass(status) {
                 if (!status) return '';
                 if (status >= 200 && status < 300) return 'status-success';
@@ -585,13 +1013,12 @@ button:hover {
                 return 'status-warning';
             }
 
-            // Function to syntax highlight JSON
             function syntaxHighlight(json) {
                 if (typeof json !== 'string') {
                     json = JSON.stringify(json, null, 2);
                 }
                 json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (match) => {
+                return json.replace(/("(\\\\u[a-zA-Z0-9]{4}|\\\\[^u]|[^\\\\"])*"(\\s*:)?|\\b(true|false|null)\\b|-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?)/g, (match) => {
                     let cls = 'json-value';
                     if (/^"/.test(match)) {
                         if (/:$/.test(match)) {
@@ -610,18 +1037,26 @@ button:hover {
                 });
             }
 
-            // Function to beautify JSON
-            function beautifyJson() {
-                const bodyTextarea = document.getElementById('body');
-                try {
-                    const parsedJson = JSON.parse(bodyTextarea.value);
-                    bodyTextarea.value = JSON.stringify(parsedJson, null, 2);
-                } catch (e) {
-                    alert('Invalid JSON: ' + e.message);
+            function updateRequestState(inProgress) {
+                isRequestInProgress = inProgress;
+                const sendBtn = document.getElementById('sendRequest');
+                const cancelBtn = document.getElementById('cancelRequest');
+                const spinner = sendBtn.querySelector('.loading-spinner');
+                const buttonText = sendBtn.querySelector('.button-text');
+
+                if (inProgress) {
+                    sendBtn.disabled = true;
+                    cancelBtn.style.display = 'inline-flex';
+                    spinner.style.display = 'block';
+                    buttonText.textContent = '⏳ Sending...';
+                } else {
+                    sendBtn.disabled = false;
+                    cancelBtn.style.display = 'none';
+                    spinner.style.display = 'none';
+                    buttonText.textContent = '🚀 Send Request';
                 }
             }
 
-            // Function to update authentication fields based on selected type
             function updateAuthFields() {
                 const authType = document.getElementById('authType').value;
                 const authFields = document.getElementById('authFields');
@@ -631,52 +1066,117 @@ button:hover {
                     case 'Bearer':
                         fieldsHTML = \`
                             <div class="form-group">
-                                <label for="authToken">Bearer Token:</label>
-                                <input type="text" id="authToken" placeholder="Enter Bearer Token">
+                                <label for="authToken">Bearer Token</label>
+                                <input type="password" id="authToken" placeholder="Enter your bearer token">
                             </div>
                         \`;
                         break;
                     case 'Basic':
                         fieldsHTML = \`
                             <div class="form-group">
-                                <label for="username">Username:</label>
-                                <input type="text" id="username" placeholder="Enter Username">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" placeholder="Enter username">
                             </div>
                             <div class="form-group">
-                                <label for="password">Password:</label>
-                                <input type="password" id="password" placeholder="Enter Password">
+                                <label for="password">Password</label>
+                                <input type="password" id="password" placeholder="Enter password">
                             </div>
                         \`;
-                        break;
-                    default:
-                        fieldsHTML = '';
                         break;
                 }
 
                 authFields.innerHTML = fieldsHTML;
             }
 
-            // Update auth fields when the authentication type changes
+            function collectHeaders() {
+                const headers = {};
+                const headerRows = document.querySelectorAll('.header-row');
+                
+                headerRows.forEach(row => {
+                    const key = row.querySelector('.header-key').value.trim();
+                    const value = row.querySelector('.header-value').value.trim();
+                    if (key && value) {
+                        headers[key] = value;
+                    }
+                });
+                
+                return headers;
+            }
+
+            function addHeaderRow() {
+                const container = document.getElementById('headersContainer');
+                const row = document.createElement('div');
+                row.className = 'header-row';
+                row.innerHTML = \`
+                    <input type="text" placeholder="Header Name" class="header-key">
+                    <input type="text" placeholder="Header Value" class="header-value">
+                    <button type="button" class="remove-header-btn btn-small">✕</button>
+                \`;
+                
+                row.querySelector('.remove-header-btn').addEventListener('click', () => {
+                    container.removeChild(row);
+                });
+                
+                container.appendChild(row);
+            }
+
+            function updateHistoryTable(history) {
+                const tbody = document.getElementById('historyTableBody');
+                tbody.innerHTML = history.map(item => \`
+                    <tr>
+                        <td><span style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 3px; font-size: 11px;">\${item.method}</span></td>
+                        <td class="url-cell" title="\${item.url}">\${item.url}</td>
+                        <td class="\${getStatusClass(item.status)}">\${item.status || '-'}</td>
+                        <td>\${item.responseTime ? item.responseTime + 'ms' : '-'}</td>
+                        <td>\${item.size ? item.size : '-'}</td>
+                        <td>\${new Date(item.timestamp).toLocaleString()}</td>
+                    </tr>
+                \`).join('');
+            }
+
+            // Event listeners
             document.getElementById('authType').addEventListener('change', updateAuthFields);
+            
+            document.getElementById('addHeader').addEventListener('click', addHeaderRow);
+            
+            // Initial header row remove functionality
+            document.querySelector('.remove-header-btn').addEventListener('click', function() {
+                if (document.querySelectorAll('.header-row').length > 1) {
+                    this.parentElement.remove();
+                }
+            });
 
-            // Initial call to set up auth fields
-            updateAuthFields();
+            document.getElementById('beautifyJson').addEventListener('click', () => {
+                const bodyTextarea = document.getElementById('body');
+                try {
+                    const parsedJson = JSON.parse(bodyTextarea.value);
+                    bodyTextarea.value = JSON.stringify(parsedJson, null, 2);
+                    showNotification('JSON formatted successfully!', 'success');
+                } catch (e) {
+                    showNotification('Invalid JSON: ' + e.message, 'error');
+                }
+            });
 
-            // Handle Beautify JSON button click
-            document.getElementById('beautifyJson').addEventListener('click', beautifyJson);
-
-            // Handle Send Request button click
             document.getElementById('sendRequest').addEventListener('click', () => {
+                if (isRequestInProgress) return;
+
                 const method = document.getElementById('method').value;
-                const url = document.getElementById('url').value;
-                const body = document.getElementById('body').value;
+                const url = document.getElementById('url').value.trim();
+                const body = document.getElementById('body').value.trim();
+                const timeout = parseInt(document.getElementById('timeout').value) || 30000;
                 const authType = document.getElementById('authType').value;
                 const authToken = document.getElementById('authToken')?.value;
                 const username = document.getElementById('username')?.value;
                 const password = document.getElementById('password')?.value;
+                const headers = collectHeaders();
 
                 if (!url) {
-                    alert('Please enter a URL');
+                    showNotification('Please enter a URL', 'error');
+                    return;
+                }
+
+                if (!/^https?:\\/\\//i.test(url)) {
+                    showNotification('URL must start with http:// or https://', 'error');
                     return;
                 }
 
@@ -685,103 +1185,147 @@ button:hover {
                     method,
                     url,
                     data: body,
+                    headers,
                     authType,
                     authToken,
                     username,
                     password,
+                    timeout
                 });
             });
 
-            // Handle Show Cookies button click
+            document.getElementById('cancelRequest').addEventListener('click', () => {
+                vscode.postMessage({ command: 'cancelRequest' });
+            });
+
             document.getElementById('showCookies').addEventListener('click', () => {
-                vscode.postMessage({
-                    command: 'getCookies',
-                });
+                vscode.postMessage({ command: 'getCookies' });
             });
 
-            // Handle Close Modal button click
+            document.getElementById('clearHistory').addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear the request history?')) {
+                    vscode.postMessage({ command: 'clearHistory' });
+                }
+            });
+
+            document.getElementById('clearCookies').addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear all stored cookies?')) {
+                    vscode.postMessage({ command: 'clearCookies' });
+                }
+            });
+
             document.getElementById('closeModal').addEventListener('click', () => {
                 document.getElementById('cookieModal').style.display = 'none';
             });
 
-            // Handle Copy to Clipboard button click
             document.getElementById('copyCookies').addEventListener('click', () => {
                 const cookieText = document.getElementById('cookieList').innerText;
                 navigator.clipboard.writeText(cookieText).then(() => {
-                    alert('Cookies copied to clipboard!');
+                    showNotification('Cookies copied to clipboard!', 'success');
                 });
             });
 
-            // Listen for messages from the extension
+            // Initialize
+            updateAuthFields();
+
+            // Message handling
             window.addEventListener('message', (event) => {
-                const responseOutput = document.getElementById('responseOutput');
-                const statusCode = document.getElementById('statusCode');
-                const responseTime = document.getElementById('responseTime');
+                const data = event.data;
 
-                if (event.data.command === 'apiResponse') {
-                    // Update status with proper styling
-                    statusCode.textContent = event.data.status;
-                    statusCode.className = getStatusClass(event.data.status);
-                    
-                    // Update response time
-                    responseTime.textContent = event.data.responseTime;
-                    
-                    // Update response output
-                    responseOutput.innerHTML = syntaxHighlight(event.data.data);
+                switch (data.command) {
+                    case 'requestStarted':
+                        updateRequestState(true);
+                        document.getElementById('responseOutput').innerHTML = 
+                            '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">⏳ Sending request...</div>';
+                        break;
 
-                    // Update history table
-                    const historyTableBody = document.getElementById('historyTableBody');
-                    historyTableBody.innerHTML = event.data.history.map(item => \`
-                        <tr>
-                            <td>\${item.method}</td>
-                            <td>\${item.url}</td>
-                            <td class="\${getStatusClass(item.status)}">\${item.status || '-'}</td>
-                            <td>\${new Date(item.timestamp).toLocaleTimeString()}</td>
-                        </tr>
-                    \`).join('');
-                } else if (event.data.command === 'apiError') {
-                    // Update status with error styling
-                    statusCode.textContent = event.data.status || 'Error';
-                    statusCode.className = 'status-error';
-                    responseTime.textContent = '-';
-                    
-                    let errorContent = 'Error: ' + event.data.error;
-                    if (event.data.response) {
-                        errorContent += '\\n\\n' + syntaxHighlight(event.data.response);
-                    }
-                    responseOutput.innerHTML = errorContent;
-                } else if (event.data.command === 'showCookies') {
-                    const cookieList = document.getElementById('cookieList');
-                    cookieList.innerHTML = '';
+                    case 'apiResponse':
+                        updateRequestState(false);
+                        document.getElementById('statusCode').textContent = data.status;
+                        document.getElementById('statusCode').className = 'stat-value ' + getStatusClass(data.status);
+                        document.getElementById('responseTime').textContent = data.responseTime + 'ms';
+                        document.getElementById('responseSize').textContent = data.size;
+                        document.getElementById('responseOutput').innerHTML = syntaxHighlight(data.data);
+                        updateHistoryTable(data.history);
+                        showNotification('Request completed successfully!', 'success');
+                        break;
 
-                    for (const [domain, cookies] of Object.entries(event.data.cookies)) {
-                        const domainHeader = document.createElement('h3');
-                        domainHeader.textContent = domain;
-                        cookieList.appendChild(domainHeader);
+                    case 'apiError':
+                        updateRequestState(false);
+                        document.getElementById('statusCode').textContent = data.status || 'Error';
+                        document.getElementById('statusCode').className = 'stat-value status-error';
+                        document.getElementById('responseTime').textContent = data.responseTime ? data.responseTime + 'ms' : '-';
+                        document.getElementById('responseSize').textContent = '-';
+                        
+                        let errorContent = 'Error: ' + data.error;
+                        if (data.response) {
+                            errorContent += '\\n\\n' + syntaxHighlight(data.response);
+                        }
+                        document.getElementById('responseOutput').innerHTML = errorContent;
+                        showNotification('Request failed: ' + data.error, 'error');
+                        break;
 
-                        cookies.forEach(cookie => {
-                            const cookieItem = document.createElement('div');
-                            cookieItem.className = 'cookie-item';
-                            cookieItem.innerHTML = \`<strong>Cookie:</strong> \${cookie}\`;
-                            cookieList.appendChild(cookieItem);
-                        });
-                    }
+                    case 'requestCancelled':
+                        updateRequestState(false);
+                        document.getElementById('responseOutput').innerHTML = 
+                            '<div style="text-align: center; color: var(--warning-color); padding: 40px;">⚠️ Request was cancelled</div>';
+                        showNotification('Request cancelled', 'info');
+                        break;
 
-                    document.getElementById('cookieModal').style.display = 'flex';
+                    case 'showCookies':
+                        const cookieList = document.getElementById('cookieList');
+                        cookieList.innerHTML = '';
+
+                        if (Object.keys(data.cookies).length === 0) {
+                            cookieList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">No cookies stored</div>';
+                        } else {
+                            for (const [domain, cookies] of Object.entries(data.cookies)) {
+                                const domainDiv = document.createElement('div');
+                                domainDiv.className = 'cookie-item';
+                                domainDiv.innerHTML = \`
+                                    <div class="cookie-domain">\${domain}</div>
+                                    \${cookies.map(cookie => \`<div style="margin-left: 10px; font-family: monospace; font-size: 12px;">\${cookie}</div>\`).join('')}
+                                \`;
+                                cookieList.appendChild(domainDiv);
+                            }
+                        }
+
+                        document.getElementById('cookieModal').style.display = 'flex';
+                        break;
+
+                    case 'historyCleared':
+                        updateHistoryTable([]);
+                        showNotification('History cleared successfully!', 'success');
+                        break;
+
+                    case 'cookiesCleared':
+                        showNotification('Cookies cleared successfully!', 'success');
+                        break;
+
+                    case 'error':
+                        showNotification('Error: ' + data.message, 'error');
+                        break;
                 }
             });
         </script>
     </body>
     </html>
-    `;
+  `;
 
-  // Helper function to determine status class
   function getStatusClass(status?: number): string {
     if (!status) return "";
     if (status >= 200 && status < 300) return "status-success";
     if (status >= 400 && status < 500) return "status-error";
     if (status >= 500) return "status-error";
     return "status-warning";
+  }
+
+  function formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 }
 
