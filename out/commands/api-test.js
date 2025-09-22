@@ -835,7 +835,11 @@ function getWebviewContent(history) {
                 <div class="form-group">
                     <label for="body">Request Body</label>
                     <div style="position: relative;">
-                        <button id="beautifyJson" class="btn-small" style="position: absolute; top: 10px; right: 10px; z-index: 10;">✨ Format</button>
+                        <div style="position: absolute; top: 10px; right: 10px; z-index: 10; display: flex; gap: 5px;">
+                            <button id="convertToJson" class="btn-small" title="Convert to JSON">🔄 To JSON</button>
+                            <button id="beautifyJson" class="btn-small" title="Format JSON/XML">✨ Format</button>
+                            <button id="validateData" class="btn-small" title="Validate JSON/XML">✅ Validate</button>
+                        </div>
                         <textarea id="body" rows="8" placeholder='{"key": "value"}'></textarea>
                     </div>
                 </div>
@@ -1072,6 +1076,226 @@ function getWebviewContent(history) {
                 \`).join('');
             }
 
+            // Helper functions for JSON/XML conversion and formatting
+            function convertToJson(content) {
+                // Remove leading/trailing whitespace
+                content = content.trim();
+                
+                // Try to parse as JSON first
+                try {
+                    return JSON.parse(content);
+                } catch (e) {
+                    // Not valid JSON, try other formats
+                }
+                
+                // Try to parse as XML and convert to JSON
+                if (content.startsWith('<') && content.endsWith('>')) {
+                    try {
+                        return xmlToJson(content);
+                    } catch (e) {
+                        throw new Error('Invalid XML format');
+                    }
+                }
+                
+                // Try to parse as query string
+                if (content.includes('=') && !content.includes('{') && !content.includes('<')) {
+                    try {
+                        return queryStringToJson(content);
+                    } catch (e) {
+                        throw new Error('Invalid query string format');
+                    }
+                }
+                
+                // Try to parse as key-value pairs (one per line)
+                if (content.includes('\\n') && content.includes(':')) {
+                    try {
+                        return keyValueToJson(content);
+                    } catch (e) {
+                        throw new Error('Invalid key-value format');
+                    }
+                }
+                
+                // Try to fix common JSON syntax errors
+                try {
+                    return fixAndParseJson(content);
+                } catch (e) {
+                    throw new Error('Could not convert to valid JSON format');
+                }
+            }
+            
+            function xmlToJson(xml) {
+                // Simple XML to JSON converter
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xml, 'text/xml');
+                
+                if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+                    throw new Error('Invalid XML');
+                }
+                
+                function xmlNodeToJson(node) {
+                    const result = {};
+                    
+                    // Handle attributes
+                    if (node.attributes && node.attributes.length > 0) {
+                        result['@attributes'] = {};
+                        for (let i = 0; i < node.attributes.length; i++) {
+                            const attr = node.attributes[i];
+                            result['@attributes'][attr.name] = attr.value;
+                        }
+                    }
+                    
+                    // Handle child nodes
+                    if (node.childNodes && node.childNodes.length > 0) {
+                        for (let i = 0; i < node.childNodes.length; i++) {
+                            const child = node.childNodes[i];
+                            
+                            if (child.nodeType === 3) { // Text node
+                                const text = child.textContent.trim();
+                                if (text) {
+                                    if (Object.keys(result).length === 0) {
+                                        return text;
+                                    } else {
+                                        result['#text'] = text;
+                                    }
+                                }
+                            } else if (child.nodeType === 1) { // Element node
+                                const childJson = xmlNodeToJson(child);
+                                if (result[child.nodeName]) {
+                                    if (!Array.isArray(result[child.nodeName])) {
+                                        result[child.nodeName] = [result[child.nodeName]];
+                                    }
+                                    result[child.nodeName].push(childJson);
+                                } else {
+                                    result[child.nodeName] = childJson;
+                                }
+                            }
+                        }
+                    }
+                    
+                    return result;
+                }
+                
+                return xmlNodeToJson(xmlDoc.documentElement);
+            }
+            
+            function queryStringToJson(queryString) {
+                const result = {};
+                const pairs = queryString.split('&');
+                
+                for (const pair of pairs) {
+                    const [key, value] = pair.split('=');
+                    if (key) {
+                        result[decodeURIComponent(key)] = value ? decodeURIComponent(value) : '';
+                    }
+                }
+                
+                return result;
+            }
+            
+            function keyValueToJson(content) {
+                const result = {};
+                const lines = content.split('\\n');
+                
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed && trimmed.includes(':')) {
+                        const colonIndex = trimmed.indexOf(':');
+                        const key = trimmed.substring(0, colonIndex).trim();
+                        const value = trimmed.substring(colonIndex + 1).trim();
+                        
+                        if (key) {
+                            // Try to parse value as JSON
+                            try {
+                                result[key] = JSON.parse(value);
+                            } catch (e) {
+                                result[key] = value;
+                            }
+                        }
+                    }
+                }
+                
+                return result;
+            }
+            
+            function fixAndParseJson(content) {
+                // Common JSON fixes
+                let fixed = content
+                    // Fix single quotes to double quotes
+                    .replace(/'/g, '"')
+                    // Fix unquoted keys
+                    .replace(/([{,]\\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\\s*:)/g, '$1"$2"$3')
+                    // Fix trailing commas
+                    .replace(/,\\s*([}\\]])/g, '$1')
+                    // Fix missing commas between objects/arrays
+                    .replace(/}\\s*{/g, '},{')
+                    .replace(/]\\s*\\[/g, '],[');
+                
+                return JSON.parse(fixed);
+            }
+            
+            function formatXml(xml) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xml, 'text/xml');
+                
+                if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+                    throw new Error('Invalid XML');
+                }
+                
+                const serializer = new XMLSerializer();
+                let formatted = serializer.serializeToString(xmlDoc);
+                
+                // Simple XML formatting
+                formatted = formatted
+                    .replace(/></g, '>\\n<')
+                    .replace(/^\\s*\\n/gm, '');
+                
+                // Add indentation
+                const lines = formatted.split('\\n');
+                let indent = 0;
+                const indentSize = 2;
+                
+                return lines.map(line => {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('</')) {
+                        indent -= indentSize;
+                    }
+                    
+                    const result = ' '.repeat(Math.max(0, indent)) + trimmed;
+                    
+                    if (trimmed.startsWith('<') && !trimmed.startsWith('</') && !trimmed.endsWith('/>')) {
+                        indent += indentSize;
+                    }
+                    
+                    return result;
+                }).join('\\n');
+            }
+            
+            function validateContent(content) {
+                // Try JSON validation
+                try {
+                    JSON.parse(content);
+                    return { isValid: true, type: 'JSON', error: null };
+                } catch (jsonError) {
+                    // Try XML validation
+                    try {
+                        const parser = new DOMParser();
+                        const xmlDoc = parser.parseFromString(content, 'text/xml');
+                        
+                        if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+                            throw new Error('Invalid XML');
+                        }
+                        
+                        return { isValid: true, type: 'XML', error: null };
+                    } catch (xmlError) {
+                        return { 
+                            isValid: false, 
+                            type: 'JSON/XML', 
+                            error: \`JSON: \${jsonError.message}, XML: \${xmlError.message}\`
+                        };
+                    }
+                }
+            }
+
             // Event listeners
             document.getElementById('authType').addEventListener('change', updateAuthFields);
             
@@ -1084,14 +1308,66 @@ function getWebviewContent(history) {
                 }
             });
 
+            // Smart JSON/XML conversion functionality
+            document.getElementById('convertToJson').addEventListener('click', () => {
+                const bodyTextarea = document.getElementById('body');
+                const content = bodyTextarea.value.trim();
+                
+                if (!content) {
+                    showNotification('No content to convert', 'warning');
+                    return;
+                }
+
+                try {
+                    // Try to convert various formats to JSON
+                    let result = convertToJson(content);
+                    bodyTextarea.value = JSON.stringify(result, null, 2);
+                    showNotification('Successfully converted to JSON!', 'success');
+                } catch (error) {
+                    showNotification('Could not convert to JSON: ' + error.message, 'error');
+                }
+            });
+
             document.getElementById('beautifyJson').addEventListener('click', () => {
                 const bodyTextarea = document.getElementById('body');
+                const content = bodyTextarea.value.trim();
+                
+                if (!content) {
+                    showNotification('No content to format', 'warning');
+                    return;
+                }
+
                 try {
-                    const parsedJson = JSON.parse(bodyTextarea.value);
-                    bodyTextarea.value = JSON.stringify(parsedJson, null, 2);
+                    // Try JSON first
+                    const parsed = JSON.parse(content);
+                    bodyTextarea.value = JSON.stringify(parsed, null, 2);
                     showNotification('JSON formatted successfully!', 'success');
-                } catch (e) {
-                    showNotification('Invalid JSON: ' + e.message, 'error');
+                } catch (jsonError) {
+                    try {
+                        // Try XML formatting
+                        const formatted = formatXml(content);
+                        bodyTextarea.value = formatted;
+                        showNotification('XML formatted successfully!', 'success');
+                    } catch (xmlError) {
+                        showNotification('Invalid JSON/XML format', 'error');
+                    }
+                }
+            });
+
+            document.getElementById('validateData').addEventListener('click', () => {
+                const bodyTextarea = document.getElementById('body');
+                const content = bodyTextarea.value.trim();
+                
+                if (!content) {
+                    showNotification('No content to validate', 'warning');
+                    return;
+                }
+
+                const validation = validateContent(content);
+                if (validation.isValid) {
+                    showNotification(\`Valid \${validation.type}!\`, 'success');
+                } else {
+                    showNotification(\`Invalid \${validation.type}: \${validation.error}\`, 'error');
                 }
             });
 
