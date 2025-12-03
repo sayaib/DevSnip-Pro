@@ -77,18 +77,6 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "tools",
         new vscode.ThemeColor("terminal.ansiBrightWhite")
       ),
-      this.createCommandButton(
-        "🔍 Regex Builder & Tester",
-        "sayaib.hue-console.regexBuilder",
-        "search",
-        new vscode.ThemeColor("terminal.ansiBrightCyan")
-      ),
-      this.createCommandButton(
-        "📝 JSON/XML Formatter",
-        "sayaib.hue-console.jsonFormatter",
-        "json",
-        new vscode.ThemeColor("terminal.ansiBrightGreen")
-      ),
     ];
   }
 

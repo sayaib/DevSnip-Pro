@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.",
-  "version": "10.45.132",
+  "version": "10.46.133",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -573,6 +573,10 @@
       {
         "command": "sayaib.hue-console.loremGenerator",
         "title": "📄 DevSnip Pro: Lorem Ipsum Generator"
+      },
+      {
+        "command": "sayaib.hue-console.jsonToToon",
+        "title": "🎭 DevSnip Pro: JSON → TOON Converter"
       }
     ],
     "viewsContainers": {
@@ -595,8 +599,23 @@
     "menus": {}
   },
   "activationEvents": [
-    "onCommand:extension.snippet-test",
-    "onCommand:extension.showSnippets"
+    "onView:myView",
+    "onCommand:sayaib.hue-console.showSnippets",
+    "onCommand:sayaib.hue-console.createCustomSnippet",
+    "onCommand:sayaib.hue-console.listAndRemoveConsoleLogs",
+    "onCommand:sayaib.hue-console.captureCode",
+    "onCommand:sayaib.hue-console.openGUI",
+    "onCommand:sayaib.hue-console.advancedToolsHub",
+    "onCommand:sayaib.hue-console.regexBuilder",
+    "onCommand:sayaib.hue-console.jsonFormatter",
+    "onCommand:sayaib.hue-console.hashGenerator",
+    "onCommand:sayaib.hue-console.base64Encoder",
+    "onCommand:sayaib.hue-console.colorPalette",
+    "onCommand:sayaib.hue-console.urlEncoder",
+    "onCommand:sayaib.hue-console.timestampConverter",
+    "onCommand:sayaib.hue-console.loremGenerator",
+    "onCommand:sayaib.hue-console.jsonToToon",
+    "onCommand:sayaib.hue-console.removeUnusedImports"
   ],
   "browser": "./out/extention.js",
   "main": "./out/extention.js",
@@ -622,6 +641,7 @@
     "vscode-test": "^1.5.2"
   },
   "dependencies": {
+    "@vscode/vsce": "^3.7.1",
     "axios": "^1.8.3",
     "dom-to-image": "^2.6.0",
     "file-saver": "^2.0.5",

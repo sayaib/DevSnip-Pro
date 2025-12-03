@@ -600,7 +600,7 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
 
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
             gap: 30px;
             align-items: start;
         }
@@ -731,6 +731,8 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
 
         .headers-container {
             margin-bottom: 20px;
+            max-height: 30vh;
+            overflow-y: auto;
         }
 
         .header-row {
@@ -738,6 +740,7 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
             gap: 10px;
             margin-bottom: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .header-row input {
@@ -831,6 +834,18 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                 padding: 20px;
                 width: 95%;
             }
+        }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .request-panel,
+            .response-panel,
+            .history-section { padding: 12px; }
+            .response-content { max-height: 50vh; }
+            .response-output { font-size: 12px; }
+            .header { flex-direction: column; align-items: stretch; }
+            .header-actions { width: 100%; justify-content: center; }
+            .header-row { flex-direction: column; gap: 8px; }
+            .header-row input { width: 100%; }
         }
         </style>
     </head>

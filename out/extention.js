@@ -39,8 +39,6 @@ class MyTreeDataProvider {
             this.createCommandButton("Create Custom Code Snippet", "sayaib.hue-console.createCustomSnippet", "edit", new vscode.ThemeColor("terminal.ansiBrightBlue")),
             this.createCommandButton("View Saved Code Snippets", "sayaib.hue-console.showSnippets", "file-code", new vscode.ThemeColor("terminal.ansiBrightMagenta")),
             this.createCommandButton("🧰 Advanced Developer Tools", "sayaib.hue-console.advancedToolsHub", "tools", new vscode.ThemeColor("terminal.ansiBrightWhite")),
-            this.createCommandButton("🔍 Regex Builder & Tester", "sayaib.hue-console.regexBuilder", "search", new vscode.ThemeColor("terminal.ansiBrightCyan")),
-            this.createCommandButton("📝 JSON/XML Formatter", "sayaib.hue-console.jsonFormatter", "json", new vscode.ThemeColor("terminal.ansiBrightGreen")),
         ];
     }
     createCommandButton(label, command, iconId, color) {

@@ -2,6 +2,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAdvancedToolsCommands = void 0;
 const vscode = require("vscode");
+const path = require("path");
+function getNonce() {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = '';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 function registerAdvancedToolsCommands(context) {
     // Register Advanced Tools Hub
     const advancedToolsHubCommand = vscode.commands.registerCommand('sayaib.hue-console.advancedToolsHub', () => {
@@ -18,7 +27,9 @@ function registerAdvancedToolsCommands(context) {
     // Register Regex Builder
     const regexBuilderCommand = vscode.commands.registerCommand('sayaib.hue-console.regexBuilder', () => {
         const panel = vscode.window.createWebviewPanel('regexBuilder', '🔍 Regex Builder & Tester', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getRegexBuilderHtml();
+        const nonce = getNonce();
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'regex-builder.js')));
+        panel.webview.html = getRegexBuilderHtml(panel.webview.cspSource, String(scriptUri), nonce);
         panel.webview.onDidReceiveMessage(message => {
             switch (message.command) {
                 case 'testRegex':
@@ -30,14 +41,13 @@ function registerAdvancedToolsCommands(context) {
     // Register JSON Formatter
     const jsonFormatterCommand = vscode.commands.registerCommand('sayaib.hue-console.jsonFormatter', () => {
         const panel = vscode.window.createWebviewPanel('jsonFormatter', '📝 JSON/XML Formatter', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getJsonFormatterHtml();
-        panel.webview.onDidReceiveMessage(message => {
-            switch (message.command) {
-                case 'formatJson':
-                    // Handle JSON formatting logic here
-                    break;
-            }
-        }, undefined, context.subscriptions);
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'json-xml-formatter.js')));
+        panel.webview.html = getJsonFormatterHtml(panel.webview.cspSource, String(scriptUri));
+        const editor = vscode.window.activeTextEditor;
+        const text = editor ? editor.document.getText(editor.selection.isEmpty ? undefined : editor.selection) : '';
+        if (text) {
+            panel.webview.postMessage({ command: 'prefill', text });
+        }
     });
     // Register Hash Generator
     const hashGeneratorCommand = vscode.commands.registerCommand('sayaib.hue-console.hashGenerator', () => {
@@ -59,8 +69,14 @@ function registerAdvancedToolsCommands(context) {
         const panel = vscode.window.createWebviewPanel('timestampConverter', '⏰ Timestamp Converter', vscode.ViewColumn.One, { enableScripts: true });
         panel.webview.html = getTimestampConverterHtml();
     });
+    // Register JSON → TOON Converter
+    const jsonToToonCommand = vscode.commands.registerCommand('sayaib.hue-console.jsonToToon', () => {
+        const panel = vscode.window.createWebviewPanel('jsonToToon', '🎭 JSON → TOON Converter', vscode.ViewColumn.One, { enableScripts: true });
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'json-to-toon.js')));
+        panel.webview.html = getJsonToToonHtml(panel.webview.cspSource, String(scriptUri));
+    });
     // Add all commands to subscriptions
-    context.subscriptions.push(advancedToolsHubCommand, regexBuilderCommand, jsonFormatterCommand, hashGeneratorCommand, base64EncoderCommand, urlEncoderCommand, timestampConverterCommand);
+    context.subscriptions.push(advancedToolsHubCommand, regexBuilderCommand, jsonFormatterCommand, hashGeneratorCommand, base64EncoderCommand, urlEncoderCommand, timestampConverterCommand, jsonToToonCommand);
 }
 exports.registerAdvancedToolsCommands = registerAdvancedToolsCommands;
 function getAdvancedToolsHubHtml() {
@@ -157,6 +173,12 @@ function getAdvancedToolsHubHtml() {
                         <div class="tool-title">Timestamp Converter</div>
                         <div class="tool-description">Convert between Unix timestamps and human-readable dates.</div>
                     </div>
+                    
+                    <div class="tool-card" onclick="openTool('sayaib.hue-console.jsonToToon')">
+                        <div class="tool-icon">🎭</div>
+                        <div class="tool-title">JSON → TOON Converter</div>
+                        <div class="tool-description">Convert JSON into TOON outline notation for quick reviews.</div>
+                    </div>
                 </div>
             </div>
             
@@ -174,12 +196,13 @@ function getAdvancedToolsHubHtml() {
         </html>
     `;
 }
-function getRegexBuilderHtml() {
+function getRegexBuilderHtml(cspSource, scriptSrc, nonce) {
     return `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; font-src ${cspSource} https: data:; script-src ${cspSource}; style-src ${cspSource} 'unsafe-inline';">
             <title>Regex Builder & Tester</title>
             <style>
                 body { font-family: var(--vscode-font-family); background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); margin: 0; padding: 20px; }
@@ -189,61 +212,44 @@ function getRegexBuilderHtml() {
                 input, textarea { width: 100%; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; }
                 button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 8px 16px; border-radius: 3px; cursor: pointer; margin-right: 10px; }
                 .output { margin-top: 20px; padding: 10px; background: var(--vscode-textCodeBlock-background); border-radius: 3px; }
+                .row { display: grid; grid-template-columns: 1fr 200px; gap: 12px; align-items: end; }
+                .small { font-size: 12px; color: var(--vscode-descriptionForeground); }
             </style>
         </head>
         <body>
             <div class="container">
                 <h1>🔍 Regex Builder & Tester</h1>
-                <div class="input-group">
-                    <label for="pattern">Regular Expression Pattern:</label>
-                    <input type="text" id="pattern" placeholder="Enter your regex pattern...">
+                <div class="input-group row">
+                    <div>
+                        <label for="pattern">Regular Expression Pattern:</label>
+                        <input type="text" id="pattern" placeholder="Enter your regex pattern...">
+                        <div class="small">Enter pattern only (no /slashes/); use flags below.</div>
+                    </div>
+                    <div>
+                        <label for="flags">Flags (g i m s u y):</label>
+                        <input type="text" id="flags" value="g" placeholder="e.g. gim">
+                    </div>
                 </div>
                 <div class="input-group">
                     <label for="testString">Test String:</label>
                     <textarea id="testString" placeholder="Enter text to test against..."></textarea>
                 </div>
-                <button onclick="testRegex()">Test Regex</button>
-                <button onclick="clearAll()">Clear</button>
+                <button id="testBtn">Test Regex</button>
+                <button id="clearBtn">Clear</button>
                 <div id="output" class="output"></div>
             </div>
-            <script>
-                function testRegex() {
-                    const pattern = document.getElementById('pattern').value;
-                    const testString = document.getElementById('testString').value;
-                    const output = document.getElementById('output');
-                    
-                    try {
-                        const regex = new RegExp(pattern, 'g');
-                        const matches = [...testString.matchAll(regex)];
-                        
-                        if (matches.length > 0) {
-                            output.innerHTML = '<h3>Matches found:</h3>' + matches.map((match, i) => 
-                                '<div><strong>Match ' + (i+1) + ':</strong> "' + match[0] + '" at position ' + match.index + '</div>'
-                            ).join('');
-                        } else {
-                            output.innerHTML = '<h3>No matches found</h3>';
-                        }
-                    } catch (e) {
-                        output.innerHTML = '<h3>Error:</h3><div style="color: var(--vscode-errorForeground);">' + e.message + '</div>';
-                    }
-                }
-                
-                function clearAll() {
-                    document.getElementById('pattern').value = '';
-                    document.getElementById('testString').value = '';
-                    document.getElementById('output').innerHTML = '';
-                }
-            </script>
+            <script src="${scriptSrc}"></script>
         </body>
         </html>
     `;
 }
-function getJsonFormatterHtml() {
+function getJsonFormatterHtml(cspSource, scriptSrc) {
     return `
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; font-src ${cspSource} https: data:; script-src ${cspSource}; style-src ${cspSource} 'unsafe-inline';">
             <title>JSON/XML Formatter</title>
             <style>
                 body { font-family: var(--vscode-font-family); background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); margin: 0; padding: 20px; }
@@ -258,10 +264,14 @@ function getJsonFormatterHtml() {
             <div class="container">
                 <h1>📝 JSON/XML Formatter</h1>
                 <div class="controls">
-                    <button onclick="formatJson()">Format JSON</button>
-                    <button onclick="minifyJson()">Minify JSON</button>
-                    <button onclick="validateJson()">Validate</button>
-                    <button onclick="clearAll()">Clear</button>
+                    <button id="formatJsonBtn">Format JSON</button>
+                    <button id="minifyJsonBtn">Minify JSON</button>
+                    <button id="formatXmlBtn">Format XML</button>
+                    <button id="minifyXmlBtn">Minify XML</button>
+                    <button id="validateJsonBtn">Validate JSON</button>
+                    <button id="validateXmlBtn">Validate XML</button>
+                    <button id="copyBtn">Copy Output</button>
+                    <button id="clearBtn">Clear</button>
                 </div>
                 <div class="panels">
                     <div>
@@ -274,45 +284,7 @@ function getJsonFormatterHtml() {
                     </div>
                 </div>
             </div>
-            <script>
-                function formatJson() {
-                    const input = document.getElementById('input').value;
-                    const output = document.getElementById('output');
-                    try {
-                        const parsed = JSON.parse(input);
-                        output.value = JSON.stringify(parsed, null, 2);
-                    } catch (e) {
-                        output.value = 'Error: ' + e.message;
-                    }
-                }
-                
-                function minifyJson() {
-                    const input = document.getElementById('input').value;
-                    const output = document.getElementById('output');
-                    try {
-                        const parsed = JSON.parse(input);
-                        output.value = JSON.stringify(parsed);
-                    } catch (e) {
-                        output.value = 'Error: ' + e.message;
-                    }
-                }
-                
-                function validateJson() {
-                    const input = document.getElementById('input').value;
-                    const output = document.getElementById('output');
-                    try {
-                        JSON.parse(input);
-                        output.value = '✅ Valid JSON';
-                    } catch (e) {
-                        output.value = '❌ Invalid JSON: ' + e.message;
-                    }
-                }
-                
-                function clearAll() {
-                    document.getElementById('input').value = '';
-                    document.getElementById('output').value = '';
-                }
-            </script>
+            <script src="${scriptSrc}"></script>
         </body>
         </html>
     `;
@@ -461,11 +433,17 @@ function getUrlEncoderHtml() {
             <title>URL Encoder/Decoder</title>
             <style>
                 body { font-family: var(--vscode-font-family); background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); margin: 0; padding: 20px; }
-                .container { max-width: 800px; margin: 0 auto; }
-                .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-                textarea { width: 100%; height: 200px; padding: 10px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; }
-                button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 8px 16px; border-radius: 3px; cursor: pointer; margin: 5px; }
-                .controls { text-align: center; margin: 20px 0; }
+                .container { max-width: 980px; margin: 0 auto; }
+                .panels { display: grid; grid-template-columns: minmax(280px,1fr) minmax(320px,1fr); gap: 24px; align-items: start; }
+                textarea { width: 100%; height: 220px; padding: 12px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; font-size: 14px; }
+                button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; margin: 5px; font-weight: 600; }
+                .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 20px 0; }
+                .note { margin-top: 10px; background: var(--vscode-sideBar-background); border: 1px solid var(--vscode-sideBar-border); border-radius: 8px; padding: 14px; font-size: 13px; flex: 1 1 100%; }
+                .note h3 { margin: 0 0 8px 0; color: var(--vscode-descriptionForeground); font-size: 13px; }
+                .note ul { margin: 0; padding-left: 20px; list-style-type: disc; }
+                .note li { margin: 6px 0; }
+                .actions-right { margin-left: auto; }
+                @media (max-width: 768px) { .panels { grid-template-columns: 1fr; } .actions-right { margin-left: 0; } .note { font-size: 12px; } textarea { height: 200px; } }
             </style>
         </head>
         <body>
@@ -475,6 +453,22 @@ function getUrlEncoderHtml() {
                     <button onclick="encodeUrl()">Encode URL</button>
                     <button onclick="decodeUrl()">Decode URL</button>
                     <button onclick="clearAll()">Clear</button>
+                    <button class="actions-right" id="copyBtn">Copy Output</button>
+                    <div class="note">
+                        <h3>You must URL-encode:</h3>
+                        <ul>
+                            <li>Query parameter values</li>
+                            <li>Path parameters</li>
+                            <li>Form values sent via GET</li>
+                            <li>Characters such as: spaces, ?, #, &, /, %, =, :, @</li>
+                            <li>Non-ASCII characters (é, ü, 漢字, emoji)</li>
+                        </ul>
+                        <h3>Do NOT encode:</h3>
+                        <ul>
+                            <li>The full URL (unless required)</li>
+                            <li>Already-encoded values (to avoid double encoding)</li>
+                        </ul>
+                    </div>
                 </div>
                 <div class="panels">
                     <div>
@@ -512,6 +506,22 @@ function getUrlEncoderHtml() {
                     document.getElementById('input').value = '';
                     document.getElementById('output').value = '';
                 }
+                function copyOutput() {
+                    const output = document.getElementById('output').value || '';
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(output);
+                    } else {
+                        const tmp = document.createElement('textarea');
+                        tmp.style.position = 'fixed';
+                        tmp.style.opacity = '0';
+                        tmp.value = output;
+                        document.body.appendChild(tmp);
+                        tmp.select();
+                        try { document.execCommand('copy'); } catch {}
+                        document.body.removeChild(tmp);
+                    }
+                }
+                const copyBtn = document.getElementById('copyBtn'); if (copyBtn) copyBtn.addEventListener('click', copyOutput);
             </script>
         </body>
         </html>
@@ -604,6 +614,51 @@ function getTimestampConverterHtml() {
                 // Set current date as default
                 document.getElementById('dateInput').value = new Date().toISOString().slice(0, 16);
             </script>
+        </body>
+        </html>
+    `;
+}
+function getJsonToToonHtml(cspSource, scriptSrc) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data:; font-src ${cspSource} https: data:; script-src ${cspSource}; style-src ${cspSource} 'unsafe-inline';">
+            <title>JSON → TOON Converter</title>
+            <style>
+                body { font-family: var(--vscode-font-family); background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); margin: 0; padding: 20px; }
+                .container { max-width: 1000px; margin: 0 auto; }
+                .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                textarea { width: 100%; height: 300px; padding: 10px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 3px; font-family: monospace; }
+                button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 8px 16px; border-radius: 3px; cursor: pointer; margin: 5px; }
+                .controls { text-align: center; margin: 20px 0; }
+                .note { color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🎭 JSON → TOON Converter</h1>
+                <p class="note">Paste JSON on the left and convert to TOON outline notation on the right.</p>
+                <div class="controls">
+                    <button id="convertBtn">Convert</button>
+                    <button id="copyBtn">Copy Output</button>
+                    <button id="clearBtn">Clear</button>
+                </div>
+                <div class="panels">
+                    <div>
+                        <h3>Input (JSON)</h3>
+                        <textarea id="input" placeholder="Paste JSON here..."></textarea>
+                    </div>
+                    <div>
+                        <h3>Output (TOON)</h3>
+                        <textarea id="output" readonly placeholder="TOON output will appear here..."></textarea>
+                    </div>
+                </div>
+                <h3>Console</h3>
+                <pre id="log" style="background: var(--vscode-textCodeBlock-background); padding: 10px; border-radius: 3px; height: 120px; overflow: auto;"></pre>
+            </div>
+            <script src="${scriptSrc}"></script>
         </body>
         </html>
     `;

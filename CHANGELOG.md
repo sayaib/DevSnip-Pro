@@ -1,5 +1,9 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.46.133 - 2025-12-03
+
+- Added JSON to TOON converter adn readme updated
+
 ## Version 10.43.119 - 2025-04-03
 
 - Rest API status code issue fixed in test REST API section

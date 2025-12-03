@@ -9,14 +9,22 @@
 
 DevSnip Pro is a comprehensive Visual Studio Code extension designed to supercharge your development workflow. Whether you're building web applications, working with databases, or managing code snippets, DevSnip Pro provides all the essential tools you need in one powerful package.
 
+## 🧭 How to Access
+
+- Activity Bar: Click the `DevSnip Pro` icon in the left sidebar.
+- Command Palette: Press `Ctrl+Shift+P` (Cmd+Shift+P), type `DevSnip Pro:` and choose a command.
+- Context Menu: Right-click in any code file to access context features like snapshots and cleanup.
+More details are available in [Access After Install](#-access-after-install).
 ---
 
 ## 📋 Table of Contents
 
+- [🧭 How to Access](#-how-to-access)
 - [✨ Key Features](#-key-features)
 - [🎨 Supported Technologies](#-supported-technologies)
 - [🚀 Installation](#-installation)
 - [🎯 Quick Start Guide](#-quick-start-guide)
+- [🧭 Access After Install](#-access-after-install)
 - [📖 Feature Documentation](#-feature-documentation)
   - [🌏 REST API Testing](#-rest-api-testing)
   - [💽 MongoDB Integration](#-mongodb-integration)
@@ -43,7 +51,7 @@ DevSnip Pro combines multiple essential development tools into one seamless exte
 | 💽 **MongoDB Integration** | Direct database connectivity and querying | Execute queries and view results in real-time |
 | 🧹 **Console Log Cleanup** | Intelligent code cleanup automation | Remove debug logs with one click |
 | 📸 **Code Snapshots** | Beautiful code sharing made simple | Create stunning visual code snippets |
-| 🧰 **Advanced Tools Hub** | 8 professional developer utilities | Regex builder, JSON formatter, hash generator, and more |
+| 🧰 **Advanced Tools Hub** | 9 professional developer utilities | Regex builder, JSON formatter, hash generator, and more |
 | ✨ **Custom Snippets** | Personal snippet library management | Create, organize, and share your code templates |
 | 📜 **500+ Pre-built Snippets** | Extensive collection across 15+ technologies | Instant access to common patterns and boilerplate |
 | 🎯 **Activity Bar Integration** | Quick access through VS Code sidebar | All features available with one click |
@@ -139,6 +147,33 @@ Choose any feature from the organized interface:
 
 **Context Menu:**
 - Right-click in any code file to access context-specific features
+
+---
+
+## 🧭 Access After Install
+
+### Activity Bar
+- Click the `DevSnip Pro` icon in the left sidebar to open the features panel.
+
+### Command Palette
+- Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac), then type `DevSnip Pro:` to see all commands.
+
+### Available Commands
+- `🚀 DevSnip Pro: Show Custom Snippets`
+- `🚀 DevSnip Pro: Create Your Own Perfect Code Snippet`
+- `🛠️ DevSnip Pro: List and Remove Console Logs`
+- `📸 DevSnip Pro: Create a Code Snapshot.`
+- `🛢 DevSnip Pro: Rest API Client`
+- `🧰 DevSnip Pro: Advanced Developer Tools Hub`
+- `🔍 DevSnip Pro: Regex Builder & Tester`
+- `📝 DevSnip Pro: JSON/XML Formatter`
+- `🔐 DevSnip Pro: Hash Generator`
+- `🔤 DevSnip Pro: Base64 Encoder/Decoder`
+- `🎨 DevSnip Pro: Color Palette Manager`
+- `🔗 DevSnip Pro: URL Encoder/Decoder`
+- `⏰ DevSnip Pro: Timestamp Converter`
+- `📄 DevSnip Pro: Lorem Ipsum Generator`
+- `🎭 DevSnip Pro: JSON → TOON Converter`
 
 ---
 
@@ -301,7 +336,7 @@ Create beautiful, shareable images of your code with customizable styling.
 
 ### 🧰 Advanced Developer Tools
 
-Comprehensive suite of 8 professional utilities for common development tasks.
+Comprehensive suite of 9 professional utilities for common development tasks.
 
 | Tool | Purpose | Key Features |
 |------|---------|--------------|
@@ -313,6 +348,7 @@ Comprehensive suite of 8 professional utilities for common development tasks.
 | 🔗 **URL Encoder/Decoder** | Handle URL encoding/decoding | Query parameters, special characters |
 | ⏰ **Timestamp Converter** | Convert between time formats | Unix timestamps, ISO dates |
 | 📄 **Lorem Ipsum Generator** | Generate placeholder text | Customizable length and format |
+| 🎭 **JSON → TOON Converter** | Convert JSON to TOON format | Easy conversion, quick copy/export |
 
 **How to Access:**
 1. Click DevSnip Pro icon in Activity Bar
