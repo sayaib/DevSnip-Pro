@@ -8,6 +8,15 @@ interface ConsoleLog {
   text: string;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function registerListAndRemoveConsoleLogsCommand(
   context: vscode.ExtensionContext
 ) {
@@ -49,31 +58,9 @@ export function registerListAndRemoveConsoleLogsCommand(
       );
 
       // Optimized log search
-      await Promise.all(
+      const scanResults = await Promise.all(
         files.map(async (file) => {
-          // try {
-          //   const content = await fs.readFile(file.fsPath, "utf8");
-          //   // const regex = /console\.log\s*\((.*)\);?/g;
-          //   const regex = /console\.log\s*\(([\s\S]*?)\);?/g;
-
-          //   let match;
-          //   let lineNumber = 0;
-          //   const lines = content.split("\n");
-
-          //   for (const line of lines) {
-          //     match = regex.exec(line);
-          //     if (match) {
-          //       allConsoleLogs.push({
-          //         filePath: file.fsPath,
-          //         lineNumber,
-          //         text: match[0],
-          //       });
-          //     }
-          //     lineNumber++;
-          //   }
-          // } catch (error) {
-          //   console.error(`Error reading file ${file.fsPath}:`, error);
-          // }
+          const logs: ConsoleLog[] = [];
           try {
             const content = await fs.readFile(file.fsPath, "utf8");
             const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
@@ -84,7 +71,7 @@ export function registerListAndRemoveConsoleLogsCommand(
               const beforeMatch = content.substring(0, match.index);
               const lineNumber = beforeMatch.split("\n").length;
 
-              allConsoleLogs.push({
+              logs.push({
                 filePath: file.fsPath,
                 lineNumber: lineNumber, // 1-based index
                 text: match[0],
@@ -93,8 +80,10 @@ export function registerListAndRemoveConsoleLogsCommand(
           } catch (error) {
             console.error(`Error reading file ${file.fsPath}:`, error);
           }
+          return logs;
         })
       );
+      allConsoleLogs.push(...scanResults.flat());
 
       if (allConsoleLogs.length === 0) {
         panel.webview.html = generateWebviewContentConsoleLoading(
@@ -162,22 +151,30 @@ async function removeSelectedLogs(
   selectedLogs: ConsoleLog[],
   panel: vscode.WebviewPanel
 ) {
+  // Group logs by file and sort each file's logs by line number in descending order
+  // This prevents stale line numbers when multiple lines are removed from the same file
+  const logsByFile = new Map<string, ConsoleLog[]>();
+  for (const log of selectedLogs) {
+    const existing = logsByFile.get(log.filePath) || [];
+    existing.push(log);
+    logsByFile.set(log.filePath, existing);
+  }
+
   const workspaceEdit = new vscode.WorkspaceEdit();
 
-  // Track the files that have been modified
-  const modifiedFiles = new Set<string>();
+  for (const [, logs] of logsByFile) {
+    // Sort by lineNumber descending so we delete from bottom to top
+    logs.sort((a, b) => b.lineNumber - a.lineNumber);
 
-  for (const log of selectedLogs) {
-    try {
-      const uri = vscode.Uri.file(log.filePath);
-      const document = await vscode.workspace.openTextDocument(uri);
-      const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
-      workspaceEdit.delete(uri, line.range);
-
-      // Add the file to the set of modified files
-      modifiedFiles.add(log.filePath);
-    } catch (error) {
-      console.error(`Error processing log in file ${log.filePath}:`, error);
+    for (const log of logs) {
+      try {
+        const uri = vscode.Uri.file(log.filePath);
+        const document = await vscode.workspace.openTextDocument(uri);
+        const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
+        workspaceEdit.delete(uri, line.range);
+      } catch (error) {
+        console.error(`Error processing log in file ${log.filePath}:`, error);
+      }
     }
   }
 
@@ -185,7 +182,7 @@ async function removeSelectedLogs(
   await vscode.workspace.applyEdit(workspaceEdit);
 
   // Save all modified files
-  for (const filePath of modifiedFiles) {
+  for (const filePath of logsByFile.keys()) {
     const uri = vscode.Uri.file(filePath);
     const document = await vscode.workspace.openTextDocument(uri);
     await document.save();
@@ -221,8 +218,9 @@ async function fetchConsoleLogs(): Promise<ConsoleLog[]> {
     excludePattern
   );
 
-  await Promise.all(
+  const results = await Promise.all(
     files.map(async (file) => {
+      const logs: ConsoleLog[] = [];
       try {
         const content = await fs.readFile(file.fsPath, "utf8");
         const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
@@ -232,7 +230,7 @@ async function fetchConsoleLogs(): Promise<ConsoleLog[]> {
           const beforeMatch = content.substring(0, match.index);
           const lineNumber = beforeMatch.split("\n").length;
 
-          allConsoleLogs.push({
+          logs.push({
             filePath: file.fsPath,
             lineNumber: lineNumber,
             text: match[0],
@@ -241,10 +239,11 @@ async function fetchConsoleLogs(): Promise<ConsoleLog[]> {
       } catch (error) {
         console.error(`Error reading file ${file.fsPath}:`, error);
       }
+      return logs;
     })
   );
 
-  return allConsoleLogs;
+  return results.flat();
 }
 function generateWebviewContentConsoleLoading(message: string): string {
   return `
@@ -345,7 +344,7 @@ main h2 {
     transform: translateX(0px);
   }
   100% {
-    width 100%;
+    width: 100%;
     opacity: 100%;
   }
 }
@@ -378,7 +377,7 @@ main h2 {
           <span class="coding-ide-ui-line"></span>
           <br>
           <br>
-          <h3>${message}</h3>
+          <h3>${escapeHtml(message)}</h3>
           <br>
       </div>
     </div>
@@ -397,7 +396,6 @@ const loader = document.querySelector("#loader");
 
 window.onload = () => {
   loader.style.display = "block";
-  mainContent.style.display = "none";
 };
 
 const showMain = () => {
@@ -572,12 +570,10 @@ function generateWebviewContentConsole(consoleLogs: ConsoleLog[]): string {
                     (log, key) => `
                         <tr>
                             <td>${key + 1}</td>
-                            <td><button class="remove-log-btn" data-log='${JSON.stringify(
-                              log
-                            )}'>Remove</button></td>
-                            <td>${log.filePath}</td>
+                            <td><button class="remove-log-btn" data-index="${key}">Remove</button></td>
+                            <td>${escapeHtml(log.filePath)}</td>
                             <td>${log.lineNumber + 1}</td>
-                            <td><pre>${log.text}</pre></td>
+                            <td><pre>${escapeHtml(log.text)}</pre></td>
                         </tr>`
                   )
                   .join("")}
@@ -591,6 +587,7 @@ function generateWebviewContentConsole(consoleLogs: ConsoleLog[]): string {
 
     <script>
         const vscode = acquireVsCodeApi();
+        const consoleLogsData = ${JSON.stringify(consoleLogs)};
 
         function filterTable() {
             const searchInput = document.getElementById("searchInput").value.trim();
@@ -606,13 +603,14 @@ function generateWebviewContentConsole(consoleLogs: ConsoleLog[]): string {
 
         document.querySelectorAll('.remove-log-btn').forEach(button => {
             button.addEventListener('click', function() {
-                const log = JSON.parse(this.getAttribute('data-log'));
-                const selectedLogs = [{
-                    lineNumber: log.lineNumber,
-                    text: log.text,
-                    filePath: log.filePath
-                }];
-                vscode.postMessage({ command: "removeSelectedLogs", selectedLogs });
+                const index = parseInt(this.getAttribute('data-index'));
+                const log = consoleLogsData[index];
+                if (log) {
+                    vscode.postMessage({
+                        command: "removeSelectedLogs",
+                        selectedLogs: [log]
+                    });
+                }
             });
         });
 

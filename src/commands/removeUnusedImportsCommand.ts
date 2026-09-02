@@ -72,6 +72,9 @@ export function registerRemoveUnusedImportsCommand(
 
       panel.webview.html = generateWebviewContent(unusedImports);
 
+      // Send data to webview via postMessage instead of inline script
+      panel.webview.postMessage({ command: "initData", unusedImports });
+
       panel.webview.onDidReceiveMessage(
         async (message) => {
           if (message.command === "removeSelectedImports") {
@@ -301,35 +304,44 @@ function generateWebviewContent(unusedImports: UnusedImport[]): string {
         </style>
     </head>
     <body>
-        <h2 class="header">🧹 Unused Imports Found (${unusedImports.length})</h2>
+        <h2 class="header">Unused Imports Found (${unusedImports.length})</h2>
         <div id="imports-list">
             ${importsList}
         </div>
         <div class="buttons">
-            <button onclick="removeSelected()">Remove Selected</button>
-            <button onclick="removeAll()" class="danger">Remove All</button>
+            <button id="removeSelectedBtn">Remove Selected</button>
+            <button id="removeAllBtn" class="danger">Remove All</button>
         </div>
         
         <script>
             const vscode = acquireVsCodeApi();
+            let unusedImportsData = [];
             
-            function removeSelected() {
+            window.addEventListener('message', (event) => {
+                const data = event.data;
+                if (data.command === 'initData') {
+                    unusedImportsData = data.unusedImports;
+                }
+            });
+            
+            document.getElementById('removeSelectedBtn').addEventListener('click', () => {
                 const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-                const selectedImports = Array.from(checkboxes).map((cb, index) => {
-                    return ${JSON.stringify(unusedImports)}[parseInt(cb.id.split('-')[1])];
-                });
+                const selectedImports = Array.from(checkboxes).map((cb) => {
+                    const index = parseInt(cb.id.split('-')[1]);
+                    return unusedImportsData[index];
+                }).filter(Boolean);
                 
                 vscode.postMessage({
                     command: 'removeSelectedImports',
                     selectedImports: selectedImports
                 });
-            }
+            });
             
-            function removeAll() {
+            document.getElementById('removeAllBtn').addEventListener('click', () => {
                 vscode.postMessage({
                     command: 'removeAllImports'
                 });
-            }
+            });
         </script>
     </body>
     </html>

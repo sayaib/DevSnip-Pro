@@ -1,4 +1,27 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -10,9 +33,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerListAndRemoveConsoleLogsCommand = void 0;
-const vscode = require("vscode");
-const fs = require("fs/promises");
-const path = require("path");
+const vscode = __importStar(require("vscode"));
+const fs = __importStar(require("fs/promises"));
+const path = __importStar(require("path"));
+function escapeHtml(str) {
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 function registerListAndRemoveConsoleLogsCommand(context) {
     const command = vscode.commands.registerCommand("sayaib.hue-console.listAndRemoveConsoleLogs", () => __awaiter(this, void 0, void 0, function* () {
         if (!vscode.workspace.workspaceFolders) {
@@ -30,28 +61,8 @@ function registerListAndRemoveConsoleLogsCommand(context) {
         // Fast file search
         const files = yield vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], searchPattern), excludePattern);
         // Optimized log search
-        yield Promise.all(files.map((file) => __awaiter(this, void 0, void 0, function* () {
-            // try {
-            //   const content = await fs.readFile(file.fsPath, "utf8");
-            //   // const regex = /console\.log\s*\((.*)\);?/g;
-            //   const regex = /console\.log\s*\(([\s\S]*?)\);?/g;
-            //   let match;
-            //   let lineNumber = 0;
-            //   const lines = content.split("\n");
-            //   for (const line of lines) {
-            //     match = regex.exec(line);
-            //     if (match) {
-            //       allConsoleLogs.push({
-            //         filePath: file.fsPath,
-            //         lineNumber,
-            //         text: match[0],
-            //       });
-            //     }
-            //     lineNumber++;
-            //   }
-            // } catch (error) {
-            //   console.error(`Error reading file ${file.fsPath}:`, error);
-            // }
+        const scanResults = yield Promise.all(files.map((file) => __awaiter(this, void 0, void 0, function* () {
+            const logs = [];
             try {
                 const content = yield fs.readFile(file.fsPath, "utf8");
                 const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
@@ -60,7 +71,7 @@ function registerListAndRemoveConsoleLogsCommand(context) {
                     // Get line number by counting newlines before the match
                     const beforeMatch = content.substring(0, match.index);
                     const lineNumber = beforeMatch.split("\n").length;
-                    allConsoleLogs.push({
+                    logs.push({
                         filePath: file.fsPath,
                         lineNumber: lineNumber,
                         text: match[0],
@@ -70,7 +81,9 @@ function registerListAndRemoveConsoleLogsCommand(context) {
             catch (error) {
                 console.error(`Error reading file ${file.fsPath}:`, error);
             }
+            return logs;
         })));
+        allConsoleLogs.push(...scanResults.flat());
         if (allConsoleLogs.length === 0) {
             panel.webview.html = generateWebviewContentConsoleLoading("No `console.log` statements found.");
             vscode.window.showInformationMessage("No console.log statements found.");
@@ -117,26 +130,34 @@ exports.registerListAndRemoveConsoleLogsCommand = registerListAndRemoveConsoleLo
 // }
 function removeSelectedLogs(selectedLogs, panel) {
     return __awaiter(this, void 0, void 0, function* () {
-        const workspaceEdit = new vscode.WorkspaceEdit();
-        // Track the files that have been modified
-        const modifiedFiles = new Set();
+        // Group logs by file and sort each file's logs by line number in descending order
+        // This prevents stale line numbers when multiple lines are removed from the same file
+        const logsByFile = new Map();
         for (const log of selectedLogs) {
-            try {
-                const uri = vscode.Uri.file(log.filePath);
-                const document = yield vscode.workspace.openTextDocument(uri);
-                const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
-                workspaceEdit.delete(uri, line.range);
-                // Add the file to the set of modified files
-                modifiedFiles.add(log.filePath);
-            }
-            catch (error) {
-                console.error(`Error processing log in file ${log.filePath}:`, error);
+            const existing = logsByFile.get(log.filePath) || [];
+            existing.push(log);
+            logsByFile.set(log.filePath, existing);
+        }
+        const workspaceEdit = new vscode.WorkspaceEdit();
+        for (const [, logs] of logsByFile) {
+            // Sort by lineNumber descending so we delete from bottom to top
+            logs.sort((a, b) => b.lineNumber - a.lineNumber);
+            for (const log of logs) {
+                try {
+                    const uri = vscode.Uri.file(log.filePath);
+                    const document = yield vscode.workspace.openTextDocument(uri);
+                    const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
+                    workspaceEdit.delete(uri, line.range);
+                }
+                catch (error) {
+                    console.error(`Error processing log in file ${log.filePath}:`, error);
+                }
             }
         }
         // Apply the workspace edit
         yield vscode.workspace.applyEdit(workspaceEdit);
         // Save all modified files
-        for (const filePath of modifiedFiles) {
+        for (const filePath of logsByFile.keys()) {
             const uri = vscode.Uri.file(filePath);
             const document = yield vscode.workspace.openTextDocument(uri);
             yield document.save();
@@ -157,7 +178,8 @@ function fetchConsoleLogs() {
         const searchPattern = "**/*.{ts,tsx,js,jsx,php,html}";
         const excludePattern = "{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/coverage/**,**/temp/**,**/.next/**}";
         const files = yield vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], searchPattern), excludePattern);
-        yield Promise.all(files.map((file) => __awaiter(this, void 0, void 0, function* () {
+        const results = yield Promise.all(files.map((file) => __awaiter(this, void 0, void 0, function* () {
+            const logs = [];
             try {
                 const content = yield fs.readFile(file.fsPath, "utf8");
                 const regex = /console\.log\s*\(\s*([\s\S]*?)\s*\);?/g;
@@ -165,7 +187,7 @@ function fetchConsoleLogs() {
                 while ((match = regex.exec(content)) !== null) {
                     const beforeMatch = content.substring(0, match.index);
                     const lineNumber = beforeMatch.split("\n").length;
-                    allConsoleLogs.push({
+                    logs.push({
                         filePath: file.fsPath,
                         lineNumber: lineNumber,
                         text: match[0],
@@ -175,8 +197,9 @@ function fetchConsoleLogs() {
             catch (error) {
                 console.error(`Error reading file ${file.fsPath}:`, error);
             }
+            return logs;
         })));
-        return allConsoleLogs;
+        return results.flat();
     });
 }
 function generateWebviewContentConsoleLoading(message) {
@@ -278,7 +301,7 @@ main h2 {
     transform: translateX(0px);
   }
   100% {
-    width 100%;
+    width: 100%;
     opacity: 100%;
   }
 }
@@ -311,7 +334,7 @@ main h2 {
           <span class="coding-ide-ui-line"></span>
           <br>
           <br>
-          <h3>${message}</h3>
+          <h3>${escapeHtml(message)}</h3>
           <br>
       </div>
     </div>
@@ -330,7 +353,6 @@ const loader = document.querySelector("#loader");
 
 window.onload = () => {
   loader.style.display = "block";
-  mainContent.style.display = "none";
 };
 
 const showMain = () => {
@@ -503,10 +525,10 @@ function generateWebviewContentConsole(consoleLogs) {
         .map((log, key) => `
                         <tr>
                             <td>${key + 1}</td>
-                            <td><button class="remove-log-btn" data-log='${JSON.stringify(log)}'>Remove</button></td>
-                            <td>${log.filePath}</td>
+                            <td><button class="remove-log-btn" data-index="${key}">Remove</button></td>
+                            <td>${escapeHtml(log.filePath)}</td>
                             <td>${log.lineNumber + 1}</td>
-                            <td><pre>${log.text}</pre></td>
+                            <td><pre>${escapeHtml(log.text)}</pre></td>
                         </tr>`)
         .join("")}
             </tbody>
@@ -519,6 +541,7 @@ function generateWebviewContentConsole(consoleLogs) {
 
     <script>
         const vscode = acquireVsCodeApi();
+        const consoleLogsData = ${JSON.stringify(consoleLogs)};
 
         function filterTable() {
             const searchInput = document.getElementById("searchInput").value.trim();
@@ -534,13 +557,14 @@ function generateWebviewContentConsole(consoleLogs) {
 
         document.querySelectorAll('.remove-log-btn').forEach(button => {
             button.addEventListener('click', function() {
-                const log = JSON.parse(this.getAttribute('data-log'));
-                const selectedLogs = [{
-                    lineNumber: log.lineNumber,
-                    text: log.text,
-                    filePath: log.filePath
-                }];
-                vscode.postMessage({ command: "removeSelectedLogs", selectedLogs });
+                const index = parseInt(this.getAttribute('data-index'));
+                const log = consoleLogsData[index];
+                if (log) {
+                    vscode.postMessage({
+                        command: "removeSelectedLogs",
+                        selectedLogs: [log]
+                    });
+                }
             });
         });
 

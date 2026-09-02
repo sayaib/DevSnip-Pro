@@ -1,8 +1,31 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
-const vscode = require("vscode");
-const path = require("path");
+const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
 const createSnippetCommand_1 = require("./commands/createSnippetCommand");
 const showSnippetsCommand_1 = require("./commands/showSnippetsCommand");
 const listAndRemoveConsoleLogsCommand_1 = require("./commands/listAndRemoveConsoleLogsCommand");
@@ -10,6 +33,7 @@ const removeUnusedImportsCommand_1 = require("./commands/removeUnusedImportsComm
 const take_code_snip_1 = require("./commands/take-code-snip");
 const api_test_1 = require("./commands/api-test");
 const advancedTools_1 = require("./commands/advancedTools");
+const aiMlTools_1 = require("./commands/aiMlTools");
 function activate(context) {
     const snippetsFolderPath = path.join(__dirname, "../custom");
     console.log("DevSnip Pro extension is now active!");
@@ -24,6 +48,8 @@ function activate(context) {
     (0, take_code_snip_1.codeSnapShot)(context);
     // Register advanced tools commands
     (0, advancedTools_1.registerAdvancedToolsCommands)(context);
+    // Register AI/ML & LLM tools commands
+    (0, aiMlTools_1.registerAiMlToolsCommands)(context);
 }
 exports.activate = activate;
 class MyTreeDataProvider {
@@ -39,6 +65,7 @@ class MyTreeDataProvider {
             this.createCommandButton("Create Custom Code Snippet", "sayaib.hue-console.createCustomSnippet", "edit", new vscode.ThemeColor("terminal.ansiBrightBlue")),
             this.createCommandButton("View Saved Code Snippets", "sayaib.hue-console.showSnippets", "file-code", new vscode.ThemeColor("terminal.ansiBrightMagenta")),
             this.createCommandButton("🧰 Advanced Developer Tools", "sayaib.hue-console.advancedToolsHub", "tools", new vscode.ThemeColor("terminal.ansiBrightWhite")),
+            this.createCommandButton("🤖 AI/ML & LLM Tools", "sayaib.hue-console.aiMlHub", "robot", new vscode.ThemeColor("terminal.ansiBrightCyan")),
         ];
     }
     createCommandButton(label, command, iconId, color) {

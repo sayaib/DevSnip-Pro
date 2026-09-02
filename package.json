@@ -577,6 +577,50 @@
       {
         "command": "sayaib.hue-console.jsonToToon",
         "title": "🎭 DevSnip Pro: JSON → TOON Converter"
+      },
+      {
+        "command": "sayaib.hue-console.aiMlHub",
+        "title": "🤖 DevSnip Pro: AI/ML & LLM Tools Hub"
+      },
+      {
+        "command": "sayaib.hue-console.tokenCounter",
+        "title": "💰 DevSnip Pro: Token Counter & Cost Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.promptTemplate",
+        "title": "📝 DevSnip Pro: Prompt Template Manager"
+      },
+      {
+        "command": "sayaib.hue-console.mlCodeGen",
+        "title": "🐍 DevSnip Pro: Python ML Code Generator"
+      },
+      {
+        "command": "sayaib.hue-console.llmApiTester",
+        "title": "📡 DevSnip Pro: LLM API Tester"
+      },
+      {
+        "command": "sayaib.hue-console.datasetSplit",
+        "title": "📊 DevSnip Pro: Dataset Split Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.gpuVram",
+        "title": "🖥️ DevSnip Pro: GPU VRAM Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.experimentLogger",
+        "title": "📓 DevSnip Pro: Experiment Logger"
+      },
+      {
+        "command": "sayaib.hue-console.modelCard",
+        "title": "📄 DevSnip Pro: Model Card Generator"
+      },
+      {
+        "command": "sayaib.hue-console.jsonlViewer",
+        "title": "📋 DevSnip Pro: JSONL Viewer"
+      },
+      {
+        "command": "sayaib.hue-console.mdTableGen",
+        "title": "📐 DevSnip Pro: Markdown Table Generator"
       }
     ],
     "viewsContainers": {
@@ -615,7 +659,18 @@
     "onCommand:sayaib.hue-console.timestampConverter",
     "onCommand:sayaib.hue-console.loremGenerator",
     "onCommand:sayaib.hue-console.jsonToToon",
-    "onCommand:sayaib.hue-console.removeUnusedImports"
+    "onCommand:sayaib.hue-console.removeUnusedImports",
+    "onCommand:sayaib.hue-console.aiMlHub",
+    "onCommand:sayaib.hue-console.tokenCounter",
+    "onCommand:sayaib.hue-console.promptTemplate",
+    "onCommand:sayaib.hue-console.mlCodeGen",
+    "onCommand:sayaib.hue-console.llmApiTester",
+    "onCommand:sayaib.hue-console.datasetSplit",
+    "onCommand:sayaib.hue-console.gpuVram",
+    "onCommand:sayaib.hue-console.experimentLogger",
+    "onCommand:sayaib.hue-console.modelCard",
+    "onCommand:sayaib.hue-console.jsonlViewer",
+    "onCommand:sayaib.hue-console.mdTableGen"
   ],
   "browser": "./out/extention.js",
   "main": "./out/extention.js",

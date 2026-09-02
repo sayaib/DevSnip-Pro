@@ -7,6 +7,7 @@ import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImpor
 import { codeSnapShot } from "./commands/take-code-snip";
 import { apiTest } from "./commands/api-test";
 import { registerAdvancedToolsCommands } from "./commands/advancedTools";
+import { registerAiMlToolsCommands } from "./commands/aiMlTools";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(__dirname, "../custom");
@@ -26,6 +27,9 @@ export function activate(context: vscode.ExtensionContext) {
   
   // Register advanced tools commands
   registerAdvancedToolsCommands(context);
+
+  // Register AI/ML & LLM tools commands
+  registerAiMlToolsCommands(context);
 }
 
 class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -76,6 +80,12 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "sayaib.hue-console.advancedToolsHub",
         "tools",
         new vscode.ThemeColor("terminal.ansiBrightWhite")
+      ),
+      this.createCommandButton(
+        "🤖 AI/ML & LLM Tools",
+        "sayaib.hue-console.aiMlHub",
+        "robot",
+        new vscode.ThemeColor("terminal.ansiBrightCyan")
       ),
     ];
   }

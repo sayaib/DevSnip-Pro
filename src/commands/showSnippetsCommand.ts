@@ -13,6 +13,15 @@ interface SnippetFile {
   snippets: { [key: string]: Snippet };
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function registerShowSnippetsCommand(
   context: vscode.ExtensionContext,
   snippetsFolderPath: string
@@ -360,13 +369,11 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
                         ([key, snippet]) => `
                         <tr>
                         
-                            <td><pre>${snippet.prefix}</pre></td>
-                            <td>${key}</td>
-                            <td>${snippet.description || ""}</td>
+                            <td><pre>${escapeHtml(snippet.prefix)}</pre></td>
+                            <td>${escapeHtml(key)}</td>
+                            <td>${escapeHtml(snippet.description || "")}</td>
                             <td>
-                                <button class="remove-log-btn" onclick="deleteSnippet('${
-                                  group.language
-                                }', '${key}')">
+                                <button class="remove-log-btn delete-btn" data-language="${escapeHtml(group.language)}" data-key="${escapeHtml(key)}">
                                     Delete
                                 </button>
                             </td>
@@ -393,9 +400,13 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
                 });
             }
 
-            function deleteSnippet(language, snippetKey) {
-                vscode.postMessage({ command: 'deleteSnippet', language, snippetKey });
-            }
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const language = this.getAttribute('data-language');
+                    const snippetKey = this.getAttribute('data-key');
+                    vscode.postMessage({ command: 'deleteSnippet', language, snippetKey });
+                });
+            });
         </script>
     </body>
     </html>
