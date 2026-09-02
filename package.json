@@ -162,75 +162,7 @@
     "snippets": [
       {
         "language": "javascript",
-        "path": "./snippets/snippets_js.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_react.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_nodejs.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_react_query.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_react_redux.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_react_router.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_javascript.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_mongoaggr.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_mongodb.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/snippets_html.json"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "javascript",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "javascript",
         "path": "./custom/custom_javascript.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_js.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_typescript.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/snippets_react.json"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "typescript",
-        "path": "./snippets/tailwind_snippets.code-snippets"
       },
       {
         "language": "typescript",
@@ -238,43 +170,7 @@
       },
       {
         "language": "typescriptreact",
-        "path": "./snippets/snippets_typescript.json"
-      },
-      {
-        "language": "typescriptreact",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "typescriptreact",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "typescriptreact",
         "path": "./custom/custom_typescriptreact.json"
-      },
-      {
-        "language": "javascriptreact",
-        "path": "./snippets/snippets_react_query.json"
-      },
-      {
-        "language": "javascriptreact",
-        "path": "./snippets/snippets_react_redux.json"
-      },
-      {
-        "language": "javascriptreact",
-        "path": "./snippets/snippets_react_router.json"
-      },
-      {
-        "language": "javascriptreact",
-        "path": "./snippets/snippets_react.json"
-      },
-      {
-        "language": "javascriptreact",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "javascriptreact",
-        "path": "./snippets/tailwind_snippets.code-snippets"
       },
       {
         "language": "javascriptreact",
@@ -282,39 +178,7 @@
       },
       {
         "language": "html",
-        "path": "./snippets/snippets_js.json"
-      },
-      {
-        "language": "html",
-        "path": "./snippets/snippets_html.json"
-      },
-      {
-        "language": "html",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "html",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "html",
         "path": "./custom/custom_html.json"
-      },
-      {
-        "language": "php",
-        "path": "./snippets/snippets_php.json"
-      },
-      {
-        "language": "php",
-        "path": "./snippets/snippets_html.json"
-      },
-      {
-        "language": "php",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "php",
-        "path": "./snippets/tailwind_snippets.code-snippets"
       },
       {
         "language": "php",
@@ -322,15 +186,7 @@
       },
       {
         "language": "python",
-        "path": "./snippets/snippets_python.json"
-      },
-      {
-        "language": "python",
         "path": "./custom/custom_python.json"
-      },
-      {
-        "language": "dart",
-        "path": "./snippets/snippets_flutter.json"
       },
       {
         "language": "dart",
@@ -341,16 +197,8 @@
         "path": "./custom/custom_css.json"
       },
       {
-        "language": "css",
-        "path": "./snippets/css.code-snippets"
-      },
-      {
         "language": "scss",
         "path": "./custom/custom_scss.json"
-      },
-      {
-        "language": "scss",
-        "path": "./snippets/css.code-snippets"
       },
       {
         "language": "json",
@@ -391,10 +239,6 @@
       {
         "language": "csharp",
         "path": "./custom/custom_csharp.json"
-      },
-      {
-        "language": "ruby",
-        "path": "./snippets/snippets_html.json"
       },
       {
         "language": "ruby",
@@ -450,14 +294,6 @@
       },
       {
         "language": "plaintext",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "plaintext",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "plaintext",
         "path": "./custom/custom_plaintext.json"
       },
       {
@@ -483,38 +319,6 @@
       {
         "language": "vue",
         "path": "./custom/custom_vue.json"
-      },
-      {
-        "language": "vue",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "vue",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "vue-html",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "vue-html",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "handlebars",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "handlebars",
-        "path": "./snippets/tailwind_snippets.code-snippets"
-      },
-      {
-        "language": "razor",
-        "path": "./snippets/bootstrap_snippets.code-snippets"
-      },
-      {
-        "language": "razor",
-        "path": "./snippets/tailwind_snippets.code-snippets"
       }
     ],
     "commands": [
@@ -621,6 +425,54 @@
       {
         "command": "sayaib.hue-console.mdTableGen",
         "title": "📐 DevSnip Pro: Markdown Table Generator"
+      },
+      {
+        "command": "sayaib.hue-console.bigDataHub",
+        "title": "🗄️ DevSnip Pro: Big Data Tools Hub"
+      },
+      {
+        "command": "sayaib.hue-console.schemaViewer",
+        "title": "📋 DevSnip Pro: Schema Viewer"
+      },
+      {
+        "command": "sayaib.hue-console.sparkSqlFormatter",
+        "title": "🔤 DevSnip Pro: Spark SQL Formatter"
+      },
+      {
+        "command": "sayaib.hue-console.dataQualityChecker",
+        "title": "🔍 DevSnip Pro: Data Quality Checker"
+      },
+      {
+        "command": "sayaib.hue-console.schemaDiff",
+        "title": "🔀 DevSnip Pro: Schema Diff Tool"
+      },
+      {
+        "command": "sayaib.hue-console.partitionCalc",
+        "title": "📊 DevSnip Pro: Partition Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.ragHub",
+        "title": "🧬 DevSnip Pro: RAG Tools Hub"
+      },
+      {
+        "command": "sayaib.hue-console.chunkingTester",
+        "title": "✂️ DevSnip Pro: Chunking Strategy Tester"
+      },
+      {
+        "command": "sayaib.hue-console.embeddingCost",
+        "title": "💰 DevSnip Pro: Embedding Cost Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.contextWindow",
+        "title": "🪟 DevSnip Pro: Context Window Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.semanticDedup",
+        "title": "🔄 DevSnip Pro: Semantic Dedup Checker"
+      },
+      {
+        "command": "sayaib.hue-console.ragEvalScores",
+        "title": "📈 DevSnip Pro: RAG Eval Calculator"
       }
     ],
     "viewsContainers": {
@@ -670,7 +522,19 @@
     "onCommand:sayaib.hue-console.experimentLogger",
     "onCommand:sayaib.hue-console.modelCard",
     "onCommand:sayaib.hue-console.jsonlViewer",
-    "onCommand:sayaib.hue-console.mdTableGen"
+    "onCommand:sayaib.hue-console.mdTableGen",
+    "onCommand:sayaib.hue-console.bigDataHub",
+    "onCommand:sayaib.hue-console.schemaViewer",
+    "onCommand:sayaib.hue-console.sparkSqlFormatter",
+    "onCommand:sayaib.hue-console.dataQualityChecker",
+    "onCommand:sayaib.hue-console.schemaDiff",
+    "onCommand:sayaib.hue-console.partitionCalc",
+    "onCommand:sayaib.hue-console.ragHub",
+    "onCommand:sayaib.hue-console.chunkingTester",
+    "onCommand:sayaib.hue-console.embeddingCost",
+    "onCommand:sayaib.hue-console.contextWindow",
+    "onCommand:sayaib.hue-console.semanticDedup",
+    "onCommand:sayaib.hue-console.ragEvalScores"
   ],
   "browser": "./out/extention.js",
   "main": "./out/extention.js",

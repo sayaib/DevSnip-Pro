@@ -72,9 +72,9 @@ function createCustomSnippet() {
             // Save the snippet
             const snippetName = prefix.replace(/[^a-zA-Z0-9]/g, "");
             const snippetContent = snippet_generator_1.SnippetGenerator.saveSnippet(snippetName, snippet);
-            // Get the snippets directory path
-            const snippetsPath = path.join(__dirname, "..", "..", "snippets");
-            // Create snippets directory if it doesn't exist
+            // Get the custom snippets directory path
+            const snippetsPath = path.join(__dirname, "..", "..", "custom");
+            // Create custom directory if it doesn't exist
             if (!fs.existsSync(snippetsPath)) {
                 fs.mkdirSync(snippetsPath, { recursive: true });
             }

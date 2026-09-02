@@ -8,6 +8,8 @@ import { codeSnapShot } from "./commands/take-code-snip";
 import { apiTest } from "./commands/api-test";
 import { registerAdvancedToolsCommands } from "./commands/advancedTools";
 import { registerAiMlToolsCommands } from "./commands/aiMlTools";
+import { registerBigDataToolsCommands } from "./commands/bigDataTools";
+import { registerRagToolsCommands } from "./commands/ragTools";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(__dirname, "../custom");
@@ -30,6 +32,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register AI/ML & LLM tools commands
   registerAiMlToolsCommands(context);
+
+  // Register Big Data tools commands
+  registerBigDataToolsCommands(context);
+
+  // Register RAG tools commands
+  registerRagToolsCommands(context);
 }
 
 class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -86,6 +94,18 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         "sayaib.hue-console.aiMlHub",
         "robot",
         new vscode.ThemeColor("terminal.ansiBrightCyan")
+      ),
+      this.createCommandButton(
+        "🗄️ Big Data Tools",
+        "sayaib.hue-console.bigDataHub",
+        "database",
+        new vscode.ThemeColor("terminal.ansiBrightYellow")
+      ),
+      this.createCommandButton(
+        "🧬 RAG Tools",
+        "sayaib.hue-console.ragHub",
+        "search",
+        new vscode.ThemeColor("terminal.ansiBrightMagenta")
       ),
     ];
   }

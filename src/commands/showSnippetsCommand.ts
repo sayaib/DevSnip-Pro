@@ -96,7 +96,7 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How to Create and Use Custom Snippets with DevSnip Pro</title>
+    <title>How to Create Custom Snippets with DevSnip Pro</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -135,25 +135,16 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
         strong {
             color: #0073e6;
         }
-             td{
-            color:black;
-            }
-            th{
-            color:black;
-            }
-            a {
-             color: #0073e6;
-            }
     </style>
 </head>
 <body>
-    <h2>No Custom Snippets Found.</h1>
+    <h2>No Custom Snippets Found.</h2>
     <div class="container">
         <h1>How to Create and Use Custom Snippets with DevSnip Pro</h1>
         <ol>
             <li><strong>Select Your Code:</strong> Highlight the code snippet you want to save in the VS Code editor.</li>
             <li><strong>Right-Click on the Editor:</strong> Open the context menu by right-clicking on the selected code.</li>
-            <li><strong>Choose "🚀 DevSnip Pro: Create Your Own Perfect Code Snippet":</strong> Select this option from the context menu.</li>
+            <li><strong>Choose "DevSnip Pro: Create Your Own Perfect Code Snippet":</strong> Select this option from the context menu.</li>
             <li><strong>Enter Snippet Details:</strong> Provide the following information:
                 <ul>
                     <li><strong>Snippet Prefix:</strong> A unique identifier for your snippet.</li>
@@ -163,71 +154,6 @@ function generateWebviewContent(snippetsData: SnippetFile[]): string {
             </li>
             <li><strong>Call Your Snippets:</strong> Use the given prefix name to quickly insert your saved snippet in the editor.</li>
         </ol>
-
-        <h1>Use Preloaded Snippets</h1>
-        <table border="1" cellpadding="10" cellspacing="0" style="width: 100%; text-align: center;">
-  <tr>
-    <th>Language</th>
-    <th>Link</th>
-  </tr>
-  <tr>
-    <td>✅ HTML</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/html">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ Javascript</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/javascript">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ TypeScript</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/typescript">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ React</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/react">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ React Router</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/react-router">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ React Redux</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/react-redux">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ React Query</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/react-query">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ Python</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/python">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ PHP</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/php">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ Flutter</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/flutter">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ Node.js</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/nodejs">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ ES6</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/ES6">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ MongoDB</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongodb">Click Here</a></td>
-  </tr>
-  <tr>
-    <td>✅ Mongo Aggregation</td>
-    <td><a href="https://sayaibsarkar.net/#/dev-snip-pro/document/en/code-snippets/mongo-aggregation">Click Here</a></td>
-  </tr>
-</table>
-
     </div>
 </body>
 </html>

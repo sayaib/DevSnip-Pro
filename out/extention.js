@@ -34,6 +34,8 @@ const take_code_snip_1 = require("./commands/take-code-snip");
 const api_test_1 = require("./commands/api-test");
 const advancedTools_1 = require("./commands/advancedTools");
 const aiMlTools_1 = require("./commands/aiMlTools");
+const bigDataTools_1 = require("./commands/bigDataTools");
+const ragTools_1 = require("./commands/ragTools");
 function activate(context) {
     const snippetsFolderPath = path.join(__dirname, "../custom");
     console.log("DevSnip Pro extension is now active!");
@@ -50,6 +52,10 @@ function activate(context) {
     (0, advancedTools_1.registerAdvancedToolsCommands)(context);
     // Register AI/ML & LLM tools commands
     (0, aiMlTools_1.registerAiMlToolsCommands)(context);
+    // Register Big Data tools commands
+    (0, bigDataTools_1.registerBigDataToolsCommands)(context);
+    // Register RAG tools commands
+    (0, ragTools_1.registerRagToolsCommands)(context);
 }
 exports.activate = activate;
 class MyTreeDataProvider {
@@ -66,6 +72,8 @@ class MyTreeDataProvider {
             this.createCommandButton("View Saved Code Snippets", "sayaib.hue-console.showSnippets", "file-code", new vscode.ThemeColor("terminal.ansiBrightMagenta")),
             this.createCommandButton("🧰 Advanced Developer Tools", "sayaib.hue-console.advancedToolsHub", "tools", new vscode.ThemeColor("terminal.ansiBrightWhite")),
             this.createCommandButton("🤖 AI/ML & LLM Tools", "sayaib.hue-console.aiMlHub", "robot", new vscode.ThemeColor("terminal.ansiBrightCyan")),
+            this.createCommandButton("🗄️ Big Data Tools", "sayaib.hue-console.bigDataHub", "database", new vscode.ThemeColor("terminal.ansiBrightYellow")),
+            this.createCommandButton("🧬 RAG Tools", "sayaib.hue-console.ragHub", "search", new vscode.ThemeColor("terminal.ansiBrightMagenta")),
         ];
     }
     createCommandButton(label, command, iconId, color) {
