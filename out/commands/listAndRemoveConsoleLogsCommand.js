@@ -44,6 +44,14 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+function getNonce() {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = '';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 function registerListAndRemoveConsoleLogsCommand(context) {
     const command = vscode.commands.registerCommand("sayaib.hue-console.listAndRemoveConsoleLogs", () => __awaiter(this, void 0, void 0, function* () {
         if (!vscode.workspace.workspaceFolders) {
@@ -75,6 +83,8 @@ function registerListAndRemoveConsoleLogsCommand(context) {
                         filePath: file.fsPath,
                         lineNumber: lineNumber,
                         text: match[0],
+                        startOffset: match.index,
+                        endOffset: regex.lastIndex,
                     });
                 }
             }
@@ -146,8 +156,9 @@ function removeSelectedLogs(selectedLogs, panel) {
                 try {
                     const uri = vscode.Uri.file(log.filePath);
                     const document = yield vscode.workspace.openTextDocument(uri);
-                    const line = document.lineAt(log.lineNumber - 1); // Ensure 0-based index
-                    workspaceEdit.delete(uri, line.range);
+                    const start = document.positionAt(log.startOffset);
+                    const end = document.positionAt(log.endOffset);
+                    workspaceEdit.delete(uri, new vscode.Range(start, end));
                 }
                 catch (error) {
                     console.error(`Error processing log in file ${log.filePath}:`, error);
@@ -191,6 +202,8 @@ function fetchConsoleLogs() {
                         filePath: file.fsPath,
                         lineNumber: lineNumber,
                         text: match[0],
+                        startOffset: match.index,
+                        endOffset: regex.lastIndex,
                     });
                 }
             }
@@ -203,12 +216,14 @@ function fetchConsoleLogs() {
     });
 }
 function generateWebviewContentConsoleLoading(message) {
+    const nonce = getNonce();
     return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>Log Viewer</title>
     <style>
     @import url("https://fonts.googleapis.com/css?family=Raleway:400,400i,700");
@@ -346,7 +361,7 @@ main h2 {
 
 
 
-    <script>
+    <script nonce="${nonce}">
   //Loader
 const loader = document.querySelector("#loader");
 
@@ -382,12 +397,14 @@ for (var i = 0; i < l; i++) {
   `;
 }
 function generateWebviewContentConsole(consoleLogs) {
+    const nonce = getNonce();
     return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>Log Viewer</title>
     <style>
         /* General Styles */
@@ -507,7 +524,7 @@ function generateWebviewContentConsole(consoleLogs) {
 </head>
 <body>
     <h1>Active <span>Console Log Statements</span> in the Project</h1>
-    <input type="text" id="searchInput" placeholder="Search logs..." oninput="filterTable()"/>
+    <input type="text" id="searchInput" placeholder="Search logs..."/>
 
     <div class="container">
         <table id="consoleTable">
@@ -527,7 +544,7 @@ function generateWebviewContentConsole(consoleLogs) {
                             <td>${key + 1}</td>
                             <td><button class="remove-log-btn" data-index="${key}">Remove</button></td>
                             <td>${escapeHtml(log.filePath)}</td>
-                            <td>${log.lineNumber + 1}</td>
+                            <td>${log.lineNumber}</td>
                             <td><pre>${escapeHtml(log.text)}</pre></td>
                         </tr>`)
         .join("")}
@@ -535,18 +552,24 @@ function generateWebviewContentConsole(consoleLogs) {
         </table>
 
         <div class="actions">
-            <button type="button" onclick="removeAllLogs()">Remove All Logs</button>
+            <button type="button" id="removeAllLogsBtn">Remove All Logs</button>
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         const consoleLogsData = ${JSON.stringify(consoleLogs)};
 
         function filterTable() {
             const searchInput = document.getElementById("searchInput").value.trim();
             const rows = document.querySelectorAll("#consoleTable tbody tr");
-            const regex = new RegExp(searchInput, "i");
+            let regex;
+            try {
+                regex = new RegExp(searchInput, "i");
+            } catch {
+                rows.forEach((row) => row.style.display = "none");
+                return;
+            }
 
             rows.forEach((row) => {
                 const cells = Array.from(row.querySelectorAll("td"));
@@ -554,6 +577,8 @@ function generateWebviewContentConsole(consoleLogs) {
                 row.style.display = matches ? "" : "none";
             });
         }
+
+        document.getElementById('searchInput').addEventListener('input', filterTable);
 
         document.querySelectorAll('.remove-log-btn').forEach(button => {
             button.addEventListener('click', function() {
@@ -571,6 +596,8 @@ function generateWebviewContentConsole(consoleLogs) {
         function removeAllLogs() {
             vscode.postMessage({ command: "removeAllLogs" });
         }
+
+        document.getElementById('removeAllLogsBtn').addEventListener('click', removeAllLogs);
     </script>
 </body>
 </html>
@@ -578,6 +605,7 @@ function generateWebviewContentConsole(consoleLogs) {
   `;
 }
 function generateWebviewContentConsoleDeleteConfirm(consoleLogs) {
+    const nonce = getNonce();
     return `
 
 <!DOCTYPE html>
@@ -585,6 +613,7 @@ function generateWebviewContentConsoleDeleteConfirm(consoleLogs) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>Success Alert Box</title>
     <style>
         body {
@@ -662,7 +691,7 @@ font-size:10px;
     <div class="alert-box">
         <span class="alert-icon">✔</span>
         <span>Success! Your delete action was completed successfully. Console Log Deleted: ${consoleLogs.length}</span>
-        <button class="close-btn" onclick="this.parentElement.style.display='none';">✖</button>
+        <button class="close-btn" id="closeConfirmBtn">✖</button>
     </div>
 
     <div class="table-container">
@@ -683,10 +712,10 @@ font-size:10px;
               <td>${key + 1}
                 
                   <td>${log.filePath}</td>
-                  <td>${log.lineNumber + 1}</td>
+                  <td>${log.lineNumber}</td>
                   <td>
                   <pre style="white-space: pre-wrap;">
-                    ${log.text}
+                    ${escapeHtml(log.text)}
                </pre>
                   </td>
               </tr>`)
@@ -694,6 +723,11 @@ font-size:10px;
           </tbody>
       </table>
     </div>
+    <script nonce="${nonce}">
+      document.getElementById('closeConfirmBtn').addEventListener('click', function() {
+        this.parentElement.style.display = 'none';
+      });
+    </script>
 </body>
 </html>
 

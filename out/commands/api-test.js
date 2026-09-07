@@ -125,8 +125,8 @@ class ApiTester {
     }
     validateUrl(url) {
         try {
-            new URL(url);
-            return true;
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
         }
         catch (_a) {
             return false;
@@ -168,7 +168,7 @@ class ApiTester {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
     makeRequest(request) {
-        var _a, _b;
+        var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function* () {
             // Resolve environment variables
             const resolvedUrl = this.resolveVariables(request.url);
@@ -176,6 +176,12 @@ class ApiTester {
             if (request.headers) {
                 for (const [key, value] of Object.entries(request.headers)) {
                     resolvedHeaders[this.resolveVariables(key)] = this.resolveVariables(value);
+                }
+            }
+            const resolvedParams = {};
+            if (request.params) {
+                for (const [key, value] of Object.entries(request.params)) {
+                    resolvedParams[this.resolveVariables(key)] = this.resolveVariables(value);
                 }
             }
             const resolvedData = request.data ? this.resolveVariables(request.data) : undefined;
@@ -188,19 +194,26 @@ class ApiTester {
             }
             // Handle GraphQL request type
             let finalUrl = resolvedUrl;
+            if (Object.keys(resolvedParams).length > 0) {
+                const parsedUrl = new URL(finalUrl);
+                for (const [key, value] of Object.entries(resolvedParams)) {
+                    parsedUrl.searchParams.set(key, value);
+                }
+                finalUrl = parsedUrl.toString();
+            }
             let finalData = resolvedData;
             let finalHeaders = Object.assign({}, resolvedHeaders);
             if (request.requestType === 'graphql') {
                 // For GraphQL, wrap query in JSON body
                 const graphqlBody = {
-                    query: request.graphqlQuery || resolvedData || ''
+                    query: this.resolveVariables(request.graphqlQuery || resolvedData || '')
                 };
                 if (request.graphqlVariables) {
                     try {
                         graphqlBody.variables = JSON.parse(this.resolveVariables(request.graphqlVariables));
                     }
-                    catch (_c) {
-                        graphqlBody.variables = this.resolveVariables(request.graphqlVariables);
+                    catch (_f) {
+                        throw new Error("Invalid GraphQL variables JSON");
                     }
                 }
                 if (request.graphqlOperationName) {
@@ -208,9 +221,6 @@ class ApiTester {
                 }
                 finalData = JSON.stringify(graphqlBody);
                 finalHeaders['Content-Type'] = 'application/json';
-            }
-            if (finalData && !this.validateJson(finalData)) {
-                throw new Error("Invalid JSON in request body");
             }
             // Cancel previous request if exists
             if (this.cancelTokenSource) {
@@ -221,20 +231,27 @@ class ApiTester {
             const config = {
                 method: request.method,
                 url: finalUrl,
-                timeout: request.timeout || this.DEFAULT_TIMEOUT,
+                timeout: Number.isFinite(request.timeout) && request.timeout > 0
+                    ? Math.min(request.timeout, 300000)
+                    : this.DEFAULT_TIMEOUT,
                 validateStatus: () => true,
                 cancelToken: this.cancelTokenSource.token,
                 headers: Object.assign({ 'User-Agent': 'DevSnip-Pro API Tester' }, finalHeaders)
             };
             // Handle request body for appropriate methods
-            if (["POST", "PUT", "PATCH"].includes(request.method) && finalData) {
+            if (["POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(request.method.toUpperCase()) && finalData) {
+                const contentType = ((_b = (_a = Object.entries(finalHeaders)
+                    .find(([key]) => key.toLowerCase() === 'content-type')) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.toLowerCase()) || '';
                 try {
                     config.data = JSON.parse(finalData);
                     if (!finalHeaders['Content-Type']) {
                         config.headers['Content-Type'] = 'application/json';
                     }
                 }
-                catch (_d) {
+                catch (_g) {
+                    if (contentType.includes('application/json')) {
+                        throw new Error("Invalid JSON in request body");
+                    }
                     config.data = finalData;
                     if (!finalHeaders['Content-Type']) {
                         config.headers['Content-Type'] = 'text/plain';
@@ -269,17 +286,22 @@ class ApiTester {
                 const endTime = Date.now();
                 const responseTime = endTime - startTime;
                 // Calculate response size
-                const responseSize = JSON.stringify(response.data).length;
+                const serializedResponse = typeof response.data === 'string'
+                    ? response.data
+                    : JSON.stringify((_c = response.data) !== null && _c !== void 0 ? _c : '');
+                const responseSize = Buffer.byteLength(serializedResponse, 'utf8');
                 // Store cookies from response
                 if (response.headers["set-cookie"]) {
                     const existingCookies = this.cookies[domain] || [];
-                    const newCookies = response.headers["set-cookie"];
-                    this.cookies[domain] = [...existingCookies, ...newCookies];
+                    const newCookies = response.headers["set-cookie"]
+                        .map(cookie => cookie.split(';', 1)[0])
+                        .filter(Boolean);
+                    this.cookies[domain] = Array.from(new Set([...existingCookies, ...newCookies]));
                     this.saveData();
                 }
                 // Add to history
                 this.addToHistory({
-                    url: request.url,
+                    url: finalUrl,
                     method: request.method,
                     timestamp: Date.now(),
                     status: response.status,
@@ -301,11 +323,11 @@ class ApiTester {
                 }
                 const endTime = Date.now();
                 const responseTime = endTime - startTime;
-                const errorStatus = ((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) || 0;
-                const errorData = ((_b = error.response) === null || _b === void 0 ? void 0 : _b.data) || error.message;
+                const errorStatus = ((_d = error.response) === null || _d === void 0 ? void 0 : _d.status) || 0;
+                const errorData = ((_e = error.response) === null || _e === void 0 ? void 0 : _e.data) || error.message;
                 // Add failed request to history
                 this.addToHistory({
-                    url: request.url,
+                    url: finalUrl,
                     method: request.method,
                     timestamp: Date.now(),
                     status: errorStatus,
@@ -354,99 +376,92 @@ function apiTest(context) {
         panel.iconPath = vscode.Uri.file(iconPath);
         panel.webview.html = getWebviewContent(apiTester.getHistory());
         panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
-            try {
-                switch (message.command) {
-                    case "testAPI":
-                        try {
-                            panel.webview.postMessage({ command: "requestStarted" });
-                            const result = yield apiTester.makeRequest({
-                                method: message.method,
-                                url: message.url,
-                                data: message.data,
-                                headers: message.headers,
-                                authType: message.authType,
-                                authToken: message.authToken,
-                                username: message.username,
-                                password: message.password,
-                                timeout: message.timeout,
-                                requestType: message.requestType,
-                                graphqlQuery: message.graphqlQuery,
-                                graphqlVariables: message.graphqlVariables,
-                                graphqlOperationName: message.graphqlOperationName
-                            });
-                            panel.webview.postMessage(Object.assign({ command: "apiResponse" }, result));
-                        }
-                        catch (error) {
-                            panel.webview.postMessage({
-                                command: "apiError",
-                                error: error.message,
-                                status: error.status || 0,
-                                response: error.response,
-                                responseTime: error.responseTime
-                            });
-                        }
-                        break;
-                    case "cancelRequest":
-                        apiTester.cancelCurrentRequest();
-                        panel.webview.postMessage({ command: "requestCancelled" });
-                        break;
-                    case "getCookies":
-                        panel.webview.postMessage({
-                            command: "showCookies",
-                            cookies: apiTester.getCookies(),
+            switch (message.command) {
+                case "testAPI":
+                    try {
+                        panel.webview.postMessage({ command: "requestStarted" });
+                        const result = yield apiTester.makeRequest({
+                            method: message.method,
+                            url: message.url,
+                            data: message.data,
+                            params: message.params,
+                            headers: message.headers,
+                            authType: message.authType,
+                            authToken: message.authToken,
+                            username: message.username,
+                            password: message.password,
+                            timeout: message.timeout,
+                            requestType: message.requestType,
+                            graphqlQuery: message.graphqlQuery,
+                            graphqlVariables: message.graphqlVariables,
+                            graphqlOperationName: message.graphqlOperationName
                         });
-                        break;
-                    case "clearHistory":
-                        apiTester.clearHistory();
+                        panel.webview.postMessage(Object.assign({ command: "apiResponse" }, result));
+                    }
+                    catch (error) {
                         panel.webview.postMessage({
-                            command: "historyCleared",
-                            history: []
+                            command: "apiError",
+                            error: error.message || "Request failed",
+                            status: error.status || 0,
+                            response: error.response,
+                            responseTime: error.responseTime
                         });
-                        break;
-                    case "clearCookies":
-                        apiTester.clearCookies();
-                        panel.webview.postMessage({
-                            command: "cookiesCleared"
-                        });
-                        break;
-                    case "getEnvironments":
-                        panel.webview.postMessage({
-                            command: "showEnvironments",
-                            environments: apiTester.getEnvironments(),
-                            activeIndex: apiTester.getActiveEnvironmentIndex()
-                        });
-                        break;
-                    case "saveEnvironment":
-                        yield apiTester.saveEnvironment(message.environment);
-                        panel.webview.postMessage({
-                            command: "environmentSaved",
-                            environments: apiTester.getEnvironments(),
-                            activeIndex: apiTester.getActiveEnvironmentIndex()
-                        });
-                        break;
-                    case "deleteEnvironment":
-                        yield apiTester.deleteEnvironment(message.name);
-                        panel.webview.postMessage({
-                            command: "environmentDeleted",
-                            environments: apiTester.getEnvironments(),
-                            activeIndex: apiTester.getActiveEnvironmentIndex()
-                        });
-                        break;
-                    case "setActiveEnvironment":
-                        yield apiTester.setActiveEnvironment(message.index);
-                        panel.webview.postMessage({
-                            command: "environmentActivated",
-                            environments: apiTester.getEnvironments(),
-                            activeIndex: apiTester.getActiveEnvironmentIndex()
-                        });
-                        break;
-                }
-            }
-            catch (error) {
-                panel.webview.postMessage({
-                    command: "error",
-                    message: error.message || "An unexpected error occurred"
-                });
+                    }
+                    break;
+                case "cancelRequest":
+                    apiTester.cancelCurrentRequest();
+                    panel.webview.postMessage({ command: "requestCancelled" });
+                    break;
+                case "getCookies":
+                    panel.webview.postMessage({
+                        command: "showCookies",
+                        cookies: apiTester.getCookies(),
+                    });
+                    break;
+                case "clearHistory":
+                    apiTester.clearHistory();
+                    panel.webview.postMessage({
+                        command: "historyCleared",
+                        history: []
+                    });
+                    break;
+                case "clearCookies":
+                    apiTester.clearCookies();
+                    panel.webview.postMessage({
+                        command: "cookiesCleared"
+                    });
+                    break;
+                case "getEnvironments":
+                    panel.webview.postMessage({
+                        command: "showEnvironments",
+                        environments: apiTester.getEnvironments(),
+                        activeIndex: apiTester.getActiveEnvironmentIndex()
+                    });
+                    break;
+                case "saveEnvironment":
+                    yield apiTester.saveEnvironment(message.environment);
+                    panel.webview.postMessage({
+                        command: "environmentSaved",
+                        environments: apiTester.getEnvironments(),
+                        activeIndex: apiTester.getActiveEnvironmentIndex()
+                    });
+                    break;
+                case "deleteEnvironment":
+                    yield apiTester.deleteEnvironment(message.name);
+                    panel.webview.postMessage({
+                        command: "environmentDeleted",
+                        environments: apiTester.getEnvironments(),
+                        activeIndex: apiTester.getActiveEnvironmentIndex()
+                    });
+                    break;
+                case "setActiveEnvironment":
+                    yield apiTester.setActiveEnvironment(message.index);
+                    panel.webview.postMessage({
+                        command: "environmentActivated",
+                        environments: apiTester.getEnvironments(),
+                        activeIndex: apiTester.getActiveEnvironmentIndex()
+                    });
+                    break;
             }
         }), undefined, context.subscriptions);
         // Clean up on panel disposal
@@ -457,13 +472,23 @@ function apiTest(context) {
     context.subscriptions.push(disposable);
 }
 exports.apiTest = apiTest;
+function getNonce() {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = '';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 function getWebviewContent(history) {
+    const nonce = getNonce();
     return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <title>API Tester Pro</title>
         <style>
         :root {
@@ -1449,16 +1474,19 @@ function getWebviewContent(history) {
                         </tr>
                     </thead>
                     <tbody id="historyTableBody">
-                        ${history.map(item => `
-                            <tr data-url="${item.url}" data-method="${item.method}">
-                                <td><span class="method-badge ${item.method}">${item.method}</span></td>
-                                <td class="url-cell" title="${item.url}">${item.url}</td>
+                        ${history.map(item => {
+        const safeUrl = item.url.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeMethod = item.method.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        return `
+                            <tr data-url="${safeUrl}" data-method="${safeMethod}">
+                                <td><span class="method-badge ${safeMethod}">${safeMethod}</span></td>
+                                <td class="url-cell" title="${safeUrl}">${safeUrl}</td>
                                 <td><span class="status-badge s${Math.floor((item.status || 0) / 100)}xx">${item.status || '-'}</span></td>
                                 <td class="time-cell">${item.responseTime ? item.responseTime + 'ms' : '-'}</td>
-                                <td class="size-cell">${item.size ? formatBytes(item.size) : '-'}</td>
+                                <td class="size-cell">${item.size ? (typeof item.size === 'number' ? item.size + ' B' : item.size) : '-'}</td>
                                 <td class="date-cell">${new Date(item.timestamp).toLocaleDateString()}</td>
-                            </tr>
-                        `).join('')}
+                            </tr>`;
+    }).join('')}
                     </tbody>
                 </table>
             </div>
@@ -1511,7 +1539,7 @@ function getWebviewContent(history) {
             </div>
         </div>
 
-        <script>
+        <script nonce="${nonce}">
             const vscode = acquireVsCodeApi();
             let isRequestInProgress = false;
             let currentRequestType = 'rest';
@@ -1555,7 +1583,7 @@ function getWebviewContent(history) {
                 row.innerHTML = '<input type="text" class="input kv-key" placeholder="Key" value="' + (key || '') + '">' +
                     '<input type="text" class="input kv-value" placeholder="Value" value="' + (value || '') + '">' +
                     '<button class="kv-remove">&times;</button>';
-                row.querySelector('.kv-remove').addEventListener('click', () => row.remove());
+                row.querySelector('.kv-remove').addEventListener('click', () => { row.remove(); updateHeaderCount(); });
                 document.getElementById(container).appendChild(row);
                 updateHeaderCount();
             }
@@ -1633,15 +1661,40 @@ function getWebviewContent(history) {
             /* ===== SYNTAX HIGHLIGHT ===== */
             function highlight(json) {
                 if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
-                json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                return json.replace(/("(\\\\u[a-zA-Z0-9]{4}|\\\\[^u]|[^\\\\"])*"(\\s*:)?|\\b(true|false|null)\\b|-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?)/g, (match) => {
-                    let cls = '';
-                    if (/^"/.test(match)) cls = /:$/.test(match) ? 'json-key' : 'json-string';
-                    else if (/true|false/.test(match)) cls = 'json-boolean';
-                    else if (/null/.test(match)) cls = 'json-null';
-                    else cls = 'json-number';
-                    return '<span class="' + cls + '">' + match + '</span>';
-                });
+                var result = '';
+                var i = 0;
+                var len = json.length;
+                while (i < len) {
+                    if (json[i] === '"') {
+                        var start = i; i++;
+                        while (i < len && json[i] !== '"') {
+                            if (json[i] === '\\\\') i++;
+                            i++;
+                        }
+                        i++;
+                        var raw = json.substring(start, i);
+                        var content = raw.substring(1, raw.length - 1);
+                        var isKey = (i < len && json[i] === ':');
+                        result += '<span class="' + (isKey ? 'json-key' : 'json-string') + '">' + escapeHtml(content) + '</span>';
+                        if (isKey) { while (i < len && json[i] !== ':') i++; i++; }
+                    } else if (json[i] === '-' || (json[i] >= '0' && json[i] <= '9')) {
+                        var start = i;
+                        if (json[i] === '-') i++;
+                        while (i < len && json[i] >= '0' && json[i] <= '9') i++;
+                        if (i < len && json[i] === '.') { i++; while (i < len && json[i] >= '0' && json[i] <= '9') i++; }
+                        if (i < len && (json[i] === 'e' || json[i] === 'E')) { i++; if (i < len && (json[i] === '+' || json[i] === '-')) i++; while (i < len && json[i] >= '0' && json[i] <= '9') i++; }
+                        result += '<span class="json-number">' + json.substring(start, i) + '</span>';
+                    } else if (json.substring(i, i + 4) === 'true') {
+                        result += '<span class="json-boolean">true</span>'; i += 4;
+                    } else if (json.substring(i, i + 5) === 'false') {
+                        result += '<span class="json-boolean">false</span>'; i += 5;
+                    } else if (json.substring(i, i + 4) === 'null') {
+                        result += '<span class="json-null">null</span>'; i += 4;
+                    } else {
+                        result += escapeHtml(json[i]); i++;
+                    }
+                }
+                return result;
             }
 
             /* ===== JSON/XML HELPERS ===== */
@@ -1690,11 +1743,13 @@ function getWebviewContent(history) {
                 const url = document.getElementById('url').value.trim();
                 if (!url) { toast('Enter a URL', 'error'); return; }
                 if (!/^https?:\\/\\//i.test(url)) { toast('URL must start with http:// or https://', 'error'); return; }
+                setRequestState(true);
                 vscode.postMessage({
                     command: 'testAPI',
                     method: methodSelect.value,
                     url: url,
                     data: document.getElementById('body').value.trim(),
+                    params: collectKV('paramsContainer'),
                     headers: collectKV('headersContainer'),
                     authType: document.getElementById('authType').value,
                     authToken: document.getElementById('authToken')?.value,
@@ -1744,11 +1799,34 @@ function getWebviewContent(history) {
             /* ===== COOKIE MODAL ===== */
             document.getElementById('showCookies').addEventListener('click', () => vscode.postMessage({ command: 'getCookies' }));
             document.getElementById('closeCookieModal').addEventListener('click', () => document.getElementById('cookieModal').classList.remove('open'));
-            document.getElementById('copyCookies').addEventListener('click', () => {
-                navigator.clipboard.writeText(document.getElementById('cookieList').innerText).then(() => toast('Copied!', 'success'));
+            document.getElementById('cookieList').addEventListener('click', (e) => {
+                const item = e.target.closest('.cookie-item');
+                if (item && item.dataset.cookie) {
+                    navigator.clipboard.writeText(item.dataset.cookie).then(() => toast('Cookie copied!', 'success')).catch(() => {
+                        const ta = document.createElement('textarea');
+                        ta.value = item.dataset.cookie;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        toast('Cookie copied!', 'success');
+                    });
+                }
             });
-            document.getElementById('clearHistory').addEventListener('click', () => { if (confirm('Clear request history?')) vscode.postMessage({ command: 'clearHistory' }); });
-            document.getElementById('clearCookies').addEventListener('click', () => { if (confirm('Clear all cookies?')) vscode.postMessage({ command: 'clearCookies' }); });
+            document.getElementById('copyCookies').addEventListener('click', () => {
+                const text = document.getElementById('cookieList').innerText;
+                navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success')).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    toast('Copied!', 'success');
+                });
+            });
+            document.getElementById('clearHistory').addEventListener('click', () => { vscode.postMessage({ command: 'clearHistory' }); });
+            document.getElementById('clearCookies').addEventListener('click', () => { vscode.postMessage({ command: 'clearCookies' }); });
 
             /* ===== ENVIRONMENT ===== */
             function updateEnvSelect() {
@@ -1776,20 +1854,26 @@ function getWebviewContent(history) {
             });
             document.getElementById('deleteEnvBtn').addEventListener('click', () => {
                 const idx = parseInt(document.getElementById('envSelect').value);
-                if (idx >= 0 && environments[idx] && confirm('Delete "' + environments[idx].name + '"?'))
+                if (idx >= 0 && environments[idx])
                     vscode.postMessage({ command: 'deleteEnvironment', name: environments[idx].name });
+                document.getElementById('envModal').classList.remove('open');
             });
 
             /* ===== HISTORY TABLE UPDATE ===== */
+            function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
             function updateHistoryTable(history) {
                 document.getElementById('historyCount').textContent = history.length + ' requests';
-                document.getElementById('historyTableBody').innerHTML = history.map(i => '<tr data-url="' + i.url + '" data-method="' + i.method + '">' +
-                    '<td><span class="method-badge ' + i.method + '">' + i.method + '</span></td>' +
-                    '<td class="url-cell" title="' + i.url + '">' + i.url + '</td>' +
+                document.getElementById('historyTableBody').innerHTML = history.map(i => {
+                    var u = escapeHtml(i.url), m = escapeHtml(i.method);
+                    return '<tr data-url="' + u + '" data-method="' + m + '">' +
+                    '<td><span class="method-badge ' + m + '">' + m + '</span></td>' +
+                    '<td class="url-cell" title="' + u + '">' + u + '</td>' +
                     '<td><span class="status-badge s' + Math.floor((i.status||0)/100) + 'xx">' + (i.status||'-') + '</span></td>' +
                     '<td class="time-cell">' + (i.responseTime ? i.responseTime + 'ms' : '-') + '</td>' +
                     '<td class="size-cell">' + (i.size || '-') + '</td>' +
-                    '<td class="date-cell">' + new Date(i.timestamp).toLocaleDateString() + '</td></tr>').join('');
+                    '<td class="date-cell">' + new Date(i.timestamp).toLocaleDateString() + '</td></tr>';
+                }).join('');
             }
 
             /* ===== MESSAGE HANDLING ===== */
@@ -1814,9 +1898,12 @@ function getWebviewContent(history) {
                         document.getElementById('statusCode').innerHTML = '<span class="status-badge s0xx">' + (d.status || 'Error') + '</span>';
                         document.getElementById('responseTime').textContent = d.responseTime ? d.responseTime + 'ms' : '-';
                         document.getElementById('responseSize').textContent = '-';
-                        let err = 'Error: ' + d.error;
-                        if (d.response) err += '\\n\\n' + highlight(d.response);
-                        document.getElementById('responseOutput').innerHTML = err;
+                        var errHtml = '<span style="color:var(--error)">Error: ' + escapeHtml(d.error) + '</span>';
+                        if (d.response) {
+                            var responseStr = typeof d.response === 'string' ? d.response : JSON.stringify(d.response, null, 2);
+                            errHtml += '\\n\\n' + highlight(responseStr);
+                        }
+                        document.getElementById('responseOutput').innerHTML = errHtml;
                         toast('Request failed: ' + d.error, 'error');
                         break;
                     case 'requestCancelled':
@@ -1826,7 +1913,7 @@ function getWebviewContent(history) {
                     case 'showCookies':
                         const cl = document.getElementById('cookieList'); cl.innerHTML = '';
                         if (!Object.keys(d.cookies).length) { cl.innerHTML = '<div class="response-placeholder"><div class="response-placeholder-text">No cookies stored</div></div>'; }
-                        else { for (const [domain, cookies] of Object.entries(d.cookies)) { const div = document.createElement('div'); div.className = 'form-row'; div.innerHTML = '<div class="form-label">' + domain + '</div>' + cookies.map(c => '<div class="input text-mono text-sm" style="margin-bottom:4px;cursor:pointer" onclick="navigator.clipboard.writeText(this.textContent)">' + c + '</div>').join(''); cl.appendChild(div); } }
+                        else { for (const [domain, cookies] of Object.entries(d.cookies)) { const div = document.createElement('div'); div.className = 'form-row'; div.innerHTML = '<div class="form-label">' + domain + '</div>' + cookies.map(c => '<div class="input text-mono text-sm cookie-item" style="margin-bottom:4px;cursor:pointer" data-cookie="' + escapeHtml(c) + '">' + escapeHtml(c) + '</div>').join(''); cl.appendChild(div); } }
                         document.getElementById('cookieModal').classList.add('open');
                         break;
                     case 'historyCleared': updateHistoryTable([]); toast('History cleared', 'success'); break;
@@ -1846,24 +1933,5 @@ function getWebviewContent(history) {
     </body>
     </html>
   `;
-    function getStatusClass(status) {
-        if (!status)
-            return "";
-        if (status >= 200 && status < 300)
-            return "status-success";
-        if (status >= 400 && status < 500)
-            return "status-error";
-        if (status >= 500)
-            return "status-error";
-        return "status-warning";
-    }
-    function formatBytes(bytes) {
-        if (bytes === 0)
-            return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
 }
 //# sourceMappingURL=api-test.js.map

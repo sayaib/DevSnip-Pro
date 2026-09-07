@@ -1,8 +1,52 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.47.134 - 2026-09-07
+
+### New Features
+
+- **AI/ML & LLM Tools Hub** -- 10 new tools for AI/ML workflows:
+  - Token Counter & Cost Calculator (GPT-4o, Claude, Gemini, Llama, Mistral)
+  - Prompt Template Manager with variable substitution
+  - Python ML Code Generator (PyTorch, TensorFlow, HuggingFace, LangChain)
+  - LLM API Tester with streaming support
+  - Dataset Split Calculator with stratification
+  - GPU VRAM Calculator (FP32/FP16/BF16/INT8/INT4)
+  - Experiment Logger with Markdown export
+  - Model Card Generator (HuggingFace format)
+  - JSONL Viewer for training data
+  - Markdown Table Generator
+
+- **Big Data Tools Hub** -- 5 new tools for data engineering:
+  - Schema Viewer (Parquet, Avro, JSON)
+  - Spark SQL / Presto / Trino Query Formatter
+  - Data Quality Checker (CSV, JSON)
+  - Schema Diff Tool (side-by-side comparison)
+  - Partition Calculator (Hadoop/Hive/Spark)
+
+- **RAG Tools Hub** -- 5 new tools for Retrieval-Augmented Generation:
+  - Chunking Strategy Tester (fixed, sentence, recursive, overlap)
+  - Embedding Cost Calculator (OpenAI, Cohere, HuggingFace)
+  - Context Window Calculator with visual utilization bars
+  - Semantic Dedup Checker (n-gram similarity)
+  - RAG Eval Calculator (precision, recall, MRR, faithfulness)
+
+- **GraphQL support** in REST API Client -- dedicated query editor, variables, and operation name
+- **Environment variables** in REST API Client -- create, manage, and resolve `{{variable}}` placeholders across requests
+
+### Improvements
+
+- **REST API Client** -- complete UI redesign with professional layout, method color coding, config tabs, request history, cancel button, and responsive design
+- **Advanced Developer Tools Hub** -- added Color Palette and Lorem Ipsum Generator (now 9 tools), unified theme system with toast notifications
+- **Activity Bar** -- added AI/ML, Big Data, and RAG tool hubs to the sidebar tree view
+- **README** -- completely rewritten with comprehensive feature documentation
+
+### Removed
+
+- Removed legacy `snippets/` directory (replaced by `custom/` snippet system)
+
 ## Version 10.46.133 - 2025-12-03
 
-- Added JSON to TOON converter adn readme updated
+- Added JSON to TOON converter and readme updated
 
 ## Version 10.43.119 - 2025-04-03
 

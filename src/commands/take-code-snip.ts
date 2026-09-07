@@ -80,11 +80,14 @@ const getTemplate = (
 };
 
 const update = (panel: vscode.WebviewPanel): void => {
-  vscode.commands.executeCommand("editor.action.clipboardCopyAction");
+  const activeTextEditor = vscode.window.activeTextEditor;
+  if (!activeTextEditor) return;
 
-  // Send a message to the webview to trigger the code update
+  // Send selected text directly to webview without overwriting clipboard
+  const selectedText = activeTextEditor.document.getText(activeTextEditor.selection);
   panel.webview.postMessage({
     type: "updateCode",
+    code: selectedText,
   });
 };
 

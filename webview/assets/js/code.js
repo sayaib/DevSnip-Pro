@@ -52,6 +52,19 @@ export const pasteCode = clip => {
     setupTerminal(terminalCodeSnippetNode);
 };
 
+export const setCode = code => {
+    const escaped = String(code || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    terminalCodeSnippetNode.innerHTML = escaped
+        .split(/\r?\n/)
+        .map(line => `<div>${line || '&nbsp;'}</div>`)
+        .join('');
+    setupTerminal(terminalCodeSnippetNode);
+};
+
 export const showLineNumbers = () => {
     const editorLineNumbers = document.querySelectorAll('.editorLineNumber');
     editorLineNumbers.forEach(element => (element.style.display = 'block'));

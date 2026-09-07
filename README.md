@@ -1,391 +1,182 @@
-# 🚀 DevSnip Pro - The Ultimate Developer Productivity Extension
+<div align="center">
+
+# DevSnip Pro
+
+### The Ultimate Developer Productivity Extension for VS Code
 
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/sayaib.hue-console?style=for-the-badge&label=VS%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
 [![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
 [![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
 
-> **⚡ The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.**
+<img src="data/data.gif" alt="DevSnip Pro Demo" width="700" />
 
-DevSnip Pro is a comprehensive Visual Studio Code extension designed to supercharge your development workflow. Whether you're building web applications, working with databases, or managing code snippets, DevSnip Pro provides all the essential tools you need in one powerful package.
+**39 built-in tools** across API testing, code snippets, developer utilities, AI/ML tools, Big Data tools, and RAG tools — all inside VS Code.
 
-## 🧭 How to Access
-
-- Activity Bar: Click the `DevSnip Pro` icon in the left sidebar.
-- Command Palette: Press `Ctrl+Shift+P` (Cmd+Shift+P), type `DevSnip Pro:` and choose a command.
-- Context Menu: Right-click in any code file to access context features like snapshots and cleanup.
-More details are available in [Access After Install](#-access-after-install).
----
-
-## 📋 Table of Contents
-
-- [🧭 How to Access](#-how-to-access)
-- [✨ Key Features](#-key-features)
-- [🎨 Supported Technologies](#-supported-technologies)
-- [🚀 Installation](#-installation)
-- [🎯 Quick Start Guide](#-quick-start-guide)
-- [🧭 Access After Install](#-access-after-install)
-- [📖 Feature Documentation](#-feature-documentation)
-  - [🌏 REST API Testing](#-rest-api-testing)
-  - [💽 MongoDB Integration](#-mongodb-integration)
-  - [🧹 Console Log Cleanup](#-console-log-cleanup)
-  - [📸 Code Snapshots](#-code-snapshots)
-  - [🧰 Advanced Developer Tools](#-advanced-developer-tools)
-  - [✨ Custom Snippet Management](#-custom-snippet-management)
-  - [📜 Pre-built Snippet Library](#-pre-built-snippet-library)
-- [💡 Usage Examples](#-usage-examples)
-- [⚙️ Configuration](#️-configuration)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-- [🆘 Support & Help](#-support--help)
-
----
-
-## ✨ Key Features
-
-DevSnip Pro combines multiple essential development tools into one seamless extension:
-
-| Feature | Description | Benefit |
-|---------|-------------|---------|
-| 🌏 **REST API Testing** | Professional API client built into VS Code | Test endpoints without leaving your editor |
-| 💽 **MongoDB Integration** | Direct database connectivity and querying | Execute queries and view results in real-time |
-| 🧹 **Console Log Cleanup** | Intelligent code cleanup automation | Remove debug logs with one click |
-| 📸 **Code Snapshots** | Beautiful code sharing made simple | Create stunning visual code snippets |
-| 🧰 **Advanced Tools Hub** | 9 professional developer utilities | Regex builder, JSON formatter, hash generator, and more |
-| ✨ **Custom Snippets** | Personal snippet library management | Create, organize, and share your code templates |
-| 📜 **500+ Pre-built Snippets** | Extensive collection across 15+ technologies | Instant access to common patterns and boilerplate |
-| 🎯 **Activity Bar Integration** | Quick access through VS Code sidebar | All features available with one click |
-
----
-
-## 🎨 Supported Technologies
-
-DevSnip Pro provides comprehensive snippet libraries and tools for modern development:
-
-<div align="center">
-
-### 🌐 Frontend Technologies
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/react_icon.png" alt="ReactJS" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/javascript_icon.png" alt="JavaScript" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/typescript_icon.png" alt="TypeScript" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/html_icon.png" alt="HTML" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/css_icon.png" alt="CSS" width="40" height="40" />
-
-### 🎨 CSS Frameworks
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/bootstrap_icon.png" alt="Bootstrap" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/tailwind_icon.png" alt="Tailwind CSS" width="40" height="40" />
-
-### ⚙️ Backend & Database
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/nodejs_icon.png" alt="NodeJS" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/mongodb_icon.png" alt="MongoDB" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/python_icon.png" alt="Python" width="40" height="40" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/php_icon.png" alt="PHP" width="40" height="40" />
-
-### 📱 Mobile Development
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/flutter_icon.png" alt="Flutter" width="40" height="40" />
+[Installation](#installation) | [Features](#features) | [Quick Start](#quick-start) | [Documentation](#documentation) | [Contributing](#contributing)
 
 </div>
 
-**Complete Language Support:**
-- **Frontend:** JavaScript, TypeScript, React, HTML, CSS, Vue.js
-- **Backend:** Node.js, Python, PHP, Java, C#, Go, Ruby
-- **Mobile:** Flutter/Dart, Swift, Kotlin
-- **Frameworks:** Bootstrap, Tailwind CSS, React Query, Redux, React Router
-- **Database:** MongoDB, SQL
-- **Others:** JSON, YAML, Markdown, Shell Scripts, and more
+---
+
+## Table of Contents
+
+- [Features Overview](#features-overview)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [How to Access](#how-to-access)
+- [Features](#features)
+  - [REST API Client](#1-rest-api-client)
+  - [Custom Snippets](#2-custom-snippet-management)
+  - [Pre-built Snippet Library](#3-pre-built-snippet-library)
+  - [Console Log Cleanup](#4-console-log-cleanup)
+  - [Unused Imports Remover](#5-unused-imports-remover)
+  - [Code Snapshots](#6-code-snapshots)
+  - [Advanced Developer Tools](#7-advanced-developer-tools)
+  - [AI/ML & LLM Tools](#8-ai--ml--llm-tools)
+  - [Big Data Tools](#9-big-data-tools)
+  - [RAG Tools](#10-rag-tools)
+- [Supported Technologies](#supported-technologies)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
 
 ---
 
-## 🚀 Installation
+## Features Overview
 
-### Method 1: VS Code Marketplace (Recommended)
+| Category | Tools | Description |
+|----------|-------|-------------|
+| API Testing | 1 | Full-featured REST/GraphQL client with environments, auth, cookies, and history |
+| Snippet Management | 3 | Create custom snippets, browse 500+ pre-built snippets across 30+ languages |
+| Code Cleanup | 2 | Remove console logs and unused imports across your entire project |
+| Code Snapshots | 1 | Generate beautiful, shareable code images with customizable themes |
+| Advanced Dev Tools | 9 | Regex builder, JSON/XML formatter, hash generator, Base64, URL encoder, color palette, timestamp converter, lorem generator, JSON to TOON |
+| AI/ML & LLM Tools | 10 | Token counter, prompt manager, model comparison, embedding cost calculator, and more |
+| Big Data Tools | 5 | Schema viewer, SQL formatter, data pipeline builder, and more |
+| RAG Tools | 5 | Chunking strategy tester, embedding cost calculator, vector DB simulator, and more |
 
-1. **Open VS Code**
-2. **Go to Extensions** (Ctrl+Shift+X / Cmd+Shift+X)
-3. **Search for "DevSnip Pro"**
-4. **Click "Install"** on the extension by Sayaib Sarkar
-5. **Reload VS Code** if prompted
+---
 
-### Method 2: Command Line
+## Installation
+
+### VS Code Marketplace (Recommended)
+
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+3. Search for **"DevSnip Pro"**
+4. Click **Install**
+
+### Command Line
 
 ```bash
 code --install-extension sayaib.hue-console
 ```
 
-### Method 3: Manual Installation
+### Manual (VSIX)
 
-1. Download the `.vsix` file from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
-2. Open VS Code
-3. Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac)
-4. Type "Extensions: Install from VSIX"
-5. Select the downloaded file
-
----
-
-## 🎯 Quick Start Guide
-
-### Step 1: Locate DevSnip Pro
-After installation, look for the **DevSnip Pro icon** in VS Code's Activity Bar (left sidebar).
-
-### Step 2: Access Features
-Click on the DevSnip Pro icon to open the extension panel with all available tools.
-
-### Step 3: Start Using
-Choose any feature from the organized interface:
-- **🚀 Create Custom Snippets** - Build your personal code library
-- **🛢 REST API Client** - Test your APIs
-- **🛠️ Console Log Cleanup** - Clean your code
-- **📸 Code Snapshots** - Share beautiful code images
-- **🧰 Advanced Tools Hub** - Access developer utilities
-
-### Alternative Access Methods
-
-**Command Palette:**
-1. Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac)
-2. Type "DevSnip" to see all available commands
-3. Select the feature you want to use
-
-**Context Menu:**
-- Right-click in any code file to access context-specific features
+1. Download the `.vsix` from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
+2. In VS Code, open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+3. Run **"Extensions: Install from VSIX"**
+4. Select the downloaded file
 
 ---
 
-## 🧭 Access After Install
+## Quick Start
+
+After installation, find the **DevSnip Pro icon** in the Activity Bar (left sidebar). Click it to see all available tools.
+
+### Access Methods
+
+| Method | How |
+|--------|-----|
+| **Activity Bar** | Click the DevSnip Pro icon in the left sidebar |
+| **Command Palette** | `Ctrl+Shift+P` / `Cmd+Shift+P` then type `DevSnip Pro:` |
+| **Context Menu** | Right-click in any code file for context-specific actions |
+
+---
+
+## How to Access
 
 ### Activity Bar
-- Click the `DevSnip Pro` icon in the left sidebar to open the features panel.
+
+Click the **DevSnip Pro** icon in the left sidebar to open the features panel.
 
 ### Command Palette
-- Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac), then type `DevSnip Pro:` to see all commands.
+
+Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac), then type `DevSnip Pro:` to see all commands.
 
 ### Available Commands
-- `🚀 DevSnip Pro: Show Custom Snippets`
-- `🚀 DevSnip Pro: Create Your Own Perfect Code Snippet`
-- `🛠️ DevSnip Pro: List and Remove Console Logs`
-- `📸 DevSnip Pro: Create a Code Snapshot.`
-- `🛢 DevSnip Pro: Rest API Client`
-- `🧰 DevSnip Pro: Advanced Developer Tools Hub`
-- `🔍 DevSnip Pro: Regex Builder & Tester`
-- `📝 DevSnip Pro: JSON/XML Formatter`
-- `🔐 DevSnip Pro: Hash Generator`
-- `🔤 DevSnip Pro: Base64 Encoder/Decoder`
-- `🎨 DevSnip Pro: Color Palette Manager`
-- `🔗 DevSnip Pro: URL Encoder/Decoder`
-- `⏰ DevSnip Pro: Timestamp Converter`
-- `📄 DevSnip Pro: Lorem Ipsum Generator`
-- `🎭 DevSnip Pro: JSON → TOON Converter`
+
+| Command | Description |
+|---------|-------------|
+| `DevSnip Pro: Open REST API Client` | Launch the API testing tool |
+| `DevSnip Pro: Show Custom Snippets` | Browse your saved snippets |
+| `DevSnip Pro: Create Custom Snippet` | Create a new code snippet |
+| `DevSnip Pro: List and Remove Console Logs` | Find and clean console.log statements |
+| `DevSnip Pro: Remove Unused Imports` | Clean up unused imports |
+| `DevSnip Pro: Capture Code Snapshot` | Create a visual code image |
+| `DevSnip Pro: Advanced Developer Tools Hub` | Open the tools hub |
+| `DevSnip Pro: AI/ML & LLM Tools Hub` | Open AI/ML tools |
+| `DevSnip Pro: Big Data Tools Hub` | Open Big Data tools |
+| `DevSnip Pro: RAG Tools Hub` | Open RAG tools |
 
 ---
 
-## 📖 Feature Documentation
+## Features
 
-### 🌏 REST API Testing
+### 1. REST API Client
 
-Professional API client built directly into VS Code for seamless endpoint testing.
+A full-featured API client built directly into VS Code — no need to switch to Postman or Insomnia.
 
-**Features:**
-- ✅ Support for all HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.)
-- ✅ Request/response history tracking
-- ✅ Environment variables support
-- ✅ Beautiful JSON syntax highlighting
-- ✅ Response time monitoring
-- ✅ Status code validation
+<img src="screenshot/sc1.png" alt="REST API Client" width="700" />
+
+**Capabilities:**
+
+- All HTTP methods: `GET` `POST` `PUT` `DELETE` `PATCH` `HEAD` `OPTIONS`
+- GraphQL support with query editor, variables, and operation name
+- Request headers and body (JSON, text, form data)
+- Bearer Token and Basic Auth authentication
+- Query parameter builder
+- Environment variables with `{{variable}}` syntax
+- Cookie management (view, copy, clear per domain)
+- Request history with status, response time, and size
+- JSON syntax highlighting in responses
+- Configurable timeout (1–300 seconds)
+- Cancel in-flight requests
+- cURL paste support
 
 **How to Use:**
-1. Click DevSnip Pro icon in Activity Bar
-2. Select "🛢 REST API Client"
-3. Enter your API endpoint URL
-4. Choose HTTP method
-5. Add headers and body (if needed)
-6. Click "Send Request"
-7. View formatted response with syntax highlighting
+
+1. Open the API Client from the Activity Bar or Command Palette
+2. Select the HTTP method from the dropdown
+3. Enter the request URL
+4. Configure headers, auth, body, or GraphQL query as needed
+5. Click **Send**
+6. View the response with syntax highlighting and timing info
+
+---
+
+### 2. Custom Snippet Management
+
+Create, organize, and reuse your own code snippets.
+
+**How to Create:**
+
+1. Select code in the editor
+2. Right-click and choose **"DevSnip Pro: Create Custom Snippet"**
+3. Fill in the prefix, name, and description
+4. Save — your snippet is now available via autocomplete
+
+**Using Snippets:**
+
+1. Type your snippet prefix in any file
+2. Select from autocomplete suggestions
+3. Press `Tab` to insert
 
 **Example:**
-```json
-// Request
-POST https://api.example.com/users
-Content-Type: application/json
 
-{
-  "name": "John Doe",
-  "email": "john@example.com"
-}
-
-// Response
-{
-  "id": 123,
-  "name": "John Doe",
-  "email": "john@example.com",
-  "created_at": "2024-01-15T10:30:00Z"
-}
-```
-
----
-
-### 💽 MongoDB Integration
-
-Direct database connectivity for seamless MongoDB operations within VS Code.
-
-**Features:**
-- ✅ Connect to MongoDB databases
-- ✅ Execute queries in real-time
-- ✅ Built-in aggregation pipeline support
-- ✅ Query result visualization
-- ✅ Connection string management
-- ✅ Database and collection browsing
-
-**How to Use:**
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Type "DevSnip Pro: MongoDB"
-3. Enter your MongoDB connection string
-4. Browse databases and collections
-5. Execute queries and view results
-
-**Example Queries:**
-```javascript
-// Find documents
-db.users.find({ status: "active" })
-
-// Aggregation pipeline
-db.orders.aggregate([
-  { $match: { status: "completed" } },
-  { $group: { _id: "$customerId", total: { $sum: "$amount" } } }
-])
-```
-
----
-
-### 🧹 Console Log Cleanup
-
-Intelligent automation to clean up console.log statements from your codebase.
-
-**Features:**
-- ✅ Project-wide console.log detection
-- ✅ One-click removal with preview
-- ✅ Selective deletion options
-- ✅ Multiline console.log support
-- ✅ Preserves important logs
-- ✅ Undo functionality
-
-**How to Use:**
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Type "DevSnip Pro: List and Remove Console Logs"
-3. Wait for project analysis
-4. Review detected console.log statements
-5. Select logs to remove or click "Remove All"
-6. Confirm deletion
-
-**Before:**
-```javascript
-function calculateTotal(items) {
-  console.log('Starting calculation'); // Debug log
-  let total = 0;
-  console.log('Items:', items); // Debug log
-  
-  items.forEach(item => {
-    console.log('Processing item:', item); // Debug log
-    total += item.price;
-  });
-  
-  console.log('Final total:', total); // Debug log
-  return total;
-}
-```
-
-**After:**
-```javascript
-function calculateTotal(items) {
-  let total = 0;
-  
-  items.forEach(item => {
-    total += item.price;
-  });
-  
-  return total;
-}
-```
-
----
-
-### 📸 Code Snapshots
-
-Create beautiful, shareable images of your code with customizable styling.
-
-**Features:**
-- ✅ Stunning visual code snapshots
-- ✅ Multiple theme options
-- ✅ Customizable styling
-- ✅ Export in various formats
-- ✅ Perfect for documentation and social sharing
-- ✅ Syntax highlighting preservation
-
-**How to Use:**
-1. Select the code you want to capture
-2. Right-click and choose "📸 DevSnip Pro: Create a Code Snapshot"
-3. Customize theme and styling options
-4. Export or copy the generated image
-
-**Perfect for:**
-- 📚 Documentation
-- 🐦 Social media sharing
-- 📝 Blog posts and tutorials
-- 👥 Team presentations
-- 📖 Code reviews
-
----
-
-### 🧰 Advanced Developer Tools
-
-Comprehensive suite of 9 professional utilities for common development tasks.
-
-| Tool | Purpose | Key Features |
-|------|---------|--------------|
-| 🔍 **Regex Builder & Tester** | Build and test regular expressions | Real-time matching, explanations |
-| 📝 **JSON/XML Formatter** | Format and validate data structures | Syntax highlighting, minification |
-| 🔐 **Hash Generator** | Generate cryptographic hashes | MD5, SHA-1, SHA-256, and more |
-| 🔤 **Base64 Encoder/Decoder** | Encode/decode Base64 strings | File and text support |
-| 🎨 **Color Palette Manager** | Manage project color schemes | Color picking, conversion tools |
-| 🔗 **URL Encoder/Decoder** | Handle URL encoding/decoding | Query parameters, special characters |
-| ⏰ **Timestamp Converter** | Convert between time formats | Unix timestamps, ISO dates |
-| 📄 **Lorem Ipsum Generator** | Generate placeholder text | Customizable length and format |
-| 🎭 **JSON → TOON Converter** | Convert JSON to TOON format | Easy conversion, quick copy/export |
-
-**How to Access:**
-1. Click DevSnip Pro icon in Activity Bar
-2. Select "🧰 Advanced Developer Tools Hub"
-3. Choose the tool you need
-4. Use the intuitive interface for each utility
-
----
-
-### ✨ Custom Snippet Management
-
-Create, organize, and manage your personal code snippet library.
-
-**Features:**
-- ✅ Intuitive snippet creation interface
-- ✅ Language-specific organization
-- ✅ Smart autocomplete and prefix suggestions
-- ✅ Import/export functionality
-- ✅ Team sharing capabilities
-- ✅ Search and filter options
-
-**How to Create Custom Snippets:**
-1. **Select Your Code:** Highlight the code you want to save
-2. **Open DevSnip Pro:** Click the icon in Activity Bar
-3. **Choose "Create Custom Snippets"**
-4. **Fill in Details:**
-   - **Prefix:** Unique identifier (e.g., `myloop`)
-   - **Name:** Descriptive name (e.g., "Custom For Loop")
-   - **Description:** Brief explanation (optional)
-5. **Save:** Your snippet is now available for use
-
-**Using Your Snippets:**
-1. Start typing your prefix in any file
-2. Select from autocomplete suggestions
-3. Press Tab to insert the snippet
-
-**Example Custom Snippet:**
 ```javascript
 // Prefix: "apihandler"
 // Name: "Express API Handler"
@@ -401,119 +192,229 @@ app.get('/api/${1:endpoint}', async (req, res) => {
 
 ---
 
-### 📜 Pre-built Snippet Library
+### 3. Pre-built Snippet Library
 
-Access 500+ carefully crafted snippets across 15+ technologies.
+Access **500+** carefully crafted snippets across **30+** technologies:
 
-**Categories:**
-- **React:** Components, hooks, lifecycle methods, state management
-- **JavaScript/TypeScript:** ES6+ features, async/await, promises, utilities
-- **Node.js:** Express routes, middleware, database connections
-- **MongoDB:** Queries, aggregations, schema definitions
-- **HTML:** Semantic markup, forms, meta tags
-- **CSS:** Flexbox, Grid, animations, responsive design
-- **Bootstrap:** Components, utilities, responsive classes
-- **Tailwind CSS:** Utility classes, responsive design, components
-- **Python:** Functions, classes, decorators, file operations
-- **PHP:** Classes, functions, database operations
-- **Flutter:** Widgets, state management, navigation
+| Category | Languages/Frameworks |
+|----------|---------------------|
+| Frontend | JavaScript, TypeScript, React, Vue.js, HTML, CSS |
+| CSS Frameworks | Bootstrap, Tailwind CSS |
+| Backend | Node.js, Python, PHP, Java, C#, Go, Ruby |
+| Mobile | Flutter/Dart, Swift, Kotlin |
+| Database | MongoDB, SQL |
+| State Management | Redux, React Query, React Router |
+| Other | JSON, YAML, Markdown, Shell Scripts |
 
-**How to Browse Snippets:**
+Browse snippets via Command Palette: `DevSnip Pro: Show Custom Snippets`
+
+---
+
+### 4. Console Log Cleanup
+
+Detect and remove `console.log` statements across your entire project.
+
+**Features:**
+
+- Project-wide scan for all `console.log` statements
+- Preview before deletion
+- Selective or bulk removal
+- Multiline log support
+- Preserves `console.error`, `console.warn`, etc. (configurable)
+
+**How to Use:**
+
 1. Open Command Palette (`Ctrl+Shift+P`)
-2. Type "DevSnip Pro: Show Custom Snippets"
-3. Browse by language or search for specific patterns
-4. Click to view snippet details and usage
+2. Run **"DevSnip Pro: List and Remove Console Logs"**
+3. Review detected statements
+4. Remove all or select specific ones
 
----
-
-## 💡 Usage Examples
-
-### Example 1: API Testing Workflow
+**Before:**
 
 ```javascript
-// 1. Test user registration endpoint
-POST https://api.myapp.com/auth/register
-Content-Type: application/json
-
-{
-  "username": "testuser",
-  "email": "test@example.com",
-  "password": "securepassword"
+function calculateTotal(items) {
+  console.log('Starting calculation');
+  let total = 0;
+  items.forEach(item => {
+    console.log('Processing:', item);
+    total += item.price;
+  });
+  console.log('Total:', total);
+  return total;
 }
-
-// 2. Test login with created user
-POST https://api.myapp.com/auth/login
-Content-Type: application/json
-
-{
-  "email": "test@example.com",
-  "password": "securepassword"
-}
-
-// 3. Use returned token for authenticated requests
-GET https://api.myapp.com/user/profile
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-### Example 2: MongoDB Query Development
+**After:**
 
 ```javascript
-// Connect to database
-mongodb://localhost:27017/myapp
-
-// Test user queries
-db.users.find({ status: "active" }).limit(10)
-
-// Develop aggregation pipeline
-db.orders.aggregate([
-  { $match: { createdAt: { $gte: new Date("2024-01-01") } } },
-  { $group: { 
-    _id: "$customerId", 
-    totalOrders: { $sum: 1 },
-    totalAmount: { $sum: "$amount" }
-  }},
-  { $sort: { totalAmount: -1 } }
-])
-```
-
-### Example 3: Snippet-Driven Development
-
-```javascript
-// Type "rfc" for React Functional Component
-import React from 'react';
-
-const ComponentName = () => {
-  return (
-    <div>
-      
-    </div>
-  );
-};
-
-export default ComponentName;
-
-// Type "usestate" for useState hook
-const [state, setState] = useState(initialValue);
-
-// Type "useeffect" for useEffect hook
-useEffect(() => {
-  // Effect logic here
-  
-  return () => {
-    // Cleanup logic here
-  };
-}, [dependencies]);
+function calculateTotal(items) {
+  let total = 0;
+  items.forEach(item => {
+    total += item.price;
+  });
+  return total;
+}
 ```
 
 ---
 
-## ⚙️ Configuration
+### 5. Unused Imports Remover
 
-DevSnip Pro works out of the box with sensible defaults, but you can customize it to fit your workflow.
+Automatically detect and remove unused import statements from your code.
 
-### VS Code Settings
+**How to Use:**
 
-Add these settings to your VS Code `settings.json`:
+1. Open Command Palette (`Ctrl+Shift+P`)
+2. Run **"DevSnip Pro: Remove Unused Imports"**
+3. Unused imports are removed from the current file
+
+---
+
+### 6. Code Snapshots
+
+Generate beautiful, shareable images of your code with customizable styling.
+
+**Features:**
+
+- Multiple theme options (dark, light, custom)
+- Customizable background, padding, and border
+- Syntax highlighting preservation
+- Export as PNG
+- Perfect for documentation, social media, and presentations
+
+**How to Use:**
+
+1. Select the code you want to capture
+2. Right-click and choose **"DevSnip Pro: Capture Code Snapshot"**
+3. Customize theme and styling
+4. Export or copy the image
+
+---
+
+### 7. Advanced Developer Tools
+
+9 professional utilities for everyday development tasks:
+
+| Tool | What It Does |
+|------|-------------|
+| **Regex Builder & Tester** | Build, test, and debug regular expressions with real-time match visualization |
+| **JSON/XML Formatter** | Format, minify, validate, and syntax-highlight JSON and XML |
+| **Hash Generator** | Generate SHA-1, SHA-256, SHA-384, and SHA-512 cryptographic hashes |
+| **Base64 Encoder/Decoder** | Encode and decode Base64 strings with full UTF-8 support |
+| **URL Encoder/Decoder** | Encode and decode URL components and full URLs |
+| **Timestamp Converter** | Convert between Unix timestamps and human-readable dates |
+| **JSON to TOON Converter** | Convert JSON to Tree Outline notation for quick data reviews |
+| **Color Palette** | Pick colors, generate shade palettes, and check WCAG contrast ratios |
+| **Lorem Ipsum Generator** | Generate placeholder text with configurable length and format |
+
+---
+
+### 8. AI/ML & LLM Tools
+
+10 specialized tools for AI and machine learning workflows:
+
+| Tool | What It Does |
+|------|-------------|
+| **Token Counter** | Count tokens in text for LLM context window management |
+| **Prompt Manager** | Create, organize, and test LLM prompts |
+| **Model Comparison** | Compare pricing and capabilities across AI models |
+| **Embedding Cost Calculator** | Estimate costs for embedding operations |
+| **AI Response Evaluator** | Evaluate quality of LLM responses |
+| **ML Hyperparameter Tracker** | Track and log hyperparameter configurations |
+| **Dataset Splitter** | Split datasets into train/validation/test sets |
+| **Confusion Matrix Builder** | Build and visualize classification confusion matrices |
+| **Loss Function Selector** | Choose the right loss function for your ML task |
+| **Regex Pattern Library for AI** | Pre-built regex patterns for NLP and text processing |
+
+---
+
+### 9. Big Data Tools
+
+5 tools for data engineering and Big Data workflows:
+
+| Tool | What It Does |
+|------|-------------|
+| **Schema Viewer** | Visualize and explore database schemas |
+| **SQL Formatter** | Format and beautify SQL queries |
+| **Data Pipeline Builder** | Design and document data pipelines |
+| **CSV/JSON Data Explorer** | Explore and transform tabular data |
+| **Data Quality Checker** | Validate data quality and detect anomalies |
+
+---
+
+### 10. RAG Tools
+
+5 tools for Retrieval-Augmented Generation workflows:
+
+| Tool | What It Does |
+|------|-------------|
+| **Chunking Strategy Tester** | Test different text chunking strategies |
+| **Embedding Cost Calculator** | Calculate costs for vector embedding operations |
+| **Vector DB Simulator** | Simulate vector database operations |
+| **RAG Pipeline Builder** | Design and test RAG pipelines |
+| **Similarity Search Tester** | Test and compare similarity search algorithms |
+
+---
+
+## Supported Technologies
+
+<div align="center">
+
+**Frontend**
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/javascript_icon.png" alt="JavaScript" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/typescript_icon.png" alt="TypeScript" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/react_icon.png" alt="React" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/html_icon.png" alt="HTML" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/css_icon.png" alt="CSS" width="32" height="32" />
+
+**CSS Frameworks**
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/bootstrap_icon.png" alt="Bootstrap" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/tailwind_icon.png" alt="Tailwind CSS" width="32" height="32" />
+
+**Backend & Database**
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/nodejs_icon.png" alt="Node.js" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/mongodb_icon.png" alt="MongoDB" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/python_icon.png" alt="Python" width="32" height="32" />
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/php_icon.png" alt="PHP" width="32" height="32" />
+
+**Mobile**
+<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/flutter_icon.png" alt="Flutter" width="32" height="32" />
+
+</div>
+
+**Full language list:** JavaScript, TypeScript, React, Vue.js, HTML, CSS, Node.js, Python, PHP, Java, C#, Go, Ruby, Flutter/Dart, Swift, Kotlin, Bootstrap, Tailwind CSS, Redux, React Query, React Router, MongoDB, SQL, JSON, YAML, Markdown, Shell Scripts, and more.
+
+---
+
+## Keyboard Shortcuts
+
+Add custom shortcuts in your VS Code `keybindings.json`:
+
+```json
+[
+  {
+    "key": "ctrl+shift+a",
+    "command": "sayaib.hue-console.openGUI",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+shift+s",
+    "command": "sayaib.hue-console.createCustomSnippet",
+    "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+shift+l",
+    "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
+    "when": "editorTextFocus"
+  }
+]
+```
+
+---
+
+## Configuration
+
+DevSnip Pro works out of the box. Optionally customize via VS Code `settings.json`:
 
 ```json
 {
@@ -526,147 +427,84 @@ Add these settings to your VS Code `settings.json`:
 }
 ```
 
-### Keyboard Shortcuts
-
-You can add custom keyboard shortcuts in VS Code:
-
-```json
-{
-  "key": "ctrl+shift+s",
-  "command": "sayaib.hue-console.createCustomSnippet",
-  "when": "editorTextFocus"
-},
-{
-  "key": "ctrl+shift+a",
-  "command": "sayaib.hue-console.openGUI",
-  "when": "editorTextFocus"
-},
-{
-  "key": "ctrl+shift+c",
-  "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-  "when": "editorTextFocus"
-}
-```
-
 ---
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions from the community! Here's how you can help:
+Contributions are welcome! Here's how:
 
-### Ways to Contribute
+### Report Bugs
 
-1. **🐛 Report Bugs:** Found an issue? [Open a bug report](https://github.com/sayaib/DevSnip-Pro/issues)
-2. **💡 Suggest Features:** Have an idea? [Submit a feature request](https://github.com/sayaib/DevSnip-Pro/issues)
-3. **📝 Improve Documentation:** Help make our docs better
-4. **🔧 Submit Code:** Fix bugs or add features via pull requests
-5. **📦 Add Snippets:** Contribute new code snippets for any language
+Found an issue? [Open a bug report](https://github.com/sayaib/DevSnip-Pro/issues)
+
+### Suggest Features
+
+Have an idea? [Submit a feature request](https://github.com/sayaib/DevSnip-Pro/issues)
 
 ### Development Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/sayaib/DevSnip-Pro.git
-
-# Navigate to project directory
 cd DevSnip-Pro
-
-# Install dependencies
 npm install
-
-# Open in VS Code
 code .
-
-# Start development
 npm run watch
 ```
-
-### Snippet Contribution Guidelines
-
-When contributing snippets:
-- Follow existing naming conventions
-- Include clear descriptions
-- Test snippets thoroughly
-- Use meaningful placeholder names
-- Follow language best practices
 
 ### Pull Request Process
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the **MIT License** - see the [LICENSE.txt](LICENSE.txt) file for details.
+MIT License — see [LICENSE.txt](LICENSE.txt) for details.
 
-### What this means:
-- ✅ **Free to use** for personal and commercial projects
-- ✅ **Modify and distribute** as needed
-- ✅ **No warranty** - use at your own risk
-- ✅ **Attribution appreciated** but not required
+- Free for personal and commercial use
+- Modify and distribute as needed
+- Attribution appreciated but not required
 
 ---
 
-## 🆘 Support & Help
+## Support
 
-### 📚 Documentation & Resources
+### Resources
 
-- **📖 [Complete Documentation](https://sayaibsarkar.net/#/dev-snip-pro/document/en)** - Comprehensive guides and tutorials
-- **🎥 [Video Tutorials](https://sayaibsarkar.net/#/dev-snip-pro/document/en)** - Step-by-step video guides
-- **📋 [Snippet Library](https://sayaibsarkar.net/#/dev-snip-pro/document/en)** - Browse all available snippets
+- [Documentation](https://sayaibsarkar.net/#/dev-snip-pro/document/en)
+- [Video Tutorials](https://sayaibsarkar.net/#/dev-snip-pro/document/en)
+- [GitHub Repository](https://github.com/sayaib/DevSnip-Pro)
 
-### 🐛 Getting Help
+### Found a Bug?
 
-**Found a bug or need help?**
-1. **Check [Existing Issues](https://github.com/sayaib/DevSnip-Pro/issues)** first
-2. **Search [Documentation](https://sayaibsarkar.net/#/dev-snip-pro/document/en)** for solutions
-3. **Create a [New Issue](https://github.com/sayaib/DevSnip-Pro/issues/new)** with details
+1. Check [existing issues](https://github.com/sayaib/DevSnip-Pro/issues)
+2. Search the [documentation](https://sayaibsarkar.net/#/dev-snip-pro/document/en)
+3. [Create a new issue](https://github.com/sayaib/DevSnip-Pro/issues/new) with:
+   - VS Code version
+   - DevSnip Pro version
+   - OS and steps to reproduce
+   - Screenshots if helpful
 
-**When reporting issues, please include:**
-- VS Code version
-- DevSnip Pro version
-- Operating system
-- Steps to reproduce
-- Error messages (if any)
-- Screenshots (if helpful)
+### Stay Updated
 
-### 💬 Community & Contact
-
-- **🐙 GitHub:** [DevSnip-Pro Repository](https://github.com/sayaib/DevSnip-Pro)
-- **💰 Sponsor:** [GitHub Sponsors](https://github.com/sponsors/sayaib)
-- **⭐ Rate & Review:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
-
-### 🚀 Stay Updated
-
-- **⭐ Star the repository** to get notified of updates
-- **👀 Watch releases** for new features and bug fixes
-- **📧 Follow updates** on the VS Code Marketplace
+- Star the repo to get notified of updates
+- Watch releases for new features
+- Rate and review on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
 
 ---
 
 <div align="center">
 
-## 🌟 Show Your Support
+### Show Your Support
 
-If DevSnip Pro has helped boost your productivity, please consider:
+[![Star on GitHub](https://img.shields.io/static/v1?label=Star&message=on%20GitHub&style=for-the-badge&color=yellow)](https://github.com/sayaib/DevSnip-Pro)
+[![Sponsor](https://img.shields.io/static/v1?label=Sponsor&style=for-the-badge&color=red)](https://github.com/sponsors/sayaib)
+[![Write a Review](https://img.shields.io/static/v1?label=Review&style=for-the-badge&color=blue)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
 
-[![⭐ Star on GitHub](https://img.shields.io/static/v1?label=⭐&message=Star%20on%20GitHub&style=for-the-badge&color=yellow)](https://github.com/sayaib/DevSnip-Pro)
-[![💰 Sponsor](https://img.shields.io/static/v1?label=💰&message=Sponsor&style=for-the-badge&color=red)](https://github.com/sponsors/sayaib)
-[![📝 Write a Review](https://img.shields.io/static/v1?label=📝&message=Write%20a%20Review&style=for-the-badge&color=blue)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
+**Made with heart by [Sayaib Sarkar](https://github.com/sayaib)**
 
-**Made with ❤️ by [Sayaib Sarkar](https://github.com/sayaib)**
-
-*Happy Coding! 🚀*
-
-</div>
-
----
-
-<div align="center">
-<sub>DevSnip Pro - Supercharge your development workflow with the ultimate VS Code productivity extension.</sub>
 </div>

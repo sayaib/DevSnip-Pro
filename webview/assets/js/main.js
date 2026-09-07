@@ -1,4 +1,4 @@
-import { pasteCode, showLineNumbers, hideLineNumbers, getCurrentTimeString } from './code.js';
+import { pasteCode, setCode, showLineNumbers, hideLineNumbers, getCurrentTimeString } from './code.js';
 import { takeSnapshot } from './snapshot.js';
 
 (() => {
@@ -11,10 +11,10 @@ import { takeSnapshot } from './snapshot.js';
     const shootNode = document.querySelector('.shoot');
     const showLineNumbersNode = document.querySelector('#show-line-numbers');
 
-    window.addEventListener('message', ({ data: { type } }) => {
+    window.addEventListener('message', ({ data: { type, code } }) => {
         switch (type) {
             case 'updateCode':
-                document.execCommand('paste');
+                setCode(code);
                 if (!showLineNumbersNode.checked ){
                     hideLineNumbers();
                 }

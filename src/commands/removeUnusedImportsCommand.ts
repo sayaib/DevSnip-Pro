@@ -9,6 +9,15 @@ interface UnusedImport {
   importedSymbols: string[];
 }
 
+function getNonce(): string {
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let text = '';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+}
+
 export function registerRemoveUnusedImportsCommand(
   context: vscode.ExtensionContext
 ) {
@@ -72,9 +81,6 @@ export function registerRemoveUnusedImportsCommand(
 
       panel.webview.html = generateWebviewContent(unusedImports);
 
-      // Send data to webview via postMessage instead of inline script
-      panel.webview.postMessage({ command: "initData", unusedImports });
-
       panel.webview.onDidReceiveMessage(
         async (message) => {
           if (message.command === "removeSelectedImports") {
@@ -96,66 +102,60 @@ function analyzeFileImports(content: string, filePath: string): UnusedImport[] {
   const unusedImports: UnusedImport[] = [];
   const lines = content.split('\n');
   
-  // Import patterns
-  const importPatterns = [
-    // Named imports: import { a, b } from 'module'
-    /^\s*import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"];?/,
-    // Default imports: import React from 'react'
-    /^\s*import\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*from\s*['"]([^'"]+)['"];?/,
-    // Namespace imports: import * as React from 'react'
-    /^\s*import\s*\*\s*as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*from\s*['"]([^'"]+)['"];?/,
-    // Mixed imports: import React, { useState } from 'react'
-    /^\s*import\s+([a-zA-Z_$][a-zA-Z0-9_$]*),\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"];?/
-  ];
-
   lines.forEach((line, index) => {
-    for (const pattern of importPatterns) {
-      const match = line.match(pattern);
-      if (match) {
-        const importedSymbols = extractImportedSymbols(match, pattern);
-        const unusedSymbols = importedSymbols.filter(symbol => 
-          !isSymbolUsed(symbol, content, line)
-        );
-        
-        if (unusedSymbols.length > 0) {
-          // Check if all symbols in the import are unused
-          if (unusedSymbols.length === importedSymbols.length) {
-            unusedImports.push({
-              filePath,
-              lineNumber: index + 1,
-              importStatement: line.trim(),
-              importedSymbols: unusedSymbols
-            });
-          }
-        }
-        break;
-      }
+    if (!/^\s*import\s+/.test(line) || !/\sfrom\s*['"]/.test(line)) return;
+    const importedSymbols = extractImportedSymbols(line);
+    const unusedSymbols = importedSymbols.filter(symbol =>
+      !isSymbolUsed(symbol, content, line)
+    );
+
+    if (unusedSymbols.length === importedSymbols.length && unusedSymbols.length > 0) {
+      unusedImports.push({
+        filePath,
+        lineNumber: index + 1,
+        importStatement: line.trim(),
+        importedSymbols: unusedSymbols
+      });
     }
   });
 
   return unusedImports;
 }
 
-function extractImportedSymbols(match: RegExpMatchArray, pattern: RegExp): string[] {
+function extractImportedSymbols(importLine: string): string[] {
+  const clause = importLine
+    .replace(/^\s*import\s+/, '')
+    .replace(/\sfrom\s*['"][^'"]+['"];?\s*$/, '')
+    .trim();
   const symbols: string[] = [];
-  
-  if (pattern.source.includes('\\{([^}]+)\\}')) {
-    // Named imports
-    const namedImports = match[1] || match[2];
-    if (namedImports) {
-      symbols.push(...namedImports.split(',').map(s => s.trim().split(' as ')[0]));
+
+  const addNamed = (named: string) => {
+    named.split(',').forEach(part => {
+      const symbol = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(symbol)) symbols.push(symbol);
+    });
+  };
+
+  if (clause.startsWith('{')) {
+    addNamed(clause.slice(1, clause.lastIndexOf('}')));
+  } else if (clause.startsWith('*')) {
+    const namespace = clause.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)/);
+    if (namespace) symbols.push(namespace[1]);
+  } else {
+    const comma = clause.indexOf(',');
+    const defaultImport = (comma === -1 ? clause : clause.slice(0, comma)).trim();
+    if (/^[A-Za-z_$][\w$]*$/.test(defaultImport)) symbols.push(defaultImport);
+    if (comma !== -1) {
+      const remainder = clause.slice(comma + 1).trim();
+      if (remainder.startsWith('{')) addNamed(remainder.slice(1, remainder.lastIndexOf('}')));
+      else if (remainder.startsWith('*')) {
+        const namespace = remainder.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)/);
+        if (namespace) symbols.push(namespace[1]);
+      }
     }
   }
-  
-  if (pattern.source.includes('([a-zA-Z_$][a-zA-Z0-9_$]*)')) {
-    // Default or namespace imports
-    const defaultImport = match[1];
-    if (defaultImport && !defaultImport.includes('{')) {
-      symbols.push(defaultImport);
-    }
-  }
-  
-  return symbols.filter(s => s && s.length > 0);
+
+  return Array.from(new Set(symbols));
 }
 
 function isSymbolUsed(symbol: string, content: string, importLine: string): boolean {
@@ -163,13 +163,14 @@ function isSymbolUsed(symbol: string, content: string, importLine: string): bool
   const contentWithoutImport = content.replace(importLine, '');
   
   // Check various usage patterns
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const usagePatterns = [
-    new RegExp(`\\b${symbol}\\b`, 'g'),           // Direct usage
-    new RegExp(`${symbol}\\.`, 'g'),              // Property access
-    new RegExp(`<${symbol}[\\s>]`, 'g'),          // JSX component
-    new RegExp(`<${symbol}/`, 'g'),               // Self-closing JSX
-    new RegExp(`typeof\\s+${symbol}\\b`, 'g'),    // typeof usage
-    new RegExp(`instanceof\\s+${symbol}\\b`, 'g') // instanceof usage
+    new RegExp(`\\b${escaped}\\b`, 'g'),
+    new RegExp(`${escaped}\\.`, 'g'),
+    new RegExp(`<${escaped}[\\s>]`, 'g'),
+    new RegExp(`<${escaped}/`, 'g'),
+    new RegExp(`typeof\\s+${escaped}\\b`, 'g'),
+    new RegExp(`instanceof\\s+${escaped}\\b`, 'g')
   ];
   
   return usagePatterns.some(pattern => pattern.test(contentWithoutImport));
@@ -182,7 +183,10 @@ async function removeSelectedImports(
   const workspaceEdit = new vscode.WorkspaceEdit();
   const modifiedFiles = new Set<string>();
 
-  for (const importItem of selectedImports) {
+  // Sort by line number descending so removing higher lines first doesn't shift lower line numbers
+  const sorted = [...selectedImports].sort((a, b) => b.lineNumber - a.lineNumber);
+
+  for (const importItem of sorted) {
     try {
       const uri = vscode.Uri.file(importItem.filePath);
       const document = await vscode.workspace.openTextDocument(uri);
@@ -239,13 +243,14 @@ function generateLoadingContent(message: string): string {
 }
 
 function generateWebviewContent(unusedImports: UnusedImport[]): string {
+  const nonce = getNonce();
   const importsList = unusedImports.map((item, index) => `
     <div class="import-item">
       <input type="checkbox" id="import-${index}" checked>
       <label for="import-${index}">
         <strong>${path.basename(item.filePath)}</strong> (Line ${item.lineNumber})<br>
-        <code>${item.importStatement}</code><br>
-        <small>Unused symbols: ${item.importedSymbols.join(', ')}</small>
+        <code>${item.importStatement.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code><br>
+        <small>Unused symbols: ${item.importedSymbols.map(s => s.replace(/</g, '&lt;').replace(/>/g, '&gt;')).join(', ')}</small>
       </label>
     </div>
   `).join('');
@@ -254,6 +259,7 @@ function generateWebviewContent(unusedImports: UnusedImport[]): string {
     <!DOCTYPE html>
     <html>
     <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <style>
             body { 
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -313,16 +319,9 @@ function generateWebviewContent(unusedImports: UnusedImport[]): string {
             <button id="removeAllBtn" class="danger">Remove All</button>
         </div>
         
-        <script>
+        <script nonce="${nonce}">
             const vscode = acquireVsCodeApi();
-            let unusedImportsData = [];
-            
-            window.addEventListener('message', (event) => {
-                const data = event.data;
-                if (data.command === 'initData') {
-                    unusedImportsData = data.unusedImports;
-                }
-            });
+            let unusedImportsData = ${JSON.stringify(unusedImports).replace(/</g, '\\u003c')};
             
             document.getElementById('removeSelectedBtn').addEventListener('click', () => {
                 const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');

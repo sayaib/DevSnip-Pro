@@ -12,11 +12,12 @@ import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
 
 export function activate(context: vscode.ExtensionContext) {
-  const snippetsFolderPath = path.join(__dirname, "../custom");
+  const snippetsFolderPath = path.join(context.extensionPath, "custom");
 
   console.log("DevSnip Pro extension is now active!");
   const myTreeView = new MyTreeDataProvider();
   vscode.window.registerTreeDataProvider("myView", myTreeView);
+  context.subscriptions.push({ dispose: () => {} }); // Tree data provider is managed by VS Code
 
   // Register existing commands
   registerCreateSnippetCommand(context);

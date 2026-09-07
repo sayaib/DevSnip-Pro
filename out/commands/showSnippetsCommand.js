@@ -35,6 +35,14 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+function getNonce() {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let text = '';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
 function registerShowSnippetsCommand(context, snippetsFolderPath) {
     const loadSnippets = () => fs
         .readdirSync(snippetsFolderPath)
@@ -139,10 +147,14 @@ function generateWebviewContent(snippetsData) {
 
     `;
     }
+    const nonce = getNonce();
     return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -252,7 +264,6 @@ function generateWebviewContent(snippetsData) {
             id="searchInput"
             type="text"
             placeholder="Search across all the snippet fields in the table."
-            oninput="filterTable()"
         />
         ${nonEmptyGroups
         .map((group) => `
@@ -285,20 +296,26 @@ function generateWebviewContent(snippetsData) {
             </table>
           `)
         .join("")}
-        <script>
+        <script nonce="${nonce}">
             const vscode = acquireVsCodeApi();
 
-            function filterTable() {
-                const searchInput = document.getElementById("searchInput").value.trim();
+            document.getElementById('searchInput').addEventListener('input', function() {
+                const searchInput = this.value.trim();
                 const rows = document.querySelectorAll("#snippetsTable tbody tr");
-                const regex = new RegExp(searchInput, "i");
+                let regex;
+                try {
+                    regex = new RegExp(searchInput, "i");
+                } catch {
+                    rows.forEach((row) => row.style.display = "none");
+                    return;
+                }
 
                 rows.forEach((row) => {
                     const cells = Array.from(row.querySelectorAll("td"));
                     const matches = cells.some((cell) => regex.test(cell.textContent));
                     row.style.display = matches ? "" : "none";
                 });
-            }
+            });
 
             document.querySelectorAll('.delete-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
