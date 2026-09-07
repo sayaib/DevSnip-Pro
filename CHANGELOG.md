@@ -1,5 +1,15 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.47.135 - 2026-09-07
+
+### Improvements
+
+- **README completely rewritten** -- removed all screenshots and images, replaced with a clickable indexed feature list (35 features) with anchor links for easy navigation
+- Added "How to Access" section at the top with 3 clear access methods (Activity Bar, Command Palette, Right-Click Menu)
+- Added quick reference table mapping user goals to exact menu paths
+- Expanded each tool from grouped tables into individual documented sections
+- Cleaned up supported technologies section (text list instead of icon images)
+
 ## Version 10.47.134 - 2026-09-07
 
 ### New Features

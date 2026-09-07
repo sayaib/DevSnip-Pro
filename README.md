@@ -9,128 +9,81 @@
 [![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
 
-<img src="data/data.gif" alt="DevSnip Pro Demo" width="700" />
-
 **39 built-in tools** across API testing, code snippets, developer utilities, AI/ML tools, Big Data tools, and RAG tools — all inside VS Code.
 
-[Installation](#installation) | [Features](#features) | [Quick Start](#quick-start) | [Documentation](#documentation) | [Contributing](#contributing)
+[Installation](#installation) | [Features](#features) | [Configuration](#configuration) | [Contributing](#contributing)
 
 </div>
 
 ---
 
-## Table of Contents
-
-- [Features Overview](#features-overview)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [How to Access](#how-to-access)
-- [Features](#features)
-  - [REST API Client](#1-rest-api-client)
-  - [Custom Snippets](#2-custom-snippet-management)
-  - [Pre-built Snippet Library](#3-pre-built-snippet-library)
-  - [Console Log Cleanup](#4-console-log-cleanup)
-  - [Unused Imports Remover](#5-unused-imports-remover)
-  - [Code Snapshots](#6-code-snapshots)
-  - [Advanced Developer Tools](#7-advanced-developer-tools)
-  - [AI/ML & LLM Tools](#8-ai--ml--llm-tools)
-  - [Big Data Tools](#9-big-data-tools)
-  - [RAG Tools](#10-rag-tools)
-- [Supported Technologies](#supported-technologies)
-- [Configuration](#configuration)
-- [Contributing](#contributing)
-- [License](#license)
-- [Support](#support)
-
----
-
-## Features Overview
-
-| Category | Tools | Description |
-|----------|-------|-------------|
-| API Testing | 1 | Full-featured REST/GraphQL client with environments, auth, cookies, and history |
-| Snippet Management | 3 | Create custom snippets, browse 500+ pre-built snippets across 30+ languages |
-| Code Cleanup | 2 | Remove console logs and unused imports across your entire project |
-| Code Snapshots | 1 | Generate beautiful, shareable code images with customizable themes |
-| Advanced Dev Tools | 9 | Regex builder, JSON/XML formatter, hash generator, Base64, URL encoder, color palette, timestamp converter, lorem generator, JSON to TOON |
-| AI/ML & LLM Tools | 10 | Token counter, prompt manager, model comparison, embedding cost calculator, and more |
-| Big Data Tools | 5 | Schema viewer, SQL formatter, data pipeline builder, and more |
-| RAG Tools | 5 | Chunking strategy tester, embedding cost calculator, vector DB simulator, and more |
-
----
-
-## Installation
-
-### VS Code Marketplace (Recommended)
-
-1. Open VS Code
-2. Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-3. Search for **"DevSnip Pro"**
-4. Click **Install**
-
-### Command Line
-
-```bash
-code --install-extension sayaib.hue-console
-```
-
-### Manual (VSIX)
-
-1. Download the `.vsix` from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
-2. In VS Code, open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-3. Run **"Extensions: Install from VSIX"**
-4. Select the downloaded file
-
----
-
-## Quick Start
-
-After installation, find the **DevSnip Pro icon** in the Activity Bar (left sidebar). Click it to see all available tools.
-
-### Access Methods
-
-| Method | How |
-|--------|-----|
-| **Activity Bar** | Click the DevSnip Pro icon in the left sidebar |
-| **Command Palette** | `Ctrl+Shift+P` / `Cmd+Shift+P` then type `DevSnip Pro:` |
-| **Context Menu** | Right-click in any code file for context-specific actions |
-
----
-
 ## How to Access
 
-### Activity Bar
+> **After installing, there are 3 ways to open DevSnip Pro:**
 
-Click the **DevSnip Pro** icon in the left sidebar to open the features panel.
+### Option 1 — Activity Bar (Easiest)
 
-### Command Palette
+Click the **DevSnip Pro** icon in the **left sidebar** of VS Code. This opens a panel with all tools listed as clickable cards.
 
-Press `Ctrl+Shift+P` (Cmd+Shift+P on Mac), then type `DevSnip Pro:` to see all commands.
+### Option 2 — Command Palette
 
-### Available Commands
+1. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> (or <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> on Mac)
+2. Type `DevSnip Pro`
+3. Pick any command from the list
 
-| Command | Description |
-|---------|-------------|
-| `DevSnip Pro: Open REST API Client` | Launch the API testing tool |
-| `DevSnip Pro: Show Custom Snippets` | Browse your saved snippets |
-| `DevSnip Pro: Create Custom Snippet` | Create a new code snippet |
-| `DevSnip Pro: List and Remove Console Logs` | Find and clean console.log statements |
-| `DevSnip Pro: Remove Unused Imports` | Clean up unused imports |
-| `DevSnip Pro: Capture Code Snapshot` | Create a visual code image |
-| `DevSnip Pro: Advanced Developer Tools Hub` | Open the tools hub |
-| `DevSnip Pro: AI/ML & LLM Tools Hub` | Open AI/ML tools |
-| `DevSnip Pro: Big Data Tools Hub` | Open Big Data tools |
-| `DevSnip Pro: RAG Tools Hub` | Open RAG tools |
+### Option 3 — Right-Click Menu
+
+Select code in the editor, **right-click**, and choose one of the DevSnip Pro options from the context menu.
 
 ---
 
 ## Features
 
+### Index
+
+| # | Feature | Description |
+|---|---------|-------------|
+| 1 | [REST API Client](#1-rest-api-client) | Full-featured HTTP/GraphQL client with environments, auth, cookies, and history |
+| 2 | [Custom Snippet Management](#2-custom-snippet-management) | Create, save, and reuse your own code snippets |
+| 3 | [Pre-built Snippet Library](#3-pre-built-snippet-library) | 500+ snippets across 30+ languages and frameworks |
+| 4 | [Console Log Cleanup](#4-console-log-cleanup) | Detect and remove console.log statements project-wide |
+| 5 | [Unused Imports Remover](#5-unused-imports-remover) | Clean up unused import statements automatically |
+| 6 | [Code Snapshots](#6-code-snapshots) | Generate beautiful, shareable code images |
+| 7 | [Regex Builder & Tester](#7-regex-builder--tester) | Build and test regular expressions with real-time matching |
+| 8 | [JSON/XML Formatter](#8-xmlformatter) | Format, minify, validate, and syntax-highlight JSON and XML |
+| 9 | [Hash Generator](#9-hash-generator) | Generate SHA-1, SHA-256, SHA-384, and SHA-512 hashes |
+| 10 | [Base64 Encoder/Decoder](#10-base64-encoderdecoder) | Encode and decode Base64 strings with UTF-8 support |
+| 11 | [URL Encoder/Decoder](#11-url-encoderdecoder) | Encode and decode URL components and full URLs |
+| 12 | [Timestamp Converter](#12-timestamp-converter) | Convert between Unix timestamps and human-readable dates |
+| 13 | [JSON to TOON Converter](#13-json-to-toon-converter) | Convert JSON to Tree Outline notation for quick reviews |
+| 14 | [Color Palette](#14-color-palette) | Pick colors, generate palettes, and check WCAG contrast ratios |
+| 15 | [Lorem Ipsum Generator](#15-lorem-ipsum-generator) | Generate placeholder text with configurable length |
+| 16 | [Token Counter & Cost Calculator](#16-token-counter--cost-calculator) | Count tokens for LLM models and estimate API costs |
+| 17 | [Prompt Template Manager](#17-prompt-template-manager) | Create, save, and manage prompt templates with variables |
+| 18 | [Python ML Code Generator](#18-python-ml-code-generator) | Generate PyTorch, TensorFlow, HuggingFace, and LangChain boilerplate |
+| 19 | [LLM API Tester](#19-llm-api-tester) | Test OpenAI, Anthropic, Gemini, and Ollama API endpoints |
+| 20 | [Dataset Split Calculator](#20-dataset-split-calculator) | Calculate train/val/test splits with stratification |
+| 21 | [GPU VRAM Calculator](#21-gpu-vram-calculator) | Estimate VRAM requirements by model size and precision |
+| 22 | [Experiment Logger](#22-experiment-logger) | Log hyperparameters, metrics, and results with Markdown export |
+| 23 | [Model Card Generator](#23-model-card-generator) | Generate standardized HuggingFace-format model documentation |
+| 24 | [JSONL Viewer](#24-jsonl-viewer) | Parse and inspect JSONL training data in a readable table |
+| 25 | [Markdown Table Generator](#25-markdown-table-generator) | Generate markdown tables for documentation and reports |
+| 26 | [Schema Viewer](#26-schema-viewer) | Visualize Parquet, Avro, and JSON schemas as an interactive tree |
+| 27 | [Spark SQL Formatter](#27-spark-sql-formatter) | Format Spark SQL, Presto, and Trino queries |
+| 28 | [Data Quality Checker](#28-data-quality-checker) | Analyze CSV/JSON datasets for missing values, duplicates, and stats |
+| 29 | [Schema Diff Tool](#29-schema-diff-tool) | Compare two JSON schemas side-by-side |
+| 30 | [Partition Calculator](#30-partition-calculator) | Calculate optimal Hadoop/Hive partitions and Spark config |
+| 31 | [Chunking Strategy Tester](#31-chunking-strategy-tester) | Compare fixed, sentence, recursive, and overlap chunking |
+| 32 | [Embedding Cost Calculator](#32-embedding-cost-calculator) | Calculate embedding costs across OpenAI, Cohere, and HuggingFace |
+| 33 | [Context Window Calculator](#33-context-window-calculator) | Plan context window usage with visual utilization bars |
+| 34 | [Semantic Dedup Checker](#34-semantic-dedup-checker) | Find near-duplicate lines using n-gram similarity |
+| 35 | [RAG Eval Calculator](#35-rag-eval-calculator) | Evaluate RAG quality with precision, recall, MRR, and faithfulness |
+
+---
+
 ### 1. REST API Client
 
 A full-featured API client built directly into VS Code — no need to switch to Postman or Insomnia.
-
-<img src="screenshot/sc1.png" alt="REST API Client" width="700" />
 
 **Capabilities:**
 
@@ -175,21 +128,6 @@ Create, organize, and reuse your own code snippets.
 2. Select from autocomplete suggestions
 3. Press `Tab` to insert
 
-**Example:**
-
-```javascript
-// Prefix: "apihandler"
-// Name: "Express API Handler"
-app.get('/api/${1:endpoint}', async (req, res) => {
-  try {
-    const ${2:data} = await ${3:service}.${4:method}();
-    res.json({ success: true, data: ${2:data} });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-```
-
 ---
 
 ### 3. Pre-built Snippet Library
@@ -214,59 +152,19 @@ Browse snippets via Command Palette: `DevSnip Pro: Show Custom Snippets`
 
 Detect and remove `console.log` statements across your entire project.
 
-**Features:**
-
 - Project-wide scan for all `console.log` statements
 - Preview before deletion
 - Selective or bulk removal
 - Multiline log support
 - Preserves `console.error`, `console.warn`, etc. (configurable)
 
-**How to Use:**
-
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run **"DevSnip Pro: List and Remove Console Logs"**
-3. Review detected statements
-4. Remove all or select specific ones
-
-**Before:**
-
-```javascript
-function calculateTotal(items) {
-  console.log('Starting calculation');
-  let total = 0;
-  items.forEach(item => {
-    console.log('Processing:', item);
-    total += item.price;
-  });
-  console.log('Total:', total);
-  return total;
-}
-```
-
-**After:**
-
-```javascript
-function calculateTotal(items) {
-  let total = 0;
-  items.forEach(item => {
-    total += item.price;
-  });
-  return total;
-}
-```
-
 ---
 
 ### 5. Unused Imports Remover
 
-Automatically detect and remove unused import statements from your code.
+Automatically detect and remove unused import statements from the current file.
 
-**How to Use:**
-
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run **"DevSnip Pro: Remove Unused Imports"**
-3. Unused imports are removed from the current file
+Run via Command Palette: `DevSnip Pro: Remove Unused Imports`
 
 ---
 
@@ -274,115 +172,324 @@ Automatically detect and remove unused import statements from your code.
 
 Generate beautiful, shareable images of your code with customizable styling.
 
-**Features:**
-
 - Multiple theme options (dark, light, custom)
 - Customizable background, padding, and border
 - Syntax highlighting preservation
 - Export as PNG
 - Perfect for documentation, social media, and presentations
 
-**How to Use:**
+---
 
-1. Select the code you want to capture
-2. Right-click and choose **"DevSnip Pro: Capture Code Snapshot"**
-3. Customize theme and styling
-4. Export or copy the image
+### 7. Regex Builder & Tester
+
+Build, test, and debug regular expressions with real-time match visualization.
+
+- Pattern input with live matching
+- Match highlighting on test strings
+- Explanation of regex components
+- Common pattern library
 
 ---
 
-### 7. Advanced Developer Tools
+### 8. JSON/XML Formatter
 
-9 professional utilities for everyday development tasks:
+Format, minify, validate, and syntax-highlight JSON and XML documents.
 
-| Tool | What It Does |
-|------|-------------|
-| **Regex Builder & Tester** | Build, test, and debug regular expressions with real-time match visualization |
-| **JSON/XML Formatter** | Format, minify, validate, and syntax-highlight JSON and XML |
-| **Hash Generator** | Generate SHA-1, SHA-256, SHA-384, and SHA-512 cryptographic hashes |
-| **Base64 Encoder/Decoder** | Encode and decode Base64 strings with full UTF-8 support |
-| **URL Encoder/Decoder** | Encode and decode URL components and full URLs |
-| **Timestamp Converter** | Convert between Unix timestamps and human-readable dates |
-| **JSON to TOON Converter** | Convert JSON to Tree Outline notation for quick data reviews |
-| **Color Palette** | Pick colors, generate shade palettes, and check WCAG contrast ratios |
-| **Lorem Ipsum Generator** | Generate placeholder text with configurable length and format |
+- One-click formatting
+- Minification option
+- Syntax validation
+- Error location highlighting
 
 ---
 
-### 8. AI/ML & LLM Tools
+### 9. Hash Generator
 
-10 specialized tools for AI and machine learning workflows:
+Generate cryptographic hashes from any input string.
 
-| Tool | What It Does |
-|------|-------------|
-| **Token Counter** | Count tokens in text for LLM context window management |
-| **Prompt Manager** | Create, organize, and test LLM prompts |
-| **Model Comparison** | Compare pricing and capabilities across AI models |
-| **Embedding Cost Calculator** | Estimate costs for embedding operations |
-| **AI Response Evaluator** | Evaluate quality of LLM responses |
-| **ML Hyperparameter Tracker** | Track and log hyperparameter configurations |
-| **Dataset Splitter** | Split datasets into train/validation/test sets |
-| **Confusion Matrix Builder** | Build and visualize classification confusion matrices |
-| **Loss Function Selector** | Choose the right loss function for your ML task |
-| **Regex Pattern Library for AI** | Pre-built regex patterns for NLP and text processing |
+- SHA-1, SHA-256, SHA-384, SHA-512
+- One-click copy for each hash
+- Case-sensitive and case-insensitive options
 
 ---
 
-### 9. Big Data Tools
+### 10. Base64 Encoder/Decoder
 
-5 tools for data engineering and Big Data workflows:
+Encode and decode Base64 strings with full UTF-8 Unicode support.
 
-| Tool | What It Does |
-|------|-------------|
-| **Schema Viewer** | Visualize and explore database schemas |
-| **SQL Formatter** | Format and beautify SQL queries |
-| **Data Pipeline Builder** | Design and document data pipelines |
-| **CSV/JSON Data Explorer** | Explore and transform tabular data |
-| **Data Quality Checker** | Validate data quality and detect anomalies |
+- Text and file encoding
+- Full UTF-8 support
+- One-click copy
 
 ---
 
-### 10. RAG Tools
+### 11. URL Encoder/Decoder
 
-5 tools for Retrieval-Augmented Generation workflows:
+Encode and decode URL components and full URLs.
 
-| Tool | What It Does |
-|------|-------------|
-| **Chunking Strategy Tester** | Test different text chunking strategies |
-| **Embedding Cost Calculator** | Calculate costs for vector embedding operations |
-| **Vector DB Simulator** | Simulate vector database operations |
-| **RAG Pipeline Builder** | Design and test RAG pipelines |
-| **Similarity Search Tester** | Test and compare similarity search algorithms |
+- Component and full URL encoding
+- Query parameter handling
+- Special character reference guide
+
+---
+
+### 12. Timestamp Converter
+
+Convert between Unix timestamps and human-readable dates.
+
+- Auto-detects seconds vs milliseconds
+- Supports current timestamp
+- Human-readable format output
+
+---
+
+### 13. JSON to TOON Converter
+
+Convert JSON into Tree Outline notation for quick, readable data reviews.
+
+- Visual tree structure
+- Collapsible nodes
+- Quick copy/export
+
+---
+
+### 14. Color Palette
+
+Pick colors, generate shade palettes, and check WCAG contrast accessibility ratios.
+
+- Color picker with hex/RGB/HSL
+- Shade and tint generator
+- WCAG AA/AAA contrast checker
+
+---
+
+### 15. Lorem Ipsum Generator
+
+Generate placeholder text with configurable words, sentences, and paragraphs.
+
+- Customizable word count
+- Sentence and paragraph modes
+- Copy to clipboard
+
+---
+
+### 16. Token Counter & Cost Calculator
+
+Count tokens in text for LLM context window management and estimate API costs.
+
+- Supports GPT-4o, Claude, Gemini, Llama, Mistral
+- Cost estimation per model
+- Context window utilization percentage
+
+---
+
+### 17. Prompt Template Manager
+
+Create, save, and manage prompt templates with `{{variable}}` substitution.
+
+- Template storage and organization
+- Variable placeholders
+- Quick test execution
+
+---
+
+### 18. Python ML Code Generator
+
+Generate boilerplate code for popular ML frameworks.
+
+- PyTorch training loops
+- TensorFlow/Keras models
+- HuggingFace pipelines
+- LangChain chains
+
+---
+
+### 19. LLM API Tester
+
+Test OpenAI, Anthropic, Gemini, and Ollama API endpoints with streaming support.
+
+- Multi-provider support
+- Streaming response display
+- Parameter customization
+- Response timing
+
+---
+
+### 20. Dataset Split Calculator
+
+Calculate train/validation/test splits with stratification and random seed control.
+
+- Stratified splitting
+- Custom split ratios
+- Random seed for reproducibility
+
+---
+
+### 21. GPU VRAM Calculator
+
+Estimate VRAM requirements based on model parameters and precision format.
+
+- FP32, FP16, BF16, INT8, INT4 support
+- Batch size impact estimation
+- Multi-GPU recommendations
+
+---
+
+### 22. Experiment Logger
+
+Log hyperparameters, metrics, and results in structured format with Markdown export.
+
+- Structured logging format
+- Markdown export
+- Experiment comparison
+
+---
+
+### 23. Model Card Generator
+
+Generate standardized HuggingFace-format model documentation.
+
+- Auto-populated fields
+- Model details, usage, and limitations
+- Export as Markdown
+
+---
+
+### 24. JSONL Viewer
+
+Parse and inspect JSONL training data files in a readable table format.
+
+- Line-by-line parsing
+- Column detection
+- Sortable table view
+
+---
+
+### 25. Markdown Table Generator
+
+Generate markdown tables for experiment results and documentation.
+
+- Customizable columns
+- Auto-alignment
+- Copy to clipboard
+
+---
+
+### 26. Schema Viewer
+
+Parse and visualize Parquet, Avro, and JSON schemas as an interactive tree.
+
+- Nested schema display
+- Type information
+- Field descriptions
+
+---
+
+### 27. Spark SQL Formatter
+
+Format Spark SQL, Presto, and Trino queries with proper indentation and keywords.
+
+- Keyword capitalization
+- Indentation formatting
+- Alias alignment
+
+---
+
+### 28. Data Quality Checker
+
+Analyze CSV and JSON datasets for missing values, duplicates, types, and statistics.
+
+- Missing value detection
+- Duplicate identification
+- Type inference
+- Summary statistics
+
+---
+
+### 29. Schema Diff Tool
+
+Compare two JSON schemas side-by-side and highlight added, removed, and changed fields.
+
+- Side-by-side comparison
+- Color-coded diffs
+- Field-level detail
+
+---
+
+### 30. Partition Calculator
+
+Calculate optimal Hadoop/Hive partitions, Spark config, and partition key strategies.
+
+- File size estimation
+- Partition count optimization
+- Spark configuration generation
+
+---
+
+### 31. Chunking Strategy Tester
+
+Compare different text chunking strategies (fixed, sentence, recursive, overlap) with visual previews.
+
+- Multiple strategy support
+- Chunk size visualization
+- Overlap detection
+
+---
+
+### 32. Embedding Cost Calculator
+
+Calculate embedding costs across OpenAI, Cohere, and HuggingFace models.
+
+- Multi-model pricing
+- Batch size optimization
+- Total cost estimation
+
+---
+
+### 33. Context Window Calculator
+
+Plan context window usage with visual utilization bars and max chunk limits.
+
+- Visual progress bars
+- Token budget planning
+- Chunk limit warnings
+
+---
+
+### 34. Semantic Dedup Checker
+
+Find near-duplicate lines using character-level n-gram similarity.
+
+- N-gram similarity scoring
+- Configurable threshold
+- Duplicate group highlighting
+
+---
+
+### 35. RAG Eval Calculator
+
+Evaluate RAG quality with precision, recall, MRR, and faithfulness scores.
+
+- Multiple evaluation metrics
+- Score breakdown
+- Improvement suggestions
 
 ---
 
 ## Supported Technologies
 
-<div align="center">
+**Frontend:** JavaScript, TypeScript, React, Vue.js, HTML, CSS
 
-**Frontend**
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/javascript_icon.png" alt="JavaScript" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/typescript_icon.png" alt="TypeScript" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/react_icon.png" alt="React" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/html_icon.png" alt="HTML" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/css_icon.png" alt="CSS" width="32" height="32" />
+**CSS Frameworks:** Bootstrap, Tailwind CSS
 
-**CSS Frameworks**
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/bootstrap_icon.png" alt="Bootstrap" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/tailwind_icon.png" alt="Tailwind CSS" width="32" height="32" />
+**Backend:** Node.js, Python, PHP, Java, C#, Go, Ruby
 
-**Backend & Database**
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/nodejs_icon.png" alt="Node.js" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/mongodb_icon.png" alt="MongoDB" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/python_icon.png" alt="Python" width="32" height="32" />
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/php_icon.png" alt="PHP" width="32" height="32" />
+**Mobile:** Flutter/Dart, Swift, Kotlin
 
-**Mobile**
-<img src="https://raw.githubusercontent.com/sayaib/devsnip-pro-data/refs/heads/main/icons/flutter_icon.png" alt="Flutter" width="32" height="32" />
+**Database:** MongoDB, SQL
 
-</div>
+**State Management:** Redux, React Query, React Router
 
-**Full language list:** JavaScript, TypeScript, React, Vue.js, HTML, CSS, Node.js, Python, PHP, Java, C#, Go, Ruby, Flutter/Dart, Swift, Kotlin, Bootstrap, Tailwind CSS, Redux, React Query, React Router, MongoDB, SQL, JSON, YAML, Markdown, Shell Scripts, and more.
+**Other:** JSON, YAML, Markdown, Shell Scripts, and more
 
 ---
 
