@@ -11,6 +11,7 @@ import { registerAiMlToolsCommands } from "./commands/aiMlTools";
 import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
 import { registerAiMlExtraTools } from "./commands/aiMlExtraTools";
+import { executeQueuedCommand } from "./utils/command-dispatch";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(context.extensionPath, "custom");
@@ -123,7 +124,7 @@ function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
       matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })),
       { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true }
     );
-    if (selected) await vscode.commands.executeCommand(selected.command);
+    if (selected) await executeQueuedCommand(selected.command);
   });
   context.subscriptions.push(searchCommand);
 }

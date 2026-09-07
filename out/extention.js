@@ -46,6 +46,7 @@ const aiMlTools_1 = require("./commands/aiMlTools");
 const bigDataTools_1 = require("./commands/bigDataTools");
 const ragTools_1 = require("./commands/ragTools");
 const aiMlExtraTools_1 = require("./commands/aiMlExtraTools");
+const command_dispatch_1 = require("./utils/command-dispatch");
 function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     console.log("DevSnip Pro extension is now active!");
@@ -140,7 +141,7 @@ function registerUniversalToolSearch(context) {
         }
         const selected = yield vscode.window.showQuickPick(matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })), { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true });
         if (selected)
-            yield vscode.commands.executeCommand(selected.command);
+            yield (0, command_dispatch_1.executeQueuedCommand)(selected.command);
     }));
     context.subscriptions.push(searchCommand);
 }

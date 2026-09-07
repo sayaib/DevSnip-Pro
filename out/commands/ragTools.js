@@ -25,6 +25,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerRagToolsCommands = void 0;
 const vscode = __importStar(require("vscode"));
+const command_dispatch_1 = require("../utils/command-dispatch");
 function getNonce() {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let text = '';
@@ -247,7 +248,7 @@ function registerRagToolsCommands(context) {
         panel.webview.onDidReceiveMessage(message => {
             switch (message.command) {
                 case 'openTool':
-                    vscode.commands.executeCommand(message.toolCommand);
+                    (0, command_dispatch_1.executeQueuedCommand)(message.toolCommand);
                     break;
             }
         }, undefined, context.subscriptions);
@@ -328,8 +329,9 @@ function getRagHubHtml(nonce) {
             border-radius: 10px;
             align-self: flex-start;
         }
-        .hub-section { margin-bottom: 24px; }
-        .hub-section-title { font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 10px 2px; }
+        .hub-section { display: contents; }
+        .hub-section-title { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 10px 0 0 2px; }
+        .hub-section .hub-grid { display: contents; }
     </style>
 </head>
 <body>

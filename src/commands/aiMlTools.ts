@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { executeQueuedCommand } from '../utils/command-dispatch';
 
 function getNonce(): string {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -232,7 +233,7 @@ export function registerAiMlToolsCommands(context: vscode.ExtensionContext) {
             message => {
                 switch (message.command) {
                     case 'openTool':
-                        vscode.commands.executeCommand(message.toolCommand);
+                        executeQueuedCommand(message.toolCommand);
                         break;
                 }
             },
@@ -400,8 +401,9 @@ function getAiMlHubHtml(nonce: string): string {
             border-radius: 10px;
             align-self: flex-start;
         }
-        .hub-section { margin-bottom: 24px; }
-        .hub-section-title { font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 10px 2px; }
+        .hub-section { display: contents; }
+        .hub-section-title { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 10px 0 0 2px; }
+        .hub-section .hub-grid { display: contents; }
     </style>
 </head>
 <body>

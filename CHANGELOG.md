@@ -1,5 +1,25 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.49.136 - 2026-09-07
+
+### New Features
+
+- Added universal regex tool search across all DevSnip Pro commands.
+- Added Dataset Profiler, Model Metrics Calculator, and Prompt Playground tools.
+- Added nested JSON and JSONL path support for deeply structured datasets, including arrays and MongoDB-style date values.
+
+### Improvements
+
+- Reorganized the activity-bar navigation into Core Workflow, Snippets, AI/ML/LLM, Data Engineering, and Advanced Utilities sections.
+- Reorganized every inner tool hub into workflow-based groups with a consistent responsive card layout.
+- Updated Schema Viewer to infer schemas from ordinary JSON documents and render deeply nested objects and arrays.
+- Updated Schema Diff Tool to compare inferred data shapes and formal JSON Schemas using stable nested paths.
+
+### Fixes
+
+- Serialized webview-triggered command launches to prevent overlapping Extension Host flush calls.
+- Added a deterministic first-debug workflow that compiles before launch and starts a clean Extension Host window.
+
 ## Version 10.47.135 - 2026-09-07
 
 ### Improvements

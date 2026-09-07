@@ -25,6 +25,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerBigDataToolsCommands = void 0;
 const vscode = __importStar(require("vscode"));
+const command_dispatch_1 = require("../utils/command-dispatch");
 function getNonce() {
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let text = '';
@@ -247,7 +248,7 @@ function registerBigDataToolsCommands(context) {
         panel.webview.onDidReceiveMessage(message => {
             switch (message.command) {
                 case 'openTool':
-                    vscode.commands.executeCommand(message.toolCommand);
+                    (0, command_dispatch_1.executeQueuedCommand)(message.toolCommand);
                     break;
             }
         }, undefined, context.subscriptions);
@@ -328,8 +329,9 @@ function getBigDataHubHtml(nonce) {
             border-radius: 10px;
             align-self: flex-start;
         }
-        .hub-section { margin-bottom: 24px; }
-        .hub-section-title { font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 10px 2px; }
+        .hub-section { display: contents; }
+        .hub-section-title { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 10px 0 0 2px; }
+        .hub-section .hub-grid { display: contents; }
     </style>
 </head>
 <body>
@@ -1075,23 +1077,58 @@ function getSchemaDiffHtml(nonce) {
     <script nonce="${nonce}">
         ${toastScript()}
 
+        function inferDataSchema(value) {
+            if (value === null) return { type: 'null' };
+            if (Array.isArray(value)) {
+                var item = value.length ? inferDataSchema(value[0]) : { type: 'unknown' };
+                for (var i = 1; i < value.length; i++) item = mergeDataSchemas(item, inferDataSchema(value[i]));
+                return { type: 'array', items: item };
+            }
+            if (typeof value === 'object') {
+                var keys = Object.keys(value);
+                if (keys.length === 1 && Object.prototype.hasOwnProperty.call(value, '$date')) return { type: 'date' };
+                var properties = {};
+                keys.forEach(function(key) { properties[key] = inferDataSchema(value[key]); });
+                return { type: 'object', properties: properties };
+            }
+            return { type: typeof value === 'number' ? 'number' : typeof value };
+        }
+
+        function mergeDataSchemas(left, right) {
+            if (left.type === right.type) {
+                if (left.type === 'object') {
+                    var properties = {};
+                    Object.keys(left.properties || {}).forEach(function(key) { properties[key] = left.properties[key]; });
+                    Object.keys(right.properties || {}).forEach(function(key) { properties[key] = properties[key] ? mergeDataSchemas(properties[key], right.properties[key]) : right.properties[key]; });
+                    return { type: 'object', properties: properties };
+                }
+                if (left.type === 'array') return { type: 'array', items: mergeDataSchemas(left.items || { type: 'unknown' }, right.items || { type: 'unknown' }) };
+                return left;
+            }
+            if (left.type === 'null') return right;
+            if (right.type === 'null') return left;
+            return { type: 'mixed' };
+        }
+
+        function isFormalSchema(value) {
+            return value && typeof value === 'object' && typeof value.type === 'string' &&
+                (value.properties || value.items || value.$schema || Object.keys(value).every(function(key) {
+                    return ['type', 'title', 'description', 'required', 'enum', 'default', 'additionalProperties'].indexOf(key) !== -1;
+                }));
+        }
+
         function flattenSchema(obj, prefix) {
             prefix = prefix || '';
             var result = {};
+            var path = prefix || 'root';
+            result[path] = obj.type || 'unknown';
             if (obj.type === 'object' && obj.properties) {
                 Object.keys(obj.properties).forEach(function(key) {
-                    var path = prefix ? prefix + '.' + key : key;
-                    var prop = obj.properties[key];
-                    if (prop.type === 'object' && prop.properties) {
-                        Object.assign(result, flattenSchema(prop, path));
-                    } else {
-                        result[path] = prop.type || 'unknown';
-                    }
+                    var childPath = prefix ? prefix + '.' + key : key;
+                    Object.assign(result, flattenSchema(obj.properties[key], childPath));
                 });
             } else if (obj.type === 'array' && obj.items) {
-                result[prefix || 'root'] = 'array<' + (obj.items.type || 'unknown') + '>';
-            } else {
-                result[prefix || 'root'] = obj.type || 'unknown';
+                Object.assign(result, flattenSchema(obj.items, prefix ? prefix + '[]' : '[]'));
             }
             return result;
         }
@@ -1105,8 +1142,10 @@ function getSchemaDiffHtml(nonce) {
             try { schemaA = JSON.parse(inputA); } catch (e) { _toast('Schema A: invalid JSON - ' + e.message, 'error'); return; }
             try { schemaB = JSON.parse(inputB); } catch (e) { _toast('Schema B: invalid JSON - ' + e.message, 'error'); return; }
 
-            var flatA = flattenSchema(schemaA);
-            var flatB = flattenSchema(schemaB);
+            var normalizedA = isFormalSchema(schemaA) ? schemaA : inferDataSchema(schemaA);
+            var normalizedB = isFormalSchema(schemaB) ? schemaB : inferDataSchema(schemaB);
+            var flatA = flattenSchema(normalizedA);
+            var flatB = flattenSchema(normalizedB);
             var allKeys = {};
             Object.keys(flatA).forEach(function(k) { allKeys[k] = true; });
             Object.keys(flatB).forEach(function(k) { allKeys[k] = true; });
