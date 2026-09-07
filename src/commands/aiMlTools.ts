@@ -400,12 +400,14 @@ function getAiMlHubHtml(nonce: string): string {
             border-radius: 10px;
             align-self: flex-start;
         }
+        .hub-section { margin-bottom: 24px; }
+        .hub-section-title { font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 10px 2px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>AI/ML & LLM Developer Tools</h1>
-        <span class="subtitle">10 built-in utilities for AI/ML workflows</span>
+        <span class="subtitle">13 built-in utilities for AI/ML workflows</span>
     </div>
     <div class="tool-body">
         <div class="hub-grid" id="grid"></div>
@@ -422,21 +424,33 @@ function getAiMlHubHtml(nonce: string): string {
             { cmd: 'sayaib.hue-console.experimentLogger', icon: '\\u{1F4D6}', title: 'Experiment Logger', desc: 'Log hyperparameters, metrics, and results in a structured format.', tag: 'MLOps' },
             { cmd: 'sayaib.hue-console.modelCard', icon: '\\u{1F4C4}', title: 'Model Card Generator', desc: 'Generate standardized model cards in HuggingFace format for documentation.', tag: 'Docs' },
             { cmd: 'sayaib.hue-console.jsonlViewer', icon: '\\u{1F4CB}', title: 'JSONL Viewer', desc: 'Parse and inspect JSONL training data files in a readable table format.', tag: 'Data' },
-            { cmd: 'sayaib.hue-console.mdTableGen', icon: '\\u{1F4D1}', title: 'Markdown Table Generator', desc: 'Quickly generate markdown tables for experiment results and documentation.', tag: 'Docs' }
+            { cmd: 'sayaib.hue-console.mdTableGen', icon: '\\u{1F4D1}', title: 'Markdown Table Generator', desc: 'Quickly generate markdown tables for experiment results and documentation.', tag: 'Docs' },
+            { cmd: 'sayaib.hue-console.datasetProfiler', icon: '\\u{1F50E}', title: 'Dataset Profiler', desc: 'Profile CSV or JSON data with types, missing values, cardinality, and quick quality signals.', tag: 'Data' },
+            { cmd: 'sayaib.hue-console.metricsCalculator', icon: '\\u{1F4C8}', title: 'Model Metrics Calculator', desc: 'Calculate classification metrics from a confusion matrix or regression metrics from actual values.', tag: 'Evaluation' },
+            { cmd: 'sayaib.hue-console.promptPlayground', icon: '\\u{1F9EA}', title: 'Prompt Playground', desc: 'Compare prompt variants, estimate tokens, and export a reproducible chat payload.', tag: 'LLM' }
         ];
         var grid = document.getElementById('grid');
+        var groups = {};
+        var order = ['Prompting & APIs', 'Model Development', 'Data & Evaluation', 'Infrastructure', 'MLOps & Documentation'];
         tools.forEach(function(t) {
-            var card = document.createElement('div');
-            card.className = 'hub-card';
-            card.innerHTML = '<div class="hub-card-icon">' + t.icon + '</div>' +
-                '<div class="hub-card-title">' + t.title + '</div>' +
-                '<div class="hub-card-desc">' + t.desc + '</div>' +
-                '<span class="hub-card-tag">' + t.tag + '</span>';
-            card.addEventListener('click', function() {
-                var vscode = acquireVsCodeApi();
-                vscode.postMessage({ command: 'openTool', toolCommand: t.cmd });
+            var section = t.tag === 'LLM' || t.tag === 'Prompt' || t.tag === 'API' ? 'Prompting & APIs' :
+                (t.tag === 'Code' ? 'Model Development' : (t.tag === 'Data' || t.tag === 'Evaluation' ? 'Data & Evaluation' :
+                (t.tag === 'Compute' ? 'Infrastructure' : 'MLOps & Documentation')));
+            if (!groups[section]) groups[section] = [];
+            groups[section].push(t);
+        });
+        order.forEach(function(section) {
+            if (!groups[section]) return;
+            var wrapper = document.createElement('section'); wrapper.className = 'hub-section';
+            wrapper.innerHTML = '<div class="hub-section-title">' + section + '</div><div class="hub-grid"></div>';
+            var sectionGrid = wrapper.querySelector('.hub-grid');
+            groups[section].forEach(function(t) {
+                var card = document.createElement('div'); card.className = 'hub-card';
+                card.innerHTML = '<div class="hub-card-icon">' + t.icon + '</div><div class="hub-card-title">' + t.title + '</div><div class="hub-card-desc">' + t.desc + '</div><span class="hub-card-tag">' + t.tag + '</span>';
+                card.addEventListener('click', function() { acquireVsCodeApi().postMessage({ command: 'openTool', toolCommand: t.cmd }); });
+                sectionGrid.appendChild(card);
             });
-            grid.appendChild(card);
+            grid.appendChild(wrapper);
         });
     </script>
 </body>
@@ -1730,6 +1744,7 @@ function getJsonlViewerHtml(nonce: string): string {
         <div class="section">
             <label>Paste JSONL Data (one JSON object per line)</label>
             <textarea id="jsonlInput" rows="8" placeholder='{"text": "Hello", "label": 0}\n{"text": "World", "label": 1}'></textarea>
+            <input id="jsonlFilter" type="text" placeholder="Filter nested paths or values, e.g. rawRow.id or validation">
             <div class="btn-row" style="margin-top:10px;">
                 <button class="btn" id="parseBtn">Parse JSONL</button>
                 <button class="btn btn-ghost" id="loadSampleBtn">Load Sample</button>
@@ -1777,9 +1792,33 @@ function getJsonlViewerHtml(nonce: string): string {
 
             if (!objects.length) return;
 
-            // Collect all keys
+            function flattenNested(value, path, out) {
+                if (value === null || typeof value !== 'object') { out[path || '$'] = value === null ? '' : String(value); return; }
+                if (Array.isArray(value)) {
+                    if (!value.length) { out[path || '$'] = '[]'; return; }
+                    value.forEach(function(item, index) { flattenNested(item, (path ? path + '.' : '') + '[' + index + ']', out); });
+                    return;
+                }
+                var childKeys = Object.keys(value);
+                if (!childKeys.length) { out[path || '$'] = '{}'; return; }
+                childKeys.forEach(function(key) { flattenNested(value[key], path ? path + '.' + key : key, out); });
+            }
+
+            var flattened = objects.map(function(obj) { var flat = {}; flattenNested(obj, '', flat); return flat; });
+            var filter = document.getElementById('jsonlFilter').value.trim().toLowerCase();
+            if (filter) {
+                var matching = [];
+                flattened.forEach(function(flat, index) {
+                    var haystack = Object.keys(flat).map(function(k) { return k + ' ' + flat[k]; }).join(' ').toLowerCase();
+                    if (haystack.indexOf(filter) !== -1) matching.push(index);
+                });
+                objects = matching.map(function(index) { return objects[index]; });
+                flattened = matching.map(function(index) { return flattened[index]; });
+            }
+
+            // Collect all nested leaf paths
             var keys = [];
-            objects.forEach(function(obj) {
+            flattened.forEach(function(obj) {
                 Object.keys(obj).forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
             });
 
@@ -1796,7 +1835,8 @@ function getJsonlViewerHtml(nonce: string): string {
             objects.forEach(function(obj, i) {
                 html += '<tr><td>' + (i + 1) + '</td>';
                 keys.forEach(function(k) {
-                    var val = obj[k] !== undefined ? JSON.stringify(obj[k]) : '';
+                    var flat = flattened[i];
+                    var val = flat[k] !== undefined ? JSON.stringify(flat[k]) : '';
                     html += '<td title="' + val.replace(/"/g, '&quot;') + '">' + val + '</td>';
                 });
                 html += '</tr>';

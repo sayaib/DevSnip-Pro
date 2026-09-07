@@ -372,6 +372,8 @@ function getAdvancedToolsHubHtml() {
             border-radius: 10px;
             align-self: flex-start;
         }
+        .hub-section { margin-bottom: 24px; }
+        .hub-section-title { font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 10px 2px; }
     </style>
 </head>
 <body>
@@ -396,19 +398,26 @@ function getAdvancedToolsHubHtml() {
             { cmd: 'sayaib.hue-console.loremGenerator', icon: '\\u{1F4C4}', title: 'Lorem Ipsum Generator', desc: 'Generate placeholder text with configurable words, sentences, and paragraphs.', tag: 'Content' }
         ];
         var grid = document.getElementById('grid');
+        var groups = {};
+        var order = ['Data & Text', 'Encoding & Security', 'Dates & Time', 'Design', 'Content'];
         tools.forEach(function(t) {
-            var card = document.createElement('div');
-            card.className = 'hub-card';
-            card.setAttribute('data-command', t.cmd);
-            card.innerHTML = '<div class="hub-card-icon">' + t.icon + '</div>' +
-                '<div class="hub-card-title">' + t.title + '</div>' +
-                '<div class="hub-card-desc">' + t.desc + '</div>' +
-                '<span class="hub-card-tag">' + t.tag + '</span>';
-            card.addEventListener('click', function() {
-                var vscode = acquireVsCodeApi();
-                vscode.postMessage({ command: 'openTool', toolCommand: t.cmd });
+            var section = t.tag === 'Pattern' || t.tag === 'Data' ? 'Data & Text' :
+                (t.tag === 'Security' || t.tag === 'Encoding' ? 'Encoding & Security' : (t.tag === 'Time' ? 'Dates & Time' : t.tag));
+            if (!groups[section]) groups[section] = [];
+            groups[section].push(t);
+        });
+        order.forEach(function(section) {
+            if (!groups[section]) return;
+            var wrapper = document.createElement('section'); wrapper.className = 'hub-section';
+            wrapper.innerHTML = '<div class="hub-section-title">' + section + '</div><div class="hub-grid"></div>';
+            var sectionGrid = wrapper.querySelector('.hub-grid');
+            groups[section].forEach(function(t) {
+                var card = document.createElement('div'); card.className = 'hub-card'; card.setAttribute('data-command', t.cmd);
+                card.innerHTML = '<div class="hub-card-icon">' + t.icon + '</div><div class="hub-card-title">' + t.title + '</div><div class="hub-card-desc">' + t.desc + '</div><span class="hub-card-tag">' + t.tag + '</span>';
+                card.addEventListener('click', function() { acquireVsCodeApi().postMessage({ command: 'openTool', toolCommand: t.cmd }); });
+                sectionGrid.appendChild(card);
             });
-            grid.appendChild(card);
+            grid.appendChild(wrapper);
         });
     </script>
 </body>

@@ -350,6 +350,8 @@ function getBigDataHubHtml(nonce: string): string {
             border-radius: 10px;
             align-self: flex-start;
         }
+        .hub-section { margin-bottom: 24px; }
+        .hub-section-title { font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 10px 2px; }
     </style>
 </head>
 <body>
@@ -370,18 +372,25 @@ function getBigDataHubHtml(nonce: string): string {
             { cmd: 'sayaib.hue-console.partitionCalc', icon: '\\u{1F4CA}', title: 'Partition Calculator', desc: 'Calculate optimal Hadoop/Hive partitions, Spark config, and partition key strategies.', tag: 'Compute' }
         ];
         var grid = document.getElementById('grid');
+        var groups = {};
+        var order = ['Schema & Quality', 'Querying', 'Storage & Performance'];
         tools.forEach(function(t) {
-            var card = document.createElement('div');
-            card.className = 'hub-card';
-            card.innerHTML = '<div class="hub-card-icon">' + t.icon + '</div>' +
-                '<div class="hub-card-title">' + t.title + '</div>' +
-                '<div class="hub-card-desc">' + t.desc + '</div>' +
-                '<span class="hub-card-tag">' + t.tag + '</span>';
-            card.addEventListener('click', function() {
-                var vscode = acquireVsCodeApi();
-                vscode.postMessage({ command: 'openTool', toolCommand: t.cmd });
+            var section = t.tag === 'SQL' ? 'Querying' : (t.tag === 'Compute' ? 'Storage & Performance' : 'Schema & Quality');
+            if (!groups[section]) groups[section] = [];
+            groups[section].push(t);
+        });
+        order.forEach(function(section) {
+            if (!groups[section]) return;
+            var wrapper = document.createElement('section'); wrapper.className = 'hub-section';
+            wrapper.innerHTML = '<div class="hub-section-title">' + section + '</div><div class="hub-grid"></div>';
+            var sectionGrid = wrapper.querySelector('.hub-grid');
+            groups[section].forEach(function(t) {
+                var card = document.createElement('div'); card.className = 'hub-card';
+                card.innerHTML = '<div class="hub-card-icon">' + t.icon + '</div><div class="hub-card-title">' + t.title + '</div><div class="hub-card-desc">' + t.desc + '</div><span class="hub-card-tag">' + t.tag + '</span>';
+                card.addEventListener('click', function() { acquireVsCodeApi().postMessage({ command: 'openTool', toolCommand: t.cmd }); });
+                sectionGrid.appendChild(card);
             });
-            grid.appendChild(card);
+            grid.appendChild(wrapper);
         });
     </script>
 </body>
@@ -483,57 +492,69 @@ function getSchemaViewerHtml(nonce: string): string {
 
         var formattedSchema = '';
 
+        function escapeHtml(value) {
+            return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         function renderNode(schema, name, required, depth) {
             var type = schema.type || 'unknown';
-            var isObject = type === 'object';
-            var isArray = type === 'array';
-            var items = schema.items || {};
-            var properties = schema.properties || {};
-            var requiredFields = schema.required || [];
-            var html = '';
-            var indent = depth * 24;
-
-            html += '<div class="field" style="padding-left:' + indent + 'px;">';
-            html += '<span class="fname">' + (name || 'root') + '</span>';
-
-            if (isArray) {
-                html += '<span class="ftype type-array">array</span>';
-                var itemType = items.type || 'unknown';
-                if (itemType === 'object' || isArray) {
-                    html += '<span style="font-size:11px;color:var(--fg-2);">of</span> ';
-                    html += '<span class="ftype type-' + itemType + '">' + itemType + '</span>';
-                } else {
-                    html += '<span class="ftype type-' + itemType + '">' + itemType + '</span>';
-                }
-            } else {
-                html += '<span class="ftype type-' + type + '">' + type + '</span>';
+            var html = '<div class="field" style="padding-left:' + (depth * 24) + 'px;">' +
+                '<span class="fname">' + escapeHtml(name || 'root') + '</span>' +
+                '<span class="ftype type-' + type + '">' + escapeHtml(type) + '</span>';
+            if (type === 'array' && schema.items) {
+                html += '<span style="font-size:11px;color:var(--fg-2);">of</span> ' +
+                    '<span class="ftype type-' + (schema.items.type || 'unknown') + '">' + escapeHtml(schema.items.type || 'unknown') + '</span>';
             }
-
-            if (required) {
-                html += '<span class="required-badge">required</span>';
-            }
+            if (required) html += '<span class="required-badge">required</span>';
             html += '</div>';
 
-            if (isObject && Object.keys(properties).length > 0) {
+            var children = type === 'object' ? schema.properties || {} :
+                (type === 'array' && schema.items && schema.items.type === 'object' ? { '[item]': schema.items } : {});
+            if (Object.keys(children).length) {
                 html += '<div class="nested">';
-                Object.keys(properties).forEach(function(key) {
-                    var isReq = requiredFields.indexOf(key) !== -1;
-                    if (properties[key].type === 'array' && properties[key].items && properties[key].items.type === 'object') {
-                        html += renderNode(properties[key], key, isReq, depth + 1);
-                        html += '<div class="nested">';
-                        var subProps = properties[key].items.properties || {};
-                        var subReq = properties[key].items.required || [];
-                        Object.keys(subProps).forEach(function(sk) {
-                            html += renderNode(subProps[sk], sk, subReq.indexOf(sk) !== -1, depth + 2);
-                        });
-                        html += '</div>';
-                    } else {
-                        html += renderNode(properties[key], key, isReq, depth + 1);
-                    }
+                Object.keys(children).forEach(function(key) {
+                    var requiredChild = (schema.required || []).indexOf(key) !== -1;
+                    html += renderNode(children[key], key, requiredChild, depth + 1);
                 });
                 html += '</div>';
             }
             return html;
+        }
+
+        function inferSchema(value) {
+            if (value === null) return { type: 'null' };
+            if (Array.isArray(value)) {
+                var itemSchemas = value.map(inferSchema);
+                var mergedItems = itemSchemas[0] || { type: 'unknown' };
+                itemSchemas.slice(1).forEach(function(item) { mergedItems = mergeSchemas(mergedItems, item); });
+                return { type: 'array', items: mergedItems };
+            }
+            if (typeof value === 'object') {
+                var objectKeys = Object.keys(value);
+                if (objectKeys.length === 1 && Object.prototype.hasOwnProperty.call(value, '$date')) return { type: 'date' };
+                var properties = {};
+                objectKeys.forEach(function(key) { properties[key] = inferSchema(value[key]); });
+                return { type: 'object', properties: properties, required: objectKeys.slice() };
+            }
+            return { type: typeof value === 'number' ? 'number' : typeof value };
+        }
+
+        function mergeSchemas(left, right) {
+            if (left.type === right.type) {
+                if (left.type === 'object') {
+                    var merged = {};
+                    Object.keys(left.properties || {}).forEach(function(k) { merged[k] = left.properties[k]; });
+                    Object.keys(right.properties || {}).forEach(function(k) { merged[k] = merged[k] ? mergeSchemas(merged[k], right.properties[k]) : right.properties[k]; });
+                    var leftRequired = left.required || Object.keys(left.properties || {});
+                    var rightRequired = right.required || Object.keys(right.properties || {});
+                    return { type: 'object', properties: merged, required: leftRequired.filter(function(k) { return rightRequired.indexOf(k) !== -1; }) };
+                }
+                if (left.type === 'array') return { type: 'array', items: mergeSchemas(left.items || { type: 'unknown' }, right.items || { type: 'unknown' }) };
+                return left;
+            }
+            if (left.type === 'null') return right;
+            if (right.type === 'null') return left;
+            return { type: 'mixed' };
         }
 
         function countStats(schema) {
@@ -575,14 +596,17 @@ function getSchemaViewerHtml(nonce: string): string {
                 return;
             }
 
-            formattedSchema = JSON.stringify(schema, null, 2);
-            var stats = countStats(schema);
+            var isJsonSchema = schema && typeof schema === 'object' && typeof schema.type === 'string' &&
+                (schema.type === 'object' || schema.type === 'array' || schema.type === 'string' || schema.type === 'number');
+            var inferredSchema = isJsonSchema ? schema : inferSchema(schema);
+            formattedSchema = JSON.stringify(inferredSchema, null, 2);
+            var stats = countStats(inferredSchema);
             document.getElementById('fieldCount').textContent = stats.fields;
             document.getElementById('depthCount').textContent = stats.maxDepth;
             document.getElementById('requiredCount').textContent = stats.required;
             document.getElementById('stats').style.display = 'flex';
 
-            var treeHtml = renderNode(schema, null, false, 0);
+            var treeHtml = renderNode(inferredSchema, null, false, 0);
             document.getElementById('schemaTree').innerHTML = treeHtml;
             document.getElementById('treeSection').style.display = 'block';
         });
@@ -805,6 +829,7 @@ function getDataQualityCheckerHtml(nonce: string): string {
                         <option value="json">JSON</option>
                     </select>
                 </div>
+                <div><label>Nested path filter</label><input id="qualityFilter" type="text" placeholder="e.g. rawRow or calDate.year"></div>
             </div>
             <div class="btn-row" style="margin-top: 12px;">
                 <button class="btn" id="checkBtn">Check Quality</button>
@@ -837,20 +862,28 @@ function getDataQualityCheckerHtml(nonce: string): string {
             return { headers: headers, rows: rows };
         }
 
+        function flattenNested(value, path, out) {
+            if (value === null || typeof value !== 'object') {
+                out[path || '$'] = value === null ? '' : String(value);
+                return;
+            }
+            if (Array.isArray(value)) {
+                if (!value.length) { out[path || '$'] = '[]'; return; }
+                value.forEach(function(item, index) { flattenNested(item, (path ? path + '.' : '') + '[' + index + ']', out); });
+                return;
+            }
+            var keys = Object.keys(value);
+            if (!keys.length) { out[path || '$'] = '{}'; return; }
+            keys.forEach(function(key) { flattenNested(value[key], path ? path + '.' + key : key, out); });
+        }
+
         function parseJsonData(text) {
             var data = JSON.parse(text);
             if (!Array.isArray(data)) data = [data];
+            var flattened = data.map(function(row) { var out = {}; flattenNested(row, '', out); return out; });
             var headers = [];
-            data.forEach(function(row) {
-                Object.keys(row).forEach(function(k) {
-                    if (headers.indexOf(k) === -1) headers.push(k);
-                });
-            });
-            var rows = data.map(function(row) {
-                return headers.map(function(h) {
-                    return row[h] !== undefined ? String(row[h]) : '';
-                });
-            });
+            flattened.forEach(function(row) { Object.keys(row).forEach(function(k) { if (headers.indexOf(k) === -1) headers.push(k); }); });
+            var rows = flattened.map(function(row) { return headers.map(function(h) { return row[h] !== undefined ? row[h] : ''; }); });
             return { headers: headers, rows: rows };
         }
 
@@ -890,6 +923,22 @@ function getDataQualityCheckerHtml(nonce: string): string {
 
             var totalRows = parsed.rows.length;
             var totalCols = parsed.headers.length;
+
+            var fieldFilter = document.getElementById('qualityFilter').value.trim().toLowerCase();
+            if (fieldFilter) {
+                var selectedHeaders = parsed.headers.filter(function(h, ci) {
+                    return h.toLowerCase().indexOf(fieldFilter) !== -1 || parsed.rows.some(function(row) {
+                        return String(row[ci] || '').toLowerCase().indexOf(fieldFilter) !== -1;
+                    });
+                });
+                parsed = {
+                    headers: selectedHeaders,
+                    rows: parsed.rows.map(function(row) {
+                        return selectedHeaders.map(function(h) { return row[parsed.headers.indexOf(h)] || ''; });
+                    })
+                };
+                totalCols = parsed.headers.length;
+            }
 
             var missingPerCol = {};
             var uniquePerCol = {};

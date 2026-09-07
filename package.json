@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.",
-  "version": "10.47.135",
+  "version": "10.48.135",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -427,6 +427,22 @@
         "title": "📐 DevSnip Pro: Markdown Table Generator"
       },
       {
+        "command": "sayaib.hue-console.datasetProfiler",
+        "title": "🔎 DevSnip Pro: Dataset Profiler"
+      },
+      {
+        "command": "sayaib.hue-console.metricsCalculator",
+        "title": "📈 DevSnip Pro: Model Metrics Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.promptPlayground",
+        "title": "🧪 DevSnip Pro: Prompt Playground"
+      },
+      {
+        "command": "sayaib.hue-console.searchTools",
+        "title": "🔎 DevSnip Pro: Search All Tools (Regex)"
+      },
+      {
         "command": "sayaib.hue-console.bigDataHub",
         "title": "🗄️ DevSnip Pro: Big Data Tools Hub"
       },
@@ -488,7 +504,7 @@
       "myActivityBar": [
         {
           "id": "myView",
-          "name": "features"
+          "name": "Tools"
         }
       ]
     },
@@ -523,6 +539,10 @@
     "onCommand:sayaib.hue-console.modelCard",
     "onCommand:sayaib.hue-console.jsonlViewer",
     "onCommand:sayaib.hue-console.mdTableGen",
+    "onCommand:sayaib.hue-console.datasetProfiler",
+    "onCommand:sayaib.hue-console.metricsCalculator",
+    "onCommand:sayaib.hue-console.promptPlayground",
+    "onCommand:sayaib.hue-console.searchTools",
     "onCommand:sayaib.hue-console.bigDataHub",
     "onCommand:sayaib.hue-console.schemaViewer",
     "onCommand:sayaib.hue-console.sparkSqlFormatter",
