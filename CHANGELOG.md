@@ -1,5 +1,20 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.49.139 - 2026-09-08
+
+### Improvements
+
+- Replaced the Security Audit terminal output with a styled VS Code webview.
+- Added severity summary cards for critical, high, medium, and low findings.
+- Added redacted evidence, remediation guidance, and a clearer finding layout.
+- Added an `Open at line` action that jumps directly to the scanned source location for fixing.
+- Added exact resource tracking for reliable navigation in multi-root workspaces.
+
+### Fixes
+
+- Security Audit no longer requires users to search the terminal for findings.
+- Security finding navigation now opens the correct file and line instead of relying only on relative workspace paths.
+
 ## Version 10.49.138 - 2026-09-08
 
 ### New Features

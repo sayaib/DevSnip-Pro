@@ -121,7 +121,8 @@ function scanWorkspaceForSecurity() {
                         file: vscode.workspace.asRelativePath(uri),
                         line: lineIndex + 1,
                         message: rule.message,
-                        evidence: redactEvidence(lineText)
+                        evidence: redactEvidence(lineText),
+                        resource: uri.toString()
                     });
                 }
             }
@@ -154,7 +155,8 @@ function scanLocalCloudConfiguration() {
                         file: vscode.workspace.asRelativePath(uri),
                         line: lineIndex + 1,
                         message: rule.message,
-                        evidence: redactEvidence(lineText)
+                        evidence: redactEvidence(lineText),
+                        resource: uri.toString()
                     });
                 }
             }
@@ -172,6 +174,64 @@ function reportFindings(findings) {
     if (!findings.length)
         return `${header}\nNo matching security risks were found by the built-in static rules. Run your normal SAST, dependency, and secret-scanning CI checks as well.`;
     return `${header}\n${findings.map((f, i) => `${i + 1}. [${f.severity.toUpperCase()}] ${f.rule}\n   ${f.file}:${f.line} — ${f.message}\n   ${f.evidence}`).join("\n")}`;
+}
+function webviewNonce() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let value = "";
+    for (let i = 0; i < 32; i++)
+        value += chars.charAt(Math.floor(Math.random() * chars.length));
+    return value;
+}
+function escapeHtml(value) {
+    return value.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] || character));
+}
+function remediationFor(rule) {
+    const fixes = {
+        "private-key": "Remove the private key, rotate it immediately, and load it from a secure secret manager.",
+        "aws-access-key": "Revoke and rotate the key, then use an environment variable or workload identity.",
+        "github-token": "Revoke the token and use GitHub Actions secrets or a fine-grained token with least privilege.",
+        "generic-secret": "Move the value to a secret manager or environment variable and rotate the exposed value.",
+        "database-url": "Move the connection string to a secret manager and enforce TLS for the database connection.",
+        "unsafe-eval": "Replace dynamic code execution with a safe parser or allow-listed operation.",
+        "shell-injection": "Use argument arrays and validate input; never interpolate untrusted input into shell commands.",
+        "insecure-http": "Use HTTPS for non-local traffic and validate certificates in production."
+    };
+    return fixes[rule] || "Review this finding, apply the least-privilege fix, and add a regression check to CI.";
+}
+function securityAuditHtml(panel, findings) {
+    const nonce = webviewNonce();
+    const counts = findings.reduce((acc, finding) => {
+        acc[finding.severity] = (acc[finding.severity] || 0) + 1;
+        return acc;
+    }, {});
+    const status = findings.some(finding => finding.severity === "critical" || finding.severity === "high") ? "Attention required" : "No high-risk findings";
+    const cards = [
+        ["critical", "Critical", "danger"], ["high", "High", "danger"], ["medium", "Medium", "warning"], ["low", "Low", "neutral"]
+    ].map(([key, label, tone]) => `<div class="summary ${tone}"><span>${label}</span><strong>${counts[key] || 0}</strong></div>`).join("");
+    const rows = findings.length ? findings.map((finding, index) => `
+    <article class="finding ${escapeHtml(finding.severity)}">
+      <div class="finding-top"><span class="badge">${escapeHtml(finding.severity.toUpperCase())}</span><span class="rule">${escapeHtml(finding.rule)}</span></div>
+      <h3>${escapeHtml(finding.message)}</h3>
+      <button class="location" data-index="${index}">${escapeHtml(finding.file)}:${finding.line} <span>Open at line →</span></button>
+      <div class="evidence">${escapeHtml(finding.evidence)}</div>
+      <p class="fix"><strong>Recommended fix:</strong> ${escapeHtml(remediationFor(finding.rule))}</p>
+    </article>`).join("") : `<div class="empty"><div class="empty-icon">✓</div><h2>No matching risks found</h2><p>The local static rules did not find a security issue in the scanned files.</p></div>`;
+    panel.webview.options = { enableScripts: true };
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>
+    :root { color-scheme: dark; --bg: var(--vscode-editor-background); --panel: var(--vscode-sideBar-background); --input: var(--vscode-input-background); --text: var(--vscode-foreground); --muted: var(--vscode-descriptionForeground); --border: var(--vscode-panel-border); --accent: var(--vscode-focusBorder); --red: #f14c4c; --orange: #cca700; --green: #89d185; }
+    * { box-sizing: border-box; } body { margin: 0; padding: 28px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .wrap { max-width: 980px; margin: 0 auto; } header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px; }
+    h1 { margin: 0 0 6px; font-size: 24px; } .subtitle, .muted { color: var(--muted); font-size: 13px; } .status { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; font-size: 12px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; } .summary { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 13px 15px; } .summary span { display: block; color: var(--muted); font-size: 12px; } .summary strong { display: block; font-size: 25px; margin-top: 5px; } .summary.danger { border-left-color: var(--red); } .summary.warning { border-left-color: var(--orange); } .summary.neutral { border-left-color: var(--accent); }
+    .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; } .finding { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 16px; margin-bottom: 12px; } .finding.critical, .finding.high { border-left-color: var(--red); } .finding.medium { border-left-color: var(--orange); } .finding.low { border-left-color: var(--accent); }
+    .finding-top { display: flex; align-items: center; gap: 9px; } .badge { font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 4px 7px; border-radius: 4px; background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); } .medium .badge { background: color-mix(in srgb, var(--orange) 18%, transparent); color: var(--orange); } .low .badge { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); } .rule { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+    h3 { font-size: 15px; margin: 11px 0; } .location { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; text-align: left; } .location span { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin-left: 8px; } .location:hover { text-decoration: underline; }
+    .evidence { background: var(--input); border: 1px solid var(--border); border-radius: 5px; padding: 10px; margin: 12px 0; color: var(--muted); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; } .fix { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; } .fix strong { color: var(--text); }
+    .empty { text-align: center; padding: 70px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; } .empty-icon { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); font-size: 25px; } .empty h2 { font-size: 18px; margin: 14px 0 5px; } .empty p { color: var(--muted); margin: 0; }
+    @media (max-width: 650px) { body { padding: 18px; } header { display: block; } .status { display: inline-block; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  </style></head><body><main class="wrap"><header><div><h1>Security Audit</h1><div class="subtitle">Local workspace scan · sensitive evidence is redacted</div></div><div class="status">${escapeHtml(status)}</div></header><div class="summary-grid">${cards}</div><div class="section-title">Findings · ${findings.length}</div>${rows}<p class="muted">This audit is a fast local check. Continue to use dependency scanning, SAST, secret scanning, and CI security controls for production.</p></main><script nonce="${nonce}">
+    const api = acquireVsCodeApi(); document.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => api.postMessage({ type: 'open', index: Number(button.dataset.index) })));
+  </script></body></html>`;
 }
 function reportCloudFindings(findings) {
     const header = reportFindings(findings).replace("DevSnip Pro Security Audit", "DevSnip Pro Local Cloud Configuration Audit");
@@ -532,12 +592,31 @@ function registerPlatformToolsCommands(context) {
         try {
             yield vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "DevSnip Pro: Scanning workspace security" }, () => __awaiter(this, void 0, void 0, function* () {
                 const findings = yield scanWorkspaceForSecurity();
-                const channel = vscode.window.createOutputChannel("DevSnip Pro Security");
-                channel.clear();
-                channel.appendLine(reportFindings(findings));
-                channel.show(true);
+                const panel = vscode.window.createWebviewPanel("devsnipSecurityAudit", "Security Audit", vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
+                panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
+                    var _b;
+                    if ((message === null || message === void 0 ? void 0 : message.type) !== "open" || !Number.isInteger(message.index) || !findings[message.index])
+                        return;
+                    const finding = findings[message.index];
+                    const root = (_b = vscode.workspace.workspaceFolders) === null || _b === void 0 ? void 0 : _b[0];
+                    if (!root)
+                        return;
+                    try {
+                        const fileUri = finding.resource
+                            ? vscode.Uri.parse(finding.resource)
+                            : vscode.Uri.file(path.join(root.uri.fsPath, finding.file));
+                        const document = yield vscode.workspace.openTextDocument(fileUri);
+                        const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
+                        const position = new vscode.Position(line, 0);
+                        yield vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false, selection: new vscode.Range(position, position) });
+                    }
+                    catch (error) {
+                        vscode.window.showErrorMessage(`Unable to open ${finding.file}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }), undefined, context.subscriptions);
+                panel.webview.html = securityAuditHtml(panel, findings);
                 if (findings.some(f => f.severity === "critical" || f.severity === "high"))
-                    vscode.window.showWarningMessage(`Security audit found ${findings.length} potential issue(s). Review the Security output.`);
+                    vscode.window.showWarningMessage(`Security audit found ${findings.length} potential issue(s). Review the Security Audit panel.`);
                 else
                     vscode.window.showInformationMessage(`Security audit complete: ${findings.length} finding(s).`);
             }));
@@ -547,8 +626,8 @@ function registerPlatformToolsCommands(context) {
         }
     }));
     const cloudSecurity = vscode.commands.registerCommand("sayaib.hue-console.cloudSecurityAudit", () => __awaiter(this, void 0, void 0, function* () {
-        var _b;
-        if (!((_b = vscode.workspace.workspaceFolders) === null || _b === void 0 ? void 0 : _b.length)) {
+        var _c;
+        if (!((_c = vscode.workspace.workspaceFolders) === null || _c === void 0 ? void 0 : _c.length)) {
             vscode.window.showErrorMessage("Open a workspace before running the cloud security audit.");
             return;
         }
@@ -570,8 +649,8 @@ function registerPlatformToolsCommands(context) {
         }
     }));
     const devops = vscode.commands.registerCommand("sayaib.hue-console.devopsGenerator", () => __awaiter(this, void 0, void 0, function* () {
-        var _c;
-        const root = (_c = vscode.workspace.workspaceFolders) === null || _c === void 0 ? void 0 : _c[0];
+        var _d;
+        const root = (_d = vscode.workspace.workspaceFolders) === null || _d === void 0 ? void 0 : _d[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating DevOps files.");
             return;
@@ -596,8 +675,8 @@ function registerPlatformToolsCommands(context) {
         }
     }));
     const mlops = vscode.commands.registerCommand("sayaib.hue-console.mlopsGenerator", () => __awaiter(this, void 0, void 0, function* () {
-        var _d;
-        const root = (_d = vscode.workspace.workspaceFolders) === null || _d === void 0 ? void 0 : _d[0];
+        var _e;
+        const root = (_e = vscode.workspace.workspaceFolders) === null || _e === void 0 ? void 0 : _e[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating MLOps files.");
             return;
@@ -632,8 +711,8 @@ function registerPlatformToolsCommands(context) {
         channel.show(true);
     }));
     const observabilityStarter = vscode.commands.registerCommand("sayaib.hue-console.observabilityStarter", () => __awaiter(this, void 0, void 0, function* () {
-        var _e;
-        const root = (_e = vscode.workspace.workspaceFolders) === null || _e === void 0 ? void 0 : _e[0];
+        var _f;
+        const root = (_f = vscode.workspace.workspaceFolders) === null || _f === void 0 ? void 0 : _f[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating observability files.");
             return;
