@@ -53,49 +53,49 @@ Select code in the editor, **right-click**, and choose an available DevSnip Pro 
 
 ### Index
 
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | [REST API Client](#1-rest-api-client) | Full-featured HTTP/GraphQL client with environments, auth, cookies, and history |
-| 2 | [Custom Snippet Management](#2-custom-snippet-management) | Create, save, and reuse your own code snippets |
-| 3 | [Pre-built Snippet Library](#3-pre-built-snippet-library) | 500+ snippets across 30+ languages and frameworks |
-| 4 | [Console Log Cleanup](#4-console-log-cleanup) | Detect and remove console.log statements project-wide |
-| 5 | [Unused Imports Remover](#5-unused-imports-remover) | Clean up unused import statements automatically |
-| 6 | [Code Snapshots](#6-code-snapshots) | Generate beautiful, shareable code images |
-| 7 | [Regex Builder & Tester](#7-regex-builder--tester) | Build and test regular expressions with real-time matching |
-| 8 | [JSON/XML Formatter](#8-xmlformatter) | Format, minify, validate, and syntax-highlight JSON and XML |
-| 9 | [Hash Generator](#9-hash-generator) | Generate SHA-1, SHA-256, SHA-384, and SHA-512 hashes |
-| 10 | [Base64 Encoder/Decoder](#10-base64-encoderdecoder) | Encode and decode Base64 strings with UTF-8 support |
-| 11 | [URL Encoder/Decoder](#11-url-encoderdecoder) | Encode and decode URL components and full URLs |
-| 12 | [Timestamp Converter](#12-timestamp-converter) | Convert between Unix timestamps and human-readable dates |
-| 13 | [JSON to TOON Converter](#13-json-to-toon-converter) | Convert JSON to Tree Outline notation for quick reviews |
-| 14 | [Color Palette](#14-color-palette) | Pick colors, generate palettes, and check WCAG contrast ratios |
-| 15 | [Lorem Ipsum Generator](#15-lorem-ipsum-generator) | Generate placeholder text with configurable length |
-| 16 | [Token Counter & Cost Calculator](#16-token-counter--cost-calculator) | Count tokens for LLM models and estimate API costs |
-| 17 | [Prompt Template Manager](#17-prompt-template-manager) | Create, save, and manage prompt templates with variables |
-| 18 | [Python ML Code Generator](#18-python-ml-code-generator) | Generate PyTorch, TensorFlow, HuggingFace, and LangChain boilerplate |
-| 19 | [LLM API Tester](#19-llm-api-tester) | Test OpenAI, Anthropic, Gemini, and Ollama API endpoints |
-| 20 | [Dataset Split Calculator](#20-dataset-split-calculator) | Calculate train/val/test splits with stratification |
-| 21 | [GPU VRAM Calculator](#21-gpu-vram-calculator) | Estimate VRAM requirements by model size and precision |
-| 22 | [Experiment Logger](#22-experiment-logger) | Log hyperparameters, metrics, and results with Markdown export |
-| 23 | [Model Card Generator](#23-model-card-generator) | Generate standardized HuggingFace-format model documentation |
-| 24 | [JSONL Viewer](#24-jsonl-viewer) | Parse and inspect JSONL training data in a readable table |
-| 25 | [Markdown Table Generator](#25-markdown-table-generator) | Generate markdown tables for documentation and reports |
-| 26 | [Schema Viewer](#26-schema-viewer) | Visualize Parquet, Avro, and JSON schemas as an interactive tree |
-| 27 | [Spark SQL Formatter](#27-spark-sql-formatter) | Format Spark SQL, Presto, and Trino queries |
-| 28 | [Data Quality Checker](#28-data-quality-checker) | Analyze CSV/JSON datasets for missing values, duplicates, and stats |
-| 29 | [Schema Diff Tool](#29-schema-diff-tool) | Compare two JSON schemas side-by-side |
-| 30 | [Partition Calculator](#30-partition-calculator) | Calculate optimal Hadoop/Hive partitions and Spark config |
-| 31 | [Chunking Strategy Tester](#31-chunking-strategy-tester) | Compare fixed, sentence, recursive, and overlap chunking |
-| 32 | [Embedding Cost Calculator](#32-embedding-cost-calculator) | Calculate embedding costs across OpenAI, Cohere, and HuggingFace |
-| 33 | [Context Window Calculator](#33-context-window-calculator) | Plan context window usage with visual utilization bars |
-| 34 | [Semantic Dedup Checker](#34-semantic-dedup-checker) | Find near-duplicate lines using n-gram similarity |
-| 35 | [RAG Eval Calculator](#35-rag-eval-calculator) | Evaluate RAG quality with precision, recall, MRR, and faithfulness |
-| 36 | Security Audit | Bounded workspace scan for secrets and high-risk code patterns with redacted evidence |
-| 37 | Local Cloud Security Audit | Scan Terraform, Kubernetes, Docker, IAM, and cloud config for risky permissions and exposure |
-| 38 | DevOps Artifact Generator | Generate stack-aware Docker, Compose, and GitHub Actions starter files |
-| 39 | AI/ML DevOps Generator | Generate CPU/GPU containers, Kubernetes GPU serving, ML CI, and model contracts |
-| 40 | Observability Log Analyzer | Inspect selected or open logs for levels, JSON structure, timestamps, and reliability recommendations |
-| 41 | Observability Starter Generator | Generate structured-log schema and Node.js/Python OpenTelemetry starter files |
+| #   | Feature                                                               | Description                                                                                           |
+| --- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | [REST API Client](#1-rest-api-client)                                 | Full-featured HTTP/GraphQL client with environments, auth, cookies, and history                       |
+| 2   | [Custom Snippet Management](#2-custom-snippet-management)             | Create, save, and reuse your own code snippets                                                        |
+| 3   | [Pre-built Snippet Library](#3-pre-built-snippet-library)             | 500+ snippets across 30+ languages and frameworks                                                     |
+| 4   | [Console Log Cleanup](#4-console-log-cleanup)                         | Detect and remove console.log statements project-wide                                                 |
+| 5   | [Unused Imports Remover](#5-unused-imports-remover)                   | Clean up unused import statements automatically                                                       |
+| 6   | [Code Snapshots](#6-code-snapshots)                                   | Generate beautiful, shareable code images                                                             |
+| 7   | [Regex Builder & Tester](#7-regex-builder--tester)                    | Build and test regular expressions with real-time matching                                            |
+| 8   | [JSON/XML Formatter](#8-xmlformatter)                                 | Format, minify, validate, and syntax-highlight JSON and XML                                           |
+| 9   | [Hash Generator](#9-hash-generator)                                   | Generate SHA-1, SHA-256, SHA-384, and SHA-512 hashes                                                  |
+| 10  | [Base64 Encoder/Decoder](#10-base64-encoderdecoder)                   | Encode and decode Base64 strings with UTF-8 support                                                   |
+| 11  | [URL Encoder/Decoder](#11-url-encoderdecoder)                         | Encode and decode URL components and full URLs                                                        |
+| 12  | [Timestamp Converter](#12-timestamp-converter)                        | Convert between Unix timestamps and human-readable dates                                              |
+| 13  | [JSON to TOON Converter](#13-json-to-toon-converter)                  | Convert JSON to Tree Outline notation for quick reviews                                               |
+| 14  | [Color Palette](#14-color-palette)                                    | Pick colors, generate palettes, and check WCAG contrast ratios                                        |
+| 15  | [Lorem Ipsum Generator](#15-lorem-ipsum-generator)                    | Generate placeholder text with configurable length                                                    |
+| 16  | [Token Counter & Cost Calculator](#16-token-counter--cost-calculator) | Count tokens for LLM models and estimate API costs                                                    |
+| 17  | [Prompt Template Manager](#17-prompt-template-manager)                | Create, save, and manage prompt templates with variables                                              |
+| 18  | [Python ML Code Generator](#18-python-ml-code-generator)              | Generate PyTorch, TensorFlow, HuggingFace, and LangChain boilerplate                                  |
+| 19  | [LLM API Tester](#19-llm-api-tester)                                  | Test OpenAI, Anthropic, Gemini, and Ollama API endpoints                                              |
+| 20  | [Dataset Split Calculator](#20-dataset-split-calculator)              | Calculate train/val/test splits with stratification                                                   |
+| 21  | [GPU VRAM Calculator](#21-gpu-vram-calculator)                        | Estimate VRAM requirements by model size and precision                                                |
+| 22  | [Experiment Logger](#22-experiment-logger)                            | Log hyperparameters, metrics, and results with Markdown export                                        |
+| 23  | [Model Card Generator](#23-model-card-generator)                      | Generate standardized HuggingFace-format model documentation                                          |
+| 24  | [JSONL Viewer](#24-jsonl-viewer)                                      | Parse and inspect JSONL training data in a readable table                                             |
+| 25  | [Markdown Table Generator](#25-markdown-table-generator)              | Generate markdown tables for documentation and reports                                                |
+| 26  | [Schema Viewer](#26-schema-viewer)                                    | Visualize Parquet, Avro, and JSON schemas as an interactive tree                                      |
+| 27  | [Spark SQL Formatter](#27-spark-sql-formatter)                        | Format Spark SQL, Presto, and Trino queries                                                           |
+| 28  | [Data Quality Checker](#28-data-quality-checker)                      | Analyze CSV/JSON datasets for missing values, duplicates, and stats                                   |
+| 29  | [Schema Diff Tool](#29-schema-diff-tool)                              | Compare two JSON schemas side-by-side                                                                 |
+| 30  | [Partition Calculator](#30-partition-calculator)                      | Calculate optimal Hadoop/Hive partitions and Spark config                                             |
+| 31  | [Chunking Strategy Tester](#31-chunking-strategy-tester)              | Compare fixed, sentence, recursive, and overlap chunking                                              |
+| 32  | [Embedding Cost Calculator](#32-embedding-cost-calculator)            | Calculate embedding costs across OpenAI, Cohere, and HuggingFace                                      |
+| 33  | [Context Window Calculator](#33-context-window-calculator)            | Plan context window usage with visual utilization bars                                                |
+| 34  | [Semantic Dedup Checker](#34-semantic-dedup-checker)                  | Find near-duplicate lines using n-gram similarity                                                     |
+| 35  | [RAG Eval Calculator](#35-rag-eval-calculator)                        | Evaluate RAG quality with precision, recall, MRR, and faithfulness                                    |
+| 36  | Security Audit                                                        | Bounded workspace scan for secrets and high-risk code patterns with redacted evidence                 |
+| 37  | Local Cloud Security Audit                                            | Scan Terraform, Kubernetes, Docker, IAM, and cloud config for risky permissions and exposure          |
+| 38  | DevOps Artifact Generator                                             | Generate stack-aware Docker, Compose, and GitHub Actions starter files                                |
+| 39  | AI/ML DevOps Generator                                                | Generate CPU/GPU containers, Kubernetes GPU serving, ML CI, and model contracts                       |
+| 40  | Observability Log Analyzer                                            | Inspect selected or open logs for levels, JSON structure, timestamps, and reliability recommendations |
+| 41  | Observability Starter Generator                                       | Generate structured-log schema and Node.js/Python OpenTelemetry starter files                         |
 
 ---
 
@@ -178,15 +178,15 @@ Create, organize, and reuse your own code snippets.
 
 Access **500+** carefully crafted snippets across **30+** technologies:
 
-| Category | Languages/Frameworks |
-|----------|---------------------|
-| Frontend | JavaScript, TypeScript, React, Vue.js, HTML, CSS |
-| CSS Frameworks | Bootstrap, Tailwind CSS |
-| Backend | Node.js, Python, PHP, Java, C#, Go, Ruby |
-| Mobile | Flutter/Dart, Swift, Kotlin |
-| Database | MongoDB, SQL |
-| State Management | Redux, React Query, React Router |
-| Other | JSON, YAML, Markdown, Shell Scripts |
+| Category         | Languages/Frameworks                             |
+| ---------------- | ------------------------------------------------ |
+| Frontend         | JavaScript, TypeScript, React, Vue.js, HTML, CSS |
+| CSS Frameworks   | Bootstrap, Tailwind CSS                          |
+| Backend          | Node.js, Python, PHP, Java, C#, Go, Ruby         |
+| Mobile           | Flutter/Dart, Swift, Kotlin                      |
+| Database         | MongoDB, SQL                                     |
+| State Management | Redux, React Query, React Router                 |
+| Other            | JSON, YAML, Markdown, Shell Scripts              |
 
 Browse snippets via Command Palette: `DevSnip Pro: Show Custom Snippets`
 
@@ -656,6 +656,6 @@ MIT License — see [LICENSE.txt](LICENSE.txt) for details.
 [![Sponsor](https://img.shields.io/static/v1?label=Sponsor&style=for-the-badge&color=red)](https://github.com/sponsors/sayaib)
 [![Write a Review](https://img.shields.io/static/v1?label=Review&style=for-the-badge&color=blue)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
 
-**Made with heart by [Sayaib Sarkar](https://github.com/sayaib)**
+**Made with heart by [Sayaib Sarkar](https://www.linkedin.com/in/sayaib/)**
 
 </div>
