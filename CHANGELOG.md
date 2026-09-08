@@ -1,5 +1,29 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.49.137 - 2026-09-08
+
+### New Features
+
+- Added a dedicated Security Center with local code security and local cloud-configuration audits.
+- Added cloud/IaC checks for public ingress, wildcard IAM permissions, public storage, privileged containers, embedded credentials, disabled encryption/TLS, and mutable container tags.
+- Added an AI/ML DevOps generator for CPU/GPU containers, Kubernetes GPU serving, ML CI, and model-serving contracts.
+- Added DevOps generators for Docker, Compose, Kubernetes, Terraform, secure CI, and observability starter files.
+- Added structured log analysis and Node.js/Python OpenTelemetry starter templates.
+
+### Improvements
+
+- Simplified the Activity Bar navigation with shorter labels and workflow-focused groups.
+- Reduced visual noise by using neutral child icons and color accents only for category headers.
+- Removed the custom maximize/minimize controls from the Tools view to keep the interface clean and consistent with VS Code.
+- Added safe overwrite confirmation for generated deployment and observability files.
+- Added bounded, local-only scanning with binary-file filtering, size limits, skipped dependency/build directories, and redacted evidence.
+
+### Deployment Notes
+
+- Run `npm run compile` before packaging.
+- Review generated Docker, Kubernetes, Terraform, CI, and OpenTelemetry templates before deploying them.
+- The cloud security audit scans local configuration only; it does not access AWS, Azure, or GCP accounts.
+
 ## Version 10.49.136 - 2026-09-07
 
 ### New Features

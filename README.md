@@ -9,7 +9,9 @@
 [![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/sayaib.hue-console?style=for-the-badge&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&ssr=false#review-details)
 
-**39 built-in tools** across API testing, code snippets, developer utilities, AI/ML tools, Big Data tools, and RAG tools — all inside VS Code.
+**41 built-in tools** across API testing, code snippets, developer utilities, AI/ML, Big Data, RAG, Security, DevOps, MLOps, and Observability — all inside VS Code.
+
+The extension also includes production-focused Security, DevOps, and Observability tools for workspace audits, deployment artifact generation, and log analysis.
 
 [Installation](#installation) | [Features](#features) | [Configuration](#configuration) | [Contributing](#contributing)
 
@@ -23,7 +25,7 @@
 
 ### Option 1 — Activity Bar (Easiest)
 
-Click the **DevSnip Pro** icon in the **left sidebar** of VS Code. This opens a panel with all tools listed as clickable cards.
+Click the **DevSnip Pro** icon in the **left sidebar** of VS Code. This opens a clean, searchable tree with tools grouped by workflow.
 
 ### Option 2 — Command Palette
 
@@ -31,9 +33,19 @@ Click the **DevSnip Pro** icon in the **left sidebar** of VS Code. This opens a 
 2. Type `DevSnip Pro`
 3. Pick any command from the list
 
-### Option 3 — Right-Click Menu
+### Option 3 — Editor Context Menu
 
-Select code in the editor, **right-click**, and choose one of the DevSnip Pro options from the context menu.
+Select code in the editor, **right-click**, and choose an available DevSnip Pro option from the context menu.
+
+### Current tool groups
+
+- Core — API testing, snapshots, console cleanup, and import cleanup
+- Snippets — create and browse reusable snippets
+- AI & ML — model, prompt, dataset, and LLM utilities
+- Data & RAG — schemas, data quality, partitioning, chunking, and RAG evaluation
+- Security — local code security and local cloud-configuration audits
+- DevOps & Observability — Docker, Kubernetes, Terraform, MLOps, log analysis, and telemetry starters
+- Utilities — formatting, encoding, regex, colors, hashes, and other developer helpers
 
 ---
 
@@ -78,8 +90,40 @@ Select code in the editor, **right-click**, and choose one of the DevSnip Pro op
 | 33 | [Context Window Calculator](#33-context-window-calculator) | Plan context window usage with visual utilization bars |
 | 34 | [Semantic Dedup Checker](#34-semantic-dedup-checker) | Find near-duplicate lines using n-gram similarity |
 | 35 | [RAG Eval Calculator](#35-rag-eval-calculator) | Evaluate RAG quality with precision, recall, MRR, and faithfulness |
+| 36 | Security Audit | Bounded workspace scan for secrets and high-risk code patterns with redacted evidence |
+| 37 | Local Cloud Security Audit | Scan Terraform, Kubernetes, Docker, IAM, and cloud config for risky permissions and exposure |
+| 38 | DevOps Artifact Generator | Generate stack-aware Docker, Compose, and GitHub Actions starter files |
+| 39 | AI/ML DevOps Generator | Generate CPU/GPU containers, Kubernetes GPU serving, ML CI, and model contracts |
+| 40 | Observability Log Analyzer | Inspect selected or open logs for levels, JSON structure, timestamps, and reliability recommendations |
+| 41 | Observability Starter Generator | Generate structured-log schema and Node.js/Python OpenTelemetry starter files |
 
 ---
+
+## Production Engineering Tools
+
+### Security Audit
+
+Runs a bounded, local-only scan across supported text files. It skips dependency/build directories, ignores binary files and files larger than 1 MB, redacts evidence in the report, and detects private keys, common cloud tokens, hard-coded credentials, database URLs, unsafe dynamic execution, shell interpolation, and non-local HTTP URLs. Findings are written to the `DevSnip Pro Security` output channel. This is a fast developer check, not a replacement for dependency auditing, SAST, or CI secret scanning.
+
+### Local Cloud Security Audit
+
+The separate Security Center cloud audit scans local Terraform, Kubernetes, Docker, IAM, and cloud configuration files. It checks for public network ingress (`0.0.0.0/0`), wildcard IAM permissions, public storage, privileged or host-network containers, embedded cloud credentials, disabled encryption/TLS, and mutable `:latest` images. It is read-only and never connects to a cloud account. Live AWS, Azure, or GCP account auditing requires an explicitly configured provider integration and is intentionally not assumed.
+
+### DevOps Artifact Generator
+
+Generates one reviewed-at-open artifact at a time: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, GitHub Actions CI, Kubernetes Deployment/Service manifests, Terraform Docker infrastructure, or a secure CodeQL/Gitleaks workflow. The generator detects Node.js and Python projects, uses non-root containers where supported, adds restart and healthcheck settings, uses pinned major action versions, and asks before overwriting an existing file.
+
+### AI/ML DevOps Generator
+
+The dedicated MLOps generator creates a non-root CPU model-serving container, a CUDA/GPU container, a Kubernetes GPU deployment with probes and resource requests, an ML CI workflow, and a model-serving contract. Templates include model versioning, readiness checks, request IDs, latency metadata, checksum guidance, and feature-schema validation requirements.
+
+### Observability Log Analyzer
+
+Analyzes the current editor or selected log text without uploading it anywhere. It reports detected error/warning/info/debug levels, valid JSON lines, timestamp coverage, and practical recommendations for structured logs, UTC timestamps, request IDs, and secret-safe error logging.
+
+### Observability Starter Generator
+
+Creates an OpenTelemetry starter for Node.js or Python and a JSON Schema for structured logs. The generated files are intentionally reviewable templates: install the matching OpenTelemetry packages, configure an exporter, and start telemetry once during application bootstrap.
 
 ### 1. REST API Client
 

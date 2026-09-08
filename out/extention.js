@@ -46,13 +46,17 @@ const aiMlTools_1 = require("./commands/aiMlTools");
 const bigDataTools_1 = require("./commands/bigDataTools");
 const ragTools_1 = require("./commands/ragTools");
 const aiMlExtraTools_1 = require("./commands/aiMlExtraTools");
+const platformTools_1 = require("./commands/platformTools");
 const command_dispatch_1 = require("./utils/command-dispatch");
 function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     console.log("DevSnip Pro extension is now active!");
     const myTreeView = new MyTreeDataProvider();
-    vscode.window.registerTreeDataProvider("myView", myTreeView);
-    context.subscriptions.push({ dispose: () => { } }); // Tree data provider is managed by VS Code
+    const treeView = vscode.window.createTreeView("myView", {
+        treeDataProvider: myTreeView,
+        showCollapseAll: false,
+    });
+    context.subscriptions.push(treeView);
     // Register existing commands
     (0, createSnippetCommand_1.registerCreateSnippetCommand)(context);
     (0, showSnippetsCommand_1.registerShowSnippetsCommand)(context, snippetsFolderPath);
@@ -69,6 +73,7 @@ function activate(context) {
     (0, bigDataTools_1.registerBigDataToolsCommands)(context);
     // Register RAG tools commands
     (0, ragTools_1.registerRagToolsCommands)(context);
+    (0, platformTools_1.registerPlatformToolsCommands)(context);
     registerUniversalToolSearch(context);
 }
 exports.activate = activate;
@@ -115,6 +120,12 @@ const UNIVERSAL_TOOLS = [
     { label: "Context Window Calculator", description: "RAG / Retrieval", command: "sayaib.hue-console.contextWindow" },
     { label: "Semantic Dedup Checker", description: "RAG / Quality", command: "sayaib.hue-console.semanticDedup" },
     { label: "RAG Eval Calculator", description: "RAG / Evaluation", command: "sayaib.hue-console.ragEvalScores" },
+    { label: "Security Audit", description: "Security / Secrets / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
+    { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
+    { label: "DevOps Artifact Generator", description: "DevOps / Docker / CI", command: "sayaib.hue-console.devopsGenerator" },
+    { label: "AI/ML DevOps Generator", description: "MLOps / GPU / Model Serving / ML CI", command: "sayaib.hue-console.mlopsGenerator" },
+    { label: "Observability Log Analyzer", description: "Observability / Logs / Reliability", command: "sayaib.hue-console.observabilityAnalyze" },
+    { label: "Observability Starter Generator", description: "Observability / OpenTelemetry / Structured Logs", command: "sayaib.hue-console.observabilityStarter" },
 ];
 function registerUniversalToolSearch(context) {
     const searchCommand = vscode.commands.registerCommand("sayaib.hue-console.searchTools", () => __awaiter(this, void 0, void 0, function* () {
@@ -146,6 +157,9 @@ function registerUniversalToolSearch(context) {
     context.subscriptions.push(searchCommand);
 }
 class MyTreeDataProvider {
+    constructor() {
+        this.groups = this.createGroups();
+    }
     getTreeItem(element) {
         return element;
     }
@@ -154,33 +168,50 @@ class MyTreeDataProvider {
             return element.children;
         }
         return [
-            this.createCommandButton("Search all tools", "sayaib.hue-console.searchTools", "search", new vscode.ThemeColor("terminal.ansiBrightCyan")),
-            new ToolGroup("Core Workflow", "rocket", "terminal.ansiBrightYellow", [
-                this.createCommandButton("Open REST API Client", "sayaib.hue-console.openGUI", "cloud", new vscode.ThemeColor("terminal.ansiBrightCyan")),
-                this.createCommandButton("Capture Code Snapshot", "sayaib.hue-console.captureCode", "code", new vscode.ThemeColor("terminal.ansiBrightYellow")),
-                this.createCommandButton("Analyze and Remove Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash", new vscode.ThemeColor("terminal.ansiBrightRed")),
-                this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method", new vscode.ThemeColor("terminal.ansiBrightGreen")),
+            this.createCommandButton("Search tools", "sayaib.hue-console.searchTools", "search", new vscode.ThemeColor("terminal.ansiBrightCyan")),
+            ...this.groups,
+        ];
+    }
+    createGroups() {
+        return [
+            new ToolGroup("Core", "rocket", "terminal.ansiBrightYellow", [
+                this.createCommandButton("REST API Client", "sayaib.hue-console.openGUI", "cloud"),
+                this.createCommandButton("Code Snapshot", "sayaib.hue-console.captureCode", "code"),
+                this.createCommandButton("Clean Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash"),
+                this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method"),
             ]),
             new ToolGroup("Snippets", "book", "terminal.ansiBrightMagenta", [
-                this.createCommandButton("Create Custom Code Snippet", "sayaib.hue-console.createCustomSnippet", "edit", new vscode.ThemeColor("terminal.ansiBrightBlue")),
-                this.createCommandButton("View Saved Code Snippets", "sayaib.hue-console.showSnippets", "file-code", new vscode.ThemeColor("terminal.ansiBrightMagenta")),
+                this.createCommandButton("Create Snippet", "sayaib.hue-console.createCustomSnippet", "edit"),
+                this.createCommandButton("Saved Snippets", "sayaib.hue-console.showSnippets", "file-code"),
             ]),
-            new ToolGroup("AI / ML / LLM", "hubot", "terminal.ansiBrightCyan", [
-                this.createCommandButton("AI/ML & LLM Tools", "sayaib.hue-console.aiMlHub", "robot", new vscode.ThemeColor("terminal.ansiBrightCyan")),
+            new ToolGroup("AI & ML", "hubot", "terminal.ansiBrightCyan", [
+                this.createCommandButton("AI & ML Tools", "sayaib.hue-console.aiMlHub", "robot"),
             ]),
-            new ToolGroup("Data Engineering", "database", "terminal.ansiBrightGreen", [
-                this.createCommandButton("Big Data Tools", "sayaib.hue-console.bigDataHub", "database", new vscode.ThemeColor("terminal.ansiBrightYellow")),
-                this.createCommandButton("RAG Tools", "sayaib.hue-console.ragHub", "search", new vscode.ThemeColor("terminal.ansiBrightMagenta")),
+            new ToolGroup("Data & RAG", "database", "terminal.ansiBrightGreen", [
+                this.createCommandButton("Big Data", "sayaib.hue-console.bigDataHub", "database"),
+                this.createCommandButton("RAG", "sayaib.hue-console.ragHub", "search"),
             ]),
-            new ToolGroup("Advanced Utilities", "tools", "terminal.ansiBrightWhite", [
-                this.createCommandButton("Advanced Developer Tools", "sayaib.hue-console.advancedToolsHub", "tools", new vscode.ThemeColor("terminal.ansiBrightWhite")),
+            new ToolGroup("Security", "shield", "terminal.ansiBrightRed", [
+                this.createCommandButton("Local Security Audit", "sayaib.hue-console.securityAudit", "shield"),
+                this.createCommandButton("Cloud Config Audit", "sayaib.hue-console.cloudSecurityAudit", "cloud"),
+            ]),
+            new ToolGroup("DevOps & Observability", "pulse", "terminal.ansiBrightCyan", [
+                this.createCommandButton("DevOps Generator", "sayaib.hue-console.devopsGenerator", "cloud-upload"),
+                this.createCommandButton("MLOps Generator", "sayaib.hue-console.mlopsGenerator", "server-process"),
+                this.createCommandButton("Log Analyzer", "sayaib.hue-console.observabilityAnalyze", "pulse"),
+                this.createCommandButton("Telemetry Starter", "sayaib.hue-console.observabilityStarter", "broadcast"),
+            ]),
+            new ToolGroup("Utilities", "tools", "terminal.ansiBrightWhite", [
+                this.createCommandButton("Developer Utilities", "sayaib.hue-console.advancedToolsHub", "tools"),
             ]),
         ];
     }
     createCommandButton(label, command, iconId, color, description) {
         const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
         item.command = { command, title: label };
-        item.iconPath = new vscode.ThemeIcon(iconId, color); // Adding color to icon
+        // Keep child icons neutral; color is reserved for category headers so the
+        // tree remains scannable when several sections are expanded.
+        item.iconPath = new vscode.ThemeIcon(iconId);
         item.description = description;
         return item;
     }

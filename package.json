@@ -1,8 +1,8 @@
 {
   "name": "hue-console",
   "displayName": "DevSnip Pro",
-  "description": "⚡The ultimate toolkit for API testing, MongoDB connections, console log cleanup, and snippet management in VS Code.",
-  "version": "10.49.136",
+  "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
+  "version": "10.49.137",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -489,6 +489,30 @@
       {
         "command": "sayaib.hue-console.ragEvalScores",
         "title": "📈 DevSnip Pro: RAG Eval Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.securityAudit",
+        "title": "🛡️ DevSnip Pro: Security Audit"
+      },
+      {
+        "command": "sayaib.hue-console.cloudSecurityAudit",
+        "title": "☁️ DevSnip Pro: Local Cloud Security Audit"
+      },
+      {
+        "command": "sayaib.hue-console.devopsGenerator",
+        "title": "☁️ DevSnip Pro: DevOps Artifact Generator"
+      },
+      {
+        "command": "sayaib.hue-console.mlopsGenerator",
+        "title": "🤖 DevSnip Pro: AI/ML DevOps Generator"
+      },
+      {
+        "command": "sayaib.hue-console.observabilityAnalyze",
+        "title": "📡 DevSnip Pro: Observability Log Analyzer"
+      },
+      {
+        "command": "sayaib.hue-console.observabilityStarter",
+        "title": "📡 DevSnip Pro: Observability Starter Generator"
       }
     ],
     "viewsContainers": {
@@ -554,7 +578,13 @@
     "onCommand:sayaib.hue-console.embeddingCost",
     "onCommand:sayaib.hue-console.contextWindow",
     "onCommand:sayaib.hue-console.semanticDedup",
-    "onCommand:sayaib.hue-console.ragEvalScores"
+    "onCommand:sayaib.hue-console.ragEvalScores",
+    "onCommand:sayaib.hue-console.securityAudit",
+    "onCommand:sayaib.hue-console.cloudSecurityAudit",
+    "onCommand:sayaib.hue-console.devopsGenerator",
+    "onCommand:sayaib.hue-console.mlopsGenerator",
+    "onCommand:sayaib.hue-console.observabilityAnalyze",
+    "onCommand:sayaib.hue-console.observabilityStarter"
   ],
   "browser": "./out/extention.js",
   "main": "./out/extention.js",
