@@ -30,26 +30,30 @@ const fs = __importStar(require("fs"));
 const VIEW_TYPE = "devsnip pro";
 const WEB_VIEW_TITLE = "DevSnip Pro Code Snapshot";
 let panel;
+let sourceEditor;
+let sourceSelection;
 const init = (context) => {
     const activeTextEditor = vscode.window.activeTextEditor;
-    if (activeTextEditor) {
+    if (activeTextEditor && hasTextSelected(activeTextEditor.selection)) {
+        sourceEditor = activeTextEditor;
+        sourceSelection = activeTextEditor.selection;
         // Check if panel is already created, if not, create a new panel
+        const isNewPanel = !panel;
         if (!panel) {
             panel = createPanel(context);
             // Dispose panel and clean up when closed
             panel.onDidDispose(() => {
                 panel = undefined;
+                sourceEditor = undefined;
+                sourceSelection = undefined;
                 vscode.window.showInformationMessage("Bye !!");
             });
         }
-        // If there is text selected, update the panel
-        if (hasTextSelected(activeTextEditor.selection)) {
+        if (!isNewPanel)
             update(panel);
-        }
     }
     else {
-        //@desc Handle no text selection
-        vscode.window.showErrorMessage("Go to your code editor then run this feature, no code selected");
+        vscode.window.showErrorMessage("Select some code in an editor before creating a snapshot.");
     }
 };
 const createPanel = (context) => {
@@ -65,8 +69,17 @@ const createPanel = (context) => {
     panel.webview.html = getTemplate(htmlTemplatePath, panel);
     // Handle messages received from the webview
     panel.webview.onDidReceiveMessage((message) => {
-        if (message.type === "updateCode") {
-            update(panel);
+        if (message.type === "updateCode" || message.type === "ready") {
+            if (!update(panel, message.type === "updateCode")) {
+                panel.webview.postMessage({
+                    type: "snapshotError",
+                    message: "Select code in an editor before refreshing the snapshot.",
+                });
+            }
+        }
+        else if (message.type === "copyCode" && typeof message.code === "string") {
+            vscode.env.clipboard.writeText(message.code);
+            vscode.window.showInformationMessage("Snapshot code copied to clipboard.");
         }
     });
     return panel;
@@ -77,20 +90,31 @@ const getTemplate = (htmlTemplatePath, panel) => {
     return htmlContent
         .replace(/%CSP_SOURCE%/gu, panel.webview.cspSource)
         .replace(/(src|href)="([^"]*)"/gu, (_, match, src) => {
+        if (/^(?:https?:|data:|#)/u.test(src))
+            return `${match}="${src}"`;
         let assetsPath = panel.webview.asWebviewUri(vscode.Uri.file(path.resolve(htmlTemplatePath, "..", src)));
         return `${match}="${assetsPath}"`;
     });
 };
-const update = (panel) => {
-    const activeTextEditor = vscode.window.activeTextEditor;
-    if (!activeTextEditor)
-        return;
+const update = (panel, forceCurrent = false) => {
+    const editor = forceCurrent ? vscode.window.activeTextEditor : (sourceEditor || vscode.window.activeTextEditor);
+    const selection = forceCurrent ? editor === null || editor === void 0 ? void 0 : editor.selection : (sourceSelection || (editor === null || editor === void 0 ? void 0 : editor.selection));
+    if (!editor || !selection || selection.isEmpty)
+        return false;
+    // When refreshing, update the stored references so subsequent calls stay current
+    if (forceCurrent) {
+        sourceEditor = editor;
+        sourceSelection = selection;
+    }
     // Send selected text directly to webview without overwriting clipboard
-    const selectedText = activeTextEditor.document.getText(activeTextEditor.selection);
+    const selectedText = editor.document.getText(selection);
     panel.webview.postMessage({
         type: "updateCode",
         code: selectedText,
+        language: editor.document.languageId,
+        lineCount: selectedText ? selectedText.split(/\r?\n/u).length : 0,
     });
+    return true;
 };
 const hasTextSelected = (selection) => !!selection && !selection.isEmpty;
 const codeSnapShot = (context) => {

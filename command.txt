@@ -15,11 +15,6 @@
           "when": "editorTextFocus"
         },
         {
-          "command": "sayaib.hue-console.captureCode",
-          "group": "navigation",
-          "when": "editorTextFocus"
-        },
-        {
           "command": "sayaib.hue-console.connectMongoDB",
           "group": "navigation",
           "when": "editorTextFocus"

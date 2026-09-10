@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.49.139",
+  "version": "10.50.0",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -335,10 +335,6 @@
         "title": "🛠️ DevSnip Pro: List and Remove Console Logs"
       },
       {
-        "command": "sayaib.hue-console.captureCode",
-        "title": "📸 DevSnip Pro: Create a Code Snapshot."
-      },
-      {
         "command": "sayaib.hue-console.openGUI",
         "title": "🛢 DevSnip Pro: Rest API Client "
       },
@@ -539,7 +535,6 @@
     "onCommand:sayaib.hue-console.showSnippets",
     "onCommand:sayaib.hue-console.createCustomSnippet",
     "onCommand:sayaib.hue-console.listAndRemoveConsoleLogs",
-    "onCommand:sayaib.hue-console.captureCode",
     "onCommand:sayaib.hue-console.openGUI",
     "onCommand:sayaib.hue-console.advancedToolsHub",
     "onCommand:sayaib.hue-console.regexBuilder",
@@ -612,8 +607,6 @@
   "dependencies": {
     "@vscode/vsce": "^3.7.1",
     "axios": "^1.8.3",
-    "dom-to-image": "^2.6.0",
-    "file-saver": "^2.0.5",
     "mongodb": "^6.13.0"
   }
 }

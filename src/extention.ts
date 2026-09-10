@@ -4,7 +4,6 @@ import { registerCreateSnippetCommand } from "./commands/createSnippetCommand";
 import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
 import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
 import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImportsCommand";
-import { codeSnapShot } from "./commands/take-code-snip";
 import { apiTest } from "./commands/api-test";
 import { registerAdvancedToolsCommands } from "./commands/advancedTools";
 import { registerAiMlToolsCommands } from "./commands/aiMlTools";
@@ -32,7 +31,6 @@ export function activate(context: vscode.ExtensionContext) {
   registerRemoveUnusedImportsCommand(context); // Add this line
 
   apiTest(context);
-  codeSnapShot(context);
   
   // Register advanced tools commands
   registerAdvancedToolsCommands(context);
@@ -58,7 +56,6 @@ type ToolSearchItem = {
 
 const UNIVERSAL_TOOLS: ToolSearchItem[] = [
   { label: "Open REST API Client", description: "Core Workflow", command: "sayaib.hue-console.openGUI" },
-  { label: "Capture Code Snapshot", description: "Core Workflow", command: "sayaib.hue-console.captureCode" },
   { label: "Analyze and Remove Console Logs", description: "Core Workflow", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
   { label: "Remove Unused Imports", description: "Core Workflow", command: "sayaib.hue-console.removeUnusedImports" },
   { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
@@ -171,7 +168,6 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     return [
       new ToolGroup("Core", "rocket", "terminal.ansiBrightYellow", [
         this.createCommandButton("REST API Client", "sayaib.hue-console.openGUI", "cloud"),
-        this.createCommandButton("Code Snapshot", "sayaib.hue-console.captureCode", "code"),
         this.createCommandButton("Clean Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash"),
         this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method"),
       ]),

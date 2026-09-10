@@ -39,7 +39,7 @@ Select code in the editor, **right-click**, and choose an available DevSnip Pro 
 
 ### Current tool groups
 
-- Core — API testing, snapshots, console cleanup, and import cleanup
+- Core — API testing, console cleanup, and import cleanup
 - Snippets — create and browse reusable snippets
 - AI & ML — model, prompt, dataset, and LLM utilities
 - Data & RAG — schemas, data quality, partitioning, chunking, and RAG evaluation
@@ -60,42 +60,41 @@ Select code in the editor, **right-click**, and choose an available DevSnip Pro 
 | 3   | [Pre-built Snippet Library](#3-pre-built-snippet-library)             | 500+ snippets across 30+ languages and frameworks                                                     |
 | 4   | [Console Log Cleanup](#4-console-log-cleanup)                         | Detect and remove console.log statements project-wide                                                 |
 | 5   | [Unused Imports Remover](#5-unused-imports-remover)                   | Clean up unused import statements automatically                                                       |
-| 6   | [Code Snapshots](#6-code-snapshots)                                   | Generate beautiful, shareable code images                                                             |
-| 7   | [Regex Builder & Tester](#7-regex-builder--tester)                    | Build and test regular expressions with real-time matching                                            |
-| 8   | [JSON/XML Formatter](#8-xmlformatter)                                 | Format, minify, validate, and syntax-highlight JSON and XML                                           |
-| 9   | [Hash Generator](#9-hash-generator)                                   | Generate SHA-1, SHA-256, SHA-384, and SHA-512 hashes                                                  |
-| 10  | [Base64 Encoder/Decoder](#10-base64-encoderdecoder)                   | Encode and decode Base64 strings with UTF-8 support                                                   |
-| 11  | [URL Encoder/Decoder](#11-url-encoderdecoder)                         | Encode and decode URL components and full URLs                                                        |
-| 12  | [Timestamp Converter](#12-timestamp-converter)                        | Convert between Unix timestamps and human-readable dates                                              |
-| 13  | [JSON to TOON Converter](#13-json-to-toon-converter)                  | Convert JSON to Tree Outline notation for quick reviews                                               |
-| 14  | [Color Palette](#14-color-palette)                                    | Pick colors, generate palettes, and check WCAG contrast ratios                                        |
-| 15  | [Lorem Ipsum Generator](#15-lorem-ipsum-generator)                    | Generate placeholder text with configurable length                                                    |
-| 16  | [Token Counter & Cost Calculator](#16-token-counter--cost-calculator) | Count tokens for LLM models and estimate API costs                                                    |
-| 17  | [Prompt Template Manager](#17-prompt-template-manager)                | Create, save, and manage prompt templates with variables                                              |
-| 18  | [Python ML Code Generator](#18-python-ml-code-generator)              | Generate PyTorch, TensorFlow, HuggingFace, and LangChain boilerplate                                  |
-| 19  | [LLM API Tester](#19-llm-api-tester)                                  | Test OpenAI, Anthropic, Gemini, and Ollama API endpoints                                              |
-| 20  | [Dataset Split Calculator](#20-dataset-split-calculator)              | Calculate train/val/test splits with stratification                                                   |
-| 21  | [GPU VRAM Calculator](#21-gpu-vram-calculator)                        | Estimate VRAM requirements by model size and precision                                                |
-| 22  | [Experiment Logger](#22-experiment-logger)                            | Log hyperparameters, metrics, and results with Markdown export                                        |
-| 23  | [Model Card Generator](#23-model-card-generator)                      | Generate standardized HuggingFace-format model documentation                                          |
-| 24  | [JSONL Viewer](#24-jsonl-viewer)                                      | Parse and inspect JSONL training data in a readable table                                             |
-| 25  | [Markdown Table Generator](#25-markdown-table-generator)              | Generate markdown tables for documentation and reports                                                |
-| 26  | [Schema Viewer](#26-schema-viewer)                                    | Visualize Parquet, Avro, and JSON schemas as an interactive tree                                      |
-| 27  | [Spark SQL Formatter](#27-spark-sql-formatter)                        | Format Spark SQL, Presto, and Trino queries                                                           |
-| 28  | [Data Quality Checker](#28-data-quality-checker)                      | Analyze CSV/JSON datasets for missing values, duplicates, and stats                                   |
-| 29  | [Schema Diff Tool](#29-schema-diff-tool)                              | Compare two JSON schemas side-by-side                                                                 |
-| 30  | [Partition Calculator](#30-partition-calculator)                      | Calculate optimal Hadoop/Hive partitions and Spark config                                             |
-| 31  | [Chunking Strategy Tester](#31-chunking-strategy-tester)              | Compare fixed, sentence, recursive, and overlap chunking                                              |
-| 32  | [Embedding Cost Calculator](#32-embedding-cost-calculator)            | Calculate embedding costs across OpenAI, Cohere, and HuggingFace                                      |
-| 33  | [Context Window Calculator](#33-context-window-calculator)            | Plan context window usage with visual utilization bars                                                |
-| 34  | [Semantic Dedup Checker](#34-semantic-dedup-checker)                  | Find near-duplicate lines using n-gram similarity                                                     |
-| 35  | [RAG Eval Calculator](#35-rag-eval-calculator)                        | Evaluate RAG quality with precision, recall, MRR, and faithfulness                                    |
-| 36  | Security Audit                                                        | Bounded workspace scan for secrets and high-risk code patterns with redacted evidence                 |
-| 37  | Local Cloud Security Audit                                            | Scan Terraform, Kubernetes, Docker, IAM, and cloud config for risky permissions and exposure          |
-| 38  | DevOps Artifact Generator                                             | Generate stack-aware Docker, Compose, and GitHub Actions starter files                                |
-| 39  | AI/ML DevOps Generator                                                | Generate CPU/GPU containers, Kubernetes GPU serving, ML CI, and model contracts                       |
-| 40  | Observability Log Analyzer                                            | Inspect selected or open logs for levels, JSON structure, timestamps, and reliability recommendations |
-| 41  | Observability Starter Generator                                       | Generate structured-log schema and Node.js/Python OpenTelemetry starter files                         |
+| 6   | [Regex Builder & Tester](#6-regex-builder--tester)                    | Build and test regular expressions with real-time matching                                            |
+| 7   | [JSON/XML Formatter](#7-xmlformatter)                                 | Format, minify, validate, and syntax-highlight JSON and XML                                           |
+| 8   | [Hash Generator](#8-hash-generator)                                   | Generate SHA-1, SHA-256, SHA-384, and SHA-512 hashes                                                  |
+| 9   | [Base64 Encoder/Decoder](#9-base64-encoderdecoder)                   | Encode and decode Base64 strings with UTF-8 support                                                   |
+| 10  | [URL Encoder/Decoder](#10-url-encoderdecoder)                         | Encode and decode URL components and full URLs                                                        |
+| 11  | [Timestamp Converter](#11-timestamp-converter)                        | Convert between Unix timestamps and human-readable dates                                              |
+| 12  | [JSON to TOON Converter](#12-json-to-toon-converter)                  | Convert JSON to Tree Outline notation for quick reviews                                               |
+| 13  | [Color Palette](#13-color-palette)                                    | Pick colors, generate palettes, and check WCAG contrast ratios                                        |
+| 14  | [Lorem Ipsum Generator](#14-lorem-ipsum-generator)                    | Generate placeholder text with configurable length                                                    |
+| 15  | [Token Counter & Cost Calculator](#15-token-counter--cost-calculator) | Count tokens for LLM models and estimate API costs                                                    |
+| 16  | [Prompt Template Manager](#16-prompt-template-manager)                | Create, save, and manage prompt templates with variables                                              |
+| 17  | [Python ML Code Generator](#17-python-ml-code-generator)              | Generate PyTorch, TensorFlow, HuggingFace, and LangChain boilerplate                                  |
+| 18  | [LLM API Tester](#18-llm-api-tester)                                  | Test OpenAI, Anthropic, Gemini, and Ollama API endpoints                                              |
+| 19  | [Dataset Split Calculator](#19-dataset-split-calculator)              | Calculate train/val/test splits with stratification                                                   |
+| 20  | [GPU VRAM Calculator](#20-gpu-vram-calculator)                        | Estimate VRAM requirements by model size and precision                                                |
+| 21  | [Experiment Logger](#21-experiment-logger)                            | Log hyperparameters, metrics, and results with Markdown export                                        |
+| 22  | [Model Card Generator](#22-model-card-generator)                      | Generate standardized HuggingFace-format model documentation                                          |
+| 23  | [JSONL Viewer](#23-jsonl-viewer)                                      | Parse and inspect JSONL training data in a readable table                                             |
+| 24  | [Markdown Table Generator](#24-markdown-table-generator)              | Generate markdown tables for documentation and reports                                                |
+| 25  | [Schema Viewer](#25-schema-viewer)                                    | Visualize Parquet, Avro, and JSON schemas as an interactive tree                                      |
+| 26  | [Spark SQL Formatter](#26-spark-sql-formatter)                        | Format Spark SQL, Presto, and Trino queries                                                           |
+| 27  | [Data Quality Checker](#27-data-quality-checker)                      | Analyze CSV/JSON datasets for missing values, duplicates, and stats                                   |
+| 28  | [Schema Diff Tool](#28-schema-diff-tool)                              | Compare two JSON schemas side-by-side                                                                 |
+| 29  | [Partition Calculator](#29-partition-calculator)                      | Calculate optimal Hadoop/Hive partitions and Spark config                                             |
+| 30  | [Chunking Strategy Tester](#30-chunking-strategy-tester)              | Compare fixed, sentence, recursive, and overlap chunking                                              |
+| 31  | [Embedding Cost Calculator](#31-embedding-cost-calculator)            | Calculate embedding costs across OpenAI, Cohere, and HuggingFace                                      |
+| 32  | [Context Window Calculator](#32-context-window-calculator)            | Plan context window usage with visual utilization bars                                                |
+| 33  | [Semantic Dedup Checker](#33-semantic-dedup-checker)                  | Find near-duplicate lines using n-gram similarity                                                     |
+| 34  | [RAG Eval Calculator](#34-rag-eval-calculator)                        | Evaluate RAG quality with precision, recall, MRR, and faithfulness                                    |
+| 35  | Security Audit                                                        | Bounded workspace scan for secrets and high-risk code patterns with redacted evidence                 |
+| 36  | Local Cloud Security Audit                                            | Scan Terraform, Kubernetes, Docker, IAM, and cloud config for risky permissions and exposure          |
+| 37  | DevOps Artifact Generator                                             | Generate stack-aware Docker, Compose, and GitHub Actions starter files                                |
+| 38  | AI/ML DevOps Generator                                                | Generate CPU/GPU containers, Kubernetes GPU serving, ML CI, and model contracts                       |
+| 39  | Observability Log Analyzer                                            | Inspect selected or open logs for levels, JSON structure, timestamps, and reliability recommendations |
+| 40  | Observability Starter Generator                                       | Generate structured-log schema and Node.js/Python OpenTelemetry starter files                         |
 
 ---
 
@@ -212,19 +211,7 @@ Run via Command Palette: `DevSnip Pro: Remove Unused Imports`
 
 ---
 
-### 6. Code Snapshots
-
-Generate beautiful, shareable images of your code with customizable styling.
-
-- Multiple theme options (dark, light, custom)
-- Customizable background, padding, and border
-- Syntax highlighting preservation
-- Export as PNG
-- Perfect for documentation, social media, and presentations
-
----
-
-### 7. Regex Builder & Tester
+### 6. Regex Builder & Tester
 
 Build, test, and debug regular expressions with real-time match visualization.
 
@@ -235,7 +222,7 @@ Build, test, and debug regular expressions with real-time match visualization.
 
 ---
 
-### 8. JSON/XML Formatter
+### 7. JSON/XML Formatter
 
 Format, minify, validate, and syntax-highlight JSON and XML documents.
 
@@ -246,7 +233,7 @@ Format, minify, validate, and syntax-highlight JSON and XML documents.
 
 ---
 
-### 9. Hash Generator
+### 8. Hash Generator
 
 Generate cryptographic hashes from any input string.
 
@@ -256,7 +243,7 @@ Generate cryptographic hashes from any input string.
 
 ---
 
-### 10. Base64 Encoder/Decoder
+### 9. Base64 Encoder/Decoder
 
 Encode and decode Base64 strings with full UTF-8 Unicode support.
 
@@ -266,7 +253,7 @@ Encode and decode Base64 strings with full UTF-8 Unicode support.
 
 ---
 
-### 11. URL Encoder/Decoder
+### 10. URL Encoder/Decoder
 
 Encode and decode URL components and full URLs.
 
@@ -276,7 +263,7 @@ Encode and decode URL components and full URLs.
 
 ---
 
-### 12. Timestamp Converter
+### 11. Timestamp Converter
 
 Convert between Unix timestamps and human-readable dates.
 
@@ -286,7 +273,7 @@ Convert between Unix timestamps and human-readable dates.
 
 ---
 
-### 13. JSON to TOON Converter
+### 12. JSON to TOON Converter
 
 Convert JSON into Tree Outline notation for quick, readable data reviews.
 
@@ -296,7 +283,7 @@ Convert JSON into Tree Outline notation for quick, readable data reviews.
 
 ---
 
-### 14. Color Palette
+### 13. Color Palette
 
 Pick colors, generate shade palettes, and check WCAG contrast accessibility ratios.
 
@@ -306,7 +293,7 @@ Pick colors, generate shade palettes, and check WCAG contrast accessibility rati
 
 ---
 
-### 15. Lorem Ipsum Generator
+### 14. Lorem Ipsum Generator
 
 Generate placeholder text with configurable words, sentences, and paragraphs.
 
@@ -316,7 +303,7 @@ Generate placeholder text with configurable words, sentences, and paragraphs.
 
 ---
 
-### 16. Token Counter & Cost Calculator
+### 15. Token Counter & Cost Calculator
 
 Count tokens in text for LLM context window management and estimate API costs.
 
@@ -326,7 +313,7 @@ Count tokens in text for LLM context window management and estimate API costs.
 
 ---
 
-### 17. Prompt Template Manager
+### 16. Prompt Template Manager
 
 Create, save, and manage prompt templates with `{{variable}}` substitution.
 
@@ -336,7 +323,7 @@ Create, save, and manage prompt templates with `{{variable}}` substitution.
 
 ---
 
-### 18. Python ML Code Generator
+### 17. Python ML Code Generator
 
 Generate boilerplate code for popular ML frameworks.
 
@@ -347,7 +334,7 @@ Generate boilerplate code for popular ML frameworks.
 
 ---
 
-### 19. LLM API Tester
+### 18. LLM API Tester
 
 Test OpenAI, Anthropic, Gemini, and Ollama API endpoints with streaming support.
 
@@ -358,7 +345,7 @@ Test OpenAI, Anthropic, Gemini, and Ollama API endpoints with streaming support.
 
 ---
 
-### 20. Dataset Split Calculator
+### 19. Dataset Split Calculator
 
 Calculate train/validation/test splits with stratification and random seed control.
 
@@ -368,7 +355,7 @@ Calculate train/validation/test splits with stratification and random seed contr
 
 ---
 
-### 21. GPU VRAM Calculator
+### 20. GPU VRAM Calculator
 
 Estimate VRAM requirements based on model parameters and precision format.
 
@@ -378,7 +365,7 @@ Estimate VRAM requirements based on model parameters and precision format.
 
 ---
 
-### 22. Experiment Logger
+### 21. Experiment Logger
 
 Log hyperparameters, metrics, and results in structured format with Markdown export.
 
@@ -388,7 +375,7 @@ Log hyperparameters, metrics, and results in structured format with Markdown exp
 
 ---
 
-### 23. Model Card Generator
+### 22. Model Card Generator
 
 Generate standardized HuggingFace-format model documentation.
 
@@ -398,7 +385,7 @@ Generate standardized HuggingFace-format model documentation.
 
 ---
 
-### 24. JSONL Viewer
+### 23. JSONL Viewer
 
 Parse and inspect JSONL training data files in a readable table format.
 
@@ -408,7 +395,7 @@ Parse and inspect JSONL training data files in a readable table format.
 
 ---
 
-### 25. Markdown Table Generator
+### 24. Markdown Table Generator
 
 Generate markdown tables for experiment results and documentation.
 
@@ -418,7 +405,7 @@ Generate markdown tables for experiment results and documentation.
 
 ---
 
-### 26. Schema Viewer
+### 25. Schema Viewer
 
 Parse and visualize Parquet, Avro, and JSON schemas as an interactive tree.
 
@@ -428,7 +415,7 @@ Parse and visualize Parquet, Avro, and JSON schemas as an interactive tree.
 
 ---
 
-### 27. Spark SQL Formatter
+### 26. Spark SQL Formatter
 
 Format Spark SQL, Presto, and Trino queries with proper indentation and keywords.
 
@@ -438,7 +425,7 @@ Format Spark SQL, Presto, and Trino queries with proper indentation and keywords
 
 ---
 
-### 28. Data Quality Checker
+### 27. Data Quality Checker
 
 Analyze CSV and JSON datasets for missing values, duplicates, types, and statistics.
 
@@ -449,7 +436,7 @@ Analyze CSV and JSON datasets for missing values, duplicates, types, and statist
 
 ---
 
-### 29. Schema Diff Tool
+### 28. Schema Diff Tool
 
 Compare two JSON schemas side-by-side and highlight added, removed, and changed fields.
 
@@ -459,7 +446,7 @@ Compare two JSON schemas side-by-side and highlight added, removed, and changed 
 
 ---
 
-### 30. Partition Calculator
+### 29. Partition Calculator
 
 Calculate optimal Hadoop/Hive partitions, Spark config, and partition key strategies.
 
@@ -469,7 +456,7 @@ Calculate optimal Hadoop/Hive partitions, Spark config, and partition key strate
 
 ---
 
-### 31. Chunking Strategy Tester
+### 30. Chunking Strategy Tester
 
 Compare different text chunking strategies (fixed, sentence, recursive, overlap) with visual previews.
 
@@ -479,7 +466,7 @@ Compare different text chunking strategies (fixed, sentence, recursive, overlap)
 
 ---
 
-### 32. Embedding Cost Calculator
+### 31. Embedding Cost Calculator
 
 Calculate embedding costs across OpenAI, Cohere, and HuggingFace models.
 
@@ -489,7 +476,7 @@ Calculate embedding costs across OpenAI, Cohere, and HuggingFace models.
 
 ---
 
-### 33. Context Window Calculator
+### 32. Context Window Calculator
 
 Plan context window usage with visual utilization bars and max chunk limits.
 
@@ -499,7 +486,7 @@ Plan context window usage with visual utilization bars and max chunk limits.
 
 ---
 
-### 34. Semantic Dedup Checker
+### 33. Semantic Dedup Checker
 
 Find near-duplicate lines using character-level n-gram similarity.
 
@@ -509,7 +496,7 @@ Find near-duplicate lines using character-level n-gram similarity.
 
 ---
 
-### 35. RAG Eval Calculator
+### 34. RAG Eval Calculator
 
 Evaluate RAG quality with precision, recall, MRR, and faithfulness scores.
 
@@ -573,7 +560,6 @@ DevSnip Pro works out of the box. Optionally customize via VS Code `settings.jso
   "devsnip.snippetPreview": true,
   "devsnip.apiTimeout": 30000,
   "devsnip.mongoConnectionTimeout": 10000,
-  "devsnip.codeSnapshotTheme": "dark",
   "devsnip.consoleLogCleanup.confirmBeforeDelete": true
 }
 ```

@@ -210,27 +210,6 @@ function toastScript(): string {
     `;
 }
 
-function copyScript(targetId: string): string {
-    return `
-        document.getElementById('${targetId}').addEventListener('click', function() {
-            var el = document.getElementById('${targetId.replace('Copy', 'Output')}' || '${targetId.replace('Copy', 'Result')}');
-            var text = el.tagName === 'TEXTAREA' ? el.value : el.textContent;
-            if (!text || !text.trim()) { _toast('Nothing to copy', 'error'); return; }
-            navigator.clipboard.writeText(text).then(function() {
-                _toast('Copied!', 'success');
-            }).catch(function() {
-                var tmp = document.createElement('textarea');
-                tmp.value = text;
-                document.body.appendChild(tmp);
-                tmp.select();
-                document.execCommand('copy');
-                document.body.removeChild(tmp);
-                _toast('Copied!', 'success');
-            });
-        });
-    `;
-}
-
 export function registerAdvancedToolsCommands(context: vscode.ExtensionContext) {
     const advancedToolsHubCommand = vscode.commands.registerCommand('sayaib.hue-console.advancedToolsHub', () => {
         const panel = vscode.window.createWebviewPanel(
@@ -260,11 +239,10 @@ export function registerAdvancedToolsCommands(context: vscode.ExtensionContext) 
             vscode.ViewColumn.One,
             { enableScripts: true }
         );
-        const nonce = getNonce();
         const scriptUri = panel.webview.asWebviewUri(
             vscode.Uri.file(path.join(context.extensionPath, 'media', 'regex-builder.js'))
         );
-        panel.webview.html = getRegexBuilderHtml(panel.webview.cspSource, String(scriptUri), nonce);
+        panel.webview.html = getRegexBuilderHtml(panel.webview.cspSource, String(scriptUri));
     });
 
     const jsonFormatterCommand = vscode.commands.registerCommand('sayaib.hue-console.jsonFormatter', () => {
@@ -479,7 +457,7 @@ function getAdvancedToolsHubHtml(): string {
 </html>`;
 }
 
-function getRegexBuilderHtml(cspSource: string, scriptSrc: string, nonce: string): string {
+function getRegexBuilderHtml(cspSource: string, scriptSrc: string): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>

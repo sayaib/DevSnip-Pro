@@ -5,8 +5,8 @@ import { ApiTester } from '../commands/api-test';
 // Mock vscode.ExtensionContext for testing
 const mockContext: vscode.ExtensionContext = {
     globalState: {
-        get: (key: string, defaultValue?: any) => defaultValue,
-        update: async (key: string, value: any) => {},
+        get: (_key: string, defaultValue?: any) => defaultValue,
+        update: async (_key: string, _value: any) => {},
         keys: () => []
     }
 } as any;
@@ -28,12 +28,6 @@ suite('API Test Extension Tests', () => {
     });
 
     test('Should handle history operations correctly', () => {
-        const testItem = {
-            method: 'GET',
-            url: 'https://api.example.com',
-            timestamp: Date.now()
-        };
-
         // Since addToHistory is private, we'll test through public methods
         const initialCount = apiTester.getHistory().length;
         assert.strictEqual(initialCount, 0);

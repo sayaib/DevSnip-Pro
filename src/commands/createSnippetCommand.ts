@@ -6,12 +6,6 @@ import {
   getLanguageFromFileName,
 } from "../utils/snippet-utils";
 
-interface Snippet {
-  prefix: string;
-  body: string | string[];
-  description?: string;
-}
-
 export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
   const command = vscode.commands.registerCommand(
     "sayaib.hue-console.createCustomSnippet",

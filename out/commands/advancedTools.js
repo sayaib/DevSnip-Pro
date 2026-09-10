@@ -232,26 +232,6 @@ function toastScript() {
         }
     `;
 }
-function copyScript(targetId) {
-    return `
-        document.getElementById('${targetId}').addEventListener('click', function() {
-            var el = document.getElementById('${targetId.replace('Copy', 'Output')}' || '${targetId.replace('Copy', 'Result')}');
-            var text = el.tagName === 'TEXTAREA' ? el.value : el.textContent;
-            if (!text || !text.trim()) { _toast('Nothing to copy', 'error'); return; }
-            navigator.clipboard.writeText(text).then(function() {
-                _toast('Copied!', 'success');
-            }).catch(function() {
-                var tmp = document.createElement('textarea');
-                tmp.value = text;
-                document.body.appendChild(tmp);
-                tmp.select();
-                document.execCommand('copy');
-                document.body.removeChild(tmp);
-                _toast('Copied!', 'success');
-            });
-        });
-    `;
-}
 function registerAdvancedToolsCommands(context) {
     const advancedToolsHubCommand = vscode.commands.registerCommand('sayaib.hue-console.advancedToolsHub', () => {
         const panel = vscode.window.createWebviewPanel('advancedToolsHub', 'DevSnip Pro - Developer Tools', vscode.ViewColumn.One, { enableScripts: true });
@@ -266,9 +246,8 @@ function registerAdvancedToolsCommands(context) {
     });
     const regexBuilderCommand = vscode.commands.registerCommand('sayaib.hue-console.regexBuilder', () => {
         const panel = vscode.window.createWebviewPanel('regexBuilder', 'Regex Builder & Tester', vscode.ViewColumn.One, { enableScripts: true });
-        const nonce = getNonce();
         const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'regex-builder.js')));
-        panel.webview.html = getRegexBuilderHtml(panel.webview.cspSource, String(scriptUri), nonce);
+        panel.webview.html = getRegexBuilderHtml(panel.webview.cspSource, String(scriptUri));
     });
     const jsonFormatterCommand = vscode.commands.registerCommand('sayaib.hue-console.jsonFormatter', () => {
         const panel = vscode.window.createWebviewPanel('jsonFormatter', 'JSON/XML Formatter', vscode.ViewColumn.One, { enableScripts: true });
@@ -425,7 +404,7 @@ function getAdvancedToolsHubHtml() {
 </body>
 </html>`;
 }
-function getRegexBuilderHtml(cspSource, scriptSrc, nonce) {
+function getRegexBuilderHtml(cspSource, scriptSrc) {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>

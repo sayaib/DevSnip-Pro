@@ -39,7 +39,6 @@ const createSnippetCommand_1 = require("./commands/createSnippetCommand");
 const showSnippetsCommand_1 = require("./commands/showSnippetsCommand");
 const listAndRemoveConsoleLogsCommand_1 = require("./commands/listAndRemoveConsoleLogsCommand");
 const removeUnusedImportsCommand_1 = require("./commands/removeUnusedImportsCommand");
-const take_code_snip_1 = require("./commands/take-code-snip");
 const api_test_1 = require("./commands/api-test");
 const advancedTools_1 = require("./commands/advancedTools");
 const aiMlTools_1 = require("./commands/aiMlTools");
@@ -63,7 +62,6 @@ function activate(context) {
     (0, listAndRemoveConsoleLogsCommand_1.registerListAndRemoveConsoleLogsCommand)(context);
     (0, removeUnusedImportsCommand_1.registerRemoveUnusedImportsCommand)(context); // Add this line
     (0, api_test_1.apiTest)(context);
-    (0, take_code_snip_1.codeSnapShot)(context);
     // Register advanced tools commands
     (0, advancedTools_1.registerAdvancedToolsCommands)(context);
     // Register AI/ML & LLM tools commands
@@ -79,7 +77,6 @@ function activate(context) {
 exports.activate = activate;
 const UNIVERSAL_TOOLS = [
     { label: "Open REST API Client", description: "Core Workflow", command: "sayaib.hue-console.openGUI" },
-    { label: "Capture Code Snapshot", description: "Core Workflow", command: "sayaib.hue-console.captureCode" },
     { label: "Analyze and Remove Console Logs", description: "Core Workflow", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
     { label: "Remove Unused Imports", description: "Core Workflow", command: "sayaib.hue-console.removeUnusedImports" },
     { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
@@ -176,7 +173,6 @@ class MyTreeDataProvider {
         return [
             new ToolGroup("Core", "rocket", "terminal.ansiBrightYellow", [
                 this.createCommandButton("REST API Client", "sayaib.hue-console.openGUI", "cloud"),
-                this.createCommandButton("Code Snapshot", "sayaib.hue-console.captureCode", "code"),
                 this.createCommandButton("Clean Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash"),
                 this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method"),
             ]),

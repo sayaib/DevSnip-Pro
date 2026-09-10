@@ -1,5 +1,37 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.50.0 - 2026-09-09
+
+### Removed
+
+- Removed the Code Snapshot feature entirely (command `sayaib.hue-console.captureCode`, webview, and all related assets).
+- Removed `dom-to-image` and `file-saver` npm dependencies.
+- Removed `devsnip.codeSnapshotTheme` configuration setting.
+- Removed Code Snapshot from Core tool group, universal search, and Activity Bar tree.
+
+## Version 10.49.140 - 2026-09-09
+
+### Improvements
+
+- Redesigned the Code Snapshot webview with a cleaner dark UI, smoother transitions, and better visual hierarchy.
+- Replaced the complex export SVG logo with a minimal camera icon.
+- Added clipboard and refresh icons to the Copy and Use Current Selection toolbar buttons.
+- Added an empty-state placeholder inside the snapshot container when no code is selected.
+- Replaced the inline SVG terminal dots with styled `<span>` elements for lighter markup.
+- Added a loading spinner on the Export button during snapshot generation.
+- Added success/error color feedback on the export status message.
+- Added a "Copied!" confirmation on the Copy Code button after copying.
+- Moved PNG to the default export format in the dropdown.
+
+### Fixes
+
+- Fixed SVG export failing because the download link was not appended to the DOM before triggering click.
+- Fixed "Use current selection" button returning stale code from the original editor selection instead of the current active editor.
+- Fixed `computeEdeditorLineNumberWidth` typo renamed to `computeEditorLineNumberWidth`.
+- Added null guards for DOM elements in the snapshot export path to prevent runtime errors.
+- Improved export error messages to show the actual failure reason instead of a generic message.
+- Added safe initialization check for `colorPicker` to prevent crashes if the script has not loaded.
+
 ## Version 10.49.139 - 2026-09-08
 
 ### Improvements
