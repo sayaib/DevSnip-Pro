@@ -34,9 +34,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeQueuedCommand = void 0;
 const vscode = __importStar(require("vscode"));
+const milestoneTracker_1 = require("../commands/milestoneTracker");
 let commandQueue = Promise.resolve();
 /** Serialize extension commands triggered by rapid webview clicks. */
 function executeQueuedCommand(command) {
+    (0, milestoneTracker_1.autoRecordToolUsage)(command);
     const next = commandQueue.then(() => __awaiter(this, void 0, void 0, function* () {
         yield vscode.commands.executeCommand(command);
     }));

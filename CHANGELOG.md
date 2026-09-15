@@ -1,5 +1,38 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.53.0 - 2026-09-15
+
+### Improvements
+
+- **Enhanced README & Visual Showcase** -- completely revamped the README.md with professional banners, visual GIF demos, side-by-side screenshots, badge styling, and cleaner typography for maximum user engagement.
+
+## Version 10.52.0 - 2026-09-15
+
+### New Features
+
+- **README Viewer & CRUD Manager** -- added a dedicated Core tool to view, edit, create, and manage workspace `README.md` and markdown documentation files with interactive webview previews and default scaffolding templates.
+
+### Improvements
+
+- **Optimized README.md** -- restructured and shortened for clean visual understanding, making all 50+ features immediately visible via categorized feature matrices with direct command triggers.
+
+## Version 10.51.0 - 2026-09-10
+
+### New Features
+
+- **Milestone Tracker & User Points System** -- track daily usage, completed activities, streaks, and local points.
+- **Level Progression & Leaderboard Ranks** -- automatic advancement from Bronze through Silver, Gold, Platinum, Diamond, Master, and Grandmaster tiers.
+- **Real-time Sidebar Widget** -- displays current level badge and accumulated points in real-time right at the top of the Activity Bar tree view.
+- **Delta Lake Log Analyzer & Spark Cost Estimator** -- new Big Data developer tools for lakehouse logs and cloud cluster cost sizing.
+- **Hybrid Search RRF Simulator & Hallucination Analyzer** -- new RAG tools for Reciprocal Rank Fusion and source attribution scoring.
+- **LR Scheduler Visualizer & Inference Latency Estimator** -- new AI/ML developer tools for learning rate curves and GPU VRAM/throughput sizing.
+- **Interactive Cloud Security Audit Webview** -- upgraded Cloud Security Audit to open a rich interactive webview panel with clickable source code line jumps, matching Local Security Audit.
+
+### Improvements
+
+- Balanced point progression and anti-farm rate limiting for all tool executions.
+- Left-aligned text alignment across all Milestone Tracker UI components.
+
 ## Version 10.50.0 - 2026-09-09
 
 ### Removed

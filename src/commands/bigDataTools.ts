@@ -291,9 +291,29 @@ export function registerBigDataToolsCommands(context: vscode.ExtensionContext) {
         panel.webview.html = getPartitionCalcHtml(getNonce());
     });
 
+    const deltaLakeAnalyzerCmd = vscode.commands.registerCommand('sayaib.hue-console.deltaLakeAnalyzer', () => {
+        const panel = vscode.window.createWebviewPanel(
+            'deltaLakeAnalyzer',
+            'Delta Lake Log & Transaction Analyzer',
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+        );
+        panel.webview.html = getDeltaLakeAnalyzerHtml(getNonce());
+    });
+
+    const sparkCostEstimatorCmd = vscode.commands.registerCommand('sayaib.hue-console.sparkCostEstimator', () => {
+        const panel = vscode.window.createWebviewPanel(
+            'sparkCostEstimator',
+            'Spark Cluster & Cost Estimator',
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+        );
+        panel.webview.html = getSparkCostEstimatorHtml(getNonce());
+    });
+
     context.subscriptions.push(
         hubCmd, schemaViewerCmd, sparkSqlFormatterCmd, dataQualityCheckerCmd,
-        schemaDiffCmd, partitionCalcCmd
+        schemaDiffCmd, partitionCalcCmd, deltaLakeAnalyzerCmd, sparkCostEstimatorCmd
     );
 }
 
@@ -358,7 +378,7 @@ function getBigDataHubHtml(nonce: string): string {
 <body>
     <div class="tool-header">
         <h1>Big Data & Analytics Developer Tools</h1>
-        <span class="subtitle">5 built-in utilities for data engineering workflows</span>
+        <span class="subtitle">7 built-in utilities for data engineering & lakes</span>
     </div>
     <div class="tool-body">
         <div class="hub-grid" id="grid"></div>
@@ -370,13 +390,15 @@ function getBigDataHubHtml(nonce: string): string {
             { cmd: 'sayaib.hue-console.sparkSqlFormatter', icon: '\\u{1F524}', title: 'Spark SQL Formatter', desc: 'Format Spark SQL, Presto, and Trino queries with proper indentation and keywords.', tag: 'SQL' },
             { cmd: 'sayaib.hue-console.dataQualityChecker', icon: '\\u{1F50D}', title: 'Data Quality Checker', desc: 'Analyze CSV and JSON datasets for missing values, duplicates, types, and stats.', tag: 'Quality' },
             { cmd: 'sayaib.hue-console.schemaDiff', icon: '\\u{1F500}', title: 'Schema Diff Tool', desc: 'Compare two schemas side by side and highlight added, removed, and changed fields.', tag: 'Diff' },
-            { cmd: 'sayaib.hue-console.partitionCalc', icon: '\\u{1F4CA}', title: 'Partition Calculator', desc: 'Calculate optimal Hadoop/Hive partitions, Spark config, and partition key strategies.', tag: 'Compute' }
+            { cmd: 'sayaib.hue-console.partitionCalc', icon: '\\u{1F4CA}', title: 'Partition Calculator', desc: 'Calculate optimal Hadoop/Hive partitions, Spark config, and partition key strategies.', tag: 'Compute' },
+            { cmd: 'sayaib.hue-console.deltaLakeAnalyzer', icon: '\\u{1F5C4}', title: 'Delta Lake Analyzer', desc: 'Inspect Delta Lake transaction logs (_delta_log), commits, and file additions/removals.', tag: 'Lakehouse' },
+            { cmd: 'sayaib.hue-console.sparkCostEstimator', icon: '\\u{1F4B0}', title: 'Spark Cost & Cluster Estimator', desc: 'Estimate recommended Spark worker nodes, memory, partitions, and monthly cloud costs.', tag: 'Cloud' }
         ];
         var grid = document.getElementById('grid');
         var groups = {};
-        var order = ['Schema & Quality', 'Querying', 'Storage & Performance'];
+        var order = ['Schema & Quality', 'Querying', 'Storage & Lakehouse'];
         tools.forEach(function(t) {
-            var section = t.tag === 'SQL' ? 'Querying' : (t.tag === 'Compute' ? 'Storage & Performance' : 'Schema & Quality');
+            var section = t.tag === 'SQL' ? 'Querying' : (t.tag === 'Compute' || t.tag === 'Lakehouse' || t.tag === 'Cloud' ? 'Storage & Lakehouse' : 'Schema & Quality');
             if (!groups[section]) groups[section] = [];
             groups[section].push(t);
         });
@@ -498,123 +520,88 @@ function getSchemaViewerHtml(nonce: string): string {
         }
 
         function renderNode(schema, name, required, depth) {
-            var type = schema.type || 'unknown';
-            var html = '<div class="field" style="padding-left:' + (depth * 24) + 'px;">' +
-                '<span class="fname">' + escapeHtml(name || 'root') + '</span>' +
-                '<span class="ftype type-' + type + '">' + escapeHtml(type) + '</span>';
-            if (type === 'array' && schema.items) {
-                html += '<span style="font-size:11px;color:var(--fg-2);">of</span> ' +
-                    '<span class="ftype type-' + (schema.items.type || 'unknown') + '">' + escapeHtml(schema.items.type || 'unknown') + '</span>';
-            }
+            var html = '<div class="field" style="margin-left:' + (depth * 16) + 'px">';
+            if (name) html += '<span class="fname">' + escapeHtml(name) + '</span>';
+            var type = schema.type || (schema.properties ? 'object' : (schema.items ? 'array' : 'string'));
+            html += '<span class="ftype type-' + type + '">' + escapeHtml(type) + '</span>';
             if (required) html += '<span class="required-badge">required</span>';
+            if (schema.description) html += '<span style="color:var(--fg-1);font-size:11px;">// ' + escapeHtml(schema.description) + '</span>';
             html += '</div>';
 
-            var children = type === 'object' ? schema.properties || {} :
-                (type === 'array' && schema.items && schema.items.type === 'object' ? { '[item]': schema.items } : {});
-            if (Object.keys(children).length) {
-                html += '<div class="nested">';
-                Object.keys(children).forEach(function(key) {
-                    var requiredChild = (schema.required || []).indexOf(key) !== -1;
-                    html += renderNode(children[key], key, requiredChild, depth + 1);
-                });
-                html += '</div>';
+            if (type === 'object' && schema.properties) {
+                var reqList = schema.required || [];
+                var keys = Object.keys(schema.properties);
+                for (var i = 0; i < keys.length; i++) {
+                    var k = keys[i];
+                    html += renderNode(schema.properties[k], k, reqList.indexOf(k) !== -1, depth + 1);
+                }
+            } else if (type === 'array' && schema.items) {
+                html += renderNode(schema.items, '[item]', false, depth + 1);
             }
             return html;
         }
 
-        function inferSchema(value) {
-            if (value === null) return { type: 'null' };
-            if (Array.isArray(value)) {
-                var itemSchemas = value.map(inferSchema);
-                var mergedItems = itemSchemas[0] || { type: 'unknown' };
-                itemSchemas.slice(1).forEach(function(item) { mergedItems = mergeSchemas(mergedItems, item); });
-                return { type: 'array', items: mergedItems };
+        function countFields(schema) {
+            var count = 1;
+            if (schema.properties) {
+                var keys = Object.keys(schema.properties);
+                for (var i = 0; i < keys.length; i++) {
+                    count += countFields(schema.properties[keys[i]]);
+                }
+            } else if (schema.items) {
+                count += countFields(schema.items);
             }
-            if (typeof value === 'object') {
-                var objectKeys = Object.keys(value);
-                if (objectKeys.length === 1 && Object.prototype.hasOwnProperty.call(value, '$date')) return { type: 'date' };
-                var properties = {};
-                objectKeys.forEach(function(key) { properties[key] = inferSchema(value[key]); });
-                return { type: 'object', properties: properties, required: objectKeys.slice() };
-            }
-            return { type: typeof value === 'number' ? 'number' : typeof value };
+            return count;
         }
 
-        function mergeSchemas(left, right) {
-            if (left.type === right.type) {
-                if (left.type === 'object') {
-                    var merged = {};
-                    Object.keys(left.properties || {}).forEach(function(k) { merged[k] = left.properties[k]; });
-                    Object.keys(right.properties || {}).forEach(function(k) { merged[k] = merged[k] ? mergeSchemas(merged[k], right.properties[k]) : right.properties[k]; });
-                    var leftRequired = left.required || Object.keys(left.properties || {});
-                    var rightRequired = right.required || Object.keys(right.properties || {});
-                    return { type: 'object', properties: merged, required: leftRequired.filter(function(k) { return rightRequired.indexOf(k) !== -1; }) };
+        function maxDepth(schema, d) {
+            d = d || 1;
+            var maxD = d;
+            if (schema.properties) {
+                var keys = Object.keys(schema.properties);
+                for (var i = 0; i < keys.length; i++) {
+                    var sub = maxDepth(schema.properties[keys[i]], d + 1);
+                    if (sub > maxD) maxD = sub;
                 }
-                if (left.type === 'array') return { type: 'array', items: mergeSchemas(left.items || { type: 'unknown' }, right.items || { type: 'unknown' }) };
-                return left;
+            } else if (schema.items) {
+                var sub = maxDepth(schema.items, d + 1);
+                if (sub > maxD) maxD = sub;
             }
-            if (left.type === 'null') return right;
-            if (right.type === 'null') return left;
-            return { type: 'mixed' };
+            return maxD;
         }
 
-        function countStats(schema) {
-            var fields = 0;
-            var required = 0;
-            var maxDepth = 0;
-
-            function walk(obj, depth) {
-                if (obj.type === 'object' && obj.properties) {
-                    Object.keys(obj.properties).forEach(function(k) {
-                        fields++;
-                        if (obj.required && obj.required.indexOf(k) !== -1) required++;
-                        var child = obj.properties[k];
-                        if (child.type === 'object' || child.type === 'array') {
-                            var d = walk(child, depth + 1);
-                            if (d > maxDepth) maxDepth = d;
-                        }
-                    });
-                } else if (obj.type === 'array' && obj.items) {
-                    return walk(obj.items, depth + 1);
+        function countRequired(schema) {
+            var req = (schema.required || []).length;
+            if (schema.properties) {
+                var keys = Object.keys(schema.properties);
+                for (var i = 0; i < keys.length; i++) {
+                    req += countRequired(schema.properties[keys[i]]);
                 }
-                return depth;
             }
-
-            var d = walk(schema, 0);
-            if (d > maxDepth) maxDepth = d;
-            return { fields: fields, required: required, maxDepth: maxDepth };
+            return req;
         }
 
         document.getElementById('parseBtn').addEventListener('click', function() {
-            var input = document.getElementById('schemaInput').value.trim();
-            if (!input) { _toast('Paste a schema first', 'error'); return; }
-
-            var schema;
+            var raw = document.getElementById('schemaInput').value.trim();
+            if (!raw) { _toast('Please enter a schema', 'error'); return; }
             try {
-                schema = JSON.parse(input);
+                var obj = JSON.parse(raw);
+                formattedSchema = JSON.stringify(obj, null, 2);
+                document.getElementById('fieldCount').textContent = countFields(obj);
+                document.getElementById('depthCount').textContent = maxDepth(obj);
+                document.getElementById('requiredCount').textContent = countRequired(obj);
+                document.getElementById('schemaTree').innerHTML = renderNode(obj, 'root', false, 0);
+                document.getElementById('stats').style.display = 'flex';
+                document.getElementById('treeSection').style.display = 'block';
+                _toast('Schema parsed successfully!', 'success');
             } catch (e) {
-                _toast('Invalid JSON: ' + e.message, 'error');
-                return;
+                _toast('Invalid JSON schema: ' + e.message, 'error');
             }
-
-            var isJsonSchema = schema && typeof schema === 'object' && typeof schema.type === 'string' &&
-                (schema.type === 'object' || schema.type === 'array' || schema.type === 'string' || schema.type === 'number');
-            var inferredSchema = isJsonSchema ? schema : inferSchema(schema);
-            formattedSchema = JSON.stringify(inferredSchema, null, 2);
-            var stats = countStats(inferredSchema);
-            document.getElementById('fieldCount').textContent = stats.fields;
-            document.getElementById('depthCount').textContent = stats.maxDepth;
-            document.getElementById('requiredCount').textContent = stats.required;
-            document.getElementById('stats').style.display = 'flex';
-
-            var treeHtml = renderNode(inferredSchema, null, false, 0);
-            document.getElementById('schemaTree').innerHTML = treeHtml;
-            document.getElementById('treeSection').style.display = 'block';
         });
 
         document.getElementById('copyBtn').addEventListener('click', function() {
-            if (!formattedSchema) { _toast('Parse a schema first', 'error'); return; }
-            navigator.clipboard.writeText(formattedSchema).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+            if (!formattedSchema) { _toast('No schema parsed', 'error'); return; }
+            navigator.clipboard.writeText(formattedSchema).then(function() { _toast('Copied schema!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
@@ -638,125 +625,79 @@ function getSparkSqlFormatterHtml(nonce: string): string {
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spark SQL / Presto / Trino Formatter</title>
+    <title>Spark SQL Formatter</title>
     <style>
         ${SHARED_CSS}
-        .formatted-output {
-            background: var(--bg-3);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            font-family: var(--mono);
-            font-size: 13px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        .keyword { color: #2196f3; font-weight: 700; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Spark SQL / Presto / Trino Formatter</h1>
-        <span class="subtitle">Format SQL queries with proper indentation</span>
+        <span class="subtitle">Format and beautify big data SQL queries</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <label>Raw SQL Input</label>
-            <textarea id="sqlInput" rows="10" placeholder="Paste your Spark SQL, Presto, or Trino query here..."></textarea>
+            <label>SQL Query</label>
+            <textarea id="sqlInput" rows="8" placeholder="SELECT user_id, count(1) as cnt FROM events LATERAL VIEW explode(tags) as t WHERE dt >= '2026-01-01' GROUP BY user_id ORDER BY cnt DESC"></textarea>
             <div class="btn-row" style="margin-top: 12px;">
-                <button class="btn" id="formatBtn">Format</button>
-                <button class="btn btn-ghost" id="copyBtn">Copy Formatted SQL</button>
+                <button class="btn" id="formatBtn">Format SQL</button>
+                <button class="btn btn-secondary" id="upperBtn">UPPERCASE Keywords</button>
+                <button class="btn btn-ghost" id="copyBtn">Copy</button>
                 <button class="btn btn-ghost" id="clearBtn">Clear</button>
             </div>
         </div>
-        <div class="section" id="resultSection" style="display:none;">
+        <div class="section">
             <div class="section-title">Formatted Output</div>
-            <div class="formatted-output" id="output"></div>
+            <div class="result-block" id="sqlOutput">-- Formatted query will appear here</div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        var formatted = '';
+        var keywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ON', 'AS', 'LATERAL VIEW', 'EXPLODE', 'UNION', 'ALL', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'WITH', 'INSERT INTO', 'OVERWRITE TABLE'];
 
-        function formatSql(sql) {
-            sql = sql.replace(/\\s+/g, ' ').trim();
-            var topKeywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'UNION', 'INSERT', 'CREATE', 'ALTER', 'DROP', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'FULL JOIN', 'CROSS JOIN', 'LATERAL VIEW', 'LATERAL VIEW OUTER', 'ON', 'SET', 'VALUES', 'INTO', 'PARTITION BY', 'DISTRIBUTE BY', 'SORT BY', 'CLUSTER BY', 'TABLESAMPLE', 'PIVOT', 'UNPIVOT', 'EXPLAIN'];
-
-            var formatted = sql;
-            topKeywords.forEach(function(kw) {
-                var regex = new RegExp('\\\\b' + kw.replace(/ /g, '\\\\s+') + '\\\\b', 'gi');
-                formatted = formatted.replace(regex, '\\n' + kw);
-            });
-
-            var lines = formatted.split('\\n').filter(function(l) { return l.trim(); });
-            var result = [];
-            var indent = 0;
-            var subKeywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'ON', 'SET', 'VALUES', 'INTO'];
-
-            lines.forEach(function(line) {
-                line = line.trim();
-                if (!line) return;
-
-                var upperLine = line.toUpperCase();
-                var isClosing = false;
-                var openCount = (line.match(/\\(/g) || []).length;
-                var closeCount = (line.match(/\\)/g) || []).length;
-
-                if (closeCount > openCount) {
-                    indent = Math.max(0, indent - (closeCount - openCount));
-                }
-
-                result.push('    '.repeat(indent) + line);
-
-                if (openCount > closeCount) {
-                    indent += (openCount - closeCount);
-                }
-            });
-
-            return result.join('\\n');
-        }
-
-        function uppercaseKeywords(sql) {
-            var keywords = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'ON', 'AS', 'IS', 'NULL', 'TRUE', 'FALSE',
-                'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'JOIN', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'INNER', 'OUTER',
-                'UNION', 'ALL', 'DISTINCT', 'INSERT', 'INTO', 'VALUES', 'CREATE', 'TABLE', 'ALTER', 'DROP',
-                'SET', 'PARTITION BY', 'DISTRIBUTE BY', 'SORT BY', 'CLUSTER BY', 'LATERAL', 'VIEW', 'EXPLAIN',
-                'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'BETWEEN', 'LIKE', 'EXISTS', 'OVER', 'PARTITION',
-                'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE',
-                'COALESCE', 'NVL', 'IF', 'CAST', 'TRY_CAST', 'STRUCT', 'ARRAY', 'MAP',
-                'PIVOT', 'UNPIVOT', 'TABLESAMPLE', 'CLUSTER', 'REPLACE', 'CACHE', 'UNCACHE',
-                'WITH', 'RECURSIVE', 'FETCH', 'OFFSET', 'ROWS', 'ONLY', 'FIRST', 'NEXT'];
-
-            var result = sql;
-            keywords.forEach(function(kw) {
-                var regex = new RegExp('\\\\b' + kw.replace(/ /g, '\\\\s+') + '\\\\b', 'g');
-                result = result.replace(regex, kw);
-            });
-            return result;
+        function formatSql(text, upper) {
+            var q = text.trim().replace(/\\s+/g, ' ');
+            if (upper) {
+                var re = new RegExp('\\\\b(' + keywords.join('|') + ')\\\\b', 'gi');
+                q = q.replace(re, function(m) { return m.toUpperCase(); });
+            }
+            // Basic indentation for clauses
+            var formatted = q
+                .replace(/\\b(SELECT)\\b/gi, '\\nSELECT\\n  ')
+                .replace(/\\b(FROM)\\b/gi, '\\nFROM\\n  ')
+                .replace(/\\b(WHERE)\\b/gi, '\\nWHERE\\n  ')
+                .replace(/\\b(GROUP BY)\\b/gi, '\\nGROUP BY\\n  ')
+                .replace(/\\b(ORDER BY)\\b/gi, '\\nORDER BY\\n  ')
+                .replace(/\\b(HAVING)\\b/gi, '\\nHAVING\\n  ')
+                .replace(/\\b(LIMIT)\\b/gi, '\\nLIMIT\\n  ')
+                .replace(/\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|JOIN)\\b/gi, '\\n\\$1\\n  ')
+                .replace(/,/g, ',\\n  ');
+            return formatted.trim();
         }
 
         document.getElementById('formatBtn').addEventListener('click', function() {
-            var input = document.getElementById('sqlInput').value.trim();
-            if (!input) { _toast('Enter SQL first', 'error'); return; }
+            var val = document.getElementById('sqlInput').value;
+            if (!val) { _toast('Enter a SQL query', 'error'); return; }
+            document.getElementById('sqlOutput').textContent = formatSql(val, true);
+            _toast('SQL formatted!', 'success');
+        });
 
-            formatted = formatSql(input);
-            formatted = uppercaseKeywords(formatted);
-            document.getElementById('output').textContent = formatted;
-            document.getElementById('resultSection').style.display = 'block';
+        document.getElementById('upperBtn').addEventListener('click', function() {
+            var val = document.getElementById('sqlInput').value;
+            if (!val) { _toast('Enter a SQL query', 'error'); return; }
+            document.getElementById('sqlOutput').textContent = formatSql(val, true);
+            _toast('Keywords uppercased!', 'success');
         });
 
         document.getElementById('copyBtn').addEventListener('click', function() {
-            if (!formatted) { _toast('Format SQL first', 'error'); return; }
-            navigator.clipboard.writeText(formatted).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+            var text = document.getElementById('sqlOutput').textContent;
+            navigator.clipboard.writeText(text).then(function() { _toast('Copied SQL!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('sqlInput').value = '';
-            document.getElementById('resultSection').style.display = 'none';
-            formatted = '';
+            document.getElementById('sqlOutput').textContent = '-- Formatted query will appear here';
         });
     </script>
 </body>
@@ -773,241 +714,83 @@ function getDataQualityCheckerHtml(nonce: string): string {
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV/JSON Data Quality Checker</title>
+    <title>Data Quality Checker</title>
     <style>
         ${SHARED_CSS}
-        .quality-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-            margin-top: 12px;
-        }
-        .quality-table th {
-            background: var(--bg-2);
-            padding: 8px 10px;
-            text-align: left;
-            border: 1px solid var(--border);
-            font-weight: 700;
-        }
-        .quality-table td {
-            padding: 6px 10px;
-            border: 1px solid var(--border);
-            font-family: var(--mono);
-            font-size: 11px;
-        }
-        .quality-table tr:hover td { background: rgba(0,122,204,0.05); }
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 12px;
-            margin-top: 14px;
-        }
-        .summary-card {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            text-align: center;
-        }
-        .summary-card .label { font-size: 11px; color: var(--fg-1); text-transform: uppercase; }
-        .summary-card .value { font-size: 20px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
-        <h1>CSV/JSON Data Quality Checker</h1>
-        <span class="subtitle">Analyze datasets for quality issues</span>
+        <h1>Data Quality Checker</h1>
+        <span class="subtitle">Validate JSON records for missing values, nulls, and anomalies</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;">
-                <div><label>Paste CSV or JSON Data</label>
-                    <textarea id="dataInput" rows="10" placeholder='CSV: id,name,age\\n1,Alice,30\\n2,Bob,25\\n\\nJSON: [{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]'></textarea>
-                </div>
-                <div><label>Format</label>
-                    <select id="formatSelect">
-                        <option value="csv">CSV</option>
-                        <option value="json">JSON</option>
-                    </select>
-                </div>
-                <div><label>Nested path filter</label><input id="qualityFilter" type="text" placeholder="e.g. rawRow or calDate.year"></div>
-            </div>
+            <label>Paste JSON Array of Records</label>
+            <textarea id="dataInput" rows="8" placeholder='[\n  { "id": 1, "name": "Alice", "score": 95, "email": "alice@example.com" },\n  { "id": 2, "name": "Bob", "score": null, "email": null },\n  { "id": 3, "name": "Alice", "score": 88, "email": "alice@example.com" }\n]'></textarea>
             <div class="btn-row" style="margin-top: 12px;">
-                <button class="btn" id="checkBtn">Check Quality</button>
+                <button class="btn" id="checkBtn">Run Quality Audit</button>
                 <button class="btn btn-ghost" id="clearBtn">Clear</button>
             </div>
         </div>
-        <div class="section" id="resultSection" style="display:none;">
-            <div class="section-title">Summary</div>
-            <div class="summary-grid" id="summaryGrid"></div>
-        </div>
-        <div class="section" id="detailSection" style="display:none;">
-            <div class="section-title">Column Analysis</div>
-            <div style="overflow-x:auto;">
-                <table class="quality-table" id="qualityTable"></table>
-            </div>
+        <div class="section" id="reportSection" style="display:none;">
+            <div class="section-title">Data Quality Report</div>
+            <div class="result-block" id="reportOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        function parseCsv(text) {
-            var lines = text.trim().split('\\n').filter(function(l) { return l.trim(); });
-            if (!lines.length) return { headers: [], rows: [] };
-            var headers = lines[0].split(',').map(function(h) { return h.trim().replace(/^"|"$/g, ''); });
-            var rows = [];
-            for (var i = 1; i < lines.length; i++) {
-                var vals = lines[i].split(',').map(function(v) { return v.trim().replace(/^"|"$/g, ''); });
-                rows.push(vals);
-            }
-            return { headers: headers, rows: rows };
-        }
-
-        function flattenNested(value, path, out) {
-            if (value === null || typeof value !== 'object') {
-                out[path || '$'] = value === null ? '' : String(value);
-                return;
-            }
-            if (Array.isArray(value)) {
-                if (!value.length) { out[path || '$'] = '[]'; return; }
-                value.forEach(function(item, index) { flattenNested(item, (path ? path + '.' : '') + '[' + index + ']', out); });
-                return;
-            }
-            var keys = Object.keys(value);
-            if (!keys.length) { out[path || '$'] = '{}'; return; }
-            keys.forEach(function(key) { flattenNested(value[key], path ? path + '.' + key : key, out); });
-        }
-
-        function parseJsonData(text) {
-            var data = JSON.parse(text);
-            if (!Array.isArray(data)) data = [data];
-            var flattened = data.map(function(row) { var out = {}; flattenNested(row, '', out); return out; });
-            var headers = [];
-            flattened.forEach(function(row) { Object.keys(row).forEach(function(k) { if (headers.indexOf(k) === -1) headers.push(k); }); });
-            var rows = flattened.map(function(row) { return headers.map(function(h) { return row[h] !== undefined ? row[h] : ''; }); });
-            return { headers: headers, rows: rows };
-        }
-
-        function detectType(values) {
-            var nums = 0, bools = 0, dates = 0, strings = 0;
-            var nonEmpty = values.filter(function(v) { return v !== ''; });
-            if (!nonEmpty.length) return 'empty';
-            nonEmpty.forEach(function(v) {
-                if (v === 'true' || v === 'false' || v === 'True' || v === 'False') { bools++; return; }
-                if (!isNaN(Number(v))) { nums++; return; }
-                if (/^\\d{4}-\\d{2}-\\d{2}/.test(v) || /^\\d{2}\\/\\d{2}\\/\\d{4}/.test(v)) { dates++; return; }
-                strings++;
-            });
-            var total = nonEmpty.length;
-            if (nums / total > 0.8) return 'number';
-            if (bools / total > 0.8) return 'boolean';
-            if (dates / total > 0.8) return 'date';
-            return 'string';
-        }
-
         document.getElementById('checkBtn').addEventListener('click', function() {
-            var input = document.getElementById('dataInput').value.trim();
-            if (!input) { _toast('Paste data first', 'error'); return; }
-            var format = document.getElementById('formatSelect').value;
-            var parsed;
-
+            var raw = document.getElementById('dataInput').value.trim();
+            if (!raw) { _toast('Please enter JSON records', 'error'); return; }
             try {
-                if (format === 'csv') {
-                    parsed = parseCsv(input);
-                } else {
-                    parsed = parseJsonData(input);
-                }
-            } catch (e) {
-                _toast('Parse error: ' + e.message, 'error');
-                return;
-            }
+                var rows = JSON.parse(raw);
+                if (!Array.isArray(rows)) { _toast('Input must be a JSON array of objects', 'error'); return; }
+                if (rows.length === 0) { _toast('Array is empty', 'error'); return; }
 
-            var totalRows = parsed.rows.length;
-            var totalCols = parsed.headers.length;
+                var totalRows = rows.length;
+                var keys = Object.keys(rows[0]);
+                var nullCounts = {};
+                var duplicates = 0;
+                var seen = {};
 
-            var fieldFilter = document.getElementById('qualityFilter').value.trim().toLowerCase();
-            if (fieldFilter) {
-                var selectedHeaders = parsed.headers.filter(function(h, ci) {
-                    return h.toLowerCase().indexOf(fieldFilter) !== -1 || parsed.rows.some(function(row) {
-                        return String(row[ci] || '').toLowerCase().indexOf(fieldFilter) !== -1;
+                keys.forEach(function(k) { nullCounts[k] = 0; });
+
+                rows.forEach(function(r) {
+                    var sig = JSON.stringify(r);
+                    if (seen[sig]) duplicates++;
+                    else seen[sig] = true;
+
+                    keys.forEach(function(k) {
+                        if (r[k] === null || r[k] === undefined || r[k] === '') {
+                            nullCounts[k]++;
+                        }
                     });
                 });
-                parsed = {
-                    headers: selectedHeaders,
-                    rows: parsed.rows.map(function(row) {
-                        return selectedHeaders.map(function(h) { return row[parsed.headers.indexOf(h)] || ''; });
-                    })
-                };
-                totalCols = parsed.headers.length;
+
+                var report = 'DATA QUALITY AUDIT REPORT\\n' + '='.repeat(35) + '\\n';
+                report += 'Total Records: ' + totalRows + '\\n';
+                report += 'Total Columns: ' + keys.length + ' (' + keys.join(', ') + ')\\n';
+                report += 'Duplicate Rows: ' + duplicates + ' (' + ((duplicates / totalRows) * 100).toFixed(1) + '%)\\n\\n';
+                report += 'Missing / Null Values per Column:\\n';
+                keys.forEach(function(k) {
+                    var missing = nullCounts[k];
+                    var pct = ((missing / totalRows) * 100).toFixed(1);
+                    report += '  - ' + k + ': ' + missing + ' missing (' + pct + '%)\\n';
+                });
+
+                document.getElementById('reportOutput').textContent = report;
+                document.getElementById('reportSection').style.display = 'block';
+                _toast('Data quality check completed!', 'success');
+            } catch (e) {
+                _toast('Error parsing JSON: ' + e.message, 'error');
             }
-
-            var missingPerCol = {};
-            var uniquePerCol = {};
-            var typePerCol = {};
-            var numericStats = {};
-
-            parsed.headers.forEach(function(h, ci) {
-                var vals = parsed.rows.map(function(r) { return r[ci] || ''; });
-                var missing = vals.filter(function(v) { return v === ''; }).length;
-                var unique = {};
-                vals.forEach(function(v) { unique[v] = true; });
-                var uniqueCount = Object.keys(unique).length;
-                var type = detectType(vals);
-
-                missingPerCol[h] = missing;
-                uniquePerCol[h] = uniqueCount;
-                typePerCol[h] = type;
-
-                if (type === 'number') {
-                    var nums = vals.filter(function(v) { return v !== '' && !isNaN(Number(v)); }).map(Number);
-                    if (nums.length) {
-                        var sum = nums.reduce(function(a, b) { return a + b; }, 0);
-                        numericStats[h] = {
-                            min: Math.min.apply(null, nums),
-                            max: Math.max.apply(null, nums),
-                            avg: (sum / nums.length).toFixed(2)
-                        };
-                    }
-                }
-            });
-
-            var duplicateRows = 0;
-            var seen = {};
-            parsed.rows.forEach(function(r) {
-                var key = r.join('|||');
-                if (seen[key]) { duplicateRows++; } else { seen[key] = true; }
-            });
-
-            var totalMissing = 0;
-            Object.values(missingPerCol).forEach(function(v) { totalMissing += v; });
-
-            var summaryHtml = '<div class="summary-card"><div class="label">Total Rows</div><div class="value">' + totalRows + '</div></div>' +
-                '<div class="summary-card"><div class="label">Columns</div><div class="value">' + totalCols + '</div></div>' +
-                '<div class="summary-card"><div class="label">Duplicate Rows</div><div class="value" style="color:' + (duplicateRows > 0 ? 'var(--error)' : 'var(--success)') + ';">' + duplicateRows + '</div></div>' +
-                '<div class="summary-card"><div class="label">Missing Values</div><div class="value" style="color:' + (totalMissing > 0 ? 'var(--error)' : 'var(--success)') + ';">' + totalMissing + '</div></div>';
-            document.getElementById('summaryGrid').innerHTML = summaryHtml;
-            document.getElementById('resultSection').style.display = 'block';
-
-            var tableHtml = '<thead><tr><th>Column</th><th>Type</th><th>Missing</th><th>Unique</th><th>Min</th><th>Max</th><th>Avg</th></tr></thead><tbody>';
-            parsed.headers.forEach(function(h) {
-                var stats = numericStats[h] || {};
-                tableHtml += '<tr><td style="font-weight:700;">' + h + '</td>' +
-                    '<td>' + typePerCol[h] + '</td>' +
-                    '<td style="color:' + (missingPerCol[h] > 0 ? 'var(--error)' : 'var(--fg-2)') + ';">' + missingPerCol[h] + '</td>' +
-                    '<td>' + uniquePerCol[h] + '</td>' +
-                    '<td>' + (stats.min !== undefined ? stats.min : '-') + '</td>' +
-                    '<td>' + (stats.max !== undefined ? stats.max : '-') + '</td>' +
-                    '<td>' + (stats.avg !== undefined ? stats.avg : '-') + '</td></tr>';
-            });
-            tableHtml += '</tbody>';
-            document.getElementById('qualityTable').innerHTML = tableHtml;
-            document.getElementById('detailSection').style.display = 'block';
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('dataInput').value = '';
-            document.getElementById('resultSection').style.display = 'none';
-            document.getElementById('detailSection').style.display = 'none';
+            document.getElementById('reportSection').style.display = 'none';
         });
     </script>
 </body>
@@ -1027,193 +810,82 @@ function getSchemaDiffHtml(nonce: string): string {
     <title>Schema Diff Tool</title>
     <style>
         ${SHARED_CSS}
-        .diff-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-            margin-top: 12px;
-        }
-        .diff-table th {
-            background: var(--bg-2);
-            padding: 8px 10px;
-            text-align: left;
-            border: 1px solid var(--border);
-            font-weight: 700;
-        }
-        .diff-table td {
-            padding: 6px 10px;
-            border: 1px solid var(--border);
-            font-family: var(--mono);
-            font-size: 11px;
-        }
-        .diff-only-a { background: rgba(244,67,54,0.12); }
-        .diff-only-b { background: rgba(76,175,80,0.12); }
-        .diff-changed { background: rgba(255,152,0,0.12); }
-        .diff-identical { color: var(--fg-2); }
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 12px;
-        }
-        .summary-card {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            text-align: center;
-        }
-        .summary-card .label { font-size: 11px; color: var(--fg-1); text-transform: uppercase; }
-        .summary-card .value { font-size: 20px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Schema Diff Tool</h1>
-        <span class="subtitle">Compare two JSON schemas side by side</span>
+        <span class="subtitle">Compare two JSON schemas to detect breaking changes</span>
     </div>
     <div class="tool-body">
-        <div class="section">
-            <div class="panels">
-                <div>
-                    <div class="panel-label">Schema A</div>
-                    <textarea id="schemaA" rows="12" placeholder='Paste first schema...\n{\n  "type": "object",\n  "properties": {\n    "id": { "type": "integer" },\n    "name": { "type": "string" }\n  }\n}'></textarea>
-                </div>
-                <div>
-                    <div class="panel-label">Schema B</div>
-                    <textarea id="schemaB" rows="12" placeholder='Paste second schema...\n{\n  "type": "object",\n  "properties": {\n    "id": { "type": "integer" },\n    "email": { "type": "string" }\n  }\n}'></textarea>
-                </div>
+        <div class="panels">
+            <div class="section" style="margin-bottom:0;">
+                <label>Schema A (v1)</label>
+                <textarea id="schemaA" rows="8" placeholder='{ "id": "int", "name": "string", "status": "string" }'></textarea>
             </div>
-            <div class="btn-row" style="margin-top: 12px;">
-                <button class="btn" id="compareBtn">Compare Schemas</button>
-                <button class="btn btn-ghost" id="clearBtn">Clear</button>
+            <div class="section" style="margin-bottom:0;">
+                <label>Schema B (v2)</label>
+                <textarea id="schemaB" rows="8" placeholder='{ "id": "int", "name": "string", "email": "string", "status": "boolean" }'></textarea>
             </div>
         </div>
-        <div class="section" id="summarySection" style="display:none;">
-            <div class="section-title">Summary</div>
-            <div class="summary-grid" id="summaryGrid"></div>
+        <div style="margin-top: 16px;" class="btn-row">
+            <button class="btn" id="diffBtn">Compare Schemas</button>
+            <button class="btn btn-ghost" id="clearBtn">Clear</button>
         </div>
-        <div class="section" id="diffSection" style="display:none;">
-            <div class="section-title">Differences</div>
-            <div style="overflow-x:auto;">
-                <table class="diff-table" id="diffTable"></table>
-            </div>
+        <div class="section" id="diffSection" style="display:none; margin-top:16px;">
+            <div class="section-title">Schema Comparison Results</div>
+            <div class="result-block" id="diffOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        function inferDataSchema(value) {
-            if (value === null) return { type: 'null' };
-            if (Array.isArray(value)) {
-                var item = value.length ? inferDataSchema(value[0]) : { type: 'unknown' };
-                for (var i = 1; i < value.length; i++) item = mergeDataSchemas(item, inferDataSchema(value[i]));
-                return { type: 'array', items: item };
-            }
-            if (typeof value === 'object') {
-                var keys = Object.keys(value);
-                if (keys.length === 1 && Object.prototype.hasOwnProperty.call(value, '$date')) return { type: 'date' };
-                var properties = {};
-                keys.forEach(function(key) { properties[key] = inferDataSchema(value[key]); });
-                return { type: 'object', properties: properties };
-            }
-            return { type: typeof value === 'number' ? 'number' : typeof value };
-        }
+        document.getElementById('diffBtn').addEventListener('click', function() {
+            var rawA = document.getElementById('schemaA').value.trim();
+            var rawB = document.getElementById('schemaB').value.trim();
+            if (!rawA || !rawB) { _toast('Provide both schemas', 'error'); return; }
+            try {
+                var objA = JSON.parse(rawA);
+                var objB = JSON.parse(rawB);
 
-        function mergeDataSchemas(left, right) {
-            if (left.type === right.type) {
-                if (left.type === 'object') {
-                    var properties = {};
-                    Object.keys(left.properties || {}).forEach(function(key) { properties[key] = left.properties[key]; });
-                    Object.keys(right.properties || {}).forEach(function(key) { properties[key] = properties[key] ? mergeDataSchemas(properties[key], right.properties[key]) : right.properties[key]; });
-                    return { type: 'object', properties: properties };
-                }
-                if (left.type === 'array') return { type: 'array', items: mergeDataSchemas(left.items || { type: 'unknown' }, right.items || { type: 'unknown' }) };
-                return left;
-            }
-            if (left.type === 'null') return right;
-            if (right.type === 'null') return left;
-            return { type: 'mixed' };
-        }
+                var keysA = Object.keys(objA);
+                var keysB = Object.keys(objB);
 
-        function isFormalSchema(value) {
-            return value && typeof value === 'object' && typeof value.type === 'string' &&
-                (value.properties || value.items || value.$schema || Object.keys(value).every(function(key) {
-                    return ['type', 'title', 'description', 'required', 'enum', 'default', 'additionalProperties'].indexOf(key) !== -1;
-                }));
-        }
+                var added = keysB.filter(function(k) { return keysA.indexOf(k) === -1; });
+                var removed = keysA.filter(function(k) { return keysB.indexOf(k) === -1; });
+                var common = keysA.filter(function(k) { return keysB.indexOf(k) !== -1; });
+                var changed = [];
 
-        function flattenSchema(obj, prefix) {
-            prefix = prefix || '';
-            var result = {};
-            var path = prefix || 'root';
-            result[path] = obj.type || 'unknown';
-            if (obj.type === 'object' && obj.properties) {
-                Object.keys(obj.properties).forEach(function(key) {
-                    var childPath = prefix ? prefix + '.' + key : key;
-                    Object.assign(result, flattenSchema(obj.properties[key], childPath));
+                common.forEach(function(k) {
+                    if (objA[k] !== objB[k]) {
+                        changed.push({ field: k, from: objA[k], to: objB[k] });
+                    }
                 });
-            } else if (obj.type === 'array' && obj.items) {
-                Object.assign(result, flattenSchema(obj.items, prefix ? prefix + '[]' : '[]'));
+
+                var report = 'SCHEMA DIFF REPORT\\n' + '='.repeat(30) + '\\n';
+                report += 'Added Fields (' + added.length + '):\\n';
+                if (added.length === 0) report += '  (none)\\n';
+                added.forEach(function(k) { report += '  + ' + k + ': ' + JSON.stringify(objB[k]) + '\\n'; });
+
+                report += '\\nRemoved Fields (' + removed.length + '):\\n';
+                if (removed.length === 0) report += '  (none)\\n';
+                removed.forEach(function(k) { report += '  - ' + k + ': ' + JSON.stringify(objA[k]) + '\\n'; });
+
+                report += '\\nType / Value Changes (' + changed.length + '):\\n';
+                if (changed.length === 0) report += '  (none)\\n';
+                changed.forEach(function(c) { report += '  ~ ' + c.field + ': ' + JSON.stringify(c.from) + ' -> ' + JSON.stringify(c.to) + '\\n'; });
+
+                document.getElementById('diffOutput').textContent = report;
+                document.getElementById('diffSection').style.display = 'block';
+                _toast('Schema comparison complete!', 'success');
+            } catch (e) {
+                _toast('Invalid JSON: ' + e.message, 'error');
             }
-            return result;
-        }
-
-        document.getElementById('compareBtn').addEventListener('click', function() {
-            var inputA = document.getElementById('schemaA').value.trim();
-            var inputB = document.getElementById('schemaB').value.trim();
-            if (!inputA || !inputB) { _toast('Paste both schemas', 'error'); return; }
-
-            var schemaA, schemaB;
-            try { schemaA = JSON.parse(inputA); } catch (e) { _toast('Schema A: invalid JSON - ' + e.message, 'error'); return; }
-            try { schemaB = JSON.parse(inputB); } catch (e) { _toast('Schema B: invalid JSON - ' + e.message, 'error'); return; }
-
-            var normalizedA = isFormalSchema(schemaA) ? schemaA : inferDataSchema(schemaA);
-            var normalizedB = isFormalSchema(schemaB) ? schemaB : inferDataSchema(schemaB);
-            var flatA = flattenSchema(normalizedA);
-            var flatB = flattenSchema(normalizedB);
-            var allKeys = {};
-            Object.keys(flatA).forEach(function(k) { allKeys[k] = true; });
-            Object.keys(flatB).forEach(function(k) { allKeys[k] = true; });
-
-            var onlyA = [], onlyB = [], changed = [], identical = [];
-            Object.keys(allKeys).forEach(function(key) {
-                var inA = flatA.hasOwnProperty(key);
-                var inB = flatB.hasOwnProperty(key);
-                if (inA && !inB) { onlyA.push({ field: key, typeA: flatA[key] }); }
-                else if (!inA && inB) { onlyB.push({ field: key, typeB: flatB[key] }); }
-                else if (flatA[key] !== flatB[key]) { changed.push({ field: key, typeA: flatA[key], typeB: flatB[key] }); }
-                else { identical.push({ field: key, type: flatA[key] }); }
-            });
-
-            var summaryHtml = '<div class="summary-card"><div class="label">Only in A</div><div class="value" style="color:var(--error);">' + onlyA.length + '</div></div>' +
-                '<div class="summary-card"><div class="label">Only in B</div><div class="value" style="color:var(--success);">' + onlyB.length + '</div></div>' +
-                '<div class="summary-card"><div class="label">Type Changed</div><div class="value" style="color:var(--warning);">' + changed.length + '</div></div>' +
-                '<div class="summary-card"><div class="label">Identical</div><div class="value" style="color:var(--fg-2);">' + identical.length + '</div></div>';
-            document.getElementById('summaryGrid').innerHTML = summaryHtml;
-            document.getElementById('summarySection').style.display = 'block';
-
-            var tableHtml = '<thead><tr><th>Field</th><th>Status</th><th>Schema A</th><th>Schema B</th></tr></thead><tbody>';
-            onlyA.forEach(function(item) {
-                tableHtml += '<tr class="diff-only-a"><td style="font-weight:700;">' + item.field + '</td><td style="color:var(--error);">Only in A</td><td>' + item.typeA + '</td><td>-</td></tr>';
-            });
-            onlyB.forEach(function(item) {
-                tableHtml += '<tr class="diff-only-b"><td style="font-weight:700;">' + item.field + '</td><td style="color:var(--success);">Only in B</td><td>-</td><td>' + item.typeB + '</td></tr>';
-            });
-            changed.forEach(function(item) {
-                tableHtml += '<tr class="diff-changed"><td style="font-weight:700;">' + item.field + '</td><td style="color:var(--warning);">Type Changed</td><td>' + item.typeA + '</td><td>' + item.typeB + '</td></tr>';
-            });
-            identical.forEach(function(item) {
-                tableHtml += '<tr class="diff-identical"><td>' + item.field + '</td><td>Identical</td><td>' + item.type + '</td><td>' + item.type + '</td></tr>';
-            });
-            tableHtml += '</tbody>';
-            document.getElementById('diffTable').innerHTML = tableHtml;
-            document.getElementById('diffSection').style.display = 'block';
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('schemaA').value = '';
             document.getElementById('schemaB').value = '';
-            document.getElementById('summarySection').style.display = 'none';
             document.getElementById('diffSection').style.display = 'none';
         });
     </script>
@@ -1234,57 +906,50 @@ function getPartitionCalcHtml(nonce: string): string {
     <title>Data Partition Calculator</title>
     <style>
         ${SHARED_CSS}
-        .result-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 12px;
-        }
-        .result-card {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            text-align: center;
-        }
-        .result-card .label { font-size: 11px; color: var(--fg-1); text-transform: uppercase; }
-        .result-card .value { font-size: 18px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Data Partition Calculator</h1>
-        <span class="subtitle">Calculate optimal partitions for Hadoop/Hive/Spark</span>
+        <span class="subtitle">Calculate optimal Spark shuffle partitions & file sizing</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="section-title">Input Parameters</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                <div><label>Total Records</label><input type="number" id="totalRecords" value="100000000" min="1"></div>
-                <div><label>Avg Record Size (bytes)</label><input type="number" id="recordSize" value="512" min="1"></div>
-                <div><label>Target Partition Size (MB)</label><input type="number" id="partitionSize" value="128" min="1"></div>
-                <div><label>Replication Factor</label><input type="number" id="replicationFactor" value="3" min="1"></div>
+            <div class="panels">
+                <div>
+                    <label>Total Dataset Size (GB)</label>
+                    <input type="number" id="dataSize" value="150" min="1" />
+                </div>
+                <div>
+                    <label>Target Parquet File Size (MB)</label>
+                    <input type="number" id="targetSize" value="128" min="16" max="512" />
+                </div>
             </div>
-            <div class="btn-row" style="margin-top: 14px;">
-                <button class="btn" id="calcBtn">Calculate</button>
-                <button class="btn btn-ghost" id="copyBtn">Copy Config</button>
-                <button class="btn btn-ghost" id="clearBtn">Clear</button>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Average Row Size (Bytes)</label>
+                    <input type="number" id="rowSize" value="500" min="10" />
+                </div>
+                <div>
+                    <label>Cluster Cores Available</label>
+                    <input type="number" id="cores" value="64" min="1" />
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="calcBtn">Calculate Partitions</button>
             </div>
         </div>
         <div class="section" id="resultSection" style="display:none;">
-            <div class="section-title">Results</div>
-            <div class="result-grid" id="resultGrid"></div>
-        </div>
-        <div class="section" id="strategySection" style="display:none;">
-            <div class="section-title">Partition Key Strategy</div>
-            <div class="result-block" id="strategyText"></div>
-        </div>
-        <div class="section" id="pathSection" style="display:none;">
-            <div class="section-title">Hadoop/Hive Partition Path Example</div>
-            <div class="result-block" id="pathExample"></div>
+            <div class="section-title">Partition & Tuning Recommendations</div>
+            <div class="result-block" id="resultOutput"></div>
         </div>
         <div class="section" id="sparkSection" style="display:none;">
-            <div class="section-title">Spark Configuration</div>
+            <div class="section-title">Recommended Spark SQL Config</div>
             <div class="result-block" id="sparkConfig"></div>
+            <div class="btn-row" style="margin-top: 10px;">
+                <button class="btn btn-secondary" id="copyBtn">Copy Config</button>
+                <button class="btn btn-ghost" id="clearBtn">Clear</button>
+            </div>
         </div>
     </div>
     <script nonce="${nonce}">
@@ -1293,95 +958,244 @@ function getPartitionCalcHtml(nonce: string): string {
         var sparkConfigText = '';
 
         document.getElementById('calcBtn').addEventListener('click', function() {
-            var totalRecords = parseInt(document.getElementById('totalRecords').value) || 100000000;
-            var recordSize = parseInt(document.getElementById('recordSize').value) || 512;
-            var partitionSizeMB = parseInt(document.getElementById('partitionSize').value) || 128;
-            var replication = parseInt(document.getElementById('replicationFactor').value) || 3;
+            var sizeGB = parseFloat(document.getElementById('dataSize').value) || 150;
+            var targetMB = parseFloat(document.getElementById('targetSize').value) || 128;
+            var bytesPerRow = parseFloat(document.getElementById('rowSize').value) || 500;
+            var availCores = parseInt(document.getElementById('cores').value) || 64;
 
-            var totalDataGB = (totalRecords * recordSize) / (1024 * 1024 * 1024);
-            var partitionSizeBytes = partitionSizeMB * 1024 * 1024;
-            var totalBytes = totalRecords * recordSize;
-            var numPartitions = Math.ceil(totalBytes / partitionSizeBytes);
-            var recordsPerPartition = Math.floor(totalRecords / numPartitions);
-            var totalStorageGB = totalDataGB * replication;
+            var totalBytes = sizeGB * 1024 * 1024 * 1024;
+            var totalRows = Math.round(totalBytes / bytesPerRow);
+            var targetBytes = targetMB * 1024 * 1024;
+            var numFiles = Math.max(1, Math.round(totalBytes / targetBytes));
+            var numPartitions = Math.max(availCores * 3, Math.round(totalBytes / (128 * 1024 * 1024)));
 
-            var resultHtml = '<div class="result-card"><div class="label">Total Data Size</div><div class="value">' + totalDataGB.toFixed(2) + ' GB</div></div>' +
-                '<div class="result-card"><div class="label">Num Partitions</div><div class="value">' + numPartitions.toLocaleString() + '</div></div>' +
-                '<div class="result-card"><div class="label">Records/Partition</div><div class="value">' + recordsPerPartition.toLocaleString() + '</div></div>' +
-                '<div class="result-card"><div class="label">Total Storage (w/ repl.)</div><div class="value">' + totalStorageGB.toFixed(2) + ' GB</div></div>';
-            document.getElementById('resultGrid').innerHTML = resultHtml;
+            var res = 'PARTITION & PERFORMANCE ANALYSIS\\n' + '='.repeat(35) + '\\n';
+            res += 'Total Dataset Size: ' + sizeGB + ' GB (' + totalBytes.toLocaleString() + ' bytes)\\n';
+            res += 'Estimated Total Rows: ' + totalRows.toLocaleString() + '\\n';
+            res += 'Target File Size: ' + targetMB + ' MB\\n';
+            res += 'Recommended Output Files: ' + numFiles.toLocaleString() + '\\n';
+            res += 'Recommended Spark Shuffle Partitions: ' + numPartitions + ' (approx 3x available cores)\\n';
+
+            document.getElementById('resultOutput').textContent = res;
             document.getElementById('resultSection').style.display = 'block';
 
-            var strategy = '';
-            if (numPartitions <= 100) {
-                strategy = 'Small dataset: Consider partitioning by a low-cardinality column like date, region, or category.\\n' +
-                    'Recommended: date-based partitioning (e.g., year=YYYY/month=MM/day=DD)\\n' +
-                    'Alternative: hash partitioning on a high-cardinality key for even distribution.';
-            } else if (numPartitions <= 1000) {
-                strategy = 'Medium dataset: Partition by a moderate-cardinality column.\\n' +
-                    'Recommended: date + category composite partitioning\\n' +
-                    'Use bucketing on additional columns for efficient joins.';
-            } else {
-                strategy = 'Large dataset: Use date-based partitioning with bucketing for joins.\\n' +
-                    'Partition by: year/month/day for time-series data\\n' +
-                    'Bucket by: user_id, transaction_id, or other join keys\\n' +
-                    'Consider dynamic partition pruning for query optimization.';
-            }
-            document.getElementById('strategyText').textContent = strategy;
-            document.getElementById('strategySection').style.display = 'block';
-
-            var path = '/data/events/year=2024/month=01/day=15/\\n' +
-                '  part-00000.parquet\\n' +
-                '  part-00001.parquet\\n' +
-                '  ...\\n' +
-                '\\nHive table definition:\\n' +
-                'CREATE TABLE events (\\n' +
-                '    event_id BIGINT,\\n' +
-                '    user_id BIGINT,\\n' +
-                '    event_type STRING,\\n' +
-                '    payload STRING\\n' +
-                ') PARTITIONED BY (\\n' +
-                '    year INT,\\n' +
-                '    month INT,\\n' +
-                '    day INT\\n' +
-                ') STORED AS PARQUET;';
-            document.getElementById('pathExample').textContent = path;
-            document.getElementById('pathSection').style.display = 'block';
-
-            sparkConfigText = '// Spark SQL session config\\n' +
-                'spark.sql.shuffle.partitions = ' + Math.min(numPartitions, 200) + '\\n' +
-                'spark.sql.files.maxPartitionBytes = ' + (partitionSizeMB * 1024 * 1024) + '\\n' +
-                'spark.sql.sources.partitionOverwriteMode = dynamic\\n' +
+            sparkConfigText = '// Spark SQL optimization config\\n' +
+                'spark.sql.shuffle.partitions = ' + numPartitions + '\\n' +
+                'spark.sql.files.maxPartitionBytes = ' + targetBytes + '\\n' +
                 'spark.sql.adaptive.enabled = true\\n' +
-                'spark.sql.adaptive.coalescePartitions.enabled = true\\n' +
-                'spark.sql.adaptive.skewJoin.enabled = true\\n\\n' +
-                '// Repartition before write\\n' +
-                'df.repartition(' + Math.min(numPartitions, 200) + ')\\n' +
-                '  .write\\n' +
-                '  .partitionBy("year", "month", "day")\\n' +
-                '  .mode("overwrite")\\n' +
-                '  .parquet("/data/events/")\\n\\n' +
-                '// Or use bucketing for join-heavy workloads\\n' +
-                'df.write\\n' +
-                '  .partitionBy("year", "month")\\n' +
-                '  .bucketBy(' + Math.min(32, numPartitions) + ', "user_id")\\n' +
-                '  .sortBy("user_id")\\n' +
-                '  .saveAsTable("events_bucketed")';
+                'spark.sql.adaptive.coalescePartitions.enabled = true\\n\\n' +
+                'df.repartition(' + numPartitions + ')\\n' +
+                '  .write.mode("overwrite")\\n' +
+                '  .parquet("/data/output/")';
+
             document.getElementById('sparkConfig').textContent = sparkConfigText;
             document.getElementById('sparkSection').style.display = 'block';
+            _toast('Calculated successfully!', 'success');
         });
 
         document.getElementById('copyBtn').addEventListener('click', function() {
-            if (!sparkConfigText) { _toast('Calculate first', 'error'); return; }
-            navigator.clipboard.writeText(sparkConfigText).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+            if (!sparkConfigText) return;
+            navigator.clipboard.writeText(sparkConfigText).then(function() { _toast('Copied config!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('resultSection').style.display = 'none';
-            document.getElementById('strategySection').style.display = 'none';
-            document.getElementById('pathSection').style.display = 'none';
             document.getElementById('sparkSection').style.display = 'none';
-            sparkConfigText = '';
+        });
+    </script>
+</body>
+</html>`;
+}
+
+/* ================================================================
+   6. DELTA LAKE LOG ANALYZER
+   ================================================================ */
+function getDeltaLakeAnalyzerHtml(nonce: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delta Lake Log Analyzer</title>
+    <style>
+        ${SHARED_CSS}
+    </style>
+</head>
+<body>
+    <div class="tool-header">
+        <h1>Delta Lake Log Analyzer</h1>
+        <span class="subtitle">Inspect _delta_log transaction commit JSON files</span>
+    </div>
+    <div class="tool-body">
+        <div class="section">
+            <label>Paste Delta Log JSON Commit (or newline separated commit lines)</label>
+            <textarea id="logInput" rows="10" placeholder='{\n  "commitInfo": {\n    "timestamp": 1711000000000,\n    "operation": "WRITE",\n    "operationParameters": { "mode": "Append", "partitionBy": "[\"dt\"]" },\n    "engineInfo": "Apache-Spark/3.5.0 Delta-Lake/3.1.0"\n  }\n}\n{\n  "add": {\n    "path": "dt=2026-03-22/part-0000.parquet",\n    "size": 245760,\n    "modificationTime": 1711000000000\n  }\n}'></textarea>
+            <div class="btn-row" style="margin-top: 12px;">
+                <button class="btn" id="analyzeBtn">Analyze Delta Log</button>
+                <button class="btn btn-ghost" id="clearBtn">Clear</button>
+            </div>
+        </div>
+        <div class="section" id="reportSection" style="display:none;">
+            <div class="section-title">Delta Transaction Analysis</div>
+            <div class="result-block" id="reportOutput"></div>
+        </div>
+    </div>
+    <script nonce="${nonce}">
+        ${toastScript()}
+
+        document.getElementById('analyzeBtn').addEventListener('click', function() {
+            var raw = document.getElementById('logInput').value.trim();
+            if (!raw) { _toast('Please paste delta log JSON', 'error'); return; }
+            try {
+                var lines = raw.split(/\\r?\\n/);
+                var commits = 0;
+                var adds = 0;
+                var removes = 0;
+                var totalBytesAdded = 0;
+                var operations = [];
+                var engine = '';
+
+                lines.forEach(function(line) {
+                    line = line.trim();
+                    if (!line) return;
+                    try {
+                        var obj = JSON.parse(line);
+                        if (obj.commitInfo) {
+                            commits++;
+                            if (obj.commitInfo.operation) operations.push(obj.commitInfo.operation);
+                            if (obj.commitInfo.engineInfo) engine = obj.commitInfo.engineInfo;
+                        }
+                        if (obj.add) {
+                            adds++;
+                            if (obj.add.size) totalBytesAdded += obj.add.size;
+                        }
+                        if (obj.remove) {
+                            removes++;
+                        }
+                    } catch (err) {
+                        // ignore invalid lines
+                    }
+                });
+
+                var report = 'DELTA LAKE TRANSACTION LOG REPORT\\n' + '='.repeat(40) + '\\n';
+                report += 'Parsed Commit Entries: ' + commits + '\\n';
+                report += 'Engine Info: ' + (engine || 'Unknown') + '\\n';
+                report += 'Operations Executed: ' + (operations.length ? operations.join(', ') : 'None') + '\\n\\n';
+                report += 'File Actions:\\n';
+                report += '  + Files Added: ' + adds + ' (' + (totalBytesAdded / (1024 * 1024)).toFixed(2) + ' MB)\\n';
+                report += '  - Files Removed: ' + removes + '\\n';
+                report += 'Net File Delta: ' + (adds - removes) + '\\n';
+
+                document.getElementById('reportOutput').textContent = report;
+                document.getElementById('reportSection').style.display = 'block';
+                _toast('Delta log analyzed!', 'success');
+            } catch (e) {
+                _toast('Analysis error: ' + e.message, 'error');
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', function() {
+            document.getElementById('logInput').value = '';
+            document.getElementById('reportSection').style.display = 'none';
+        });
+    </script>
+</body>
+</html>`;
+}
+
+/* ================================================================
+   7. SPARK COST & CLUSTER ESTIMATOR
+   ================================================================ */
+function getSparkCostEstimatorHtml(nonce: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spark Cluster & Cost Estimator</title>
+    <style>
+        ${SHARED_CSS}
+    </style>
+</head>
+<body>
+    <div class="tool-header">
+        <h1>Spark Cluster & Cost Estimator</h1>
+        <span class="subtitle">Estimate cluster size and monthly cloud costs for Spark pipelines</span>
+    </div>
+    <div class="tool-body">
+        <div class="section">
+            <div class="panels">
+                <div>
+                    <label>Daily Data Volume Processed (GB)</label>
+                    <input type="number" id="dataGB" value="500" min="1" />
+                </div>
+                <div>
+                    <label>Pipeline Runs Per Day</label>
+                    <input type="number" id="runsPerDay" value="4" min="1" />
+                </div>
+            </div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Cloud Provider / Platform</label>
+                    <select id="cloudProvider">
+                        <option value="databricks">Databricks (AWS/Azure)</option>
+                        <option value="emr">AWS EMR (Managed Spark)</option>
+                        <option value="dataproc">Google Cloud Dataproc</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Average Job Duration (Minutes)</label>
+                    <input type="number" id="durationMin" value="45" min="1" />
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="estimateBtn">Estimate Cluster & Cost</button>
+            </div>
+        </div>
+        <div class="section" id="resultSection" style="display:none;">
+            <div class="section-title">Estimation Results</div>
+            <div class="result-block" id="resultOutput"></div>
+        </div>
+    </div>
+    <script nonce="${nonce}">
+        ${toastScript()}
+
+        document.getElementById('estimateBtn').addEventListener('click', function() {
+            var gb = parseFloat(document.getElementById('dataGB').value) || 500;
+            var runs = parseFloat(document.getElementById('runsPerDay').value) || 4;
+            var provider = document.getElementById('cloudProvider').value;
+            var mins = parseFloat(document.getElementById('durationMin').value) || 45;
+
+            var workers = Math.max(2, Math.ceil(gb / 100));
+            var driverRAM = gb > 1000 ? 64 : 32;
+            var workerRAM = 32;
+            var workerCores = 8;
+
+            var hourlyRatePerWorker = provider === 'databricks' ? 0.45 : (provider === 'emr' ? 0.35 : 0.30);
+            var driverRate = hourlyRatePerWorker * 1.5;
+            var totalHourlyRate = driverRate + (workers * hourlyRatePerWorker);
+
+            var hoursPerDay = (runs * mins) / 60.0;
+            var dailyCost = hoursPerDay * totalHourlyRate;
+            var monthlyCost = dailyCost * 30;
+
+            var report = 'SPARK CLUSTER & CLOUD COST ESTIMATE\\n' + '='.repeat(40) + '\\n';
+            report += 'Platform: ' + provider.toUpperCase() + '\\n';
+            report += 'Data Volume: ' + gb + ' GB / day (' + runs + ' runs/day)\\n\\n';
+            report += 'Recommended Cluster Configuration:\\n';
+            report += '  - Driver Node: 1x (RAM: ' + driverRAM + ' GB, Cores: 16)\\n';
+            report += '  - Worker Nodes: ' + workers + 'x (RAM per worker: ' + workerRAM + ' GB, Cores: ' + workerCores + ')\\n';
+            report += '  - Total Cluster Cores: ' + (16 + (workers * workerCores)) + '\\n\\n';
+            report += 'Estimated Cost:\\n';
+            report += '  - Runtime per Day: ' + hoursPerDay.toFixed(1) + ' hours\\n';
+            report += '  - Daily Cost: $' + dailyCost.toFixed(2) + '\\n';
+            report += '  - Estimated Monthly Cost: $' + monthlyCost.toFixed(2) + ' / month\\n';
+
+            document.getElementById('resultOutput').textContent = report;
+            document.getElementById('resultSection').style.display = 'block';
+            _toast('Cost estimation completed!', 'success');
         });
     </script>
 </body>

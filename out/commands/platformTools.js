@@ -165,16 +165,6 @@ function scanLocalCloudConfiguration() {
     });
 }
 exports.scanLocalCloudConfiguration = scanLocalCloudConfiguration;
-function reportFindings(findings) {
-    const counts = findings.reduce((acc, finding) => {
-        acc[finding.severity] = (acc[finding.severity] || 0) + 1;
-        return acc;
-    }, {});
-    const header = `DevSnip Pro Security Audit\n${"=".repeat(24)}\nFindings: ${findings.length} | Critical: ${counts.critical || 0} | High: ${counts.high || 0} | Medium: ${counts.medium || 0} | Low: ${counts.low || 0}\n`;
-    if (!findings.length)
-        return `${header}\nNo matching security risks were found by the built-in static rules. Run your normal SAST, dependency, and secret-scanning CI checks as well.`;
-    return `${header}\n${findings.map((f, i) => `${i + 1}. [${f.severity.toUpperCase()}] ${f.rule}\n   ${f.file}:${f.line} — ${f.message}\n   ${f.evidence}`).join("\n")}`;
-}
 function webviewNonce() {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let value = "";
@@ -198,7 +188,7 @@ function remediationFor(rule) {
     };
     return fixes[rule] || "Review this finding, apply the least-privilege fix, and add a regression check to CI.";
 }
-function securityAuditHtml(panel, findings) {
+function securityAuditHtml(panel, findings, title = "Security Audit") {
     const nonce = webviewNonce();
     const counts = findings.reduce((acc, finding) => {
         acc[finding.severity] = (acc[finding.severity] || 0) + 1;
@@ -229,13 +219,9 @@ function securityAuditHtml(panel, findings) {
     .evidence { background: var(--input); border: 1px solid var(--border); border-radius: 5px; padding: 10px; margin: 12px 0; color: var(--muted); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; } .fix { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; } .fix strong { color: var(--text); }
     .empty { text-align: center; padding: 70px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; } .empty-icon { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); font-size: 25px; } .empty h2 { font-size: 18px; margin: 14px 0 5px; } .empty p { color: var(--muted); margin: 0; }
     @media (max-width: 650px) { body { padding: 18px; } header { display: block; } .status { display: inline-block; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, 1fr); } }
-  </style></head><body><main class="wrap"><header><div><h1>Security Audit</h1><div class="subtitle">Local workspace scan · sensitive evidence is redacted</div></div><div class="status">${escapeHtml(status)}</div></header><div class="summary-grid">${cards}</div><div class="section-title">Findings · ${findings.length}</div>${rows}<p class="muted">This audit is a fast local check. Continue to use dependency scanning, SAST, secret scanning, and CI security controls for production.</p></main><script nonce="${nonce}">
+  </style></head><body><main class="wrap"><header><div><h1>${escapeHtml(title)}</h1><div class="subtitle">Local workspace scan · sensitive evidence is redacted</div></div><div class="status">${escapeHtml(status)}</div></header><div class="summary-grid">${cards}</div><div class="section-title">Findings · ${findings.length}</div>${rows}<p class="muted">This audit is a fast local check. Continue to use dependency scanning, SAST, secret scanning, and CI security controls for production.</p></main><script nonce="${nonce}">
     const api = acquireVsCodeApi(); document.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => api.postMessage({ type: 'open', index: Number(button.dataset.index) })));
   </script></body></html>`;
-}
-function reportCloudFindings(findings) {
-    const header = reportFindings(findings).replace("DevSnip Pro Security Audit", "DevSnip Pro Local Cloud Configuration Audit");
-    return `${header}\n\nScope: local Terraform, Kubernetes, Docker, IAM, and cloud configuration files.\nThis audit does not query or modify a live cloud account.`;
 }
 function detectStack(root) {
     try {
@@ -634,12 +620,31 @@ function registerPlatformToolsCommands(context) {
         try {
             yield vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "DevSnip Pro: Auditing local cloud configuration" }, () => __awaiter(this, void 0, void 0, function* () {
                 const findings = yield scanLocalCloudConfiguration();
-                const channel = vscode.window.createOutputChannel("DevSnip Pro Cloud Security");
-                channel.clear();
-                channel.appendLine(reportCloudFindings(findings));
-                channel.show(true);
+                const panel = vscode.window.createWebviewPanel("devsnipCloudSecurityAudit", "Cloud Config Security Audit", vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
+                panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
+                    var _d;
+                    if ((message === null || message === void 0 ? void 0 : message.type) !== "open" || !Number.isInteger(message.index) || !findings[message.index])
+                        return;
+                    const finding = findings[message.index];
+                    const root = (_d = vscode.workspace.workspaceFolders) === null || _d === void 0 ? void 0 : _d[0];
+                    if (!root)
+                        return;
+                    try {
+                        const fileUri = finding.resource
+                            ? vscode.Uri.parse(finding.resource)
+                            : vscode.Uri.file(path.join(root.uri.fsPath, finding.file));
+                        const document = yield vscode.workspace.openTextDocument(fileUri);
+                        const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
+                        const position = new vscode.Position(line, 0);
+                        yield vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false, selection: new vscode.Range(position, position) });
+                    }
+                    catch (error) {
+                        vscode.window.showErrorMessage(`Unable to open ${finding.file}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }), undefined, context.subscriptions);
+                panel.webview.html = securityAuditHtml(panel, findings, "Cloud Config Security Audit");
                 if (findings.some(f => f.severity === "critical" || f.severity === "high"))
-                    vscode.window.showWarningMessage(`Cloud configuration audit found ${findings.length} potential issue(s). Review the Cloud Security output.`);
+                    vscode.window.showWarningMessage(`Cloud configuration audit found ${findings.length} potential issue(s). Review the Cloud Security Audit panel.`);
                 else
                     vscode.window.showInformationMessage(`Cloud configuration audit complete: ${findings.length} finding(s).`);
             }));
@@ -649,8 +654,8 @@ function registerPlatformToolsCommands(context) {
         }
     }));
     const devops = vscode.commands.registerCommand("sayaib.hue-console.devopsGenerator", () => __awaiter(this, void 0, void 0, function* () {
-        var _d;
-        const root = (_d = vscode.workspace.workspaceFolders) === null || _d === void 0 ? void 0 : _d[0];
+        var _e;
+        const root = (_e = vscode.workspace.workspaceFolders) === null || _e === void 0 ? void 0 : _e[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating DevOps files.");
             return;
@@ -675,8 +680,8 @@ function registerPlatformToolsCommands(context) {
         }
     }));
     const mlops = vscode.commands.registerCommand("sayaib.hue-console.mlopsGenerator", () => __awaiter(this, void 0, void 0, function* () {
-        var _e;
-        const root = (_e = vscode.workspace.workspaceFolders) === null || _e === void 0 ? void 0 : _e[0];
+        var _f;
+        const root = (_f = vscode.workspace.workspaceFolders) === null || _f === void 0 ? void 0 : _f[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating MLOps files.");
             return;
@@ -711,8 +716,8 @@ function registerPlatformToolsCommands(context) {
         channel.show(true);
     }));
     const observabilityStarter = vscode.commands.registerCommand("sayaib.hue-console.observabilityStarter", () => __awaiter(this, void 0, void 0, function* () {
-        var _f;
-        const root = (_f = vscode.workspace.workspaceFolders) === null || _f === void 0 ? void 0 : _f[0];
+        var _g;
+        const root = (_g = vscode.workspace.workspaceFolders) === null || _g === void 0 ? void 0 : _g[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating observability files.");
             return;

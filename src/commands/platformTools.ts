@@ -132,15 +132,7 @@ export async function scanLocalCloudConfiguration(): Promise<SecurityFinding[]> 
   return findings;
 }
 
-function reportFindings(findings: SecurityFinding[]): string {
-  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
-    acc[finding.severity] = (acc[finding.severity] || 0) + 1;
-    return acc;
-  }, {});
-  const header = `DevSnip Pro Security Audit\n${"=".repeat(24)}\nFindings: ${findings.length} | Critical: ${counts.critical || 0} | High: ${counts.high || 0} | Medium: ${counts.medium || 0} | Low: ${counts.low || 0}\n`;
-  if (!findings.length) return `${header}\nNo matching security risks were found by the built-in static rules. Run your normal SAST, dependency, and secret-scanning CI checks as well.`;
-  return `${header}\n${findings.map((f, i) => `${i + 1}. [${f.severity.toUpperCase()}] ${f.rule}\n   ${f.file}:${f.line} — ${f.message}\n   ${f.evidence}`).join("\n")}`;
-}
+
 
 function webviewNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -167,7 +159,7 @@ function remediationFor(rule: string): string {
   return fixes[rule] || "Review this finding, apply the least-privilege fix, and add a regression check to CI.";
 }
 
-function securityAuditHtml(panel: vscode.WebviewPanel, findings: SecurityFinding[]): string {
+function securityAuditHtml(panel: vscode.WebviewPanel, findings: SecurityFinding[], title: string = "Security Audit"): string {
   const nonce = webviewNonce();
   const counts = findings.reduce<Record<string, number>>((acc, finding) => {
     acc[finding.severity] = (acc[finding.severity] || 0) + 1;
@@ -198,15 +190,12 @@ function securityAuditHtml(panel: vscode.WebviewPanel, findings: SecurityFinding
     .evidence { background: var(--input); border: 1px solid var(--border); border-radius: 5px; padding: 10px; margin: 12px 0; color: var(--muted); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; } .fix { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; } .fix strong { color: var(--text); }
     .empty { text-align: center; padding: 70px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; } .empty-icon { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); font-size: 25px; } .empty h2 { font-size: 18px; margin: 14px 0 5px; } .empty p { color: var(--muted); margin: 0; }
     @media (max-width: 650px) { body { padding: 18px; } header { display: block; } .status { display: inline-block; margin-top: 12px; } .summary-grid { grid-template-columns: repeat(2, 1fr); } }
-  </style></head><body><main class="wrap"><header><div><h1>Security Audit</h1><div class="subtitle">Local workspace scan · sensitive evidence is redacted</div></div><div class="status">${escapeHtml(status)}</div></header><div class="summary-grid">${cards}</div><div class="section-title">Findings · ${findings.length}</div>${rows}<p class="muted">This audit is a fast local check. Continue to use dependency scanning, SAST, secret scanning, and CI security controls for production.</p></main><script nonce="${nonce}">
+  </style></head><body><main class="wrap"><header><div><h1>${escapeHtml(title)}</h1><div class="subtitle">Local workspace scan · sensitive evidence is redacted</div></div><div class="status">${escapeHtml(status)}</div></header><div class="summary-grid">${cards}</div><div class="section-title">Findings · ${findings.length}</div>${rows}<p class="muted">This audit is a fast local check. Continue to use dependency scanning, SAST, secret scanning, and CI security controls for production.</p></main><script nonce="${nonce}">
     const api = acquireVsCodeApi(); document.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => api.postMessage({ type: 'open', index: Number(button.dataset.index) })));
   </script></body></html>`;
 }
 
-function reportCloudFindings(findings: SecurityFinding[]): string {
-  const header = reportFindings(findings).replace("DevSnip Pro Security Audit", "DevSnip Pro Local Cloud Configuration Audit");
-  return `${header}\n\nScope: local Terraform, Kubernetes, Docker, IAM, and cloud configuration files.\nThis audit does not query or modify a live cloud account.`;
-}
+
 
 function detectStack(root: string): "node" | "python" | "generic" {
   try {
@@ -557,9 +546,26 @@ export function registerPlatformToolsCommands(context: vscode.ExtensionContext):
     try {
       await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "DevSnip Pro: Auditing local cloud configuration" }, async () => {
         const findings = await scanLocalCloudConfiguration();
-        const channel = vscode.window.createOutputChannel("DevSnip Pro Cloud Security");
-        channel.clear(); channel.appendLine(reportCloudFindings(findings)); channel.show(true);
-        if (findings.some(f => f.severity === "critical" || f.severity === "high")) vscode.window.showWarningMessage(`Cloud configuration audit found ${findings.length} potential issue(s). Review the Cloud Security output.`);
+        const panel = vscode.window.createWebviewPanel("devsnipCloudSecurityAudit", "Cloud Config Security Audit", vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
+        panel.webview.onDidReceiveMessage(async message => {
+          if (message?.type !== "open" || !Number.isInteger(message.index) || !findings[message.index]) return;
+          const finding = findings[message.index];
+          const root = vscode.workspace.workspaceFolders?.[0];
+          if (!root) return;
+          try {
+            const fileUri = finding.resource
+              ? vscode.Uri.parse(finding.resource)
+              : vscode.Uri.file(path.join(root.uri.fsPath, finding.file));
+            const document = await vscode.workspace.openTextDocument(fileUri);
+            const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
+            const position = new vscode.Position(line, 0);
+            await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false, selection: new vscode.Range(position, position) });
+          } catch (error) {
+            vscode.window.showErrorMessage(`Unable to open ${finding.file}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }, undefined, context.subscriptions);
+        panel.webview.html = securityAuditHtml(panel, findings, "Cloud Config Security Audit");
+        if (findings.some(f => f.severity === "critical" || f.severity === "high")) vscode.window.showWarningMessage(`Cloud configuration audit found ${findings.length} potential issue(s). Review the Cloud Security Audit panel.`);
         else vscode.window.showInformationMessage(`Cloud configuration audit complete: ${findings.length} finding(s).`);
       });
     } catch (error) {

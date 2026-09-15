@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.50.0",
+  "version": "10.53.0",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -343,8 +343,12 @@
         "title": "🧰 DevSnip Pro: Advanced Developer Tools Hub"
       },
       {
-        "command": "sayaib.hue-console.regexBuilder",
-        "title": "🔍 DevSnip Pro: Regex Builder & Tester"
+        "command": "sayaib.hue-console.removeUnusedImports",
+        "title": "🧹 DevSnip Pro: Remove Unused Imports"
+      },
+      {
+        "command": "sayaib.hue-console.readmeManager",
+        "title": "📝 DevSnip Pro: README Viewer & CRUD Manager"
       },
       {
         "command": "sayaib.hue-console.jsonFormatter",
@@ -435,6 +439,14 @@
         "title": "🧪 DevSnip Pro: Prompt Playground"
       },
       {
+        "command": "sayaib.hue-console.lrScheduler",
+        "title": "📈 DevSnip Pro: LR Scheduler Visualizer"
+      },
+      {
+        "command": "sayaib.hue-console.inferenceEstimator",
+        "title": "⚡ DevSnip Pro: LLM Inference & VRAM Estimator"
+      },
+      {
         "command": "sayaib.hue-console.searchTools",
         "title": "🔎 DevSnip Pro: Search All Tools (Regex)"
       },
@@ -463,6 +475,14 @@
         "title": "📊 DevSnip Pro: Partition Calculator"
       },
       {
+        "command": "sayaib.hue-console.deltaLakeAnalyzer",
+        "title": "🗄️ DevSnip Pro: Delta Lake Log Analyzer"
+      },
+      {
+        "command": "sayaib.hue-console.sparkCostEstimator",
+        "title": "📊 DevSnip Pro: Spark Cluster & Cost Estimator"
+      },
+      {
         "command": "sayaib.hue-console.ragHub",
         "title": "🧬 DevSnip Pro: RAG Tools Hub"
       },
@@ -487,6 +507,14 @@
         "title": "📈 DevSnip Pro: RAG Eval Calculator"
       },
       {
+        "command": "sayaib.hue-console.hybridSearchRrf",
+        "title": "🧬 DevSnip Pro: Hybrid Search RRF Simulator"
+      },
+      {
+        "command": "sayaib.hue-console.ragHallucinationAnalyzer",
+        "title": "🛡️ DevSnip Pro: RAG Hallucination Analyzer"
+      },
+      {
         "command": "sayaib.hue-console.securityAudit",
         "title": "🛡️ DevSnip Pro: Security Audit"
       },
@@ -509,6 +537,10 @@
       {
         "command": "sayaib.hue-console.observabilityStarter",
         "title": "📡 DevSnip Pro: Observability Starter Generator"
+      },
+      {
+        "command": "sayaib.hue-console.milestoneTracker",
+        "title": "🏆 DevSnip Pro: Milestone & Points Tracker"
       }
     ],
     "viewsContainers": {
@@ -547,6 +579,7 @@
     "onCommand:sayaib.hue-console.loremGenerator",
     "onCommand:sayaib.hue-console.jsonToToon",
     "onCommand:sayaib.hue-console.removeUnusedImports",
+    "onCommand:sayaib.hue-console.readmeManager",
     "onCommand:sayaib.hue-console.aiMlHub",
     "onCommand:sayaib.hue-console.tokenCounter",
     "onCommand:sayaib.hue-console.promptTemplate",
@@ -561,6 +594,8 @@
     "onCommand:sayaib.hue-console.datasetProfiler",
     "onCommand:sayaib.hue-console.metricsCalculator",
     "onCommand:sayaib.hue-console.promptPlayground",
+    "onCommand:sayaib.hue-console.lrScheduler",
+    "onCommand:sayaib.hue-console.inferenceEstimator",
     "onCommand:sayaib.hue-console.searchTools",
     "onCommand:sayaib.hue-console.bigDataHub",
     "onCommand:sayaib.hue-console.schemaViewer",
@@ -568,18 +603,23 @@
     "onCommand:sayaib.hue-console.dataQualityChecker",
     "onCommand:sayaib.hue-console.schemaDiff",
     "onCommand:sayaib.hue-console.partitionCalc",
+    "onCommand:sayaib.hue-console.deltaLakeAnalyzer",
+    "onCommand:sayaib.hue-console.sparkCostEstimator",
     "onCommand:sayaib.hue-console.ragHub",
     "onCommand:sayaib.hue-console.chunkingTester",
     "onCommand:sayaib.hue-console.embeddingCost",
     "onCommand:sayaib.hue-console.contextWindow",
     "onCommand:sayaib.hue-console.semanticDedup",
     "onCommand:sayaib.hue-console.ragEvalScores",
+    "onCommand:sayaib.hue-console.hybridSearchRrf",
+    "onCommand:sayaib.hue-console.ragHallucinationAnalyzer",
     "onCommand:sayaib.hue-console.securityAudit",
     "onCommand:sayaib.hue-console.cloudSecurityAudit",
     "onCommand:sayaib.hue-console.devopsGenerator",
     "onCommand:sayaib.hue-console.mlopsGenerator",
     "onCommand:sayaib.hue-console.observabilityAnalyze",
-    "onCommand:sayaib.hue-console.observabilityStarter"
+    "onCommand:sayaib.hue-console.observabilityStarter",
+    "onCommand:sayaib.hue-console.milestoneTracker"
   ],
   "browser": "./out/extention.js",
   "main": "./out/extention.js",

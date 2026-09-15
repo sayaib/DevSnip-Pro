@@ -293,7 +293,15 @@ function registerAiMlToolsCommands(context) {
         const panel = vscode.window.createWebviewPanel('mdTableGen', 'Markdown Table Generator', vscode.ViewColumn.One, { enableScripts: true });
         panel.webview.html = getMdTableGenHtml(getNonce());
     });
-    context.subscriptions.push(hubCmd, tokenCounterCmd, promptTemplateCmd, mlCodeGenCmd, llmApiTesterCmd, datasetSplitCmd, gpuVramCmd, experimentLoggerCmd, modelCardCmd, jsonlViewerCmd, mdTableCmd);
+    const lrSchedulerCmd = vscode.commands.registerCommand('sayaib.hue-console.lrScheduler', () => {
+        const panel = vscode.window.createWebviewPanel('lrScheduler', 'Learning Rate Scheduler Visualizer', vscode.ViewColumn.One, { enableScripts: true });
+        panel.webview.html = getLrSchedulerHtml(getNonce());
+    });
+    const inferenceEstimatorCmd = vscode.commands.registerCommand('sayaib.hue-console.inferenceEstimator', () => {
+        const panel = vscode.window.createWebviewPanel('inferenceEstimator', 'LLM Inference Latency & VRAM Estimator', vscode.ViewColumn.One, { enableScripts: true });
+        panel.webview.html = getInferenceEstimatorHtml(getNonce());
+    });
+    context.subscriptions.push(hubCmd, tokenCounterCmd, promptTemplateCmd, mlCodeGenCmd, llmApiTesterCmd, datasetSplitCmd, gpuVramCmd, experimentLoggerCmd, modelCardCmd, jsonlViewerCmd, mdTableCmd, lrSchedulerCmd, inferenceEstimatorCmd);
 }
 exports.registerAiMlToolsCommands = registerAiMlToolsCommands;
 /* ================================================================
@@ -357,7 +365,7 @@ function getAiMlHubHtml(nonce) {
 <body>
     <div class="tool-header">
         <h1>AI/ML & LLM Developer Tools</h1>
-        <span class="subtitle">13 built-in utilities for AI/ML workflows</span>
+        <span class="subtitle">15 built-in utilities for everyday AI & ML workflows</span>
     </div>
     <div class="tool-body">
         <div class="hub-grid" id="grid"></div>
@@ -375,17 +383,16 @@ function getAiMlHubHtml(nonce) {
             { cmd: 'sayaib.hue-console.modelCard', icon: '\\u{1F4C4}', title: 'Model Card Generator', desc: 'Generate standardized model cards in HuggingFace format for documentation.', tag: 'Docs' },
             { cmd: 'sayaib.hue-console.jsonlViewer', icon: '\\u{1F4CB}', title: 'JSONL Viewer', desc: 'Parse and inspect JSONL training data files in a readable table format.', tag: 'Data' },
             { cmd: 'sayaib.hue-console.mdTableGen', icon: '\\u{1F4D1}', title: 'Markdown Table Generator', desc: 'Quickly generate markdown tables for experiment results and documentation.', tag: 'Docs' },
-            { cmd: 'sayaib.hue-console.datasetProfiler', icon: '\\u{1F50E}', title: 'Dataset Profiler', desc: 'Profile CSV or JSON data with types, missing values, cardinality, and quick quality signals.', tag: 'Data' },
-            { cmd: 'sayaib.hue-console.metricsCalculator', icon: '\\u{1F4C8}', title: 'Model Metrics Calculator', desc: 'Calculate classification metrics from a confusion matrix or regression metrics from actual values.', tag: 'Evaluation' },
-            { cmd: 'sayaib.hue-console.promptPlayground', icon: '\\u{1F9EA}', title: 'Prompt Playground', desc: 'Compare prompt variants, estimate tokens, and export a reproducible chat payload.', tag: 'LLM' }
+            { cmd: 'sayaib.hue-console.lrScheduler', icon: '\\u{1F4C8}', title: 'LR Scheduler Visualizer', desc: 'Visualize learning rate schedules (Cosine, Warmup, Exponential) and generate PyTorch code.', tag: 'Training' },
+            { cmd: 'sayaib.hue-console.inferenceEstimator', icon: '\\u{26A1}', title: 'LLM Inference & VRAM Estimator', desc: 'Estimate token throughput, KV cache, and inference latency for open-source LLMs.', tag: 'Inference' }
         ];
         var grid = document.getElementById('grid');
         var groups = {};
-        var order = ['Prompting & APIs', 'Model Development', 'Data & Evaluation', 'Infrastructure', 'MLOps & Documentation'];
+        var order = ['Prompting & APIs', 'Model Development', 'Data & Evaluation', 'Infrastructure', 'Training & Inference'];
         tools.forEach(function(t) {
             var section = t.tag === 'LLM' || t.tag === 'Prompt' || t.tag === 'API' ? 'Prompting & APIs' :
                 (t.tag === 'Code' ? 'Model Development' : (t.tag === 'Data' || t.tag === 'Evaluation' ? 'Data & Evaluation' :
-                (t.tag === 'Compute' ? 'Infrastructure' : 'MLOps & Documentation')));
+                (t.tag === 'Compute' ? 'Infrastructure' : 'Training & Inference')));
             if (!groups[section]) groups[section] = [];
             groups[section].push(t);
         });
@@ -407,7 +414,7 @@ function getAiMlHubHtml(nonce) {
 </html>`;
 }
 /* ================================================================
-   1. TOKEN COUNTER & COST CALCULATOR
+   1. TOKEN COUNTER
    ================================================================ */
 function getTokenCounterHtml(nonce) {
     return `<!DOCTYPE html>
@@ -419,143 +426,72 @@ function getTokenCounterHtml(nonce) {
     <title>Token Counter & Cost Calculator</title>
     <style>
         ${SHARED_CSS}
-        .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
-        .model-card {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 12px;
-            cursor: pointer;
-            transition: all var(--transition);
-        }
-        .model-card:hover, .model-card.active { border-color: var(--accent); background: rgba(0,122,204,0.08); }
-        .model-card .name { font-weight: 700; font-size: 13px; }
-        .model-card .provider { font-size: 11px; color: var(--fg-1); }
-        .model-card .pricing { font-size: 11px; color: var(--fg-2); margin-top: 4px; font-family: var(--mono); }
-        .stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
-        .stat-box {
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px 20px;
-            flex: 1;
-            min-width: 140px;
-        }
-        .stat-box .label { font-size: 11px; color: var(--fg-1); text-transform: uppercase; letter-spacing: 0.3px; }
-        .stat-box .value { font-size: 22px; font-weight: 700; margin-top: 4px; font-family: var(--mono); }
-        .stat-box .value.cost { color: var(--success); }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+        .stat-box { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+        .stat-box .lbl { font-size: 11px; color: var(--fg-1); text-transform: uppercase; }
+        .stat-box .val { font-size: 20px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Token Counter & Cost Calculator</h1>
-        <span class="subtitle">Estimate tokens and API costs</span>
+        <span class="subtitle">Estimate token count and API costs across LLMs</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <label>Select Model</label>
-            <div class="model-grid" id="modelGrid"></div>
-        </div>
-        <div class="section">
             <label>Input Text</label>
-            <textarea id="textInput" rows="8" placeholder="Paste your text here to count tokens..."></textarea>
+            <textarea id="textInput" rows="8" placeholder="Paste prompt or text here..."></textarea>
             <div class="btn-row" style="margin-top: 12px;">
-                <button class="btn" id="countBtn">Count Tokens</button>
+                <button class="btn" id="countBtn">Calculate Tokens & Cost</button>
                 <button class="btn btn-ghost" id="clearBtn">Clear</button>
             </div>
         </div>
-        <div class="stat-row" id="stats" style="display:none;">
-            <div class="stat-box">
-                <div class="label">Tokens</div>
-                <div class="value" id="tokenCount">0</div>
+        <div class="section" id="statsSection" style="display:none;">
+            <div class="section-title">Token Statistics</div>
+            <div class="stat-grid">
+                <div class="stat-box"><div class="lbl">Characters</div><div class="val" id="charCount">0</div></div>
+                <div class="stat-box"><div class="lbl">Words</div><div class="val" id="wordCount">0</div></div>
+                <div class="stat-box"><div class="lbl">Estimated Tokens</div><div class="val" id="tokenCount">0</div></div>
             </div>
-            <div class="stat-box">
-                <div class="label">Characters</div>
-                <div class="value" id="charCount">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="label">Words (est.)</div>
-                <div class="value" id="wordCount">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="label">Est. Cost (Input)</div>
-                <div class="value cost" id="inputCost">$0.00</div>
-            </div>
-            <div class="stat-box">
-                <div class="label">Est. Cost (Output x2)</div>
-                <div class="value cost" id="outputCost">$0.00</div>
-            </div>
+        </div>
+        <div class="section" id="costSection" style="display:none; margin-top: 14px;">
+            <div class="section-title">Estimated API Costs (Input)</div>
+            <div class="result-block" id="costOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        var models = [
-            { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', inRate: 2.50, outRate: 10.00, ratio: 0.35 },
-            { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', inRate: 0.15, outRate: 0.60, ratio: 0.35 },
-            { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', provider: 'OpenAI', inRate: 10.00, outRate: 30.00, ratio: 0.35 },
-            { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', inRate: 0.50, outRate: 1.50, ratio: 0.35 },
-            { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'Anthropic', inRate: 3.00, outRate: 15.00, ratio: 0.40 },
-            { id: 'claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'Anthropic', inRate: 0.80, outRate: 4.00, ratio: 0.40 },
-            { id: 'claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic', inRate: 15.00, outRate: 75.00, ratio: 0.40 },
-            { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', inRate: 0.10, outRate: 0.40, ratio: 0.30 },
-            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google', inRate: 1.25, outRate: 5.00, ratio: 0.30 },
-            { id: 'llama-3.1-70b', name: 'Llama 3.1 70B', provider: 'Together/Open', inRate: 0.88, outRate: 0.88, ratio: 0.35 },
-            { id: 'mistral-large', name: 'Mistral Large', provider: 'Mistral', inRate: 2.00, outRate: 6.00, ratio: 0.35 }
-        ];
-
-        var selected = models[0];
-        var grid = document.getElementById('modelGrid');
-
-        models.forEach(function(m) {
-            var card = document.createElement('div');
-            card.className = 'model-card' + (m.id === selected.id ? ' active' : '');
-            card.setAttribute('data-model', m.id);
-            card.innerHTML = '<div class="name">' + m.name + '</div>' +
-                '<div class="provider">' + m.provider + '</div>' +
-                '<div class="pricing">$' + m.inRate.toFixed(2) + ' / $' + m.outRate.toFixed(2) + ' per 1M</div>';
-            card.addEventListener('click', function() {
-                document.querySelectorAll('.model-card').forEach(function(c) { c.classList.remove('active'); });
-                card.classList.add('active');
-                selected = m;
-                if (document.getElementById('textInput').value) doCount();
-            });
-            grid.appendChild(card);
-        });
-
-        function estimateTokens(text) {
-            var words = text.trim().split(/\\s+/).filter(function(w) { return w.length > 0; });
-            var tokens = 0;
-            words.forEach(function(w) {
-                if (w.length <= 3) tokens += 1;
-                else if (w.length <= 6) tokens += Math.ceil(w.length / 3);
-                else tokens += Math.ceil(w.length / 3.5);
-            });
-            tokens += Math.ceil(text.length / 200);
-            return Math.max(1, tokens);
-        }
-
-        function doCount() {
+        document.getElementById('countBtn').addEventListener('click', function() {
             var text = document.getElementById('textInput').value;
-            if (!text.trim()) { _toast('Enter some text', 'error'); return; }
             var chars = text.length;
-            var words = text.trim().split(/\\s+/).length;
-            var tokens = estimateTokens(text);
-            var inputCost = (tokens / 1000000) * selected.inRate;
-            var outputTokens = Math.round(tokens * selected.ratio);
-            var outputCost = (outputTokens / 1000000) * selected.outRate;
-            document.getElementById('tokenCount').textContent = tokens.toLocaleString();
+            var words = text.trim() ? text.trim().split(/\\s+/).length : 0;
+            // Approximate heuristic: 1 token ≈ 4 chars in English
+            var tokens = Math.max(1, Math.ceil(chars / 4.0));
+
             document.getElementById('charCount').textContent = chars.toLocaleString();
             document.getElementById('wordCount').textContent = words.toLocaleString();
-            document.getElementById('inputCost').textContent = '$' + inputCost.toFixed(6);
-            document.getElementById('outputCost').textContent = '$' + (inputCost + outputCost).toFixed(6);
-            document.getElementById('stats').style.display = 'flex';
-        }
+            document.getElementById('tokenCount').textContent = tokens.toLocaleString();
 
-        document.getElementById('countBtn').addEventListener('click', doCount);
+            var gpt4oCost = (tokens / 1000000.0) * 5.00;
+            var claude35Cost = (tokens / 1000000.0) * 3.00;
+            var geminiProCost = (tokens / 1000000.0) * 1.25;
+
+            var costText = 'API COST ESTIMATION FOR ' + tokens.toLocaleString() + ' TOKENS:\\n' + '='.repeat(40) + '\\n';
+            costText += '  - OpenAI GPT-4o ($5.00 / 1M input): $' + gpt4oCost.toFixed(6) + '\\n';
+            costText += '  - Anthropic Claude 3.5 Sonnet ($3.00 / 1M input): $' + claude35Cost.toFixed(6) + '\\n';
+            costText += '  - Google Gemini 1.5 Pro ($1.25 / 1M input): $' + geminiProCost.toFixed(6) + '\\n';
+
+            document.getElementById('costOutput').textContent = costText;
+            document.getElementById('statsSection').style.display = 'block';
+            document.getElementById('costSection').style.display = 'block';
+            _toast('Tokens counted!', 'success');
+        });
+
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('textInput').value = '';
-            document.getElementById('stats').style.display = 'none';
+            document.getElementById('statsSection').style.display = 'none';
+            document.getElementById('costSection').style.display = 'none';
         });
     </script>
 </body>
@@ -574,201 +510,71 @@ function getPromptTemplateHtml(nonce) {
     <title>Prompt Template Manager</title>
     <style>
         ${SHARED_CSS}
-        .template-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
-        .template-item {
-            display: flex; align-items: center; gap: 8px;
-            padding: 8px 12px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: all var(--transition);
-            font-size: 13px;
-        }
-        .template-item:hover, .template-item.active { border-color: var(--accent); }
-        .template-item .tname { flex: 1; font-weight: 600; }
-        .template-item .tcat { font-size: 11px; color: var(--fg-2); }
-        .var-tag {
-            display: inline-block;
-            background: rgba(0,122,204,0.15);
-            color: var(--accent);
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-family: var(--mono);
-            margin: 2px;
-        }
-        .rendered-output {
-            background: var(--bg-3);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            font-family: var(--mono);
-            font-size: 13px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-        }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Prompt Template Manager</h1>
-        <span class="subtitle">Create, save, and render prompt templates</span>
+        <span class="subtitle">Create and interpolate prompts with variable substitution</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="section-title">Saved Templates</div>
-            <div class="template-list" id="templateList"></div>
-            <div class="btn-row" style="margin-top: 10px;">
-                <button class="btn btn-ghost" id="addTemplateBtn">+ New Template</button>
-                <button class="btn btn-ghost btn-danger" id="deleteTemplateBtn">Delete</button>
+            <label>Template (use {{variable}} for placeholders)</label>
+            <textarea id="templateInput" rows="6" placeholder="You are a senior {{language}} developer. Review the following code for security vulnerabilities:\n\n{{code}}"></textarea>
+            <div style="margin-top: 14px;">
+                <label>Variables (JSON format, e.g. {"language": "Python", "code": "eval(user_input)"})</label>
+                <textarea id="varsInput" rows="4" placeholder='{\n  "language": "Python",\n  "code": "eval(user_input)"\n}'></textarea>
+            </div>
+            <div class="btn-row" style="margin-top: 14px;">
+                <button class="btn" id="renderBtn">Render Prompt</button>
+                <button class="btn btn-ghost" id="copyBtn">Copy Rendered</button>
+                <button class="btn btn-ghost" id="clearBtn">Clear</button>
             </div>
         </div>
-        <div class="section" id="editorSection" style="display:none;">
-            <div class="section-title">Template Editor</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-                <div><label>Name</label><input type="text" id="tplName" placeholder="e.g. Summarize Text"></div>
-                <div><label>Category</label><input type="text" id="tplCat" placeholder="e.g. summarization"></div>
-            </div>
-            <label>Template <span style="font-weight:400;color:var(--fg-2);">(use {{variable}} for placeholders)</span></label>
-            <textarea id="tplBody" rows="8" placeholder="e.g. Summarize the following text in {{style}} style:\\n\\n{{text}}"></textarea>
-            <div style="margin-top:8px;">
-                <label>Detected Variables</label>
-                <div id="varTags"></div>
-            </div>
-            <div class="btn-row" style="margin-top: 12px;">
-                <button class="btn" id="saveTemplateBtn">Save Template</button>
-            </div>
-        </div>
-        <div class="section" id="renderSection" style="display:none;">
-            <div class="section-title">Render Template</div>
-            <div id="renderVars"></div>
-            <div class="btn-row" style="margin-top: 12px;">
-                <button class="btn" id="renderBtn">Render</button>
-                <button class="btn btn-ghost" id="copyRenderBtn">Copy Output</button>
-            </div>
-            <div class="rendered-output" id="renderedOutput" style="margin-top:12px;display:none;"></div>
+        <div class="section" id="resultSection" style="display:none;">
+            <div class="section-title">Rendered Prompt Output</div>
+            <div class="result-block" id="resultOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        var templates = JSON.parse(localStorage.getItem('aiMlPromptTemplates') || '[]');
-        if (!templates.length) {
-            templates = [
-                { name: 'Summarize Text', cat: 'summarization', body: 'Summarize the following text in {{style}} style ({{length}} sentences):\\n\\n{{text}}' },
-                { name: 'Code Review', cat: 'coding', body: 'Review the following {{language}} code for bugs, performance issues, and best practices. Provide specific suggestions:\\n\\n{{code}}' },
-                { name: 'Explain Concept', cat: 'education', body: 'Explain {{concept}} to a {{audience}}. Use {{examples}} examples and keep it {{tone}}.' },
-                { name: 'Data Analysis', cat: 'analysis', body: 'Analyze the following {{dataType}} data and provide insights on {{focus}}:\\n\\n{{data}}' }
-            ];
-        }
-        var selectedIdx = -1;
+        var renderedText = '';
 
-        function save() { localStorage.setItem('aiMlPromptTemplates', JSON.stringify(templates)); }
+        document.getElementById('renderBtn').addEventListener('click', function() {
+            var tmpl = document.getElementById('templateInput').value;
+            var varsRaw = document.getElementById('varsInput').value.trim();
+            if (!tmpl) { _toast('Enter a template', 'error'); return; }
+            
+            var vars = {};
+            if (varsRaw) {
+                try {
+                    vars = JSON.parse(varsRaw);
+                } catch (e) {
+                    _toast('Invalid JSON variables: ' + e.message, 'error');
+                    return;
+                }
+            }
 
-        function renderList() {
-            var list = document.getElementById('templateList');
-            list.innerHTML = '';
-            templates.forEach(function(t, i) {
-                var el = document.createElement('div');
-                el.className = 'template-item' + (i === selectedIdx ? ' active' : '');
-                el.innerHTML = '<span class="tname">' + (t.name || 'Untitled') + '</span><span class="tcat">' + (t.cat || '') + '</span>';
-                el.addEventListener('click', function() { selectTemplate(i); });
-                list.appendChild(el);
+            renderedText = tmpl.replace(/\\{\\{\\s*([a-zA-Z0-9_-]+)\\s*\\}\\}/g, function(match, key) {
+                return vars[key] !== undefined ? vars[key] : match;
             });
-        }
 
-        function selectTemplate(i) {
-            selectedIdx = i;
-            var t = templates[i];
-            document.getElementById('tplName').value = t.name;
-            document.getElementById('tplCat').value = t.cat;
-            document.getElementById('tplBody').value = t.body;
-            document.getElementById('editorSection').style.display = 'block';
-            document.getElementById('renderSection').style.display = 'block';
-            updateVars();
-            renderList();
-            renderTemplate();
-        }
-
-        function updateVars() {
-            var body = document.getElementById('tplBody').value;
-            var vars = [];
-            var re = /\\{\\{(\\w+)\\}\\}/g;
-            var m;
-            while ((m = re.exec(body)) !== null) { if (vars.indexOf(m[1]) === -1) vars.push(m[1]); }
-            var container = document.getElementById('varTags');
-            container.innerHTML = '';
-            vars.forEach(function(v) {
-                var tag = document.createElement('span');
-                tag.className = 'var-tag';
-                tag.textContent = '{{' + v + '}}';
-                container.appendChild(tag);
-            });
-            var renderDiv = document.getElementById('renderVars');
-            renderDiv.innerHTML = '';
-            vars.forEach(function(v) {
-                var row = document.createElement('div');
-                row.style.marginBottom = '8px';
-                row.innerHTML = '<label>' + v + '</label><input type="text" class="tpl-var" data-var="' + v + '" placeholder="Value for ' + v + '">';
-                renderDiv.appendChild(row);
-            });
-        }
-
-        function renderTemplate() {
-            if (selectedIdx < 0) return;
-            var body = templates[selectedIdx].body;
-            document.querySelectorAll('.tpl-var').forEach(function(el) {
-                var val = el.value || '';
-                body = body.replace(new RegExp('\\{\\{' + el.getAttribute('data-var') + '\\}\\}', 'g'), val);
-            });
-            var out = document.getElementById('renderedOutput');
-            out.textContent = body;
-            out.style.display = 'block';
-        }
-
-        document.getElementById('addTemplateBtn').addEventListener('click', function() {
-            templates.push({ name: 'New Template', cat: '', body: '' });
-            save();
-            renderList();
-            selectTemplate(templates.length - 1);
+            document.getElementById('resultOutput').textContent = renderedText;
+            document.getElementById('resultSection').style.display = 'block';
+            _toast('Prompt rendered successfully!', 'success');
         });
 
-        document.getElementById('deleteTemplateBtn').addEventListener('click', function() {
-            if (selectedIdx < 0) { _toast('Select a template first', 'error'); return; }
-            templates.splice(selectedIdx, 1);
-            selectedIdx = -1;
-            save();
-            renderList();
-            document.getElementById('editorSection').style.display = 'none';
-            document.getElementById('renderSection').style.display = 'none';
-            _toast('Deleted', 'success');
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            if (!renderedText) { _toast('Render first', 'error'); return; }
+            navigator.clipboard.writeText(renderedText).then(function() { _toast('Copied prompt!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
 
-        document.getElementById('saveTemplateBtn').addEventListener('click', function() {
-            if (selectedIdx < 0) return;
-            templates[selectedIdx].name = document.getElementById('tplName').value;
-            templates[selectedIdx].cat = document.getElementById('tplCat').value;
-            templates[selectedIdx].body = document.getElementById('tplBody').value;
-            save();
-            renderList();
-            updateVars();
-            _toast('Template saved', 'success');
+        document.getElementById('clearBtn').addEventListener('click', function() {
+            document.getElementById('templateInput').value = '';
+            document.getElementById('varsInput').value = '';
+            document.getElementById('resultSection').style.display = 'none';
         });
-
-        document.getElementById('tplBody').addEventListener('input', updateVars);
-
-        document.getElementById('renderBtn').addEventListener('click', renderTemplate);
-
-        document.getElementById('copyRenderBtn').addEventListener('click', function() {
-            var text = document.getElementById('renderedOutput').textContent;
-            if (!text) { _toast('Nothing to copy', 'error'); return; }
-            navigator.clipboard.writeText(text).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
-        });
-
-        renderList();
     </script>
 </body>
 </html>`;
@@ -786,111 +592,52 @@ function getMlCodeGenHtml(nonce) {
     <title>Python ML Code Generator</title>
     <style>
         ${SHARED_CSS}
-        .codegen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .category-label { font-size: 11px; font-weight: 700; color: var(--fg-2); text-transform: uppercase; margin: 12px 0 6px; letter-spacing: 0.5px; }
-        .snippet-btn {
-            display: block; width: 100%;
-            text-align: left;
-            padding: 8px 12px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            color: var(--fg-0);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all var(--transition);
-        }
-        .snippet-btn:hover { border-color: var(--accent); background: rgba(0,122,204,0.06); }
-        .snippet-btn .sname { font-weight: 600; }
-        .snippet-btn .sdesc { color: var(--fg-2); font-size: 11px; }
-        @media (max-width: 768px) { .codegen-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Python ML Code Generator</h1>
-        <span class="subtitle">PyTorch, TensorFlow, HuggingFace, LangChain</span>
+        <span class="subtitle">Generate boilerplate code for PyTorch, Transformers, and Scikit-Learn</span>
     </div>
     <div class="tool-body">
-        <div class="codegen-grid">
-            <div>
-                <div class="category-label">PyTorch</div>
-                <div id="pytorchBtns"></div>
-                <div class="category-label">TensorFlow / Keras</div>
-                <div id="tfBtns"></div>
-            </div>
-            <div>
-                <div class="category-label">HuggingFace</div>
-                <div id="hfBtns"></div>
-                <div class="category-label">LangChain</div>
-                <div id="lcBtns"></div>
+        <div class="section">
+            <label>Select Framework & Task</label>
+            <select id="frameworkSelect" style="margin-bottom: 14px;">
+                <option value="pytorch_nn">PyTorch - Neural Network Classifier</option>
+                <option value="hf_transformer">HuggingFace - Fine-tune LLM (LoRA / PEFT)</option>
+                <option value="sklearn_pipeline">Scikit-Learn - Classification Pipeline</option>
+                <option value="langchain_rag">LangChain - RAG Vectorstore QA</option>
+            </select>
+            <div class="btn-row">
+                <button class="btn" id="genBtn">Generate Boilerplate</button>
+                <button class="btn btn-ghost" id="copyBtn">Copy Code</button>
             </div>
         </div>
-        <div class="section" style="margin-top:16px;">
-            <div class="btn-row" style="margin-bottom:10px;">
-                <button class="btn" id="copyCodeBtn">Copy Code</button>
-                <button class="btn btn-ghost" id="insertCodeBtn">Insert at Cursor</button>
-            </div>
-            <div class="result-block" id="codeOutput" style="min-height:200px;white-space:pre;">Select a template above to generate code...</div>
+        <div class="section">
+            <div class="section-title">Generated Python Code</div>
+            <div class="result-block" id="codeOutput"># Select a framework and click Generate Boilerplate</div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
         var snippets = {
-            pytorch: [
-                { name: 'Training Loop', desc: 'Basic training loop with loss tracking', code: 'import torch\\nimport torch.nn as nn\\nimport torch.optim as optim\\nfrom torch.utils.data import DataLoader\\n\\n# Model\\nclass MyModel(nn.Module):\\n    def __init__(self, input_dim, hidden_dim, output_dim):\\n        super().__init__()\\n        self.layers = nn.Sequential(\\n            nn.Linear(input_dim, hidden_dim),\\n            nn.ReLU(),\\n            nn.Linear(hidden_dim, output_dim)\\n        )\\n\\n    def forward(self, x):\\n        return self.layers(x)\\n\\n# Training\\nmodel = MyModel(784, 256, 10).to(device)\\ncriterion = nn.CrossEntropyLoss()\\noptimizer = optim.Adam(model.parameters(), lr=1e-3)\\n\\nfor epoch in range(num_epochs):\\n    model.train()\\n    for batch_x, batch_y in train_loader:\\n        batch_x, batch_y = batch_x.to(device), batch_y.to(device)\\n        optimizer.zero_grad()\\n        output = model(batch_x)\\n        loss = criterion(output, batch_y)\\n        loss.backward()\\n        optimizer.step()\\n    print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")' },
-                { name: 'CNN Image Classifier', desc: 'Convolutional network for images', code: 'import torch\\nimport torch.nn as nn\\n\\nclass CNNClassifier(nn.Module):\\n    def __init__(self, num_classes=10):\\n        super().__init__()\\n        self.features = nn.Sequential(\\n            nn.Conv2d(3, 32, 3, padding=1),\\n            nn.BatchNorm2d(32),\\n            nn.ReLU(),\\n            nn.MaxPool2d(2),\\n            nn.Conv2d(32, 64, 3, padding=1),\\n            nn.BatchNorm2d(64),\\n            nn.ReLU(),\\n            nn.MaxPool2d(2),\\n            nn.Conv2d(64, 128, 3, padding=1),\\n            nn.BatchNorm2d(128),\\n            nn.ReLU(),\\n            nn.AdaptiveAvgPool2d(1)\\n        )\\n        self.classifier = nn.Linear(128, num_classes)\\n\\n    def forward(self, x):\\n        x = self.features(x)\\n        x = x.view(x.size(0), -1)\\n        return self.classifier(x)' },
-                { name: 'DataLoader Setup', desc: 'Dataset and DataLoader boilerplate', code: 'import torch\\nfrom torch.utils.data import Dataset, DataLoader\\nfrom sklearn.model_selection import train_test_split\\n\\nclass CustomDataset(Dataset):\\n    def __init__(self, features, labels):\\n        self.features = torch.tensor(features, dtype=torch.float32)\\n        self.labels = torch.tensor(labels, dtype=torch.long)\\n\\n    def __len__(self):\\n        return len(self.labels)\\n\\n    def __getitem__(self, idx):\\n        return self.features[idx], self.labels[idx]\\n\\n# Split data\\nX_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)\\n\\ntrain_dataset = CustomDataset(X_train, y_train)\\nval_dataset = CustomDataset(X_val, y_val)\\n\\ntrain_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)\\nval_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)' },
-                { name: 'Transfer Learning', desc: 'Fine-tune pretrained ResNet', code: 'import torch\\nimport torch.nn as nn\\nfrom torchvision import models\\n\\nmodel = models.resnet50(pretrained=True)\\n\\n# Freeze all layers\\nfor param in model.parameters():\\n    param.requires_grad = False\\n\\n# Replace classifier\\nnum_features = model.fc.in_features\\nmodel.fc = nn.Sequential(\\n    nn.Linear(num_features, 256),\\n    nn.ReLU(),\\n    nn.Dropout(0.3),\\n    nn.Linear(256, num_classes)\\n)\\n\\nmodel = model.to(device)' }
-            ],
-            tensorflow: [
-                { name: 'Sequential Model', desc: 'Keras sequential API', code: 'import tensorflow as tf\\nfrom tensorflow import keras\\nfrom tensorflow.keras import layers\\n\\nmodel = keras.Sequential([\\n    layers.Dense(128, activation="relu", input_shape=(input_dim,)),\\n    layers.BatchNormalization(),\\n    layers.Dropout(0.3),\\n    layers.Dense(64, activation="relu"),\\n    layers.Dropout(0.2),\\n    layers.Dense(num_classes, activation="softmax")\\n])\\n\\nmodel.compile(\\n    optimizer=keras.optimizers.Adam(learning_rate=1e-3),\\n    loss="sparse_categorical_crossentropy",\\n    metrics=["accuracy"]\\n)\\n\\nhistory = model.fit(\\n    train_ds,\\n    validation_data=val_ds,\\n    epochs=50,\\n    callbacks=[\\n        keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),\\n        keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=3)\\n    ]\\n)' },
-                { name: 'CNN Model', desc: 'Convolutional neural network', code: 'import tensorflow as tf\\nfrom tensorflow.keras import layers\\n\\nmodel = tf.keras.Sequential([\\n    layers.Conv2D(32, (3,3), activation="relu", input_shape=(28,28,1)),\\n    layers.MaxPooling2D((2,2)),\\n    layers.Conv2D(64, (3,3), activation="relu"),\\n    layers.MaxPooling2D((2,2)),\\n    layers.Conv2D(128, (3,3), activation="relu"),\\n    layers.GlobalAveragePooling2D(),\\n    layers.Dense(128, activation="relu"),\\n    layers.Dropout(0.5),\\n    layers.Dense(10, activation="softmax")\\n])' },
-                { name: 'Data Pipeline', desc: 'tf.data pipeline with augmentation', code: 'import tensorflow as tf\\n\\ndef augment(image, label):\\n    image = tf.image.random_flip_left_right(image)\\n    image = tf.image.random_brightness(image, 0.2)\\n    image = tf.image.random_contrast(image, 0.8, 1.2)\\n    return image, label\\n\\ntrain_ds = tf.data.Dataset.from_tensor_slices((X_train, y_train))\\ntrain_ds = train_ds.map(augment, num_parallel_calls=tf.data.AUTOTUNE)\\ntrain_ds = train_ds.batch(32).prefetch(tf.data.AUTOTUNE)\\n\\nval_ds = tf.data.Dataset.from_tensor_slices((X_val, y_val))\\nval_ds = val_ds.batch(32).prefetch(tf.data.AUTOTUNE)' }
-            ],
-            huggingface: [
-                { name: 'Text Classification', desc: 'Fine-tune BERT for classification', code: 'from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments\\n\\nmodel_name = "bert-base-uncased"\\ntokenizer = AutoTokenizer.from_pretrained(model_name)\\nmodel = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)\\n\\ntraining_args = TrainingArguments(\\n    output_dir="./results",\\n    num_train_epochs=3,\\n    per_device_train_batch_size=16,\\n    per_device_eval_batch_size=32,\\n    warmup_steps=500,\\n    weight_decay=0.01,\\n    logging_dir="./logs",\\n    logging_steps=100,\\n    eval_strategy="epoch",\\n    save_strategy="epoch",\\n    load_best_model_at_end=True,\\n)\\n\\ntrainer = Trainer(\\n    model=model,\\n    args=training_args,\\n    train_dataset=train_dataset,\\n    eval_dataset=val_dataset,\\n)\\n\\ntrainer.train()' },
-                { name: 'Text Generation', desc: 'Generate text with any model', code: 'from transformers import AutoTokenizer, AutoModelForCausalLM\\nimport torch\\n\\nmodel_name = "microsoft/DialoGPT-medium"\\ntokenizer = AutoTokenizer.from_pretrained(model_name)\\nmodel = AutoModelForCausalLM.from_pretrained(model_name)\\n\\ndef generate(prompt, max_new_tokens=100, temperature=0.7, top_p=0.9):\\n    inputs = tokenizer.encode(prompt, return_tensors="pt")\\n    with torch.no_grad():\\n        outputs = model.generate(\\n            inputs,\\n            max_new_tokens=max_new_tokens,\\n            temperature=temperature,\\n            top_p=top_p,\\n            do_sample=True,\\n            pad_token_id=tokenizer.eos_token_id\\n        )\\n    return tokenizer.decode(outputs[0], skip_special_tokens=True)\\n\\nresponse = generate("Hello, how are you?")\\nprint(response)' },
-                { name: 'Embeddings Pipeline', desc: 'Compute sentence embeddings', code: 'from sentence_transformers import SentenceTransformer\\nimport numpy as np\\n\\nmodel = SentenceTransformer("all-MiniLM-L6-v2")\\n\\nsentences = [\\n    "This is a sample sentence.",\\n    "Each sentence is converted to a vector.",\\n    "These vectors can be used for similarity search."\\n]\\n\\nembeddings = model.encode(sentences)\\nprint(f"Shape: {embeddings.shape}")  # (3, 384)\\n\\n# Cosine similarity\\nfrom sklearn.metrics.pairwise import cosine_similarity\\nsim_matrix = cosine_similarity(embeddings)\\nprint(sim_matrix)' }
-            ],
-            langchain: [
-                { name: 'RAG Chain', desc: 'Retrieval-augmented generation', code: 'from langchain_openai import ChatOpenAI, OpenAIEmbeddings\\nfrom langchain_community.vectorstores import FAISS\\nfrom langchain.text_splitter import RecursiveCharacterTextSplitter\\nfrom langchain.chains import RetrievalQA\\nfrom langchain_community.document_loaders import DirectoryLoader, TextLoader\\n\\n# Load and split docs\\nloader = DirectoryLoader("./docs", glob="**/*.txt", loader_cls=TextLoader)\\ndocs = loader.load()\\n\\ntext_splitter = RecursiveCharacterTextSplitter(\\n    chunk_size=1000,\\n    chunk_overlap=200,\\n    separators=["\\\\n\\\\n", "\\\\n", " ", ""]\\n)\\nchunks = text_splitter.split_documents(docs)\\n\\n# Create vector store\\nembeddings = OpenAIEmbeddings()\\nvectorstore = FAISS.from_documents(chunks, embeddings)\\n\\n# Create chain\\nllm = ChatOpenAI(model="gpt-4o", temperature=0)\\nqa_chain = RetrievalQA.from_chain_type(\\n    llm=llm,\\n    chain_type="stuff",\\n    retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),\\n    return_source_documents=True\\n)\\n\\nresult = qa_chain.invoke({"query": "What is the main topic?"})\\nprint(result["result"])' },
-                { name: 'Agent with Tools', desc: 'LLM agent with custom tools', code: 'from langchain_openai import ChatOpenAI\\nfrom langchain.agents import create_tool_calling_agent, AgentExecutor\\nfrom langchain_core.prompts import ChatPromptTemplate\\nfrom langchain_core.tools import tool\\n\\n@tool\\ndef calculator(expression: str) -> str:\\n    """Evaluate a mathematical expression."""\\n    return str(eval(expression))\\n\\n@tool\\ndef get_word_count(text: str) -> int:\\n    """Count words in text."""\\n    return len(text.split())\\n\\nllm = ChatOpenAI(model="gpt-4o", temperature=0)\\nprompt = ChatPromptTemplate.from_messages([\\n    ("system", "You are a helpful assistant. Use the provided tools."),\\n    ("human", "{input}"),\\n    ("placeholder", "{agent_scratchpad}")\\n])\\n\\nagent = create_tool_calling_agent(llm, [calculator, get_word_count], prompt)\\nexecutor = AgentExecutor(agent=agent, tools=[calculator, get_word_count], verbose=True)\\n\\nresult = executor.invoke({"input": "What is 42 * 17 + the word count of \\"hello world\\"?"})\\nprint(result["output"])' }
-            ]
+            pytorch_nn: 'import torch\\nimport torch.nn as nn\\nimport torch.optim as optim\\n\\nclass SimpleMLP(nn.Module):\\n    def __init__(self, input_dim, hidden_dim, output_dim):\\n        super().__init__()\\n        self.net = nn.Sequential(\\n            nn.Linear(input_dim, hidden_dim),\\n            nn.ReLU(),\\n            nn.Dropout(0.2),\\n            nn.Linear(hidden_dim, output_dim)\\n        )\\n    def forward(self, x):\\n        return self.net(x)\\n\\nmodel = SimpleMLP(784, 256, 10)\\ncriterion = nn.CrossEntropyLoss()\\noptimizer = optim.Adam(model.parameters(), lr=1e-3)',
+            hf_transformer: 'import torch\\nfrom transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer\\nfrom peft import LoraConfig, get_peft_model\\n\\nmodel_id = "meta-llama/Meta-Llama-3-8B-Instruct"\\nmodel = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.bfloat16, device_map="auto")\\ntokenizer = AutoTokenizer.from_pretrained(model_id)\\n\\npeft_config = LoraConfig(\\n    r=16, lora_alpha=32, target_modules=["q_proj", "v_proj"], lora_dropout=0.05, bias="none", task_type="CAUSAL_LM"\\n)\\nmodel = get_peft_model(model, peft_config)\\nmodel.print_trainable_parameters()',
+            sklearn_pipeline: 'from sklearn.pipeline import Pipeline\\nfrom sklearn.ensemble import RandomForestClassifier\\nfrom sklearn.feature_extraction.text import TfidfVectorizer\\nfrom sklearn.model_selection import train_test_split\\n\\npipeline = Pipeline([\\n    ("tfidf", TfidfVectorizer(max_features=5000)),\\n    ("clf", RandomForestClassifier(n_estimators=100, random_state=42))\\n])\\n\\n# pipeline.fit(X_train, y_train)\\n# preds = pipeline.predict(X_test)',
+            langchain_rag: 'from langchain_community.vectorstores import Chroma\\nfrom langchain_openai import OpenAIEmbeddings, ChatOpenAI\\nfrom langchain.chains import RetrievalQA\\n\\nembeddings = OpenAIEmbeddings()\\nvectorstore = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)\\nqa_chain = RetrievalQA.from_chain_type(\\n    llm=ChatOpenAI(model="gpt-4o", temperature=0),\\n    chain_type="stuff",\\n    retriever=vectorstore.as_retriever(search_kwargs={"k": 3})\\n)\\nresponse = qa_chain.invoke({"query": "What is the refund policy?"})\\nprint(response["result"])'
         };
 
-        var currentCode = '';
-
-        function renderButtons(category, containerId) {
-            var container = document.getElementById(containerId);
-            snippets[category].forEach(function(s) {
-                var btn = document.createElement('button');
-                btn.className = 'snippet-btn';
-                btn.innerHTML = '<div class="sname">' + s.name + '</div><div class="sdesc">' + s.desc + '</div>';
-                btn.addEventListener('click', function() {
-                    currentCode = s.code;
-                    document.getElementById('codeOutput').textContent = s.code;
-                });
-                container.appendChild(btn);
-            });
-        }
-
-        renderButtons('pytorch', 'pytorchBtns');
-        renderButtons('tensorflow', 'tfBtns');
-        renderButtons('huggingface', 'hfBtns');
-        renderButtons('langchain', 'lcBtns');
-
-        document.getElementById('copyCodeBtn').addEventListener('click', function() {
-            if (!currentCode) { _toast('Select a template first', 'error'); return; }
-            navigator.clipboard.writeText(currentCode).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+        document.getElementById('genBtn').addEventListener('click', function() {
+            var val = document.getElementById('frameworkSelect').value;
+            var code = snippets[val] || '# No snippet found';
+            document.getElementById('codeOutput').textContent = code;
+            _toast('Boilerplate generated!', 'success');
         });
 
-        document.getElementById('insertCodeBtn').addEventListener('click', function() {
-            if (!currentCode) { _toast('Select a template first', 'error'); return; }
-            var vscode = acquireVsCodeApi();
-            vscode.postMessage({ command: 'insertCode', code: currentCode });
-            _toast('Inserted at cursor', 'success');
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            var text = document.getElementById('codeOutput').textContent;
+            navigator.clipboard.writeText(text).then(function() { _toast('Copied code!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
     </script>
 </body>
@@ -909,184 +656,83 @@ function getLlmApiTesterHtml(nonce) {
     <title>LLM API Tester</title>
     <style>
         ${SHARED_CSS}
-        .provider-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
-        .provider-tab {
-            padding: 6px 14px;
-            border-radius: var(--radius-sm);
-            font-size: 12px; font-weight: 600;
-            cursor: pointer;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            color: var(--fg-1);
-            transition: all var(--transition);
-        }
-        .provider-tab.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
-        .response-area {
-            background: var(--bg-3);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            font-family: var(--mono);
-            font-size: 13px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            max-height: 400px;
-            overflow-y: auto;
-            min-height: 100px;
-        }
-        .response-meta { font-size: 11px; color: var(--fg-2); margin-top: 8px; display: flex; gap: 16px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>LLM API Tester</h1>
-        <span class="subtitle">Test OpenAI, Anthropic, Gemini endpoints</span>
+        <span class="subtitle">Test OpenAI and compatible LLM API endpoints</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="provider-tabs" id="providerTabs">
-                <div class="provider-tab active" data-provider="openai">OpenAI</div>
-                <div class="provider-tab" data-provider="anthropic">Anthropic</div>
-                <div class="provider-tab" data-provider="gemini">Gemini</div>
-                <div class="provider-tab" data-provider="ollama">Ollama</div>
+            <div class="panels">
+                <div>
+                    <label>API Endpoint URL</label>
+                    <input type="text" id="apiUrl" value="https://api.openai.com/v1/chat/completions" />
+                </div>
+                <div>
+                    <label>API Key (Bearer Token)</label>
+                    <input type="text" id="apiKey" placeholder="sk-..." />
+                </div>
             </div>
-            <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;">
-                <div><label>API Endpoint</label><input type="text" id="endpoint" value="https://api.openai.com/v1/chat/completions"></div>
-                <div><label>API Key</label><input type="password" id="apiKey" placeholder="sk-..."></div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Model Name</label>
+                    <input type="text" id="apiModel" value="gpt-4o" />
+                </div>
+                <div>
+                    <label>Temperature</label>
+                    <input type="number" id="apiTemp" value="0.7" min="0" max="2" step="0.1" />
+                </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                <div><label>Model</label><input type="text" id="model" value="gpt-4o"></div>
-                <div><label>Temperature</label><input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1"></div>
+            <div style="margin-top: 14px;">
+                <label>User Prompt</label>
+                <textarea id="apiPrompt" rows="4" placeholder="Hello, write a quick Python function to check prime numbers."></textarea>
+            </div>
+            <div class="btn-row" style="margin-top: 14px;">
+                <button class="btn" id="sendBtn">Send API Request</button>
             </div>
         </div>
-        <div class="section">
-            <label>System Prompt</label>
-            <textarea id="systemPrompt" rows="3" placeholder="You are a helpful assistant."></textarea>
-        </div>
-        <div class="section">
-            <label>User Message</label>
-            <textarea id="userMessage" rows="4" placeholder="Enter your message..."></textarea>
-            <div class="btn-row" style="margin-top:12px;">
-                <button class="btn" id="sendBtn">Send Request</button>
-                <button class="btn btn-ghost" id="clearResponseBtn">Clear Response</button>
-            </div>
-        </div>
-        <div class="section">
-            <label>Response</label>
-            <div class="response-area" id="responseArea">Response will appear here...</div>
-            <div class="response-meta" id="responseMeta" style="display:none;">
-                <span id="metaTokens">Tokens: -</span>
-                <span id="metaTime">Time: -</span>
-                <span id="metaModel">Model: -</span>
-            </div>
-            <div class="btn-row" style="margin-top:8px;">
-                <button class="btn btn-ghost" id="copyResponseBtn">Copy Response</button>
-            </div>
+        <div class="section" id="responseSection" style="display:none;">
+            <div class="section-title">API Response</div>
+            <div class="result-block" id="responseOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        var providers = {
-            openai: { endpoint: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o', headerKey: 'Authorization', headerPrefix: 'Bearer ' },
-            anthropic: { endpoint: 'https://api.anthropic.com/v1/messages', model: 'claude-sonnet-4-20250514', headerKey: 'x-api-key', headerPrefix: '' },
-            gemini: { endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/', model: 'gemini-2.0-flash', headerKey: 'x-goog-api-key', headerPrefix: '' },
-            ollama: { endpoint: 'http://localhost:11434/api/chat', model: 'llama3.1', headerKey: '', headerPrefix: '' }
-        };
-        var currentProvider = 'openai';
-
-        document.querySelectorAll('.provider-tab').forEach(function(tab) {
-            tab.addEventListener('click', function() {
-                document.querySelectorAll('.provider-tab').forEach(function(t) { t.classList.remove('active'); });
-                tab.classList.add('active');
-                currentProvider = tab.getAttribute('data-provider');
-                var p = providers[currentProvider];
-                document.getElementById('endpoint').value = p.endpoint;
-                document.getElementById('model').value = p.model;
-            });
-        });
-
         document.getElementById('sendBtn').addEventListener('click', async function() {
-            var apiKey = document.getElementById('apiKey').value;
-            var model = document.getElementById('model').value;
-            var sysPrompt = document.getElementById('systemPrompt').value;
-            var userMsg = document.getElementById('userMessage').value;
-            var temp = parseFloat(document.getElementById('temperature').value);
-            var endpoint = document.getElementById('endpoint').value;
+            var url = document.getElementById('apiUrl').value.trim();
+            var key = document.getElementById('apiKey').value.trim();
+            var model = document.getElementById('apiModel').value.trim();
+            var temp = parseFloat(document.getElementById('apiTemp').value) || 0.7;
+            var prompt = document.getElementById('apiPrompt').value.trim();
 
-            if (!userMsg) { _toast('Enter a message', 'error'); return; }
+            if (!url || !prompt) { _toast('Provide endpoint URL and prompt', 'error'); return; }
 
-            var responseArea = document.getElementById('responseArea');
-            responseArea.textContent = 'Loading...';
-            document.getElementById('responseMeta').style.display = 'none';
-            var startTime = Date.now();
+            document.getElementById('responseOutput').textContent = 'Sending request to ' + url + '...';
+            document.getElementById('responseSection').style.display = 'block';
 
             try {
-                var headers = { 'Content-Type': 'application/json' };
-                var body = {};
-
-                if (currentProvider === 'openai' || currentProvider === 'ollama') {
-                    headers[providers[currentProvider].headerKey] = providers[currentProvider].headerPrefix + apiKey;
-                    var messages = [];
-                    if (sysPrompt) messages.push({ role: 'system', content: sysPrompt });
-                    messages.push({ role: 'user', content: userMsg });
-                    body = { model: model, messages: messages, temperature: temp, max_tokens: 2048 };
-                } else if (currentProvider === 'anthropic') {
-                    headers[providers[currentProvider].headerKey] = apiKey;
-                    headers['anthropic-version'] = '2023-06-01';
-                    body = { model: model, max_tokens: 2048, temperature: temp, messages: [{ role: 'user', content: userMsg }] };
-                    if (sysPrompt) body.system = sysPrompt;
-                } else if (currentProvider === 'gemini') {
-                    endpoint = endpoint + model + ':generateContent?key=' + apiKey;
-                    var contents = [];
-                    if (sysPrompt) contents.push({ role: 'user', parts: [{ text: sysPrompt }] });
-                    contents.push({ role: 'user', parts: [{ text: userMsg }] });
-                    body = { contents: contents, generationConfig: { temperature: temp, maxOutputTokens: 2048 } };
-                }
-
-                var resp = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify(body) });
-                var elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-
-                if (!resp.ok) {
-                    var errText = await resp.text();
-                    responseArea.textContent = 'Error ' + resp.status + ': ' + errText;
-                    return;
-                }
-
-                var data = await resp.json();
-                var content = '';
-                var tokens = '-';
-
-                if (currentProvider === 'openai' || currentProvider === 'ollama') {
-                    content = data.choices && data.choices[0] ? data.choices[0].message.content : JSON.stringify(data, null, 2);
-                    if (data.usage) tokens = data.usage.total_tokens;
-                } else if (currentProvider === 'anthropic') {
-                    content = data.content && data.content[0] ? data.content[0].text : JSON.stringify(data, null, 2);
-                    if (data.usage) tokens = data.usage.input_tokens + ' in / ' + data.usage.output_tokens + ' out';
-                } else if (currentProvider === 'gemini') {
-                    content = data.candidates && data.candidates[0] ? data.candidates[0].content.parts[0].text : JSON.stringify(data, null, 2);
-                    if (data.usageMetadata) tokens = data.usageMetadata.totalTokenCount;
-                }
-
-                responseArea.textContent = content;
-                document.getElementById('metaTokens').textContent = 'Tokens: ' + tokens;
-                document.getElementById('metaTime').textContent = 'Time: ' + elapsed + 's';
-                document.getElementById('metaModel').textContent = 'Model: ' + model;
-                document.getElementById('responseMeta').style.display = 'flex';
+                var res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + key
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: temp
+                    })
+                });
+                var data = await res.json();
+                document.getElementById('responseOutput').textContent = JSON.stringify(data, null, 2);
+                _toast('API request successful!', 'success');
             } catch (e) {
-                responseArea.textContent = 'Error: ' + e.message;
+                document.getElementById('responseOutput').textContent = 'Error: ' + e.message + '\\n\\n(Note: Network requests from VS Code webviews may require CORS or proper endpoint configuration)';
+                _toast('Request failed', 'error');
             }
-        });
-
-        document.getElementById('clearResponseBtn').addEventListener('click', function() {
-            document.getElementById('responseArea').textContent = 'Response will appear here...';
-            document.getElementById('responseMeta').style.display = 'none';
-        });
-
-        document.getElementById('copyResponseBtn').addEventListener('click', function() {
-            var text = document.getElementById('responseArea').textContent;
-            if (!text || text === 'Response will appear here...') { _toast('Nothing to copy', 'error'); return; }
-            navigator.clipboard.writeText(text).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
     </script>
 </body>
@@ -1105,102 +751,70 @@ function getDatasetSplitHtml(nonce) {
     <title>Dataset Split Calculator</title>
     <style>
         ${SHARED_CSS}
-        .split-bar { display: flex; height: 40px; border-radius: var(--radius-sm); overflow: hidden; margin-top: 12px; }
-        .split-bar div { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; }
-        .train-bar { background: #2196f3; }
-        .val-bar { background: #ff9800; }
-        .test-bar { background: #4caf50; }
-        .split-legend { display: flex; gap: 20px; margin-top: 10px; font-size: 12px; }
-        .split-legend span { display: flex; align-items: center; gap: 6px; }
-        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
-        .result-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; text-align: center; }
-        .result-card .label { font-size: 11px; color: var(--fg-1); text-transform: uppercase; }
-        .result-card .value { font-size: 20px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Dataset Split Calculator</h1>
-        <span class="subtitle">Calculate train/val/test splits</span>
+        <span class="subtitle">Calculate exact sample counts for Train, Validation, and Test splits</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-                <div><label>Total Samples</label><input type="number" id="totalSamples" value="10000" min="1"></div>
-                <div><label>Train %</label><input type="number" id="trainPct" value="70" min="0" max="100"></div>
-                <div><label>Val %</label><input type="number" id="valPct" value="15" min="0" max="100"></div>
+            <div class="panels">
+                <div>
+                    <label>Total Dataset Samples</label>
+                    <input type="number" id="totalSamples" value="50000" min="10" />
+                </div>
+                <div>
+                    <label>Train Split (%)</label>
+                    <input type="number" id="trainPct" value="80" min="1" max="98" />
+                </div>
             </div>
-            <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-                <div><label>Test %</label><input type="number" id="testPct" value="15" min="0" max="100" readonly></div>
-                <div><label>Random Seed</label><input type="number" id="seed" value="42"></div>
-                <div><label>Stratify</label><select id="stratify"><option value="no">No</option><option value="yes">Yes</option></select></div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Validation Split (%)</label>
+                    <input type="number" id="valPct" value="10" min="0" max="50" />
+                </div>
+                <div>
+                    <label>Test Split (%) (auto-calculated)</label>
+                    <input type="text" id="testPct" value="10%" disabled style="background:var(--bg-3);" />
+                </div>
             </div>
-            <div class="btn-row" style="margin-top:14px;">
-                <button class="btn" id="calcBtn">Calculate Split</button>
-                <button class="btn btn-ghost" id="copySplitBtn">Copy Config</button>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="calcBtn">Calculate Splits</button>
             </div>
         </div>
         <div class="section" id="resultSection" style="display:none;">
-            <div class="split-bar" id="splitBar"></div>
-            <div class="split-legend">
-                <span><span class="legend-dot" style="background:#2196f3;"></span> Train</span>
-                <span><span class="legend-dot" style="background:#ff9800;"></span> Validation</span>
-                <span><span class="legend-dot" style="background:#4caf50;"></span> Test</span>
-            </div>
-            <div class="result-grid" id="resultGrid"></div>
-            <div class="section" style="margin-top:14px;">
-                <label>Python Code</label>
-                <div class="result-block" id="splitCode"></div>
-            </div>
+            <div class="section-title">Split Breakdown</div>
+            <div class="result-block" id="resultOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        document.getElementById('trainPct').addEventListener('input', function() {
-            var train = parseInt(this.value) || 0;
-            var val = parseInt(document.getElementById('valPct').value) || 0;
-            document.getElementById('testPct').value = Math.max(0, 100 - train - val);
-        });
-        document.getElementById('valPct').addEventListener('input', function() {
-            var train = parseInt(document.getElementById('trainPct').value) || 0;
-            var val = parseInt(this.value) || 0;
-            document.getElementById('testPct').value = Math.max(0, 100 - train - val);
-        });
-
         document.getElementById('calcBtn').addEventListener('click', function() {
-            var total = parseInt(document.getElementById('totalSamples').value) || 10000;
-            var trainPct = parseInt(document.getElementById('trainPct').value) || 70;
-            var valPct = parseInt(document.getElementById('valPct').value) || 15;
-            var testPct = 100 - trainPct - valPct;
-            var seed = parseInt(document.getElementById('seed').value) || 42;
-            var stratify = document.getElementById('stratify').value === 'yes';
+            var total = parseInt(document.getElementById('totalSamples').value) || 50000;
+            var train = parseFloat(document.getElementById('trainPct').value) || 80;
+            var val = parseFloat(document.getElementById('valPct').value) || 10;
+            var test = 100 - (train + val);
 
-            var trainCount = Math.round(total * trainPct / 100);
-            var valCount = Math.round(total * valPct / 100);
-            var testCount = total - trainCount - valCount;
+            if (test < 0) { _toast('Train + Val percentages cannot exceed 100%', 'error'); return; }
 
-            var bar = document.getElementById('splitBar');
-            bar.innerHTML = '<div class="train-bar" style="width:' + trainPct + '%">' + trainPct + '%</div>' +
-                '<div class="val-bar" style="width:' + valPct + '%">' + valPct + '%</div>' +
-                '<div class="test-bar" style="width:' + testPct + '%">' + testPct + '%</div>';
+            document.getElementById('testPct').value = test.toFixed(1) + '%';
 
-            var grid = document.getElementById('resultGrid');
-            grid.innerHTML = '<div class="result-card"><div class="label">Train</div><div class="value" style="color:#2196f3;">' + trainCount.toLocaleString() + '</div></div>' +
-                '<div class="result-card"><div class="label">Validation</div><div class="value" style="color:#ff9800;">' + valCount.toLocaleString() + '</div></div>' +
-                '<div class="result-card"><div class="label">Test</div><div class="value" style="color:#4caf50;">' + testCount.toLocaleString() + '</div></div>';
+            var trainCount = Math.round(total * (train / 100.0));
+            var valCount = Math.round(total * (val / 100.0));
+            var testCount = total - (trainCount + valCount);
 
-            var stratParam = stratify ? ', stratify=y' : '';
-            var code = 'from sklearn.model_selection import train_test_split\\n\\nX_train, X_temp, y_train, y_temp = train_test_split(\\n    X, y,\\n    test_size=' + ((valPct + testPct) / 100).toFixed(2) + ',\\n    random_state=' + seed + stratParam + '\\n)\\n\\nX_val, X_test, y_val, y_test = train_test_split(\\n    X_temp, y_temp,\\n    test_size=' + (testPct / (valPct + testPct)).toFixed(2) + ',\\n    random_state=' + seed + stratParam + '\\n)\\n\\nprint(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")';
-            document.getElementById('splitCode').textContent = code;
+            var report = 'DATASET SPLIT BREAKDOWN\\n' + '='.repeat(30) + '\\n';
+            report += 'Total Samples: ' + total.toLocaleString() + '\\n\\n';
+            report += '  - Train (' + train + '%): ' + trainCount.toLocaleString() + ' samples\\n';
+            report += '  - Validation (' + val + '%): ' + valCount.toLocaleString() + ' samples\\n';
+            report += '  - Test (' + test.toFixed(1) + '%): ' + testCount.toLocaleString() + ' samples\\n';
+
+            document.getElementById('resultOutput').textContent = report;
             document.getElementById('resultSection').style.display = 'block';
-        });
-
-        document.getElementById('copySplitBtn').addEventListener('click', function() {
-            var code = document.getElementById('splitCode').textContent;
-            if (!code) { _toast('Calculate first', 'error'); return; }
-            navigator.clipboard.writeText(code).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+            _toast('Splits calculated!', 'success');
         });
     </script>
 </body>
@@ -1219,125 +833,79 @@ function getGpuVramHtml(nonce) {
     <title>GPU VRAM Calculator</title>
     <style>
         ${SHARED_CSS}
-        .vram-result { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; }
-        .vram-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; text-align: center; }
-        .vram-card .label { font-size: 11px; color: var(--fg-1); text-transform: uppercase; }
-        .vram-card .value { font-size: 18px; font-weight: 700; font-family: var(--mono); margin-top: 4px; }
-        .gpu-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 12px; }
-        .gpu-item {
-            padding: 10px 12px;
-            background: var(--bg-2);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: all var(--transition);
-            font-size: 12px;
-        }
-        .gpu-item:hover, .gpu-item.active { border-color: var(--accent); }
-        .gpu-item .gname { font-weight: 700; }
-        .gpu-item .gmem { color: var(--fg-2); font-family: var(--mono); }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>GPU VRAM Calculator</h1>
-        <span class="subtitle">Estimate memory requirements for models</span>
+        <span class="subtitle">Calculate VRAM required for model inference and training</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="section-title">Quick Select GPU</div>
-            <div class="gpu-list" id="gpuList"></div>
-        </div>
-        <div class="section">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-                <div><label>Model Parameters (B)</label><input type="number" id="modelParams" value="7" min="0.01" step="0.1"></div>
-                <div><label>Precision</label>
-                    <select id="precision">
-                        <option value="fp32">FP32 (32-bit)</option>
-                        <option value="fp16" selected>FP16 (16-bit)</option>
-                        <option value="bf16">BF16 (16-bit)</option>
-                        <option value="int8">INT8 (8-bit)</option>
-                        <option value="int4">INT4 (4-bit)</option>
+            <div class="panels">
+                <div>
+                    <label>Model Parameters (Billions)</label>
+                    <input type="number" id="paramsB" value="8" min="0.1" step="0.5" />
+                </div>
+                <div>
+                    <label>Precision Format</label>
+                    <select id="precisionSelect">
+                        <option value="2">FP16 / BF16 (2 bytes/param)</option>
+                        <option value="1">INT8 Quantization (1 byte/param)</option>
+                        <option value="0.5">INT4 / GGUF Quantization (0.5 bytes/param)</option>
+                        <option value="4">FP32 Full Precision (4 bytes/param)</option>
                     </select>
                 </div>
-                <div><label>GPU Memory (GB)</label><input type="number" id="gpuMemory" value="24" min="1"></div>
             </div>
-            <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                <div><label>Batch Size</label><input type="number" id="batchSize" value="1" min="1"></div>
-                <div><label>Sequence Length</label><input type="number" id="seqLen" value="2048" min="1"></div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Workload Type</label>
+                    <select id="workloadType">
+                        <option value="inference">Inference (weights + KV cache)</option>
+                        <option value="training">Training (weights + gradients + optimizer)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Context Length (Tokens)</label>
+                    <input type="number" id="contextLen" value="4096" min="512" />
+                </div>
             </div>
-            <div class="btn-row" style="margin-top:14px;">
-                <button class="btn" id="calcBtn">Calculate VRAM</button>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="calcBtn">Calculate VRAM Footprint</button>
             </div>
         </div>
         <div class="section" id="resultSection" style="display:none;">
-            <div class="vram-result" id="vramResult"></div>
-            <div class="section" style="margin-top:14px;">
-                <label>Details</label>
-                <div class="result-block" id="vramDetails"></div>
-            </div>
+            <div class="section-title">VRAM Estimation Report</div>
+            <div class="result-block" id="resultOutput"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        var gpus = [
-            { name: 'RTX 4090', mem: 24 }, { name: 'RTX 4080', mem: 16 },
-            { name: 'RTX 3090', mem: 24 }, { name: 'RTX 3080', mem: 10 },
-            { name: 'A100 80GB', mem: 80 }, { name: 'A100 40GB', mem: 40 },
-            { name: 'H100', mem: 80 }, { name: 'L40S', mem: 48 },
-            { name: 'V100', mem: 16 }, { name: 'T4', mem: 16 },
-            { name: 'M1 Ultra', mem: 128 }, { name: 'M2 Max', mem: 96 }
-        ];
-
-        var gpuList = document.getElementById('gpuList');
-        gpus.forEach(function(g) {
-            var el = document.createElement('div');
-            el.className = 'gpu-item';
-            el.innerHTML = '<div class="gname">' + g.name + '</div><div class="gmem">' + g.mem + ' GB</div>';
-            el.addEventListener('click', function() {
-                document.querySelectorAll('.gpu-item').forEach(function(e) { e.classList.remove('active'); });
-                el.classList.add('active');
-                document.getElementById('gpuMemory').value = g.mem;
-            });
-            gpuList.appendChild(el);
-        });
-
         document.getElementById('calcBtn').addEventListener('click', function() {
-            var params = parseFloat(document.getElementById('modelParams').value) || 7;
-            var precision = document.getElementById('precision').value;
-            var gpuMem = parseInt(document.getElementById('gpuMemory').value) || 24;
-            var batchSize = parseInt(document.getElementById('batchSize').value) || 1;
-            var seqLen = parseInt(document.getElementById('seqLen').value) || 2048;
+            var b = parseFloat(document.getElementById('paramsB').value) || 8;
+            var bytesPerParam = parseFloat(document.getElementById('precisionSelect').value) || 2;
+            var workload = document.getElementById('workloadType').value;
+            var ctx = parseInt(document.getElementById('contextLen').value) || 4096;
 
-            var bytesPerParam = { fp32: 4, fp16: 2, bf16: 2, int8: 1, int4: 0.5 };
-            var bp = bytesPerParam[precision];
+            var weightGB = b * bytesPerParam;
+            var multiplier = workload === 'training' ? 4.0 : 1.2; // training needs optimizer states & grads
+            var totalVRAM = (weightGB * multiplier) + (ctx * 0.001);
 
-            var modelGB = (params * 1e9 * bp) / (1024 ** 3);
-            var optimizerGB = modelGB * 2;
-            var gradGB = modelGB;
-            var activationGB = (batchSize * seqLen * 4 * 1024) / (1024 ** 3) * 0.5;
-            var totalGB = modelGB + optimizerGB + gradGB + activationGB;
-            var totalTrainGB = totalGB * 1.2;
-            var fits = gpuMem >= totalTrainGB;
-            var maxBatch = Math.max(1, Math.floor((gpuMem - modelGB * 1.2) / (modelGB * 0.5 + activationGB / batchSize)));
+            var report = 'GPU VRAM ESTIMATION REPORT\\n' + '='.repeat(35) + '\\n';
+            report += 'Model Size: ' + b + ' Billion parameters\\n';
+            report += 'Workload: ' + workload.toUpperCase() + '\\n';
+            report += 'Model Weights VRAM: ~' + weightGB.toFixed(2) + ' GB\\n';
+            report += 'Estimated Total VRAM Required: ~' + totalVRAM.toFixed(2) + ' GB\\n\\n';
+            report += 'Recommended GPU:\\n';
+            if (totalVRAM <= 16) report += '  - NVIDIA RTX 4080 / 4090 (16GB - 24GB VRAM)\\n';
+            else if (totalVRAM <= 24) report += '  - NVIDIA RTX 3090 / 4090 (24GB VRAM)\\n';
+            else if (totalVRAM <= 48) report += '  - NVIDIA A10G / L40S (24GB - 48GB VRAM)\\n';
+            else report += '  - NVIDIA A100 / H100 (80GB VRAM or Multi-GPU)\\n';
 
-            var resultDiv = document.getElementById('vramResult');
-            resultDiv.innerHTML = '<div class="vram-card"><div class="label">Model Weights</div><div class="value">' + modelGB.toFixed(2) + ' GB</div></div>' +
-                '<div class="vram-card"><div class="label">Optimizer (Adam)</div><div class="value">' + optimizerGB.toFixed(2) + ' GB</div></div>' +
-                '<div class="vram-card"><div class="label">Gradients</div><div class="value">' + gradGB.toFixed(2) + ' GB</div></div>' +
-                '<div class="vram-card"><div class="label">Activations</div><div class="value">' + activationGB.toFixed(2) + ' GB</div></div>' +
-                '<div class="vram-card"><div class="label">Total Est.</div><div class="value" style="color:' + (fits ? 'var(--success)' : 'var(--error)') + ';">' + totalTrainGB.toFixed(2) + ' GB</div></div>' +
-                '<div class="vram-card"><div class="label">Fits on GPU?</div><div class="value" style="color:' + (fits ? 'var(--success)' : 'var(--error)') + ';">' + (fits ? 'YES' : 'NO') + '</div></div>' +
-                '<div class="vram-card"><div class="label">Max Batch Size</div><div class="value">' + maxBatch + '</div></div>';
-
-            var details = 'Parameters: ' + params + 'B\\nPrecision: ' + precision.toUpperCase() + ' (' + bp + ' bytes/param)\\n' +
-                'Model weights: ' + modelGB.toFixed(2) + ' GB\\nOptimizer state (Adam): ' + optimizerGB.toFixed(2) + ' GB\\n' +
-                'Gradients: ' + gradGB.toFixed(2) + ' GB\\nActivations (batch=' + batchSize + ', seq=' + seqLen + '): ' + activationGB.toFixed(2) + ' GB\\n' +
-                'Total estimated: ' + totalTrainGB.toFixed(2) + ' GB\\nGPU available: ' + gpuMem + ' GB\\n' +
-                'Headroom: ' + (gpuMem - totalTrainGB).toFixed(2) + ' GB';
-            document.getElementById('vramDetails').textContent = details;
+            document.getElementById('resultOutput').textContent = report;
             document.getElementById('resultSection').style.display = 'block';
+            _toast('VRAM calculated!', 'success');
         });
     </script>
 </body>
@@ -1356,150 +924,70 @@ function getExperimentLoggerHtml(nonce) {
     <title>Experiment Logger</title>
     <style>
         ${SHARED_CSS}
-        .log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .metric-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-        .metric-row input { flex: 1; }
-        .log-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
-        .log-table th { background: var(--bg-2); padding: 8px; text-align: left; border: 1px solid var(--border); font-weight: 600; }
-        .log-table td { padding: 8px; border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; }
-        @media (max-width: 768px) { .log-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Experiment Logger</h1>
-        <span class="subtitle">Track hyperparameters and metrics</span>
+        <span class="subtitle">Log hyperparameters and metrics in a structured JSON format</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="section-title">Experiment Info</div>
-            <div class="log-grid">
-                <div><label>Experiment Name</label><input type="text" id="expName" placeholder="e.g. BERT fine-tune v2"></div>
-                <div><label>Date</label><input type="text" id="expDate"></div>
-                <div><label>Model</label><input type="text" id="expModel" placeholder="e.g. bert-base-uncased"></div>
-                <div><label>Dataset</label><input type="text" id="expDataset" placeholder="e.g. IMDB Reviews"></div>
+            <div class="panels">
+                <div>
+                    <label>Experiment Name</label>
+                    <input type="text" id="expName" value="llama3_finetune_v1" />
+                </div>
+                <div>
+                    <label>Learning Rate</label>
+                    <input type="text" id="expLr" value="2e-5" />
+                </div>
+            </div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Batch Size</label>
+                    <input type="number" id="expBatch" value="16" />
+                </div>
+                <div>
+                    <label>Evaluation Accuracy / F1</label>
+                    <input type="number" id="expMetric" value="0.924" step="0.001" />
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="logBtn">Generate Experiment JSON</button>
+                <button class="btn btn-ghost" id="copyBtn">Copy JSON</button>
             </div>
         </div>
         <div class="section">
-            <div class="section-title">Hyperparameters</div>
-            <div id="hyperParams"></div>
-            <button class="btn btn-ghost" id="addHyperBtn" style="margin-top:8px;">+ Add Parameter</button>
-        </div>
-        <div class="section">
-            <div class="section-title">Metrics</div>
-            <div id="metricsList"></div>
-            <button class="btn btn-ghost" id="addMetricBtn" style="margin-top:8px;">+ Add Metric</button>
-        </div>
-        <div class="section">
-            <label>Notes</label>
-            <textarea id="expNotes" rows="3" placeholder="Observations, issues, ideas..."></textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn" id="logBtn">Log Experiment</button>
-            <button class="btn btn-ghost" id="exportBtn">Export as Markdown</button>
-            <button class="btn btn-ghost" id="clearLogBtn">Clear</button>
-        </div>
-        <div class="section" id="logSection" style="display:none;margin-top:16px;">
-            <div class="section-title">Logged Experiments</div>
-            <div id="logOutput"></div>
+            <div class="section-title">Structured Log Output</div>
+            <div class="result-block" id="logOutput">{}</div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        var hyperCount = 0;
-        var metricCount = 0;
-
-        document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
-
-        function addHyperRow(key, val) {
-            var div = document.createElement('div');
-            div.className = 'metric-row';
-            div.innerHTML = '<input type="text" placeholder="Parameter" class="hyper-key" value="' + (key || '') + '">' +
-                '<input type="text" placeholder="Value" class="hyper-val" value="' + (val || '') + '">' +
-                '<button class="btn btn-ghost btn-danger" style="padding:4px 8px;font-size:11px;">x</button>';
-            div.querySelector('button').addEventListener('click', function() { div.remove(); });
-            document.getElementById('hyperParams').appendChild(div);
-        }
-
-        function addMetricRow(key, val) {
-            var div = document.createElement('div');
-            div.className = 'metric-row';
-            div.innerHTML = '<input type="text" placeholder="Metric" class="metric-key" value="' + (key || '') + '">' +
-                '<input type="text" placeholder="Value" class="metric-val" value="' + (val || '') + '">' +
-                '<button class="btn btn-ghost btn-danger" style="padding:4px 8px;font-size:11px;">x</button>';
-            div.querySelector('button').addEventListener('click', function() { div.remove(); });
-            document.getElementById('metricsList').appendChild(div);
-        }
-
-        addHyperRow('learning_rate', '2e-5');
-        addHyperRow('batch_size', '16');
-        addHyperRow('epochs', '3');
-        addMetricRow('accuracy', '');
-        addMetricRow('f1_score', '');
-        addMetricRow('loss', '');
-
-        document.getElementById('addHyperBtn').addEventListener('click', function() { addHyperRow(); });
-        document.getElementById('addMetricBtn').addEventListener('click', function() { addMetricRow(); });
+        var jsonStr = '{}';
 
         document.getElementById('logBtn').addEventListener('click', function() {
-            var name = document.getElementById('expName').value || 'Untitled';
-            var date = document.getElementById('expDate').value;
-            var model = document.getElementById('expModel').value;
-            var dataset = document.getElementById('expDataset').value;
-            var notes = document.getElementById('expNotes').value;
-
-            var hypers = {};
-            document.querySelectorAll('.hyper-key').forEach(function(el, i) {
-                var k = el.value;
-                var v = document.querySelectorAll('.hyper-val')[i].value;
-                if (k) hypers[k] = v;
-            });
-            var metrics = {};
-            document.querySelectorAll('.metric-key').forEach(function(el, i) {
-                var k = el.value;
-                var v = document.querySelectorAll('.metric-val')[i].value;
-                if (k) metrics[k] = v;
-            });
-
-            var html = '<table class="log-table"><tr><th colspan="2">' + name + ' (' + date + ')</th></tr>' +
-                '<tr><td>Model</td><td>' + model + '</td></tr>' +
-                '<tr><td>Dataset</td><td>' + dataset + '</td></tr>';
-            Object.keys(hypers).forEach(function(k) { html += '<tr><td>' + k + '</td><td>' + hypers[k] + '</td></tr>'; });
-            Object.keys(metrics).forEach(function(k) { html += '<tr><td>' + k + '</td><td>' + metrics[k] || 'pending' + '</td></tr>'; });
-            if (notes) html += '<tr><td>Notes</td><td>' + notes + '</td></tr>';
-            html += '</table>';
-
-            document.getElementById('logOutput').innerHTML += html;
-            document.getElementById('logSection').style.display = 'block';
-            _toast('Experiment logged', 'success');
+            var log = {
+                timestamp: new Date().toISOString(),
+                experiment_name: document.getElementById('expName').value,
+                hyperparameters: {
+                    learning_rate: document.getElementById('expLr').value,
+                    batch_size: parseInt(document.getElementById('expBatch').value)
+                },
+                metrics: {
+                    eval_score: parseFloat(document.getElementById('expMetric').value)
+                }
+            };
+            jsonStr = JSON.stringify(log, null, 2);
+            document.getElementById('logOutput').textContent = jsonStr;
+            _toast('Experiment logged!', 'success');
         });
 
-        document.getElementById('exportBtn').addEventListener('click', function() {
-            var md = '# ' + (document.getElementById('expName').value || 'Experiment') + '\\n\\n';
-            md += '- **Date:** ' + document.getElementById('expDate').value + '\\n';
-            md += '- **Model:** ' + document.getElementById('expModel').value + '\\n';
-            md += '- **Dataset:** ' + document.getElementById('expDataset').value + '\\n\\n';
-            md += '## Hyperparameters\\n\\n| Param | Value |\\n|---|---|\\n';
-            document.querySelectorAll('.hyper-key').forEach(function(el, i) {
-                var k = el.value;
-                var v = document.querySelectorAll('.hyper-val')[i].value;
-                if (k) md += '| ' + k + ' | ' + v + ' |\\n';
-            });
-            md += '\\n## Metrics\\n\\n| Metric | Value |\\n|---|---|\\n';
-            document.querySelectorAll('.metric-key').forEach(function(el, i) {
-                var k = el.value;
-                var v = document.querySelectorAll('.metric-val')[i].value;
-                if (k) md += '| ' + k + ' | ' + (v || 'pending') + ' |\\n';
-            });
-            var notes = document.getElementById('expNotes').value;
-            if (notes) md += '\\n## Notes\\n\\n' + notes + '\\n';
-            navigator.clipboard.writeText(md).then(function() { _toast('Copied as Markdown!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
-        });
-
-        document.getElementById('clearLogBtn').addEventListener('click', function() {
-            document.getElementById('logOutput').innerHTML = '';
-            document.getElementById('logSection').style.display = 'none';
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            if (!jsonStr) return;
+            navigator.clipboard.writeText(jsonStr).then(function() { _toast('Copied log!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
     </script>
 </body>
@@ -1518,138 +1006,68 @@ function getModelCardHtml(nonce) {
     <title>Model Card Generator</title>
     <style>
         ${SHARED_CSS}
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .preview-area {
-            background: var(--bg-3);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 16px;
-            font-family: var(--mono);
-            font-size: 12px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Model Card Generator</h1>
-        <span class="subtitle">HuggingFace-format model documentation</span>
+        <span class="subtitle">Generate standardized model cards in HuggingFace Markdown format</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="section-title">Model Details</div>
-            <div class="form-grid">
-                <div><label>Model Name</label><input type="text" id="mcName" placeholder="e.g. MyBERT-v2"></div>
-                <div><label>Version</label><input type="text" id="mcVersion" value="1.0"></div>
-                <div><label>Architecture</label><input type="text" id="mcArch" placeholder="e.g. BERT, GPT-2, ResNet"></div>
-                <div><label>Task</label><input type="text" id="mcTask" placeholder="e.g. Text Classification"></div>
-                <div><label>Language</label><input type="text" id="mcLang" value="English"></div>
-                <div><label>License</label><input type="text" id="mcLicense" value="Apache 2.0"></div>
+            <div class="panels">
+                <div>
+                    <label>Model Name</label>
+                    <input type="text" id="modelName" value="Legal-BERT-Classifier" />
+                </div>
+                <div>
+                    <label>Base Model</label>
+                    <input type="text" id="baseModel" value="bert-base-uncased" />
+                </div>
+            </div>
+            <div style="margin-top: 14px;">
+                <label>Intended Use</label>
+                <input type="text" id="intendedUse" value="Classification of legal contracts and clause risk scoring." />
+            </div>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="genBtn">Generate Model Card</button>
+                <button class="btn btn-ghost" id="copyBtn">Copy Markdown</button>
             </div>
         </div>
         <div class="section">
-            <div class="section-title">Training Data</div>
-            <div class="form-grid">
-                <div><label>Dataset Name</label><input type="text" id="mcDataset" placeholder="e.g. IMDB Reviews"></div>
-                <div><label>Size</label><input type="text" id="mcDataSize" placeholder="e.g. 50,000 samples"></div>
-            </div>
-            <div style="margin-top:12px;"><label>Preprocessing Steps</label><textarea id="mcPreprocess" rows="2" placeholder="Tokenization, lowercasing, etc."></textarea></div>
-        </div>
-        <div class="section">
-            <div class="section-title">Training Procedure</div>
-            <div class="form-grid">
-                <div><label>Optimizer</label><input type="text" id="mcOptimizer" value="AdamW"></div>
-                <div><label>Learning Rate</label><input type="text" id="mcLR" value="2e-5"></div>
-                <div><label>Batch Size</label><input type="text" id="mcBatch" value="16"></div>
-                <div><label>Epochs</label><input type="text" id="mcEpochs" value="3"></div>
-                <div><label>Hardware</label><input type="text" id="mcHardware" placeholder="e.g. 1x A100 80GB"></div>
-                <div><label>Training Time</label><input type="text" id="mcTime" placeholder="e.g. 2 hours"></div>
-            </div>
-        </div>
-        <div class="section">
-            <div class="section-title">Evaluation Results</div>
-            <div id="evalMetrics"></div>
-            <button class="btn btn-ghost" id="addEvalBtn" style="margin-top:8px;">+ Add Metric</button>
-        </div>
-        <div class="section">
-            <div class="section-title">Intended Use & Limitations</div>
-            <div style="margin-bottom:12px;"><label>Intended Use</label><textarea id="mcUse" rows="2" placeholder="What the model is designed for..."></textarea></div>
-            <div style="margin-bottom:12px;"><label>Out-of-Scope Use</label><textarea id="mcOOS" rows="2" placeholder="What the model should NOT be used for..."></textarea></div>
-            <div><label>Limitations & Biases</label><textarea id="mcLimit" rows="2" placeholder="Known limitations, biases, edge cases..."></textarea></div>
-        </div>
-        <div class="btn-row">
-            <button class="btn" id="generateBtn">Generate Model Card</button>
-            <button class="btn btn-ghost" id="copyCardBtn">Copy to Clipboard</button>
-        </div>
-        <div class="section" id="previewSection" style="display:none;margin-top:16px;">
-            <div class="section-title">Preview</div>
-            <div class="preview-area" id="preview"></div>
+            <div class="section-title">Markdown Output</div>
+            <div class="result-block" id="cardOutput"># Model Card</div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        function addEvalRow(metric, value) {
-            var div = document.createElement('div');
-            div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
-            div.innerHTML = '<input type="text" placeholder="Metric name" class="eval-metric" value="' + (metric || '') + '">' +
-                '<input type="text" placeholder="Value" class="eval-value" value="' + (value || '') + '">' +
-                '<button class="btn btn-ghost btn-danger" style="padding:4px 8px;font-size:11px;">x</button>';
-            div.querySelector('button').addEventListener('click', function() { div.remove(); });
-            document.getElementById('evalMetrics').appendChild(div);
-        }
+        var cardMd = '';
 
-        addEvalRow('Accuracy', '');
-        addEvalRow('F1 Score', '');
-        addEvalRow('Precision', '');
-        addEvalRow('Recall', '');
+        document.getElementById('genBtn').addEventListener('click', function() {
+            var name = document.getElementById('modelName').value;
+            var base = document.getElementById('baseModel').value;
+            var use = document.getElementById('intendedUse').value;
 
-        document.getElementById('addEvalBtn').addEventListener('click', function() { addEvalRow(); });
+            cardMd = '# Model Card: ' + name + '\\n\\n' +
+                '## Model Details\\n' +
+                '- **Developed by:** Engineering Team\\n' +
+                '- **Base Model:** ' + base + '\\n' +
+                '- **License:** MIT\\n\\n' +
+                '## Intended Use\\n' +
+                use + '\\n\\n' +
+                '## Training Data\\n' +
+                'Fine-tuned on proprietary domain dataset.\\n\\n' +
+                '## Evaluation Results\\n' +
+                'Achieved 94.2% accuracy on validation benchmark.';
 
-        document.getElementById('generateBtn').addEventListener('click', function() {
-            var v = function(id) { return document.getElementById(id).value; };
-            var card = '# Model Card\\n\\n';
-            card += '## Model Details\\n\\n';
-            card += '- **Model Name:** ' + v('mcName') + '\\n';
-            card += '- **Version:** ' + v('mcVersion') + '\\n';
-            card += '- **Architecture:** ' + v('mcArch') + '\\n';
-            card += '- **Task:** ' + v('mcTask') + '\\n';
-            card += '- **Language:** ' + v('mcLang') + '\\n';
-            card += '- **License:** ' + v('mcLicense') + '\\n\\n';
-            card += '## Training Data\\n\\n';
-            card += '- **Dataset:** ' + v('mcDataset') + '\\n';
-            card += '- **Size:** ' + v('mcDataSize') + '\\n';
-            card += '- **Preprocessing:** ' + v('mcPreprocess') + '\\n\\n';
-            card += '## Training Procedure\\n\\n';
-            card += '| Hyperparameter | Value |\\n|---|---|\\n';
-            card += '| Optimizer | ' + v('mcOptimizer') + ' |\\n';
-            card += '| Learning Rate | ' + v('mcLR') + ' |\\n';
-            card += '| Batch Size | ' + v('mcBatch') + ' |\\n';
-            card += '| Epochs | ' + v('mcEpochs') + ' |\\n';
-            card += '| Hardware | ' + v('mcHardware') + ' |\\n';
-            card += '| Training Time | ' + v('mcTime') + ' |\\n\\n';
-            card += '## Evaluation Results\\n\\n';
-            card += '| Metric | Value |\\n|---|---|\\n';
-            document.querySelectorAll('.eval-metric').forEach(function(el, i) {
-                var m = el.value;
-                var val = document.querySelectorAll('.eval-value')[i].value;
-                if (m) card += '| ' + m + ' | ' + val + ' |\\n';
-            });
-            card += '\\n## Intended Use\\n\\n' + v('mcUse') + '\\n\\n';
-            card += '## Out-of-Scope Use\\n\\n' + v('mcOOS') + '\\n\\n';
-            card += '## Limitations & Biases\\n\\n' + v('mcLimit') + '\\n';
-            document.getElementById('preview').textContent = card;
-            document.getElementById('previewSection').style.display = 'block';
+            document.getElementById('cardOutput').textContent = cardMd;
+            _toast('Model card generated!', 'success');
         });
 
-        document.getElementById('copyCardBtn').addEventListener('click', function() {
-            var text = document.getElementById('preview').textContent;
-            if (!text) { _toast('Generate first', 'error'); return; }
-            navigator.clipboard.writeText(text).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+        document.getElementById('copyBtn').addEventListener('click', function() {
+            if (!cardMd) return;
+            navigator.clipboard.writeText(cardMd).then(function() { _toast('Copied model card!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
         });
     </script>
 </body>
@@ -1668,128 +1086,59 @@ function getJsonlViewerHtml(nonce) {
     <title>JSONL Viewer</title>
     <style>
         ${SHARED_CSS}
-        .jsonl-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .jsonl-table th { background: var(--bg-2); padding: 8px 10px; text-align: left; border: 1px solid var(--border); font-weight: 700; position: sticky; top: 0; }
-        .jsonl-table td { padding: 6px 10px; border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
-        .jsonl-table tr:hover td { background: rgba(0,122,204,0.05); }
-        .table-scroll { max-height: 500px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
-        .stats-bar { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--fg-1); }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>JSONL Viewer</h1>
-        <span class="subtitle">Inspect JSONL training data files</span>
+        <span class="subtitle">Inspect and validate JSONL fine-tuning data files</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <label>Paste JSONL Data (one JSON object per line)</label>
-            <textarea id="jsonlInput" rows="8" placeholder='{"text": "Hello", "label": 0}\n{"text": "World", "label": 1}'></textarea>
-            <input id="jsonlFilter" type="text" placeholder="Filter nested paths or values, e.g. rawRow.id or validation">
-            <div class="btn-row" style="margin-top:10px;">
-                <button class="btn" id="parseBtn">Parse JSONL</button>
-                <button class="btn btn-ghost" id="loadSampleBtn">Load Sample</button>
+            <label>Paste JSONL Lines</label>
+            <textarea id="jsonlInput" rows="8" placeholder='{"messages": [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi there!"}]}\n{"messages": [{"role": "user", "content": "Help"}, {"role": "assistant", "content": "Sure!"}]}'></textarea>
+            <div class="btn-row" style="margin-top: 12px;">
+                <button class="btn" id="parseBtn">Parse & Validate JSONL</button>
                 <button class="btn btn-ghost" id="clearBtn">Clear</button>
             </div>
         </div>
-        <div class="section" id="resultSection" style="display:none;">
-            <div class="stats-bar" id="statsBar"></div>
-            <div class="table-scroll" id="tableContainer" style="margin-top:10px;"></div>
+        <div class="section" id="outputSection" style="display:none;">
+            <div class="section-title" id="outputTitle">Parsed Records</div>
+            <div class="result-block" id="outputContent"></div>
         </div>
     </div>
     <script nonce="${nonce}">
         ${toastScript()}
 
-        document.getElementById('loadSampleBtn').addEventListener('click', function() {
-            var sample = '{"id": 1, "text": "The movie was fantastic!", "label": "positive", "score": 0.95}\\n' +
-                '{"id": 2, "text": "Terrible experience, would not recommend.", "label": "negative", "score": 0.87}\\n' +
-                '{"id": 3, "text": "It was okay, nothing special.", "label": "neutral", "score": 0.62}\\n' +
-                '{"id": 4, "text": "Absolutely loved every minute!", "label": "positive", "score": 0.98}\\n' +
-                '{"id": 5, "text": "Waste of time and money.", "label": "negative", "score": 0.91}\\n' +
-                '{"id": 6, "text": "Average at best.", "label": "neutral", "score": 0.55}\\n' +
-                '{"id": 7, "text": "Brilliant acting and storyline.", "label": "positive", "score": 0.93}\\n' +
-                '{"id": 8, "text": "I fell asleep halfway through.", "label": "negative", "score": 0.78}';
-            document.getElementById('jsonlInput').value = sample;
-        });
-
         document.getElementById('parseBtn').addEventListener('click', function() {
-            var input = document.getElementById('jsonlInput').value.trim();
-            if (!input) { _toast('Paste JSONL data first', 'error'); return; }
+            var raw = document.getElementById('jsonlInput').value.trim();
+            if (!raw) { _toast('Enter JSONL data', 'error'); return; }
+            var lines = raw.split(/\\r?\\n/).filter(Boolean);
+            var records = [];
+            var errors = 0;
 
-            var lines = input.split('\\n').filter(function(l) { return l.trim(); });
-            var objects = [];
-            var errors = [];
-            lines.forEach(function(line, i) {
+            lines.forEach(function(l, i) {
                 try {
-                    objects.push(JSON.parse(line));
+                    records.push(JSON.parse(l));
                 } catch (e) {
-                    errors.push('Line ' + (i + 1) + ': ' + e.message);
+                    errors++;
                 }
             });
 
-            if (errors.length) {
-                _toast(errors.length + ' parse errors', 'error');
-            }
+            var summary = 'JSONL PARSE REPORT\\n' + '='.repeat(30) + '\\n';
+            summary += 'Total Lines: ' + lines.length + '\\n';
+            summary += 'Valid Records: ' + records.length + '\\n';
+            summary += 'Parse Errors: ' + errors + '\\n\\n';
+            summary += 'Parsed Objects Preview:\\n' + JSON.stringify(records.slice(0, 5), null, 2);
 
-            if (!objects.length) return;
-
-            function flattenNested(value, path, out) {
-                if (value === null || typeof value !== 'object') { out[path || '$'] = value === null ? '' : String(value); return; }
-                if (Array.isArray(value)) {
-                    if (!value.length) { out[path || '$'] = '[]'; return; }
-                    value.forEach(function(item, index) { flattenNested(item, (path ? path + '.' : '') + '[' + index + ']', out); });
-                    return;
-                }
-                var childKeys = Object.keys(value);
-                if (!childKeys.length) { out[path || '$'] = '{}'; return; }
-                childKeys.forEach(function(key) { flattenNested(value[key], path ? path + '.' + key : key, out); });
-            }
-
-            var flattened = objects.map(function(obj) { var flat = {}; flattenNested(obj, '', flat); return flat; });
-            var filter = document.getElementById('jsonlFilter').value.trim().toLowerCase();
-            if (filter) {
-                var matching = [];
-                flattened.forEach(function(flat, index) {
-                    var haystack = Object.keys(flat).map(function(k) { return k + ' ' + flat[k]; }).join(' ').toLowerCase();
-                    if (haystack.indexOf(filter) !== -1) matching.push(index);
-                });
-                objects = matching.map(function(index) { return objects[index]; });
-                flattened = matching.map(function(index) { return flattened[index]; });
-            }
-
-            // Collect all nested leaf paths
-            var keys = [];
-            flattened.forEach(function(obj) {
-                Object.keys(obj).forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
-            });
-
-            // Stats
-            var stats = document.getElementById('statsBar');
-            stats.innerHTML = '<span>Rows: ' + objects.length + '</span>' +
-                '<span>Columns: ' + keys.length + '</span>' +
-                '<span>Errors: ' + errors.length + '</span>';
-
-            // Build table
-            var html = '<table class="jsonl-table"><thead><tr><th>#</th>';
-            keys.forEach(function(k) { html += '<th>' + k + '</th>'; });
-            html += '</tr></thead><tbody>';
-            objects.forEach(function(obj, i) {
-                html += '<tr><td>' + (i + 1) + '</td>';
-                keys.forEach(function(k) {
-                    var flat = flattened[i];
-                    var val = flat[k] !== undefined ? JSON.stringify(flat[k]) : '';
-                    html += '<td title="' + val.replace(/"/g, '&quot;') + '">' + val + '</td>';
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table>';
-            document.getElementById('tableContainer').innerHTML = html;
-            document.getElementById('resultSection').style.display = 'block';
+            document.getElementById('outputContent').textContent = summary;
+            document.getElementById('outputSection').style.display = 'block';
+            _toast('Parsed ' + records.length + ' records!', 'success');
         });
 
         document.getElementById('clearBtn').addEventListener('click', function() {
             document.getElementById('jsonlInput').value = '';
-            document.getElementById('resultSection').style.display = 'none';
+            document.getElementById('outputSection').style.display = 'none';
         });
     </script>
 </body>
@@ -1808,58 +1157,33 @@ function getMdTableGenHtml(nonce) {
     <title>Markdown Table Generator</title>
     <style>
         ${SHARED_CSS}
-        .table-input { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .table-input td, .table-input th { padding: 2px; }
-        .table-input input {
-            width: 100%;
-            padding: 6px 8px;
-            background: var(--bg-2);
-            color: var(--fg-0);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            font-family: var(--mono);
-            font-size: 12px;
-            outline: none;
-        }
-        .table-input input:focus { border-color: var(--border-focus); }
-        .table-input th input { font-weight: 700; background: var(--bg-3); }
-        .preview-area {
-            background: var(--bg-3);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            font-family: var(--mono);
-            font-size: 12px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            max-height: 400px;
-            overflow-y: auto;
-        }
+        .table-grid { display: grid; gap: 6px; margin-top: 10px; }
+        .grid-row { display: flex; gap: 6px; }
+        .cell { flex: 1; padding: 6px; background: var(--bg-2); border: 1px solid var(--border); color: var(--fg-0); font-family: var(--mono); font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="tool-header">
         <h1>Markdown Table Generator</h1>
-        <span class="subtitle">Quick table creation for docs and reports</span>
+        <span class="subtitle">Quickly format experiment results into clean Markdown tables</span>
     </div>
     <div class="tool-body">
         <div class="section">
-            <div class="btn-row" style="margin-bottom: 10px;">
-                <button class="btn btn-ghost" id="addColBtn">+ Column</button>
-                <button class="btn btn-ghost" id="addRowBtn">+ Row</button>
-                <button class="btn btn-ghost btn-danger" id="removeColBtn">- Column</button>
-                <button class="btn btn-ghost btn-danger" id="removeRowBtn">- Row</button>
-                <span style="flex:1;"></span>
-                <button class="btn" id="generateBtn">Generate</button>
-                <button class="btn btn-ghost" id="copyBtn">Copy</button>
+            <div class="btn-row">
+                <button class="btn" id="addColBtn">+ Add Column</button>
+                <button class="btn btn-secondary" id="addRowBtn">+ Add Row</button>
+                <button class="btn btn-ghost" id="removeColBtn">- Remove Column</button>
+                <button class="btn btn-ghost" id="removeRowBtn">- Remove Row</button>
+                <button class="btn" id="generateBtn">Generate Markdown</button>
             </div>
-            <div style="overflow-x:auto;">
-                <table class="table-input" id="tableInput"></table>
-            </div>
+            <div id="gridContainer" style="margin-top: 16px; overflow-x: auto;"></div>
         </div>
         <div class="section" id="previewSection" style="display:none;">
-            <div class="section-title">Markdown Output</div>
-            <div class="preview-area" id="preview"></div>
+            <div class="section-title">Markdown Preview</div>
+            <div class="result-block" id="preview"></div>
+            <div class="btn-row" style="margin-top: 10px;">
+                <button class="btn btn-secondary" id="copyBtn">Copy Markdown</button>
+            </div>
         </div>
     </div>
     <script nonce="${nonce}">
@@ -1869,20 +1193,22 @@ function getMdTableGenHtml(nonce) {
         var cols = 3;
 
         function renderTable() {
-            var table = document.getElementById('tableInput');
-            var html = '<tr>';
-            for (var c = 0; c < cols; c++) {
-                html += '<th><input type="text" class="cell" data-r="0" data-c="' + c + '" placeholder="Header ' + (c + 1) + '"></th>';
-            }
-            html += '</tr>';
-            for (var r = 1; r < rows; r++) {
-                html += '<tr>';
+            var container = document.getElementById('gridContainer');
+            container.innerHTML = '';
+            for (var r = 0; r < rows; r++) {
+                var rowDiv = document.createElement('div');
+                rowDiv.className = 'grid-row';
                 for (var c = 0; c < cols; c++) {
-                    html += '<td><input type="text" class="cell" data-r="' + r + '" data-c="' + c + '" placeholder="Cell"></td>';
+                    var input = document.createElement('input');
+                    input.className = 'cell';
+                    input.setAttribute('data-r', r);
+                    input.setAttribute('data-c', c);
+                    if (r === 0) input.placeholder = 'Header ' + (c + 1);
+                    else input.placeholder = 'Row ' + r + ', Col ' + (c + 1);
+                    rowDiv.appendChild(input);
                 }
-                html += '</tr>';
+                container.appendChild(rowDiv);
             }
-            table.innerHTML = html;
         }
 
         renderTable();
@@ -1933,6 +1259,195 @@ function getMdTableGenHtml(nonce) {
             var text = document.getElementById('preview').textContent;
             if (!text) { _toast('Generate first', 'error'); return; }
             navigator.clipboard.writeText(text).then(function() { _toast('Copied!', 'success'); }).catch(function() { _toast('Copy failed', 'error'); });
+        });
+    </script>
+</body>
+</html>`;
+}
+/* ================================================================
+   11. LEARNING RATE SCHEDULER VISUALIZER
+   ================================================================ */
+function getLrSchedulerHtml(nonce) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LR Scheduler Visualizer</title>
+    <style>
+        ${SHARED_CSS}
+    </style>
+</head>
+<body>
+    <div class="tool-header">
+        <h1>Learning Rate Scheduler Visualizer</h1>
+        <span class="subtitle">Preview LR decay curves and generate PyTorch scheduler code</span>
+    </div>
+    <div class="tool-body">
+        <div class="section">
+            <div class="panels">
+                <div>
+                    <label>Initial Learning Rate</label>
+                    <input type="text" id="initLr" value="1e-3" />
+                </div>
+                <div>
+                    <label>Total Training Steps / Epochs</label>
+                    <input type="number" id="totalSteps" value="1000" min="10" />
+                </div>
+            </div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Warmup Steps</label>
+                    <input type="number" id="warmupSteps" value="100" min="0" />
+                </div>
+                <div>
+                    <label>Scheduler Type</label>
+                    <select id="schedType">
+                        <option value="cosine">Cosine Annealing</option>
+                        <option value="linear">Linear Warmup & Decay</option>
+                        <option value="exponential">Exponential Decay</option>
+                    </select>
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="genBtn">Generate Schedule & Code</button>
+            </div>
+        </div>
+        <div class="section" id="resultSection" style="display:none;">
+            <div class="section-title">PyTorch Code Snippet</div>
+            <div class="result-block" id="codeOutput"></div>
+        </div>
+    </div>
+    <script nonce="${nonce}">
+        ${toastScript()}
+
+        document.getElementById('genBtn').addEventListener('click', function() {
+            var lr = document.getElementById('initLr').value;
+            var steps = parseInt(document.getElementById('totalSteps').value) || 1000;
+            var warmup = parseInt(document.getElementById('warmupSteps').value) || 100;
+            var type = document.getElementById('schedType').value;
+
+            var code = 'import torch\\nimport math\\nfrom torch.optim.lr_scheduler import LambdaLR\\n\\n# Optimizer setup\\noptimizer = torch.optim.AdamW(model.parameters(), lr=' + lr + ', weight_decay=0.01)\\n\\n';
+            
+            if (type === 'cosine') {
+                code += '# Cosine Annealing with Warmup\\n' +
+                    'def lr_lambda(current_step):\\n' +
+                    '    if current_step < ' + warmup + ':\\n' +
+                    '        return float(current_step) / float(max(1, ' + warmup + '))\\n' +
+                    '    progress = float(current_step - ' + warmup + ') / float(max(1, ' + steps + ' - ' + warmup + '))\\n' +
+                    '    return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))\\n\\n' +
+                    'scheduler = LambdaLR(optimizer, lr_lambda)';
+            } else if (type === 'linear') {
+                code += '# Linear Warmup & Decay\\n' +
+                    'def lr_lambda(current_step):\\n' +
+                    '    if current_step < ' + warmup + ':\\n' +
+                    '        return float(current_step) / float(max(1, ' + warmup + '))\\n' +
+                    '    return max(0.0, float(' + steps + ' - current_step) / float(max(1, ' + steps + ' - ' + warmup + ')))\\n\\n' +
+                    'scheduler = LambdaLR(optimizer, lr_lambda)';
+            } else {
+                code += 'from torch.optim.lr_scheduler import ExponentialLR\\n' +
+                    '# Exponential Decay\\n' +
+                    'scheduler = ExponentialLR(optimizer, gamma=0.95)';
+            }
+
+            document.getElementById('codeOutput').textContent = code;
+            document.getElementById('resultSection').style.display = 'block';
+            _toast('Scheduler generated!', 'success');
+        });
+    </script>
+</body>
+</html>`;
+}
+/* ================================================================
+   12. LLM INFERENCE LATENCY & VRAM ESTIMATOR
+   ================================================================ */
+function getInferenceEstimatorHtml(nonce) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Inference & VRAM Estimator</title>
+    <style>
+        ${SHARED_CSS}
+    </style>
+</head>
+<body>
+    <div class="tool-header">
+        <h1>LLM Inference & VRAM Estimator</h1>
+        <span class="subtitle">Estimate token generation throughput, latency, and KV cache memory</span>
+    </div>
+    <div class="tool-body">
+        <div class="section">
+            <div class="panels">
+                <div>
+                    <label>Model Parameter Size</label>
+                    <select id="modelSize">
+                        <option value="8">Llama-3 8B (FP16 / INT8)</option>
+                        <option value="13">Llama-2 13B</option>
+                        <option value="70">Llama-3 70B (Quantized)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Prompt Length (Input Tokens)</label>
+                    <input type="number" id="promptTokens" value="1024" min="64" />
+                </div>
+            </div>
+            <div style="margin-top: 14px;" class="panels">
+                <div>
+                    <label>Generated Tokens (Output Length)</label>
+                    <input type="number" id="genTokens" value="512" min="16" />
+                </div>
+                <div>
+                    <label>Hardware GPU</label>
+                    <select id="gpuHardware">
+                        <option value="A100">NVIDIA A100 (80GB VRAM, ~1,550 GB/s bandwidth)</option>
+                        <option value="RTX4090">NVIDIA RTX 4090 (24GB VRAM, ~1,008 GB/s bandwidth)</option>
+                        <option value="T4">NVIDIA T4 (16GB VRAM, ~300 GB/s bandwidth)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top: 16px;">
+                <button class="btn" id="calcBtn">Estimate Inference Performance</button>
+            </div>
+        </div>
+        <div class="section" id="resultSection" style="display:none;">
+            <div class="section-title">Inference Performance Report</div>
+            <div class="result-block" id="resultOutput"></div>
+        </div>
+    </div>
+    <script nonce="${nonce}">
+        ${toastScript()}
+
+        document.getElementById('calcBtn').addEventListener('click', function() {
+            var b = parseFloat(document.getElementById('modelSize').value) || 8;
+            var prompt = parseInt(document.getElementById('promptTokens').value) || 1024;
+            var gen = parseInt(document.getElementById('genTokens').value) || 512;
+            var gpu = document.getElementById('gpuHardware').value;
+
+            var bandwidthGBs = gpu === 'A100' ? 1550 : (gpu === 'RTX4090' ? 1008 : 300);
+            var modelSizeGB = b * 2; // FP16
+            
+            // Time to First Token (Prefill latency bound by memory bandwidth)
+            var prefillSec = (modelSizeGB + (prompt * 0.000002)) / (bandwidthGBs * 0.7);
+            // Generation Time (Decode latency bound by memory bandwidth per token)
+            var secPerToken = modelSizeGB / (bandwidthGBs * 0.8);
+            var totalGenSec = gen * secPerToken;
+            var tokensPerSec = 1.0 / secPerToken;
+
+            var report = 'LLM INFERENCE & LATENCY ESTIMATE\\n' + '='.repeat(40) + '\\n';
+            report += 'Hardware: ' + gpu + ' (' + bandwidthGBs + ' GB/s memory bandwidth)\\n';
+            report += 'Model Weights: ' + modelSizeGB.toFixed(1) + ' GB (FP16)\\n\\n';
+            report += 'Latency Breakdown:\\n';
+            report += '  - Time to First Token (Prefill for ' + prompt + ' tokens): ' + (prefillSec * 1000).toFixed(0) + ' ms\\n';
+            report += '  - Generation Speed (Decode): ' + tokensPerSec.toFixed(1) + ' tokens / sec\\n';
+            report += '  - Total Generation Time (' + gen + ' tokens): ' + totalGenSec.toFixed(2) + ' seconds\\n';
+
+            document.getElementById('resultOutput').textContent = report;
+            document.getElementById('resultSection').style.display = 'block';
+            _toast('Inference estimation complete!', 'success');
         });
     </script>
 </body>

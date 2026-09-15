@@ -11,13 +11,29 @@ import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
 import { registerAiMlExtraTools } from "./commands/aiMlExtraTools";
 import { registerPlatformToolsCommands } from "./commands/platformTools";
+import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, autoRecordToolUsage } from "./commands/milestoneTracker";
+import { registerReadmeManagerCommand } from "./commands/readmeManager";
 import { executeQueuedCommand } from "./utils/command-dispatch";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(context.extensionPath, "custom");
 
   console.log("DevSnip Pro extension is now active!");
-  const myTreeView = new MyTreeDataProvider();
+
+  // Intercept all DevSnip Pro command registrations to automatically award points for using any feature/tool
+  const originalRegisterCommand = vscode.commands.registerCommand;
+  (vscode.commands as any).registerCommand = function(command: string, callback: (...args: any[]) => any, thisArg?: any) {
+    const wrappedCallback = (...args: any[]) => {
+      if (command && command.startsWith('sayaib.hue-console.') && command !== 'sayaib.hue-console.milestoneTracker') {
+        autoRecordToolUsage(command);
+      }
+      return callback.apply(thisArg, args);
+    };
+    return originalRegisterCommand.call(vscode.commands, command, wrappedCallback, thisArg);
+  };
+
+  const myTreeView = new MyTreeDataProvider(context);
+  setTreeRefreshCallback(() => myTreeView.refresh());
   const treeView = vscode.window.createTreeView("myView", {
     treeDataProvider: myTreeView,
     showCollapseAll: false,
@@ -28,7 +44,8 @@ export function activate(context: vscode.ExtensionContext) {
   registerCreateSnippetCommand(context);
   registerShowSnippetsCommand(context, snippetsFolderPath);
   registerListAndRemoveConsoleLogsCommand(context);
-  registerRemoveUnusedImportsCommand(context); // Add this line
+  registerRemoveUnusedImportsCommand(context);
+  registerReadmeManagerCommand(context);
 
   apiTest(context);
   
@@ -45,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register RAG tools commands
   registerRagToolsCommands(context);
   registerPlatformToolsCommands(context);
+  registerMilestoneTrackerCommand(context);
   registerUniversalToolSearch(context);
 }
 
@@ -58,6 +76,7 @@ const UNIVERSAL_TOOLS: ToolSearchItem[] = [
   { label: "Open REST API Client", description: "Core Workflow", command: "sayaib.hue-console.openGUI" },
   { label: "Analyze and Remove Console Logs", description: "Core Workflow", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
   { label: "Remove Unused Imports", description: "Core Workflow", command: "sayaib.hue-console.removeUnusedImports" },
+  { label: "README Viewer & Manager", description: "Core Workflow", command: "sayaib.hue-console.readmeManager" },
   { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
   { label: "View Saved Code Snippets", description: "Snippets", command: "sayaib.hue-console.showSnippets" },
   { label: "Advanced Developer Tools", description: "Advanced Utilities", command: "sayaib.hue-console.advancedToolsHub" },
@@ -84,24 +103,31 @@ const UNIVERSAL_TOOLS: ToolSearchItem[] = [
   { label: "Experiment Logger", description: "AI / MLOps", command: "sayaib.hue-console.experimentLogger" },
   { label: "Model Card Generator", description: "AI / Documentation", command: "sayaib.hue-console.modelCard" },
   { label: "Markdown Table Generator", description: "AI / Documentation", command: "sayaib.hue-console.mdTableGen" },
+  { label: "LR Scheduler Visualizer", description: "AI / Training", command: "sayaib.hue-console.lrScheduler" },
+  { label: "LLM Inference & VRAM Estimator", description: "AI / Inference", command: "sayaib.hue-console.inferenceEstimator" },
   { label: "Big Data Tools", description: "Data Engineering / Hub", command: "sayaib.hue-console.bigDataHub" },
   { label: "Schema Viewer", description: "Data Engineering / Schema", command: "sayaib.hue-console.schemaViewer" },
   { label: "Spark SQL Formatter", description: "Data Engineering / Querying", command: "sayaib.hue-console.sparkSqlFormatter" },
   { label: "Data Quality Checker", description: "Data Engineering / Quality", command: "sayaib.hue-console.dataQualityChecker" },
   { label: "Schema Diff Tool", description: "Data Engineering / Schema", command: "sayaib.hue-console.schemaDiff" },
   { label: "Partition Calculator", description: "Data Engineering / Performance", command: "sayaib.hue-console.partitionCalc" },
+  { label: "Delta Lake Log Analyzer", description: "Data Engineering / Lakehouse", command: "sayaib.hue-console.deltaLakeAnalyzer" },
+  { label: "Spark Cluster & Cost Estimator", description: "Data Engineering / Cloud", command: "sayaib.hue-console.sparkCostEstimator" },
   { label: "RAG Tools", description: "RAG / Hub", command: "sayaib.hue-console.ragHub" },
   { label: "Chunking Strategy Tester", description: "RAG / Ingestion", command: "sayaib.hue-console.chunkingTester" },
   { label: "Embedding Cost Calculator", description: "RAG / Infrastructure", command: "sayaib.hue-console.embeddingCost" },
   { label: "Context Window Calculator", description: "RAG / Retrieval", command: "sayaib.hue-console.contextWindow" },
   { label: "Semantic Dedup Checker", description: "RAG / Quality", command: "sayaib.hue-console.semanticDedup" },
   { label: "RAG Eval Calculator", description: "RAG / Evaluation", command: "sayaib.hue-console.ragEvalScores" },
+  { label: "Hybrid Search & RRF Simulator", description: "RAG / Retrieval", command: "sayaib.hue-console.hybridSearchRrf" },
+  { label: "RAG Hallucination Analyzer", description: "RAG / Evaluation", command: "sayaib.hue-console.ragHallucinationAnalyzer" },
   { label: "Security Audit", description: "Security / Secrets / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
   { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
   { label: "DevOps Artifact Generator", description: "DevOps / Docker / CI", command: "sayaib.hue-console.devopsGenerator" },
   { label: "AI/ML DevOps Generator", description: "MLOps / GPU / Model Serving / ML CI", command: "sayaib.hue-console.mlopsGenerator" },
   { label: "Observability Log Analyzer", description: "Observability / Logs / Reliability", command: "sayaib.hue-console.observabilityAnalyze" },
   { label: "Observability Starter Generator", description: "Observability / OpenTelemetry / Structured Logs", command: "sayaib.hue-console.observabilityStarter" },
+  { label: "Milestone & Points Tracker", description: "Gamification / Progress", command: "sayaib.hue-console.milestoneTracker" },
 ];
 
 function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
@@ -139,9 +165,17 @@ function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
 
 class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly groups: ToolGroup[];
+  private readonly context: vscode.ExtensionContext;
+  private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | void> = this._onDidChangeTreeData.event;
 
-  constructor() {
+  constructor(context: vscode.ExtensionContext) {
+    this.context = context;
     this.groups = this.createGroups();
+  }
+
+  public refresh(): void {
+    this._onDidChangeTreeData.fire();
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -153,7 +187,17 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
       return element.children;
     }
 
+    const stats = getUserStats(this.context);
+    const level = getCurrentLevel(stats.totalPoints);
+    const trackerItem = this.createCommandButton(
+      `${level.badge} ${level.name} (${stats.totalPoints} pts)`,
+      "sayaib.hue-console.milestoneTracker",
+      "trophy",
+      new vscode.ThemeColor("terminal.ansiBrightYellow")
+    );
+
     return [
+      trackerItem,
       this.createCommandButton(
         "Search tools",
         "sayaib.hue-console.searchTools",
@@ -170,6 +214,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         this.createCommandButton("REST API Client", "sayaib.hue-console.openGUI", "cloud"),
         this.createCommandButton("Clean Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash"),
         this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method"),
+        this.createCommandButton("README Viewer & Manager", "sayaib.hue-console.readmeManager", "book"),
       ]),
       new ToolGroup("Snippets", "book", "terminal.ansiBrightMagenta", [
         this.createCommandButton("Create Snippet", "sayaib.hue-console.createCustomSnippet", "edit"),
@@ -210,9 +255,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
       vscode.TreeItemCollapsibleState.None
     );
     item.command = { command, title: label };
-    // Keep child icons neutral; color is reserved for category headers so the
-    // tree remains scannable when several sections are expanded.
-    item.iconPath = new vscode.ThemeIcon(iconId);
+    item.iconPath = color ? new vscode.ThemeIcon(iconId, color) : new vscode.ThemeIcon(iconId);
     item.description = description;
     return item;
   }
