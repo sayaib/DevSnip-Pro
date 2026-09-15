@@ -112,6 +112,26 @@ export async function saveUserStats(context: vscode.ExtensionContext, stats: Use
     await context.globalState.update('devsnip_user_stats', stats);
 }
 
+export async function redeemPoints(context: vscode.ExtensionContext, cost: number, reason: string): Promise<boolean> {
+    const stats = getUserStats(context);
+    if (stats.totalPoints < cost) {
+        return false;
+    }
+    stats.totalPoints -= cost;
+    stats.activities.unshift({
+        id: `redeem_${Date.now()}`,
+        title: `Redeemed Points: ${reason} (-${cost} pts)`,
+        points: -cost,
+        timestamp: Date.now(),
+        category: 'Redemption'
+    });
+    await saveUserStats(context, stats);
+    if (refreshCallback) {
+        refreshCallback();
+    }
+    return true;
+}
+
 export async function recordActivity(
     context: vscode.ExtensionContext,
     activityId: string,

@@ -32,7 +32,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerMilestoneTrackerCommand = exports.getNextLevel = exports.getCurrentLevel = exports.autoRecordToolUsage = exports.recordActivity = exports.saveUserStats = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.MILESTONES = exports.LEVELS = void 0;
+exports.registerMilestoneTrackerCommand = exports.getNextLevel = exports.getCurrentLevel = exports.autoRecordToolUsage = exports.recordActivity = exports.redeemPoints = exports.saveUserStats = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.MILESTONES = exports.LEVELS = void 0;
 const vscode = __importStar(require("vscode"));
 exports.LEVELS = [
     { name: "Bronze", minPoints: 0, color: "#CD7F32", badge: "🥉", rank: "Rank #5 (Novice Developer)", reward: "Basic Snippet Library & Core Tools" },
@@ -109,6 +109,28 @@ function saveUserStats(context, stats) {
     });
 }
 exports.saveUserStats = saveUserStats;
+function redeemPoints(context, cost, reason) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const stats = getUserStats(context);
+        if (stats.totalPoints < cost) {
+            return false;
+        }
+        stats.totalPoints -= cost;
+        stats.activities.unshift({
+            id: `redeem_${Date.now()}`,
+            title: `Redeemed Points: ${reason} (-${cost} pts)`,
+            points: -cost,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+        yield saveUserStats(context, stats);
+        if (refreshCallback) {
+            refreshCallback();
+        }
+        return true;
+    });
+}
+exports.redeemPoints = redeemPoints;
 function recordActivity(context, activityId, title, points, category) {
     return __awaiter(this, void 0, void 0, function* () {
         const stats = getUserStats(context);
