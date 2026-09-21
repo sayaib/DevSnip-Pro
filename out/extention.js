@@ -48,6 +48,7 @@ const aiMlExtraTools_1 = require("./commands/aiMlExtraTools");
 const platformTools_1 = require("./commands/platformTools");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
 const readmeManager_1 = require("./commands/readmeManager");
+const openCodeIntegration_1 = require("./commands/openCodeIntegration");
 const command_dispatch_1 = require("./utils/command-dispatch");
 function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
@@ -76,6 +77,7 @@ function activate(context) {
     (0, listAndRemoveConsoleLogsCommand_1.registerListAndRemoveConsoleLogsCommand)(context);
     (0, removeUnusedImportsCommand_1.registerRemoveUnusedImportsCommand)(context);
     (0, readmeManager_1.registerReadmeManagerCommand)(context);
+    (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context);
     (0, api_test_1.apiTest)(context);
     // Register advanced tools commands
     (0, advancedTools_1.registerAdvancedToolsCommands)(context);
@@ -96,6 +98,7 @@ const UNIVERSAL_TOOLS = [
     { label: "Analyze and Remove Console Logs", description: "Core Workflow", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
     { label: "Remove Unused Imports", description: "Core Workflow", command: "sayaib.hue-console.removeUnusedImports" },
     { label: "README Viewer & Manager", description: "Core Workflow", command: "sayaib.hue-console.readmeManager" },
+    { label: "OpenCode Integration", description: "Core Workflow", command: "sayaib.hue-console.openCodeIntegration" },
     { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
     { label: "View Saved Code Snippets", description: "Snippets", command: "sayaib.hue-console.showSnippets" },
     { label: "Advanced Developer Tools", description: "Advanced Utilities", command: "sayaib.hue-console.advancedToolsHub" },
@@ -210,6 +213,7 @@ class MyTreeDataProvider {
                 this.createCommandButton("Clean Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash"),
                 this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method"),
                 this.createCommandButton("README Viewer & Manager", "sayaib.hue-console.readmeManager", "book"),
+                this.createCommandButton("OpenCode Integration", "sayaib.hue-console.openCodeIntegration", "terminal"),
             ]),
             new ToolGroup("Snippets", "book", "terminal.ansiBrightMagenta", [
                 this.createCommandButton("Create Snippet", "sayaib.hue-console.createCustomSnippet", "edit"),

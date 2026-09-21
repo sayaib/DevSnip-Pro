@@ -1,5 +1,20 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.58.0 - 2026-09-21
+
+### New Features
+
+- **OpenCode Integration Hub** -- new Core tool (`sayaib.hue-console.openCodeIntegration`) that checks for Node.js and the OpenCode CLI, installs or repairs OpenCode via the official `opencode-ai` npm package, rechecks system status, and launches OpenCode in a terminal rooted at the current workspace folder.
+- **Cross-platform support** -- detection, installation, terminal launching, and workspace handling work on Windows, macOS, and Linux, with per-OS guidance (npm, Homebrew, install script, Chocolatey, Scoop, WSL).
+- **Broken-install detection** -- an npm listing alone no longer reports as installed. Partial installs (package listed but the `opencode` binary does not run) are flagged with a repair flow that removes the stale package and reinstalls cleanly.
+- **REST API Client webview pattern** -- single-render hub with direct element-id event bindings and `postMessage({ command })` messaging; install success is only reported after `opencode --version` is verified to run.
+
+### Fixes
+
+- Fixed OpenCode hub buttons not responding (replaced CSP-blocked inline handlers and fragile full-page re-renders with persistent bindings).
+- Fixed Install/Recheck appearing stuck (removed `sudo` via exec, which hangs without a TTY; added timeouts to all dependency checks).
+- Fixed wrong npm package for OpenCode (`opencode` does not exist on npm; corrected to `opencode-ai`).
+
 ## Version 10.57.0 - 2026-09-21
 
 ### New Features & Improvements

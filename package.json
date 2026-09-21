@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.57.0",
+  "version": "10.58.0",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -343,12 +343,20 @@
         "title": "🧰 DevSnip Pro: Advanced Developer Tools Hub"
       },
       {
+        "command": "sayaib.hue-console.regexBuilder",
+        "title": "🔍 DevSnip Pro: Regex Builder & Tester"
+      },
+      {
         "command": "sayaib.hue-console.removeUnusedImports",
         "title": "🧹 DevSnip Pro: Remove Unused Imports"
       },
       {
         "command": "sayaib.hue-console.readmeManager",
         "title": "📝 DevSnip Pro: README Viewer & CRUD Manager"
+      },
+      {
+        "command": "sayaib.hue-console.openCodeIntegration",
+        "title": "⚡ DevSnip Pro: OpenCode Integration"
       },
       {
         "command": "sayaib.hue-console.jsonFormatter",
@@ -580,6 +588,7 @@
     "onCommand:sayaib.hue-console.jsonToToon",
     "onCommand:sayaib.hue-console.removeUnusedImports",
     "onCommand:sayaib.hue-console.readmeManager",
+    "onCommand:sayaib.hue-console.openCodeIntegration",
     "onCommand:sayaib.hue-console.aiMlHub",
     "onCommand:sayaib.hue-console.tokenCounter",
     "onCommand:sayaib.hue-console.promptTemplate",
