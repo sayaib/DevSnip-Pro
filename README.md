@@ -48,6 +48,8 @@ How it works:
 
 Install success is only reported after `opencode --version` is verified to run. Per-OS alternatives are shown in the hub: npm, Homebrew (`brew install anomalyco/tap/opencode`), the install script (`curl -fsSL https://opencode.ai/install | bash`), Chocolatey/Scoop on Windows, and WSL guidance.
 
+Windows note: PowerShell may show a script security prompt for VS Code's shell integration when launching. The hub waits for the shell to be ready before running `opencode`. If the prompt blocks the launch, answer it in the terminal, use the offered Command Prompt fallback, or permanently allow local scripts by running `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in PowerShell.
+
 ## Snippets and Templates
 
 | Feature | Command / Trigger | Description |

@@ -153,10 +153,43 @@ export function registerOpenCodeIntegrationCommand(context: vscode.ExtensionCont
           const wsPath = getWorkspacePath();
           const terminal = vscode.window.createTerminal({ name: "OpenCode", cwd: wsPath });
           terminal.show();
-          terminal.sendText(OPENCODE_BIN);
-          vscode.window.showInformationMessage(
-            wsPath ? `Launched OpenCode in workspace: ${wsPath}` : "Launched OpenCode."
-          );
+          // Wait until the shell is fully initialized before running the
+          // command. On Windows, PowerShell may first show an
+          // execution-policy prompt for VS Code's shell integration script;
+          // text sent too early would land in that prompt instead of running.
+          const launched = await executeWhenShellReady(terminal, OPENCODE_BIN, 15000);
+          if (launched) {
+            vscode.window.showInformationMessage(
+              wsPath ? `Launched OpenCode in workspace: ${wsPath}` : "Launched OpenCode."
+            );
+          } else {
+            terminal.sendText(OPENCODE_BIN);
+            const status = await runSystemChecks();
+            panel.webview.postMessage({
+              command: "hubStatus",
+              ...status,
+              ok: false,
+              message: platform === "win32"
+                ? "Windows PowerShell showed a script security prompt, so the automatic launch may not have run. Answer the prompt in the terminal, or use one of the options in the notification."
+                : "The terminal shell was not ready, so the launch command was typed but may not have executed. Press Enter in the terminal if needed, then try again."
+            });
+            if (platform === "win32") {
+              const action = await vscode.window.showWarningMessage(
+                "PowerShell blocked the automatic OpenCode launch with a script security prompt.",
+                "Launch in Command Prompt",
+                "Copy PowerShell Fix"
+              );
+              if (action === "Launch in Command Prompt") {
+                // cmd.exe has no execution-policy prompts, so this just works.
+                const cmdTerminal = vscode.window.createTerminal({ name: "OpenCode", cwd: wsPath, shellPath: "cmd.exe" });
+                cmdTerminal.show();
+                cmdTerminal.sendText(OPENCODE_BIN);
+              } else if (action === "Copy PowerShell Fix") {
+                await vscode.env.clipboard.writeText("Set-ExecutionPolicy -Scope CurrentUser RemoteSigned");
+                vscode.window.showInformationMessage("Fix copied: paste and run it in PowerShell, restart the terminal, then launch OpenCode again.");
+              }
+            }
+          }
           break;
         }
       }
@@ -166,6 +199,33 @@ export function registerOpenCodeIntegrationCommand(context: vscode.ExtensionCont
   });
 
   context.subscriptions.push(command);
+}
+
+/**
+ * Run a command in a terminal only after its shell is fully initialized
+ * (shell integration ready). Resolves false on timeout so the caller can
+ * fall back to typing the command and showing guidance.
+ */
+function executeWhenShellReady(terminal: vscode.Terminal, commandLine: string, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (terminal.shellIntegration) {
+      terminal.shellIntegration.executeCommand(commandLine);
+      resolve(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      listener.dispose();
+      resolve(false);
+    }, timeoutMs);
+    const listener = vscode.window.onDidChangeTerminalShellIntegration((e) => {
+      if (e.terminal === terminal && terminal.shellIntegration) {
+        clearTimeout(timer);
+        listener.dispose();
+        terminal.shellIntegration.executeCommand(commandLine);
+        resolve(true);
+      }
+    });
+  });
 }
 
 interface HubStatus {

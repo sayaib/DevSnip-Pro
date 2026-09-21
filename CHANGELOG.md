@@ -1,5 +1,11 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.59.0 - 2026-09-21
+
+### Fixes
+
+- Fixed Windows PowerShell execution-policy prompt swallowing the OpenCode launch command. The hub now waits for shell readiness via the Terminal Shell Integration API before running `opencode`, with a Command Prompt fallback and a one-command policy fix (`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
+
 ## Version 10.58.0 - 2026-09-21
 
 ### New Features
