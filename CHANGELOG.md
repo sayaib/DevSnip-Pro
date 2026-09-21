@@ -1,5 +1,15 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.57.0 - 2026-09-21
+
+### New Features & Improvements
+
+- **Milestone Tracker & Points System** -- added user activity tracking, streaks, level progression (Bronze to Grandmaster tiers), and real-time sidebar widget badge.
+- **README Viewer & CRUD Manager** -- added a dedicated core tool to view, edit, scaffold, and preview markdown documentation with GitHub-style live preview.
+- **AI/ML Tool Enhancements** -- added LR Scheduler Visualizer and LLM Inference & VRAM Estimator tools.
+- **Big Data Tool Enhancements** -- added Delta Lake Log Analyzer and Spark Cluster & Cost Estimator tools.
+- **RAG Tool Enhancements** -- added Hybrid Search RRF Simulator and RAG Hallucination Analyzer tools.
+
 ## Version 10.56.0 - 2026-09-17
 
 ### New Features & Security
