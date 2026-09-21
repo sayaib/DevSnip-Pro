@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.54.0",
+  "version": "10.56.0",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -640,9 +640,9 @@
     "@typescript-eslint/parser": "^4.26.0",
     "eslint": "^7.27.0",
     "glob": "^7.1.7",
-    "mocha": "^8.4.0",
+    "mocha": "^12.0.1",
     "typescript": "^4.3.2",
-    "vscode-test": "^1.5.2"
+    "vscode-test": "^1.4.1"
   },
   "dependencies": {
     "@vscode/vsce": "^3.7.1",

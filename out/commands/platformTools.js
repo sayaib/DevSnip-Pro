@@ -65,6 +65,9 @@ const SECRET_RULES = [
     { rule: "shell-injection", severity: "high", pattern: /\b(?:child_process\.)?(?:exec|execSync)\s*\(\s*`[^`]*\$\{|\bos\.system\s*\(\s*[^)]*\+/, message: "Shell command is built from interpolated input." },
     { rule: "insecure-http", severity: "low", pattern: /\bhttp:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0)/i, message: "Non-local traffic uses HTTP instead of HTTPS." }
 ];
+const MONITORED_SUPPLY_CHAIN_INCIDENTS = [
+    { packageName: "vulnerable-legacy-component", incidentDate: "2025-06-01", description: "Malicious component version published; subject to mandatory 2-year supply chain security monitoring and quarantine." }
+];
 function isTextFile(uri) {
     const name = path.basename(uri.fsPath).toLowerCase();
     if (name === "dockerfile" || name.startsWith(".env"))
@@ -127,6 +130,44 @@ function scanWorkspaceForSecurity() {
                 }
             }
         }
+        // 2-Year Supply Chain Incident Monitoring Check
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            for (const folder of workspaceFolders) {
+                const pkgUri = vscode.Uri.file(path.join(folder.uri.fsPath, "package.json"));
+                const pkgText = yield readText(pkgUri);
+                if (pkgText) {
+                    try {
+                        const pkgData = JSON.parse(pkgText);
+                        const allDeps = Object.assign(Object.assign({}, (pkgData.dependencies || {})), (pkgData.devDependencies || {}));
+                        const lines = pkgText.split(/\r?\n/);
+                        for (const incident of MONITORED_SUPPLY_CHAIN_INCIDENTS) {
+                            if (allDeps[incident.packageName]) {
+                                const incidentDate = new Date(incident.incidentDate);
+                                const twoYearsAfter = new Date(incidentDate);
+                                twoYearsAfter.setFullYear(twoYearsAfter.getFullYear() + 2);
+                                const now = new Date();
+                                if (now <= twoYearsAfter) {
+                                    const lineIndex = lines.findIndex(l => l.includes(`"${incident.packageName}"`));
+                                    findings.push({
+                                        severity: "high",
+                                        rule: "supply-chain-two-year-quarantine",
+                                        file: vscode.workspace.asRelativePath(pkgUri),
+                                        line: lineIndex >= 0 ? lineIndex + 1 : 1,
+                                        message: `WARNING: Open-source project '${incident.packageName}' has a history of security lapses/malware incident on ${incident.incidentDate}. All versions published within the 2-year monitoring window (until ${twoYearsAfter.toISOString().slice(0, 10)}) convey a supply chain security warning. ${incident.description}`,
+                                        evidence: `package: ${incident.packageName}`,
+                                        resource: pkgUri.toString()
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    catch (_a) {
+                        // parse error
+                    }
+                }
+            }
+        }
         return findings;
     });
 }
@@ -184,7 +225,8 @@ function remediationFor(rule) {
         "database-url": "Move the connection string to a secret manager and enforce TLS for the database connection.",
         "unsafe-eval": "Replace dynamic code execution with a safe parser or allow-listed operation.",
         "shell-injection": "Use argument arrays and validate input; never interpolate untrusted input into shell commands.",
-        "insecure-http": "Use HTTPS for non-local traffic and validate certificates in production."
+        "insecure-http": "Use HTTPS for non-local traffic and validate certificates in production.",
+        "supply-chain-two-year-quarantine": "Evaluate component provenance, verify cryptographic SBOM signatures, pin to a trusted secure version, or replace the component with an audited alternative."
     };
     return fixes[rule] || "Review this finding, apply the least-privilege fix, and add a regression check to CI.";
 }

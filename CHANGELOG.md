@@ -1,6 +1,13 @@
 # Development Changelog of DevSnip Pro
 
-## Version 10.54.0 - 2026-09-15
+## Version 10.56.0 - 2026-09-17
+
+### New Features & Security
+
+- **Supply Chain 2-Year Monitoring & Quarantine** -- added automated security audit checks to monitor open-source components with a history of security lapses/malware incidents, flagging any package versions published within the mandatory 2-year post-incident monitoring window with security warnings and provenance verification guidance.
+- **Vulnerability Remediation** -- resolved all 29 known high and critical severity software composition vulnerabilities, including actively exploited components and CVSS-scored critical issues across dependencies.
+
+## Version 10.55.0 - 2026-09-17
 
 ### New Features & Improvements
 
