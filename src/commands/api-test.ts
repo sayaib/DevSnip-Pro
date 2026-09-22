@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import axios, { AxiosRequestConfig, CancelTokenSource } from "axios";
+import * as https from "https";
 import * as path from "path";
 import { getUserStats, redeemPoints } from "./milestoneTracker";
 
@@ -11,11 +12,20 @@ interface ApiHistoryItem {
   status?: number;
   responseTime?: number;
   size?: number;
+  attempts?: number;
 }
 
 interface RequestHeaders {
   [key: string]: string;
 }
+
+interface ProxyConfig {
+  host: string;
+  port: number;
+  auth?: { username: string; password: string };
+}
+
+type BodyType = 'json' | 'text' | 'form-urlencoded';
 
 interface ApiRequest {
   method: string;
@@ -27,16 +37,45 @@ interface ApiRequest {
   authToken?: string;
   username?: string;
   password?: string;
+  apiKeyName?: string;
+  apiKeyValue?: string;
+  apiKeyLocation?: 'header' | 'query';
   timeout?: number;
   requestType?: 'rest' | 'graphql';
   graphqlQuery?: string;
   graphqlVariables?: string;
   graphqlOperationName?: string;
+  bodyType?: BodyType;
+  /** Number of automatic retries on network errors / retryable status codes (max 5). */
+  retries?: number;
+  /** Base delay in ms for exponential backoff between retries. */
+  retryDelay?: number;
+  /** HTTP status codes that should trigger a retry. Defaults to [429, 502, 503, 504]. */
+  retryStatusCodes?: number[];
+  /** Whether to follow HTTP redirects. Defaults to true. */
+  followRedirects?: boolean;
+  /** Max number of redirects to follow when followRedirects is true. */
+  maxRedirects?: number;
+  /** Set to false to disable SSL/TLS certificate verification. */
+  rejectUnauthorized?: boolean;
+  /** Explicit proxy configuration, or false to disable proxy usage entirely. */
+  proxy?: ProxyConfig | false;
 }
 
 interface Environment {
   name: string;
   variables: { [key: string]: string };
+}
+
+interface RequestParts {
+  finalUrl: string;
+  headers: RequestHeaders;
+  bodyData: any;
+  auth?: { username: string; password: string };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 class ApiTester {
@@ -45,6 +84,8 @@ class ApiTester {
   private cancelTokenSource: CancelTokenSource | null = null;
   private readonly MAX_HISTORY_SIZE = 50;
   private readonly DEFAULT_TIMEOUT = 30000;
+  private readonly MAX_RESPONSE_DISPLAY_SIZE = 2 * 1024 * 1024; // 2MB
+  private readonly DEFAULT_RETRY_STATUS_CODES = [429, 502, 503, 504];
   private environments: Environment[] = [];
   private activeEnvironmentIndex: number = -1;
 
@@ -169,8 +210,16 @@ class ApiTester {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  public async makeRequest(request: ApiRequest): Promise<any> {
-    // Resolve environment variables
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Resolves environment variables and computes the final URL, headers and body
+   * for a given request without performing any network I/O. Shared by makeRequest()
+   * and generateCurlCommand() so both stay perfectly in sync.
+   */
+  private buildRequestParts(request: ApiRequest): RequestParts {
     const resolvedUrl = this.resolveVariables(request.url);
     const resolvedHeaders: RequestHeaders = {};
     if (request.headers) {
@@ -188,13 +237,19 @@ class ApiTester {
     const resolvedAuthToken = request.authToken ? this.resolveVariables(request.authToken) : undefined;
     const resolvedUsername = request.username ? this.resolveVariables(request.username) : undefined;
     const resolvedPassword = request.password ? this.resolveVariables(request.password) : undefined;
+    const resolvedApiKeyName = request.apiKeyName ? this.resolveVariables(request.apiKeyName) : undefined;
+    const resolvedApiKeyValue = request.apiKeyValue ? this.resolveVariables(request.apiKeyValue) : undefined;
 
     // Validation
     if (!this.validateUrl(resolvedUrl)) {
       throw new Error("Invalid URL format");
     }
 
-    // Handle GraphQL request type
+    // API Key auth delivered via query string is merged in before the URL is built
+    if (request.authType === "ApiKey" && request.apiKeyLocation === "query" && resolvedApiKeyName && resolvedApiKeyValue) {
+      resolvedParams[resolvedApiKeyName] = resolvedApiKeyValue;
+    }
+
     let finalUrl = resolvedUrl;
     if (Object.keys(resolvedParams).length > 0) {
       const parsedUrl = new URL(finalUrl);
@@ -225,13 +280,273 @@ class ApiTester {
       finalHeaders['Content-Type'] = 'application/json';
     }
 
+    // Handle request body for appropriate methods, honoring the requested body type
+    let bodyData: any = undefined;
+    if (["POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(request.method.toUpperCase()) && finalData) {
+      const contentType = Object.entries(finalHeaders)
+        .find(([key]) => key.toLowerCase() === 'content-type')?.[1]?.toLowerCase() || '';
+      const bodyType: BodyType = request.bodyType || 'json';
+
+      if (bodyType === 'form-urlencoded') {
+        let formObject: Record<string, any> | undefined;
+        try {
+          const parsed = JSON.parse(finalData);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            formObject = parsed;
+          }
+        } catch {
+          // Not JSON - treat the raw text as an already-encoded form body (e.g. a=1&b=2)
+        }
+        if (formObject) {
+          const usp = new URLSearchParams();
+          for (const [k, v] of Object.entries(formObject)) usp.append(k, String(v));
+          bodyData = usp.toString();
+        } else {
+          bodyData = finalData;
+        }
+        if (!finalHeaders['Content-Type']) {
+          finalHeaders['Content-Type'] = 'application/x-www-form-urlencoded';
+        }
+      } else if (bodyType === 'text') {
+        bodyData = finalData;
+        if (!finalHeaders['Content-Type']) {
+          finalHeaders['Content-Type'] = 'text/plain';
+        }
+      } else {
+        try {
+          bodyData = JSON.parse(finalData);
+          if (!finalHeaders['Content-Type']) {
+            finalHeaders['Content-Type'] = 'application/json';
+          }
+        } catch {
+          if (contentType.includes('application/json')) {
+            throw new Error("Invalid JSON in request body");
+          }
+          bodyData = finalData;
+          if (!finalHeaders['Content-Type']) {
+            finalHeaders['Content-Type'] = 'text/plain';
+          }
+        }
+      }
+    }
+
+    // Handle authentication
+    let auth: { username: string; password: string } | undefined;
+    if (request.authType) {
+      switch (request.authType) {
+        case "Bearer":
+          if (resolvedAuthToken) {
+            finalHeaders['Authorization'] = `Bearer ${resolvedAuthToken}`;
+          }
+          break;
+        case "Basic":
+          if (resolvedUsername && resolvedPassword) {
+            auth = { username: resolvedUsername, password: resolvedPassword };
+          }
+          break;
+        case "ApiKey":
+          if (request.apiKeyLocation !== "query" && resolvedApiKeyName && resolvedApiKeyValue) {
+            finalHeaders[resolvedApiKeyName] = resolvedApiKeyValue;
+          }
+          break;
+      }
+    }
+
+    return { finalUrl, headers: finalHeaders, bodyData, auth };
+  }
+
+  /**
+   * Builds an equivalent cURL command for the given request (without sending it).
+   * Includes any cookies currently stored for the target domain.
+   */
+  public generateCurlCommand(request: ApiRequest): string {
+    const { finalUrl, headers, bodyData, auth } = this.buildRequestParts(request);
+    const domain = this.getDomainFromUrl(finalUrl);
+    const allHeaders = { ...headers };
+    if (domain && this.cookies[domain]?.length && !Object.keys(allHeaders).some(h => h.toLowerCase() === 'cookie')) {
+      allHeaders['Cookie'] = this.cookies[domain].join('; ');
+    }
+
+    const parts: string[] = ['curl', '-X', request.method.toUpperCase()];
+    for (const [key, value] of Object.entries(allHeaders)) {
+      parts.push('-H', shellQuote(`${key}: ${value}`));
+    }
+    if (auth) {
+      parts.push('-u', shellQuote(`${auth.username}:${auth.password}`));
+    }
+    if (bodyData !== undefined) {
+      const bodyStr = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
+      parts.push('-d', shellQuote(bodyStr));
+    }
+    parts.push(shellQuote(finalUrl));
+    return parts.join(' ');
+  }
+
+  /**
+   * Tokenizes a shell-style command line, respecting single/double quotes.
+   */
+  private tokenizeShellCommand(input: string): string[] {
+    const tokens: string[] = [];
+    let current = '';
+    let quote: string | null = null;
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i];
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        } else if (ch === '\\' && quote === '"' && i + 1 < input.length) {
+          current += input[++i];
+        } else {
+          current += ch;
+        }
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === '\\' && input[i + 1] === '\n') {
+        i++; // line continuation
+      } else if (/\s/.test(ch)) {
+        if (current) { tokens.push(current); current = ''; }
+      } else {
+        current += ch;
+      }
+    }
+    if (current) tokens.push(current);
+    return tokens;
+  }
+
+  /**
+   * Parses a cURL command (as copied from a browser, Postman, etc.) into a partial
+   * ApiRequest that can be merged into the request form.
+   */
+  public parseCurlCommand(curlCommand: string): Partial<ApiRequest> {
+    const tokens = this.tokenizeShellCommand(curlCommand.trim());
+    if (!tokens.length || tokens[0].toLowerCase() !== 'curl') {
+      throw new Error("Not a valid cURL command");
+    }
+
+    const result: Partial<ApiRequest> = { headers: {} };
+    let url: string | undefined;
+
+    for (let i = 1; i < tokens.length; i++) {
+      const tok = tokens[i];
+      switch (tok) {
+        case '-X':
+        case '--request':
+          result.method = (tokens[++i] || 'GET').toUpperCase();
+          break;
+        case '-H':
+        case '--header': {
+          const headerVal = tokens[++i] || '';
+          const idx = headerVal.indexOf(':');
+          if (idx > -1) {
+            result.headers![headerVal.slice(0, idx).trim()] = headerVal.slice(idx + 1).trim();
+          }
+          break;
+        }
+        case '-d':
+        case '--data':
+        case '--data-raw':
+        case '--data-binary':
+        case '--data-urlencode':
+          result.data = tokens[++i];
+          if (!result.method) result.method = 'POST';
+          break;
+        case '-u':
+        case '--user': {
+          const cred = tokens[++i] || '';
+          const sepIdx = cred.indexOf(':');
+          result.authType = 'Basic';
+          result.username = sepIdx > -1 ? cred.slice(0, sepIdx) : cred;
+          result.password = sepIdx > -1 ? cred.slice(sepIdx + 1) : '';
+          break;
+        }
+        case '-b':
+        case '--cookie':
+          result.headers!['Cookie'] = tokens[++i] || '';
+          break;
+        case '-A':
+        case '--user-agent':
+          result.headers!['User-Agent'] = tokens[++i] || '';
+          break;
+        case '-k':
+        case '--insecure':
+          result.rejectUnauthorized = false;
+          break;
+        case '-L':
+        case '--location':
+          result.followRedirects = true;
+          break;
+        case '-x':
+        case '--proxy': {
+          const proxyVal = tokens[++i] || '';
+          try {
+            const proxyUrl = new URL(proxyVal.includes('://') ? proxyVal : `http://${proxyVal}`);
+            result.proxy = {
+              host: proxyUrl.hostname,
+              port: proxyUrl.port ? parseInt(proxyUrl.port, 10) : 8080,
+              auth: proxyUrl.username ? { username: proxyUrl.username, password: proxyUrl.password } : undefined
+            };
+          } catch {
+            // Ignore malformed proxy value
+          }
+          break;
+        }
+        default:
+          if (!tok.startsWith('-') && !url) {
+            url = tok;
+          }
+          break;
+      }
+    }
+
+    if (!url) throw new Error("No URL found in cURL command");
+    result.url = url;
+    if (!result.method) result.method = 'GET';
+    return result;
+  }
+
+  /**
+   * Exports the full stored request history as JSON or CSV.
+   */
+  public exportHistory(format: 'json' | 'csv' = 'json'): string {
+    if (format === 'csv') {
+      const header = 'id,method,url,status,responseTime,size,attempts,timestamp';
+      const rows = this.history.map(h => [
+        h.id,
+        h.method,
+        JSON.stringify(h.url),
+        h.status ?? '',
+        h.responseTime ?? '',
+        h.size ?? '',
+        h.attempts ?? 1,
+        new Date(h.timestamp).toISOString()
+      ].join(','));
+      return [header, ...rows].join('\n');
+    }
+    return JSON.stringify(this.history, null, 2);
+  }
+
+  public async makeRequest(request: ApiRequest): Promise<any> {
+    const { finalUrl, headers, bodyData, auth } = this.buildRequestParts(request);
+
     // Cancel previous request if exists
     if (this.cancelTokenSource) {
       this.cancelTokenSource.cancel("New request initiated");
     }
-
     this.cancelTokenSource = axios.CancelToken.source();
-    const startTime = Date.now();
+
+    const domain = this.getDomainFromUrl(finalUrl);
+    const requestHeaders: RequestHeaders = {
+      'User-Agent': 'DevSnip-Pro API Tester',
+      ...headers
+    };
+    if (domain && this.cookies[domain]?.length) {
+      requestHeaders['Cookie'] = this.cookies[domain].join("; ");
+    }
+
+    const maxRedirects = request.followRedirects === false ? 0 : Math.max(0, request.maxRedirects ?? 5);
+    const httpsAgent = request.rejectUnauthorized === false
+      ? new https.Agent({ rejectUnauthorized: false })
+      : undefined;
 
     const config: AxiosRequestConfig = {
       method: request.method as any,
@@ -241,121 +556,119 @@ class ApiTester {
         : this.DEFAULT_TIMEOUT,
       validateStatus: () => true,
       cancelToken: this.cancelTokenSource.token,
-      headers: {
-        'User-Agent': 'DevSnip-Pro API Tester',
-        ...finalHeaders
-      }
+      headers: requestHeaders,
+      maxRedirects,
+      data: bodyData,
+      auth,
+      ...(httpsAgent ? { httpsAgent } : {}),
+      ...(request.proxy === false ? { proxy: false } : request.proxy ? { proxy: request.proxy } : {})
     };
 
-    // Handle request body for appropriate methods
-    if (["POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(request.method.toUpperCase()) && finalData) {
-      const contentType = Object.entries(finalHeaders)
-        .find(([key]) => key.toLowerCase() === 'content-type')?.[1]?.toLowerCase() || '';
+    const maxRetries = Math.max(0, Math.min(request.retries ?? 0, 5));
+    const retryStatusCodes = request.retryStatusCodes && request.retryStatusCodes.length
+      ? request.retryStatusCodes
+      : this.DEFAULT_RETRY_STATUS_CODES;
+    const baseDelay = Math.max(0, request.retryDelay ?? 500);
+
+    const startTime = Date.now();
+    let attempt = 0;
+
+    while (true) {
       try {
-        config.data = JSON.parse(finalData);
-        if (!finalHeaders['Content-Type']) {
-          config.headers!['Content-Type'] = 'application/json';
+        const response = await axios(config);
+
+        if (attempt < maxRetries && retryStatusCodes.includes(response.status)) {
+          attempt++;
+          await this.delay(baseDelay * Math.pow(2, attempt - 1));
+          continue;
         }
-      } catch {
-        if (contentType.includes('application/json')) {
-          throw new Error("Invalid JSON in request body");
+
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+
+        // Calculate response size
+        const serializedResponse = typeof response.data === 'string'
+          ? response.data
+          : JSON.stringify(response.data ?? '');
+        const responseSize = Buffer.byteLength(serializedResponse, 'utf8');
+
+        let responseData = response.data;
+        let truncated = false;
+        if (responseSize > this.MAX_RESPONSE_DISPLAY_SIZE) {
+          truncated = true;
+          responseData = typeof response.data === 'string'
+            ? response.data.slice(0, this.MAX_RESPONSE_DISPLAY_SIZE) + '\n... [response truncated]'
+            : response.data;
         }
-        config.data = finalData;
-        if (!finalHeaders['Content-Type']) {
-          config.headers!['Content-Type'] = 'text/plain';
+
+        // Store cookies from response
+        if (response.headers["set-cookie"]) {
+          const existingCookies = this.cookies[domain] || [];
+          const newCookies = response.headers["set-cookie"]
+            .map(cookie => cookie.split(';', 1)[0])
+            .filter(Boolean);
+          this.cookies[domain] = Array.from(new Set([...existingCookies, ...newCookies]));
+          this.saveData();
         }
+
+        // Add to history
+        this.addToHistory({
+          url: finalUrl,
+          method: request.method,
+          timestamp: Date.now(),
+          status: response.status,
+          responseTime,
+          size: responseSize,
+          attempts: attempt + 1
+        });
+
+        return {
+          status: response.status,
+          headers: response.headers,
+          data: responseData,
+          responseTime,
+          size: this.formatBytes(responseSize),
+          truncated,
+          attempts: attempt + 1,
+          history: this.history.slice(0, 10) // Only send last 10 for UI
+        };
+      } catch (error: any) {
+        if (axios.isCancel(error)) {
+          throw new Error("Request was cancelled");
+        }
+
+        const isNetworkError = !error.response;
+        const errorStatus = error.response?.status || 0;
+        const canRetry = attempt < maxRetries && (isNetworkError || retryStatusCodes.includes(errorStatus));
+
+        if (canRetry) {
+          attempt++;
+          await this.delay(baseDelay * Math.pow(2, attempt - 1));
+          continue;
+        }
+
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+        const errorData = error.response?.data || error.message;
+
+        // Add failed request to history
+        this.addToHistory({
+          url: finalUrl,
+          method: request.method,
+          timestamp: Date.now(),
+          status: errorStatus,
+          responseTime,
+          attempts: attempt + 1
+        });
+
+        throw {
+          message: error.message,
+          status: errorStatus,
+          response: errorData,
+          responseTime,
+          attempts: attempt + 1
+        };
       }
-    }
-
-    // Handle authentication
-    if (request.authType) {
-      switch (request.authType) {
-        case "Bearer":
-          if (resolvedAuthToken) {
-            config.headers!['Authorization'] = `Bearer ${resolvedAuthToken}`;
-          }
-          break;
-        case "Basic":
-          if (resolvedUsername && resolvedPassword) {
-            config.auth = {
-              username: resolvedUsername,
-              password: resolvedPassword,
-            };
-          }
-          break;
-      }
-    }
-
-    // Add cookies
-    const domain = this.getDomainFromUrl(finalUrl);
-    if (domain && this.cookies[domain]) {
-      config.headers!['Cookie'] = this.cookies[domain].join("; ");
-    }
-
-    try {
-      const response = await axios(config);
-      const endTime = Date.now();
-      const responseTime = endTime - startTime;
-      
-      // Calculate response size
-      const serializedResponse = typeof response.data === 'string'
-        ? response.data
-        : JSON.stringify(response.data ?? '');
-      const responseSize = Buffer.byteLength(serializedResponse, 'utf8');
-
-      // Store cookies from response
-      if (response.headers["set-cookie"]) {
-        const existingCookies = this.cookies[domain] || [];
-        const newCookies = response.headers["set-cookie"]
-          .map(cookie => cookie.split(';', 1)[0])
-          .filter(Boolean);
-        this.cookies[domain] = Array.from(new Set([...existingCookies, ...newCookies]));
-        this.saveData();
-      }
-
-      // Add to history
-      this.addToHistory({
-        url: finalUrl,
-        method: request.method,
-        timestamp: Date.now(),
-        status: response.status,
-        responseTime,
-        size: responseSize
-      });
-
-      return {
-        status: response.status,
-        headers: response.headers,
-        data: response.data,
-        responseTime,
-        size: this.formatBytes(responseSize),
-        history: this.history.slice(0, 10) // Only send last 10 for UI
-      };
-    } catch (error: any) {
-      if (axios.isCancel(error)) {
-        throw new Error("Request was cancelled");
-      }
-      
-      const endTime = Date.now();
-      const responseTime = endTime - startTime;
-      const errorStatus = error.response?.status || 0;
-      const errorData = error.response?.data || error.message;
-
-      // Add failed request to history
-      this.addToHistory({
-        url: finalUrl,
-        method: request.method,
-        timestamp: Date.now(),
-        status: errorStatus,
-        responseTime
-      });
-
-      throw {
-        message: error.message,
-        status: errorStatus,
-        response: errorData,
-        responseTime
-      };
     }
   }
 
@@ -387,6 +700,37 @@ class ApiTester {
 
 export { ApiTester };
 
+/** Builds an ApiRequest object from a raw webview message payload. */
+function buildApiRequestFromMessage(message: any): ApiRequest {
+  return {
+    method: message.method,
+    url: message.url,
+    data: message.data,
+    params: message.params,
+    headers: message.headers,
+    authType: message.authType,
+    authToken: message.authToken,
+    username: message.username,
+    password: message.password,
+    apiKeyName: message.apiKeyName,
+    apiKeyValue: message.apiKeyValue,
+    apiKeyLocation: message.apiKeyLocation,
+    timeout: message.timeout,
+    requestType: message.requestType,
+    graphqlQuery: message.graphqlQuery,
+    graphqlVariables: message.graphqlVariables,
+    graphqlOperationName: message.graphqlOperationName,
+    bodyType: message.bodyType,
+    retries: message.retries,
+    retryDelay: message.retryDelay,
+    retryStatusCodes: message.retryStatusCodes,
+    followRedirects: message.followRedirects,
+    maxRedirects: message.maxRedirects,
+    rejectUnauthorized: message.rejectUnauthorized,
+    proxy: message.proxy
+  };
+}
+
 export function apiTest(context: vscode.ExtensionContext) {
   const apiTester = new ApiTester(context);
 
@@ -415,22 +759,7 @@ export function apiTest(context: vscode.ExtensionContext) {
               try {
                 panel.webview.postMessage({ command: "requestStarted" });
 
-                const result = await apiTester.makeRequest({
-                  method: message.method,
-                  url: message.url,
-                  data: message.data,
-                  params: message.params,
-                  headers: message.headers,
-                  authType: message.authType,
-                  authToken: message.authToken,
-                  username: message.username,
-                  password: message.password,
-                  timeout: message.timeout,
-                  requestType: message.requestType,
-                  graphqlQuery: message.graphqlQuery,
-                  graphqlVariables: message.graphqlVariables,
-                  graphqlOperationName: message.graphqlOperationName
-                });
+                const result = await apiTester.makeRequest(buildApiRequestFromMessage(message));
 
                 panel.webview.postMessage({
                   command: "apiResponse",
@@ -442,7 +771,8 @@ export function apiTest(context: vscode.ExtensionContext) {
                   error: error.message || "Request failed",
                   status: error.status || 0,
                   response: error.response,
-                  responseTime: error.responseTime
+                  responseTime: error.responseTime,
+                  attempts: error.attempts
                 });
               }
               break;
@@ -450,6 +780,42 @@ export function apiTest(context: vscode.ExtensionContext) {
             case "cancelRequest":
               apiTester.cancelCurrentRequest();
               panel.webview.postMessage({ command: "requestCancelled" });
+              break;
+
+            case "generateCurl":
+              try {
+                const curl = apiTester.generateCurlCommand(buildApiRequestFromMessage(message));
+                panel.webview.postMessage({ command: "curlGenerated", curl });
+              } catch (error: any) {
+                panel.webview.postMessage({ command: "curlGenerated", error: error.message || "Failed to generate cURL command" });
+              }
+              break;
+
+            case "parseCurl":
+              try {
+                const parsed = apiTester.parseCurlCommand(message.curl || "");
+                panel.webview.postMessage({ command: "curlParsed", request: parsed });
+              } catch (error: any) {
+                panel.webview.postMessage({ command: "curlParsed", error: error.message || "Failed to parse cURL command" });
+              }
+              break;
+
+            case "exportHistory":
+              try {
+                const format: "json" | "csv" = message.format === "csv" ? "csv" : "json";
+                const data = apiTester.exportHistory(format);
+                const uri = await vscode.window.showSaveDialog({
+                  filters: format === "csv" ? { "CSV Files": ["csv"] } : { "JSON Files": ["json"] },
+                  defaultUri: vscode.Uri.file(path.join(context.extensionPath, `devsnip-api-history.${format}`))
+                });
+                if (uri) {
+                  await vscode.workspace.fs.writeFile(uri, Buffer.from(data, "utf8"));
+                  panel.webview.postMessage({ command: "historyExported", success: true });
+                  vscode.window.showInformationMessage(`API history exported to ${uri.fsPath}`);
+                }
+              } catch (error: any) {
+                panel.webview.postMessage({ command: "historyExported", success: false, error: error.message || "Export failed" });
+              }
               break;
 
             case "getCookies":
@@ -1508,6 +1874,8 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                 <button id="manageEnvBtn" class="btn btn-ghost btn-sm">Manage</button>
             </div>
             <div class="topbar-actions">
+                <button id="copyAsCurl" class="btn btn-ghost btn-sm" title="Copy the current request as a cURL command">📋 cURL</button>
+                <button id="exportHistoryBtn" class="btn btn-ghost btn-sm" title="Export request history to a file">⬇ Export</button>
                 <button id="showCookies" class="btn btn-ghost btn-sm">Cookies</button>
                 <button id="clearHistory" class="btn btn-ghost btn-sm">Clear History</button>
                 <button id="clearCookies" class="btn btn-danger btn-sm">Clear Cookies</button>
@@ -1526,7 +1894,7 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                     <option value="HEAD">HEAD</option>
                     <option value="OPTIONS">OPTIONS</option>
                 </select>
-                <input type="text" id="url" class="url-input" placeholder="Enter request URL or paste cURL...">
+                <input type="text" id="url" class="url-input" placeholder="Enter request URL or paste a cURL command...">
                 <button id="sendRequest" class="send-btn">
                     <span class="btn-label">Send</span>
                     <div class="spinner hidden"></div>
@@ -1550,6 +1918,7 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                     <button class="config-tab" data-tab="headers">Headers <span class="badge" id="headerCount">0</span></button>
                     <button class="config-tab" data-tab="auth">Auth</button>
                     <button class="config-tab" data-tab="body">Body</button>
+                    <button class="config-tab" data-tab="advanced">Advanced</button>
                     <button class="config-tab" data-tab="graphql" id="graphqlTab" style="display:none">GraphQL</button>
                     <button class="config-tab" data-tab="premium">👑 Premium Hub (<span id="userPointsBadge">0</span> pts)</button>
                 </div>
@@ -1654,6 +2023,7 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                             <option value="None">No Auth</option>
                             <option value="Bearer">Bearer Token</option>
                             <option value="Basic">Basic Auth</option>
+                            <option value="ApiKey">API Key</option>
                         </select>
                     </div>
                     <div id="authFields"></div>
@@ -1662,11 +2032,62 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                 <!-- BODY TAB -->
                 <div class="config-content" id="tab-body">
                     <div class="body-toolbar">
+                        <select id="bodyType" class="select" style="max-width:220px">
+                            <option value="json">JSON</option>
+                            <option value="text">Text / Raw</option>
+                            <option value="form-urlencoded">Form URL Encoded</option>
+                        </select>
                         <button class="btn btn-ghost btn-sm" id="convertToJson">To JSON</button>
                         <button class="btn btn-ghost btn-sm" id="beautifyJson">Format</button>
                         <button class="btn btn-ghost btn-sm" id="validateData">Validate</button>
                     </div>
                     <textarea id="body" class="textarea" rows="12" placeholder='{"key": "value"}' style="font-family: var(--font-mono);"></textarea>
+                </div>
+
+                <!-- ADVANCED TAB -->
+                <div class="config-content" id="tab-advanced">
+                    <div class="form-row">
+                        <label class="form-label">Retries on failure</label>
+                        <input type="number" id="retries" class="input" value="0" min="0" max="5" style="max-width:120px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Retry delay (ms, exponential backoff)</label>
+                        <input type="number" id="retryDelay" class="input" value="500" min="0" max="10000" style="max-width:160px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Retry on status codes</label>
+                        <input type="text" id="retryStatusCodes" class="input" value="429,502,503,504" style="max-width:220px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" style="display:flex;align-items:center;gap:8px;text-transform:none;">
+                            <input type="checkbox" id="followRedirects" checked style="width:auto;"> Follow redirects
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Max redirects</label>
+                        <input type="number" id="maxRedirects" class="input" value="5" min="0" max="20" style="max-width:120px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" style="display:flex;align-items:center;gap:8px;text-transform:none;">
+                            <input type="checkbox" id="sslVerify" checked style="width:auto;"> Verify SSL/TLS certificates
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Proxy Host</label>
+                        <input type="text" id="proxyHost" class="input" placeholder="e.g., 127.0.0.1" style="max-width:220px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Proxy Port</label>
+                        <input type="number" id="proxyPort" class="input" placeholder="8080" style="max-width:120px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Proxy Username (optional)</label>
+                        <input type="text" id="proxyUsername" class="input" style="max-width:220px">
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Proxy Password (optional)</label>
+                        <input type="password" id="proxyPassword" class="input" style="max-width:220px">
+                    </div>
                 </div>
 
                 <!-- GRAPHQL TAB -->
@@ -1891,6 +2312,10 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                 } else if (authType === 'Basic') {
                     el.innerHTML = '<div class="form-row"><label class="form-label">Username</label><input type="text" id="username" class="input" placeholder="Username"></div>' +
                         '<div class="form-row"><label class="form-label">Password</label><input type="password" id="password" class="input" placeholder="Password"></div>';
+                } else if (authType === 'ApiKey') {
+                    el.innerHTML = '<div class="form-row"><label class="form-label">Key Name</label><input type="text" id="apiKeyName" class="input" placeholder="e.g., X-API-Key"></div>' +
+                        '<div class="form-row"><label class="form-label">Key Value</label><input type="password" id="apiKeyValue" class="input" placeholder="Enter API key"></div>' +
+                        '<div class="form-row"><label class="form-label">Add To</label><select id="apiKeyLocation" class="select" style="max-width:200px"><option value="header">Header</option><option value="query">Query Parameter</option></select></div>';
                 } else {
                     el.innerHTML = '';
                 }
@@ -2000,17 +2425,12 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                 let ind = 0; return s.split('\\n').map(l => { const t = l.trim(); if (t.startsWith('</')) ind--; const r = ' '.repeat(Math.max(0, ind)) + t; if (t.startsWith('<') && !t.startsWith('</') && !t.endsWith('/>')) ind++; return r; }).join('\\n');
             }
 
-            /* ===== SEND ===== */
-            document.getElementById('sendRequest').addEventListener('click', () => {
-                if (isRequestInProgress) return;
-                const url = document.getElementById('url').value.trim();
-                if (!url) { toast('Enter a URL', 'error'); return; }
-                if (!/^https?:\\/\\//i.test(url)) { toast('URL must start with http:// or https://', 'error'); return; }
-                setRequestState(true);
-                vscode.postMessage({
-                    command: 'testAPI',
+            /* ===== SHARED REQUEST PAYLOAD ===== */
+            function buildRequestPayload() {
+                const proxyHost = document.getElementById('proxyHost')?.value?.trim();
+                return {
                     method: methodSelect.value,
-                    url: url,
+                    url: document.getElementById('url').value.trim(),
                     data: document.getElementById('body').value.trim(),
                     params: collectKV('paramsContainer'),
                     headers: collectKV('headersContainer'),
@@ -2018,15 +2438,65 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                     authToken: document.getElementById('authToken')?.value,
                     username: document.getElementById('username')?.value,
                     password: document.getElementById('password')?.value,
+                    apiKeyName: document.getElementById('apiKeyName')?.value,
+                    apiKeyValue: document.getElementById('apiKeyValue')?.value,
+                    apiKeyLocation: document.getElementById('apiKeyLocation')?.value,
                     timeout: parseInt(document.getElementById('timeout').value) || 30000,
                     requestType: currentRequestType,
                     graphqlQuery: document.getElementById('graphqlQuery')?.value?.trim() || '',
                     graphqlVariables: document.getElementById('graphqlVariables')?.value?.trim() || '',
-                    graphqlOperationName: document.getElementById('graphqlOperationName')?.value?.trim() || ''
-                });
+                    graphqlOperationName: document.getElementById('graphqlOperationName')?.value?.trim() || '',
+                    bodyType: document.getElementById('bodyType')?.value || 'json',
+                    retries: parseInt(document.getElementById('retries')?.value) || 0,
+                    retryDelay: parseInt(document.getElementById('retryDelay')?.value) || 500,
+                    retryStatusCodes: (document.getElementById('retryStatusCodes')?.value || '')
+                        .split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)),
+                    followRedirects: document.getElementById('followRedirects')?.checked ?? true,
+                    maxRedirects: parseInt(document.getElementById('maxRedirects')?.value) || 5,
+                    rejectUnauthorized: document.getElementById('sslVerify')?.checked ?? true,
+                    proxy: proxyHost ? {
+                        host: proxyHost,
+                        port: parseInt(document.getElementById('proxyPort')?.value) || 8080,
+                        auth: document.getElementById('proxyUsername')?.value ? {
+                            username: document.getElementById('proxyUsername').value,
+                            password: document.getElementById('proxyPassword')?.value || ''
+                        } : undefined
+                    } : undefined
+                };
+            }
+
+            /* ===== SEND ===== */
+            document.getElementById('sendRequest').addEventListener('click', () => {
+                if (isRequestInProgress) return;
+                const url = document.getElementById('url').value.trim();
+                if (!url) { toast('Enter a URL', 'error'); return; }
+                if (!/^https?:\\/\\//i.test(url)) { toast('URL must start with http:// or https://', 'error'); return; }
+                setRequestState(true);
+                vscode.postMessage(Object.assign({ command: 'testAPI' }, buildRequestPayload()));
             });
 
             document.getElementById('cancelRequest').addEventListener('click', () => vscode.postMessage({ command: 'cancelRequest' }));
+
+            /* ===== COPY AS CURL ===== */
+            document.getElementById('copyAsCurl').addEventListener('click', () => {
+                const url = document.getElementById('url').value.trim();
+                if (!url) { toast('Enter a URL first', 'error'); return; }
+                vscode.postMessage(Object.assign({ command: 'generateCurl' }, buildRequestPayload()));
+            });
+
+            /* ===== EXPORT HISTORY ===== */
+            document.getElementById('exportHistoryBtn').addEventListener('click', () => {
+                vscode.postMessage({ command: 'exportHistory', format: 'json' });
+            });
+
+            /* ===== IMPORT FROM CURL (paste into URL bar) ===== */
+            document.getElementById('url').addEventListener('paste', (e) => {
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                if (text && text.trim().toLowerCase().startsWith('curl ')) {
+                    e.preventDefault();
+                    vscode.postMessage({ command: 'parseCurl', curl: text });
+                }
+            });
 
             /* ===== HISTORY CLICK ===== */
             document.getElementById('historyTableBody').addEventListener('click', (e) => {
@@ -2154,7 +2624,8 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                         document.getElementById('responseSize').textContent = d.size;
                         document.getElementById('responseOutput').innerHTML = highlight(d.data);
                         updateHistoryTable(d.history);
-                        toast('Request completed', 'success');
+                        if (d.truncated) toast('Response was truncated (too large to display in full)', 'warning');
+                        toast(d.attempts && d.attempts > 1 ? ('Request completed after ' + d.attempts + ' attempts') : 'Request completed', 'success');
                         break;
                     case 'apiError':
                         setRequestState(false);
@@ -2203,6 +2674,58 @@ function getWebviewContent(history: ApiHistoryItem[]): string {
                         const errEl = document.getElementById('premiumOutput');
                         errEl.textContent = 'Error: ' + d.error;
                         errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        break;
+                    case 'curlGenerated':
+                        if (d.error) { toast('Failed to generate cURL: ' + d.error, 'error'); break; }
+                        navigator.clipboard.writeText(d.curl).then(() => toast('cURL command copied to clipboard!', 'success')).catch(() => {
+                            const ta = document.createElement('textarea');
+                            ta.value = d.curl;
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(ta);
+                            toast('cURL command copied to clipboard!', 'success');
+                        });
+                        break;
+                    case 'curlParsed': {
+                        if (d.error) { toast('cURL import failed: ' + d.error, 'error'); break; }
+                        const r = d.request || {};
+                        if (r.url) document.getElementById('url').value = r.url;
+                        if (r.method) { methodSelect.value = r.method; updateMethodColor(); }
+                        const headersContainer = document.getElementById('headersContainer');
+                        headersContainer.innerHTML = '';
+                        if (r.headers && Object.keys(r.headers).length) {
+                            Object.entries(r.headers).forEach(([k, v]) => addKVRow('headersContainer', k, v));
+                        } else {
+                            addKVRow('headersContainer');
+                        }
+                        if (r.data !== undefined) document.getElementById('body').value = r.data;
+                        if (r.authType === 'Basic') {
+                            document.getElementById('authType').value = 'Basic';
+                            updateAuthFields();
+                            if (document.getElementById('username')) document.getElementById('username').value = r.username || '';
+                            if (document.getElementById('password')) document.getElementById('password').value = r.password || '';
+                        }
+                        if (r.rejectUnauthorized === false && document.getElementById('sslVerify')) {
+                            document.getElementById('sslVerify').checked = false;
+                        }
+                        if (r.followRedirects && document.getElementById('followRedirects')) {
+                            document.getElementById('followRedirects').checked = true;
+                        }
+                        if (r.proxy && document.getElementById('proxyHost')) {
+                            document.getElementById('proxyHost').value = r.proxy.host || '';
+                            document.getElementById('proxyPort').value = r.proxy.port || '';
+                            if (r.proxy.auth) {
+                                document.getElementById('proxyUsername').value = r.proxy.auth.username || '';
+                                document.getElementById('proxyPassword').value = r.proxy.auth.password || '';
+                            }
+                        }
+                        toast('cURL command imported successfully', 'success');
+                        break;
+                    }
+                    case 'historyExported':
+                        if (d.success) toast('History exported successfully', 'success');
+                        else if (d.error) toast('Export failed: ' + d.error, 'error');
                         break;
                     case 'error': toast('Error: ' + d.message, 'error'); break;
                 }

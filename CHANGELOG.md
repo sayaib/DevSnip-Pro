@@ -1,10 +1,45 @@
 # Development Changelog of DevSnip Pro
 
-## Version 10.59.0 - 2026-09-21
+## Version 10.59.2 - 2026-09-21
 
 ### Fixes
 
 - Fixed Windows PowerShell execution-policy prompt swallowing the OpenCode launch command. The hub now waits for shell readiness via the Terminal Shell Integration API before running `opencode`, with a Command Prompt fallback and a one-command policy fix (`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`).
+
+## Version 10.59.1 - 2026-09-22
+
+(Note: The REST API Client received a major feature upgrade:
+
+### New Features
+
+- **API Key authentication** — add a custom header or query-parameter key to requests (Auth tab)
+- **Body type selector** — choose JSON (default), plain text, or `application/x-www-form-urlencoded` (Body tab)
+- **Automatic retries with exponential backoff** — configurable `retries` (max 5), `retryDelay`, and `retryStatusCodes` (defaults: 429/502/503/504). Also retries on network/timeout failures. Backward-compatible (`retries` defaults to 0).
+- **Redirect & SSL controls** — `followRedirects`, `maxRedirects`, and `rejectUnauthorized` toggle for self-signed certs
+- **Proxy support** — explicit host/port/auth, or `false` to disable entirely
+- **cURL import & export** — paste a `curl` command to auto-populate method, URL, headers, body, and basic auth; copy the current request as a `curl` command from the topbar
+- **History export** — export full request history as JSON or CSV
+- **Response truncation** — responses over 2MB are silently truncated in the UI with a `truncated` flag; `attempts` reported in history and response metadata
+
+### Improvements
+
+- Auth tab now supports API Key (header or query) alongside Bearer and Basic
+- Body tab has a type selector (JSON / Text / Form URL Encoded)
+- New Advanced tab: retries, retry delay/status codes, redirect/SSL toggles, proxy config
+- Topbar buttons: 📋 cURL (copies request as cURL) and ⬇ Export (saves history to file)
+- Pasting a `curl ...` command into the URL bar now imports it as a live request
+- Response panel shows retry attempt count and truncation warnings
+- History now records `attempts` per request and a per-request attempt count
+
+### Fixes
+
+- Invalid JSON with explicit `Content-Type: application/json` now throws a clear error instead of silently sending malformed data
+- Cookie jar now properly deduplicates cookies across requests
+- GraphQL body parsing and error messages improved for malformed variables/operation names
+
+### Integration Tests
+
+- Added comprehensive test suite (`src/test/api-test.test.ts`) exercising cURL generation/parsing, body type encoding, retry logic, auth header delivery, redirect handling, and `makeRequest` against a local test server — all without external network calls.
 
 ## Version 10.58.0 - 2026-09-21
 

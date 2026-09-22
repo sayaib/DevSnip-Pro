@@ -19,7 +19,7 @@ A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS C
 
 | Feature | Command / Trigger | Description |
 | :------ | :---------------- | :---------- |
-| **REST API Client** | `sayaib.hue-console.openGUI` | Full HTTP/GraphQL client with headers, auth, cookies and history |
+| **REST API Client** | `sayaib.hue-console.openGUI` | Full HTTP/GraphQL client with headers, auth (Bearer/Basic/API Key), body types (JSON/Text/Form URL Encoded), auto-retry with backoff, redirect/SSL/proxy controls, cURL import & export, history export, cookies and history |
 | **OpenCode Integration** | `sayaib.hue-console.openCodeIntegration` | Check, install/repair, and launch the OpenCode CLI (see below) |
 | **Console Log Cleanup** | `sayaib.hue-console.listAndRemoveConsoleLogs` | Scan and remove `console.log` statements project-wide |
 | **Unused Imports Remover** | `sayaib.hue-console.removeUnusedImports` | Automatically strip unused import statements |
