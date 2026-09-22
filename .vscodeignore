@@ -1,15 +1,23 @@
+# Sources and build metadata (only out/ ships)
+src/**
+out/test/**
+out/**/*.map
+tsconfig.json
+.eslintrc.json
 .vscode/**
 .vscode-test/**
-.gitignore
+.github/**
+node_modules/.bin/**
+
+# Repo-only assets and scratch files
+data/**
+k8s/**
+screenshot/**
+arc.wsd
+command.txt
+final_logo.png
+logo1.png
 vsc-extension-quickstart.md
-src
-.git
-.vscode
 *.vsix
 *.log
-*.ts
-*.map
-data
-final_logo.png
-node_modules/*
-!node_modules/essential-package
+.gitignore

@@ -1,285 +1,68 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerBigDataToolsCommands = void 0;
-const vscode = __importStar(require("vscode"));
+const command_registry_1 = require("../utils/command-registry");
+const webview_ui_1 = require("../utils/webview-ui");
+const webview_ui_2 = require("../utils/webview-ui");
 const command_dispatch_1 = require("../utils/command-dispatch");
-function getNonce() {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let text = '';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
-const SHARED_CSS = `
-:root {
-    --bg-0: var(--vscode-editor-background);
-    --bg-1: var(--vscode-sideBar-background);
-    --bg-2: var(--vscode-input-background);
-    --bg-3: var(--vscode-textCodeBlock-background);
-    --fg-0: var(--vscode-editor-foreground);
-    --fg-1: var(--vscode-descriptionForeground);
-    --fg-2: var(--vscode-disabledForeground);
-    --border: var(--vscode-input-border);
-    --border-focus: var(--vscode-focusBorder);
-    --accent: var(--vscode-button-background);
-    --accent-fg: var(--vscode-button-foreground);
-    --success: #4caf50;
-    --success-bg: rgba(76, 175, 80, 0.15);
-    --error: #f44336;
-    --error-bg: rgba(244, 67, 54, 0.15);
-    --warning: #ff9800;
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-    --transition: 0.2s ease;
-    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    font-family: var(--sans);
-    background: var(--bg-0);
-    color: var(--fg-0);
-    line-height: 1.5;
-    padding: 0;
-    overflow-x: hidden;
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--fg-2); border-radius: 3px; }
-
-.tool-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px 24px;
-    background: var(--bg-1);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 50;
-}
-.tool-header h1 { font-size: 16px; font-weight: 700; white-space: nowrap; }
-.tool-header .subtitle { font-size: 12px; color: var(--fg-1); }
-
-.tool-body { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
-
-.section {
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    margin-bottom: 16px;
-}
-.section-title {
-    font-size: 13px; font-weight: 700;
-    color: var(--fg-1);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 14px;
-}
-
-label {
-    display: block;
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 4px;
-}
-.input, input[type="text"], input[type="number"], select {
-    width: 100%;
-    padding: 8px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    outline: none;
-    transition: border-color var(--transition);
-}
-.input:focus, input:focus, textarea:focus, select:focus {
-    border-color: var(--border-focus);
-}
-textarea {
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    resize: vertical;
-    outline: none;
-    transition: border-color var(--transition);
-}
-select {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23999'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 30px;
-}
-
-.btn {
-    padding: 8px 16px;
-    background: var(--accent);
-    color: var(--accent-fg);
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-.btn:hover { opacity: 0.85; }
-.btn-secondary {
-    background: var(--bg-3);
-    color: var(--fg-0);
-}
-.btn-ghost {
-    background: transparent;
-    color: var(--fg-1);
-    border: 1px solid var(--border);
-}
-.btn-ghost:hover { background: var(--bg-2); color: var(--fg-0); }
-.btn-danger {
-    background: var(--error);
-    color: #fff;
-}
-.btn-row {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-}
-
-.result-block {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 14px;
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 400px;
-    overflow-y: auto;
-    color: var(--fg-0);
-}
-
-.panels {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-.panel-label {
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-@media (max-width: 768px) {
-    .panels { grid-template-columns: 1fr; }
-    .tool-body { padding: 16px; }
-    .btn-row { flex-direction: column; align-items: stretch; }
-}
-
-.toast-container {
-    position: fixed; top: 12px; right: 12px; z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px;
-}
-.toast {
-    padding: 10px 16px;
-    border-radius: var(--radius-md);
-    font-size: 13px; font-weight: 500;
-    color: #fff;
-    box-shadow: var(--shadow);
-    transform: translateX(120%);
-    transition: transform 0.3s ease;
-    max-width: 320px;
-}
-.toast.show { transform: translateX(0); }
-.toast.success { background: #2e7d32; }
-.toast.error { background: #c62828; }
-.toast.info { background: #1565c0; }
-`;
-function toastScript() {
-    return `
-        function _toast(msg, type) {
-            var c = document.querySelector('.toast-container');
-            if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
-            var t = document.createElement('div');
-            t.className = 'toast ' + (type || 'success');
-            t.textContent = msg;
-            c.appendChild(t);
-            requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('show'); }); });
-            setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 2000);
-        }
-    `;
-}
+/** Shared panel styling lives in utils/webview-ui so every tool page stays consistent. */
+const SHARED_CSS = webview_ui_2.TOOL_CSS;
 function registerBigDataToolsCommands(context) {
-    const hubCmd = vscode.commands.registerCommand('sayaib.hue-console.bigDataHub', () => {
-        const panel = vscode.window.createWebviewPanel('bigDataHub', 'DevSnip Pro - Big Data & Analytics Tools', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getBigDataHubHtml(getNonce());
-        panel.webview.onDidReceiveMessage(message => {
-            switch (message.command) {
-                case 'openTool':
-                    (0, command_dispatch_1.executeQueuedCommand)(message.toolCommand);
-                    break;
+    const hubCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.bigDataHub', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('bigDataHub', 'DevSnip Pro - Big Data & Analytics Tools', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getBigDataHubHtml((0, webview_ui_2.getNonce)());
+        // executeQueuedCommand validates the id against the commands this
+        // extension registered, so a hub can only open DevSnip Pro tools.
+        const messageSubscription = panel.webview.onDidReceiveMessage(message => {
+            if (message?.command === 'openTool') {
+                void (0, command_dispatch_1.executeQueuedCommand)(message.toolCommand);
             }
-        }, undefined, context.subscriptions);
+        });
+        panel.onDidDispose(() => messageSubscription.dispose());
     });
-    const schemaViewerCmd = vscode.commands.registerCommand('sayaib.hue-console.schemaViewer', () => {
-        const panel = vscode.window.createWebviewPanel('schemaViewer', 'Parquet/Avro/JSON Schema Viewer', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getSchemaViewerHtml(getNonce());
+    const schemaViewerCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.schemaViewer', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('schemaViewer', 'Parquet/Avro/JSON Schema Viewer', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getSchemaViewerHtml((0, webview_ui_2.getNonce)());
     });
-    const sparkSqlFormatterCmd = vscode.commands.registerCommand('sayaib.hue-console.sparkSqlFormatter', () => {
-        const panel = vscode.window.createWebviewPanel('sparkSqlFormatter', 'Spark SQL / Presto / Trino Formatter', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getSparkSqlFormatterHtml(getNonce());
+    const sparkSqlFormatterCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.sparkSqlFormatter', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('sparkSqlFormatter', 'Spark SQL / Presto / Trino Formatter', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getSparkSqlFormatterHtml((0, webview_ui_2.getNonce)());
     });
-    const dataQualityCheckerCmd = vscode.commands.registerCommand('sayaib.hue-console.dataQualityChecker', () => {
-        const panel = vscode.window.createWebviewPanel('dataQualityChecker', 'CSV/JSON Data Quality Checker', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getDataQualityCheckerHtml(getNonce());
+    const dataQualityCheckerCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.dataQualityChecker', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('dataQualityChecker', 'CSV/JSON Data Quality Checker', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getDataQualityCheckerHtml((0, webview_ui_2.getNonce)());
     });
-    const schemaDiffCmd = vscode.commands.registerCommand('sayaib.hue-console.schemaDiff', () => {
-        const panel = vscode.window.createWebviewPanel('schemaDiff', 'Schema Diff Tool', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getSchemaDiffHtml(getNonce());
+    const schemaDiffCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.schemaDiff', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('schemaDiff', 'Schema Diff Tool', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getSchemaDiffHtml((0, webview_ui_2.getNonce)());
     });
-    const partitionCalcCmd = vscode.commands.registerCommand('sayaib.hue-console.partitionCalc', () => {
-        const panel = vscode.window.createWebviewPanel('partitionCalc', 'Data Partition Calculator', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getPartitionCalcHtml(getNonce());
+    const partitionCalcCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.partitionCalc', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('partitionCalc', 'Data Partition Calculator', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getPartitionCalcHtml((0, webview_ui_2.getNonce)());
     });
-    const deltaLakeAnalyzerCmd = vscode.commands.registerCommand('sayaib.hue-console.deltaLakeAnalyzer', () => {
-        const panel = vscode.window.createWebviewPanel('deltaLakeAnalyzer', 'Delta Lake Log & Transaction Analyzer', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getDeltaLakeAnalyzerHtml(getNonce());
+    const deltaLakeAnalyzerCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.deltaLakeAnalyzer', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('deltaLakeAnalyzer', 'Delta Lake Log & Transaction Analyzer', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getDeltaLakeAnalyzerHtml((0, webview_ui_2.getNonce)());
     });
-    const sparkCostEstimatorCmd = vscode.commands.registerCommand('sayaib.hue-console.sparkCostEstimator', () => {
-        const panel = vscode.window.createWebviewPanel('sparkCostEstimator', 'Spark Cluster & Cost Estimator', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getSparkCostEstimatorHtml(getNonce());
+    const sparkCostEstimatorCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.sparkCostEstimator', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('sparkCostEstimator', 'Spark Cluster & Cost Estimator', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getSparkCostEstimatorHtml((0, webview_ui_2.getNonce)());
     });
     context.subscriptions.push(hubCmd, schemaViewerCmd, sparkSqlFormatterCmd, dataQualityCheckerCmd, schemaDiffCmd, partitionCalcCmd, deltaLakeAnalyzerCmd, sparkCostEstimatorCmd);
 }
@@ -351,7 +134,7 @@ function getBigDataHubHtml(nonce) {
         <div class="hub-grid" id="grid"></div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
         var tools = [
             { cmd: 'sayaib.hue-console.schemaViewer', icon: '\\u{1F4CB}', title: 'Schema Viewer', desc: 'Parse and visualize Parquet, Avro, and JSON schemas as an interactive tree.', tag: 'Schema' },
             { cmd: 'sayaib.hue-console.sparkSqlFormatter', icon: '\\u{1F524}', title: 'Spark SQL Formatter', desc: 'Format Spark SQL, Presto, and Trino queries with proper indentation and keywords.', tag: 'SQL' },
@@ -477,7 +260,7 @@ function getSchemaViewerHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         var formattedSchema = '';
 
@@ -617,7 +400,7 @@ function getSparkSqlFormatterHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         var keywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN', 'ON', 'AS', 'LATERAL VIEW', 'EXPLODE', 'UNION', 'ALL', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'WITH', 'INSERT INTO', 'OVERWRITE TABLE'];
 
@@ -703,7 +486,7 @@ function getDataQualityCheckerHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('checkBtn').addEventListener('click', function() {
             var raw = document.getElementById('dataInput').value.trim();
@@ -801,7 +584,7 @@ function getSchemaDiffHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('diffBtn').addEventListener('click', function() {
             var rawA = document.getElementById('schemaA').value.trim();
@@ -915,7 +698,7 @@ function getPartitionCalcHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         var sparkConfigText = '';
 
@@ -1003,7 +786,7 @@ function getDeltaLakeAnalyzerHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('analyzeBtn').addEventListener('click', function() {
             var raw = document.getElementById('logInput').value.trim();
@@ -1120,7 +903,7 @@ function getSparkCostEstimatorHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('estimateBtn').addEventListener('click', function() {
             var gb = parseFloat(document.getElementById('dataGB').value) || 500;

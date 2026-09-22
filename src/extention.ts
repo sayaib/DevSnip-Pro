@@ -11,27 +11,23 @@ import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
 import { registerAiMlExtraTools } from "./commands/aiMlExtraTools";
 import { registerPlatformToolsCommands } from "./commands/platformTools";
-import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, autoRecordToolUsage } from "./commands/milestoneTracker";
+import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage } from "./commands/milestoneTracker";
+import { registerTrackedCommand, setUsageRecorder } from "./utils/command-registry";
 import { registerReadmeManagerCommand } from "./commands/readmeManager";
 import { registerOpenCodeIntegrationCommand } from "./commands/openCodeIntegration";
 import { executeQueuedCommand } from "./utils/command-dispatch";
+import { disposeAllToolPanels } from "./utils/webview-ui";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(context.extensionPath, "custom");
 
-  console.log("DevSnip Pro extension is now active!");
+  // The milestone store needs its context before any command can record usage.
+  setMilestoneContext(context);
 
-  // Intercept all DevSnip Pro command registrations to automatically award points for using any feature/tool
-  const originalRegisterCommand = vscode.commands.registerCommand;
-  (vscode.commands as any).registerCommand = function(command: string, callback: (...args: any[]) => any, thisArg?: any) {
-    const wrappedCallback = (...args: any[]) => {
-      if (command && command.startsWith('sayaib.hue-console.') && command !== 'sayaib.hue-console.milestoneTracker') {
-        autoRecordToolUsage(command);
-      }
-      return callback.apply(thisArg, args);
-    };
-    return originalRegisterCommand.call(vscode.commands, command, wrappedCallback, thisArg);
-  };
+  // Tool usage points are awarded by registerTrackedCommand, which every
+  // DevSnip Pro command is registered through. The recorder is installed before
+  // any command is registered, so no invocation is missed and none is counted twice.
+  setUsageRecorder(command => { void autoRecordToolUsage(command); });
 
   const myTreeView = new MyTreeDataProvider(context);
   setTreeRefreshCallback(() => myTreeView.refresh());
@@ -41,31 +37,42 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
-  // Register existing commands
-  registerCreateSnippetCommand(context);
-  registerShowSnippetsCommand(context, snippetsFolderPath);
-  registerListAndRemoveConsoleLogsCommand(context);
-  registerRemoveUnusedImportsCommand(context);
-  registerReadmeManagerCommand(context);
-  registerOpenCodeIntegrationCommand(context);
+  // One failing group must not stop the rest of the extension from loading:
+  // a thrown error here would leave every other command unregistered.
+  const registrations: Array<[string, () => void]> = [
+    ["snippets", () => {
+      registerCreateSnippetCommand(context);
+      registerShowSnippetsCommand(context, snippetsFolderPath);
+    }],
+    ["workspace hygiene", () => {
+      registerListAndRemoveConsoleLogsCommand(context);
+      registerRemoveUnusedImportsCommand(context);
+      registerReadmeManagerCommand(context);
+    }],
+    ["OpenCode integration", () => registerOpenCodeIntegrationCommand(context)],
+    ["REST API client", () => apiTest(context)],
+    ["developer utilities", () => registerAdvancedToolsCommands(context)],
+    ["AI/ML tools", () => {
+      registerAiMlToolsCommands(context);
+      registerAiMlExtraTools(context);
+    }],
+    ["big data tools", () => registerBigDataToolsCommands(context)],
+    ["RAG tools", () => registerRagToolsCommands(context)],
+    ["platform tools", () => registerPlatformToolsCommands(context)],
+    ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
+    ["tool search", () => registerUniversalToolSearch(context)],
+  ];
 
-  apiTest(context);
-  
-  // Register advanced tools commands
-  registerAdvancedToolsCommands(context);
-
-  // Register AI/ML & LLM tools commands
-  registerAiMlToolsCommands(context);
-  registerAiMlExtraTools(context);
-
-  // Register Big Data tools commands
-  registerBigDataToolsCommands(context);
-
-  // Register RAG tools commands
-  registerRagToolsCommands(context);
-  registerPlatformToolsCommands(context);
-  registerMilestoneTrackerCommand(context);
-  registerUniversalToolSearch(context);
+  for (const [name, register] of registrations) {
+    try {
+      register();
+    } catch (error) {
+      console.error(`DevSnip Pro: failed to register ${name}.`, error);
+      vscode.window.showErrorMessage(
+        `DevSnip Pro could not load its ${name} commands: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 }
 
 type ToolSearchItem = {
@@ -134,7 +141,7 @@ const UNIVERSAL_TOOLS: ToolSearchItem[] = [
 ];
 
 function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
-  const searchCommand = vscode.commands.registerCommand("sayaib.hue-console.searchTools", async () => {
+  const searchCommand = registerTrackedCommand("sayaib.hue-console.searchTools", async () => {
     const pattern = await vscode.window.showInputBox({
       title: "Search DevSnip Pro Tools",
       prompt: "Enter a regular expression to match tool names, categories, or commands",
@@ -278,4 +285,7 @@ class ToolGroup extends vscode.TreeItem {
   }
 }
 
-export function deactivate() {}
+export function deactivate() {
+  // Panels opened through the shared registry are not in context.subscriptions.
+  disposeAllToolPanels();
+}

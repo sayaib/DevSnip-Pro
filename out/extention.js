@@ -22,15 +22,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
 const vscode = __importStar(require("vscode"));
@@ -47,23 +38,19 @@ const ragTools_1 = require("./commands/ragTools");
 const aiMlExtraTools_1 = require("./commands/aiMlExtraTools");
 const platformTools_1 = require("./commands/platformTools");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
+const command_registry_1 = require("./utils/command-registry");
 const readmeManager_1 = require("./commands/readmeManager");
 const openCodeIntegration_1 = require("./commands/openCodeIntegration");
 const command_dispatch_1 = require("./utils/command-dispatch");
+const webview_ui_1 = require("./utils/webview-ui");
 function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
-    console.log("DevSnip Pro extension is now active!");
-    // Intercept all DevSnip Pro command registrations to automatically award points for using any feature/tool
-    const originalRegisterCommand = vscode.commands.registerCommand;
-    vscode.commands.registerCommand = function (command, callback, thisArg) {
-        const wrappedCallback = (...args) => {
-            if (command && command.startsWith('sayaib.hue-console.') && command !== 'sayaib.hue-console.milestoneTracker') {
-                (0, milestoneTracker_1.autoRecordToolUsage)(command);
-            }
-            return callback.apply(thisArg, args);
-        };
-        return originalRegisterCommand.call(vscode.commands, command, wrappedCallback, thisArg);
-    };
+    // The milestone store needs its context before any command can record usage.
+    (0, milestoneTracker_1.setMilestoneContext)(context);
+    // Tool usage points are awarded by registerTrackedCommand, which every
+    // DevSnip Pro command is registered through. The recorder is installed before
+    // any command is registered, so no invocation is missed and none is counted twice.
+    (0, command_registry_1.setUsageRecorder)(command => { void (0, milestoneTracker_1.autoRecordToolUsage)(command); });
     const myTreeView = new MyTreeDataProvider(context);
     (0, milestoneTracker_1.setTreeRefreshCallback)(() => myTreeView.refresh());
     const treeView = vscode.window.createTreeView("myView", {
@@ -71,26 +58,40 @@ function activate(context) {
         showCollapseAll: false,
     });
     context.subscriptions.push(treeView);
-    // Register existing commands
-    (0, createSnippetCommand_1.registerCreateSnippetCommand)(context);
-    (0, showSnippetsCommand_1.registerShowSnippetsCommand)(context, snippetsFolderPath);
-    (0, listAndRemoveConsoleLogsCommand_1.registerListAndRemoveConsoleLogsCommand)(context);
-    (0, removeUnusedImportsCommand_1.registerRemoveUnusedImportsCommand)(context);
-    (0, readmeManager_1.registerReadmeManagerCommand)(context);
-    (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context);
-    (0, api_test_1.apiTest)(context);
-    // Register advanced tools commands
-    (0, advancedTools_1.registerAdvancedToolsCommands)(context);
-    // Register AI/ML & LLM tools commands
-    (0, aiMlTools_1.registerAiMlToolsCommands)(context);
-    (0, aiMlExtraTools_1.registerAiMlExtraTools)(context);
-    // Register Big Data tools commands
-    (0, bigDataTools_1.registerBigDataToolsCommands)(context);
-    // Register RAG tools commands
-    (0, ragTools_1.registerRagToolsCommands)(context);
-    (0, platformTools_1.registerPlatformToolsCommands)(context);
-    (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context);
-    registerUniversalToolSearch(context);
+    // One failing group must not stop the rest of the extension from loading:
+    // a thrown error here would leave every other command unregistered.
+    const registrations = [
+        ["snippets", () => {
+                (0, createSnippetCommand_1.registerCreateSnippetCommand)(context);
+                (0, showSnippetsCommand_1.registerShowSnippetsCommand)(context, snippetsFolderPath);
+            }],
+        ["workspace hygiene", () => {
+                (0, listAndRemoveConsoleLogsCommand_1.registerListAndRemoveConsoleLogsCommand)(context);
+                (0, removeUnusedImportsCommand_1.registerRemoveUnusedImportsCommand)(context);
+                (0, readmeManager_1.registerReadmeManagerCommand)(context);
+            }],
+        ["OpenCode integration", () => (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context)],
+        ["REST API client", () => (0, api_test_1.apiTest)(context)],
+        ["developer utilities", () => (0, advancedTools_1.registerAdvancedToolsCommands)(context)],
+        ["AI/ML tools", () => {
+                (0, aiMlTools_1.registerAiMlToolsCommands)(context);
+                (0, aiMlExtraTools_1.registerAiMlExtraTools)(context);
+            }],
+        ["big data tools", () => (0, bigDataTools_1.registerBigDataToolsCommands)(context)],
+        ["RAG tools", () => (0, ragTools_1.registerRagToolsCommands)(context)],
+        ["platform tools", () => (0, platformTools_1.registerPlatformToolsCommands)(context)],
+        ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],
+        ["tool search", () => registerUniversalToolSearch(context)],
+    ];
+    for (const [name, register] of registrations) {
+        try {
+            register();
+        }
+        catch (error) {
+            console.error(`DevSnip Pro: failed to register ${name}.`, error);
+            vscode.window.showErrorMessage(`DevSnip Pro could not load its ${name} commands: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
 }
 exports.activate = activate;
 const UNIVERSAL_TOOLS = [
@@ -152,8 +153,8 @@ const UNIVERSAL_TOOLS = [
     { label: "Milestone & Points Tracker", description: "Gamification / Progress", command: "sayaib.hue-console.milestoneTracker" },
 ];
 function registerUniversalToolSearch(context) {
-    const searchCommand = vscode.commands.registerCommand("sayaib.hue-console.searchTools", () => __awaiter(this, void 0, void 0, function* () {
-        const pattern = yield vscode.window.showInputBox({
+    const searchCommand = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.searchTools", async () => {
+        const pattern = await vscode.window.showInputBox({
             title: "Search DevSnip Pro Tools",
             prompt: "Enter a regular expression to match tool names, categories, or commands",
             placeHolder: "e.g. json|schema|rag|calculator",
@@ -174,10 +175,10 @@ function registerUniversalToolSearch(context) {
             vscode.window.showInformationMessage("No DevSnip Pro tools matched that regular expression.");
             return;
         }
-        const selected = yield vscode.window.showQuickPick(matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })), { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true });
+        const selected = await vscode.window.showQuickPick(matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })), { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true });
         if (selected)
-            yield (0, command_dispatch_1.executeQueuedCommand)(selected.command);
-    }));
+            await (0, command_dispatch_1.executeQueuedCommand)(selected.command);
+    });
     context.subscriptions.push(searchCommand);
 }
 class MyTreeDataProvider {
@@ -258,6 +259,9 @@ class ToolGroup extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon(iconId, new vscode.ThemeColor(colorId));
     }
 }
-function deactivate() { }
+function deactivate() {
+    // Panels opened through the shared registry are not in context.subscriptions.
+    (0, webview_ui_1.disposeAllToolPanels)();
+}
 exports.deactivate = deactivate;
 //# sourceMappingURL=extention.js.map

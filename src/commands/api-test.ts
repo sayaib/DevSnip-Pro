@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
+import { registerTrackedCommand } from "../utils/command-registry";
 import axios, { AxiosRequestConfig, CancelTokenSource } from "axios";
 import * as https from "https";
 import * as path from "path";
-import { getUserStats, redeemPoints } from "./milestoneTracker";
+import { getUserStats, redeemPoints, refundPoints } from "./milestoneTracker";
+import { safePostMessage } from "../utils/webview-ui";
 
 interface ApiHistoryItem {
   id: string;
@@ -74,7 +76,8 @@ interface RequestParts {
   auth?: { username: string; password: string };
 }
 
-function shellQuote(value: string): string {
+/** POSIX single-quote escaping, exported so the quoting can be verified against a real shell in tests. */
+export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
@@ -83,7 +86,6 @@ class ApiTester {
   private cookies: { [domain: string]: string[] } = {};
   private cancelTokenSource: CancelTokenSource | null = null;
   private readonly MAX_HISTORY_SIZE = 50;
-  private readonly DEFAULT_TIMEOUT = 30000;
   private readonly MAX_RESPONSE_DISPLAY_SIZE = 2 * 1024 * 1024; // 2MB
   private readonly DEFAULT_RETRY_STATUS_CODES = [429, 502, 503, 504];
   private environments: Environment[] = [];
@@ -91,6 +93,12 @@ class ApiTester {
 
   constructor(private context: vscode.ExtensionContext) {
     this.loadStoredData();
+  }
+
+  /** Default request timeout, from the `devsnip.apiTimeout` setting. */
+  private get defaultTimeout(): number {
+    const configured = vscode.workspace.getConfiguration("devsnip").get<number>("apiTimeout", 30000);
+    return Number.isFinite(configured) && configured > 0 ? Math.min(configured, 300000) : 30000;
   }
 
   private loadStoredData(): void {
@@ -181,10 +189,32 @@ class ApiTester {
     }
   }
 
+  /**
+   * Strips credential-looking query values before a URL is stored or exported.
+   * API keys are commonly passed in the query string, and request history is
+   * persisted to global state and can be exported to a file.
+   */
+  public static redactUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      let changed = false;
+      for (const key of [...parsed.searchParams.keys()]) {
+        if (/(key|token|secret|password|passwd|pwd|auth|signature|sig|credential)/i.test(key)) {
+          parsed.searchParams.set(key, "[redacted]");
+          changed = true;
+        }
+      }
+      return changed ? parsed.toString() : url;
+    } catch {
+      return url;
+    }
+  }
+
   private addToHistory(item: Omit<ApiHistoryItem, 'id'>): void {
     const historyItem: ApiHistoryItem = {
       ...item,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+      url: ApiTester.redactUrl(item.url),
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
     };
     
     this.history.unshift(historyItem);
@@ -553,7 +583,7 @@ class ApiTester {
       url: finalUrl,
       timeout: Number.isFinite(request.timeout) && (request.timeout as number) > 0
         ? Math.min(request.timeout as number, 300000)
-        : this.DEFAULT_TIMEOUT,
+        : this.defaultTimeout,
       validateStatus: () => true,
       cancelToken: this.cancelTokenSource.token,
       headers: requestHeaders,
@@ -733,10 +763,19 @@ function buildApiRequestFromMessage(message: any): ApiRequest {
 
 export function apiTest(context: vscode.ExtensionContext) {
   const apiTester = new ApiTester(context);
+  let activePanel: vscode.WebviewPanel | undefined;
 
-  const disposable = vscode.commands.registerCommand(
+  const disposable = registerTrackedCommand(
     "sayaib.hue-console.openGUI",
     () => {
+      // A single ApiTester backs the client (shared history, cookies and one
+      // cancel token), so a second panel would cancel the first panel's
+      // request. Reveal the existing panel instead.
+      if (activePanel) {
+        activePanel.reveal(vscode.ViewColumn.One);
+        return;
+      }
+
       const panel = vscode.window.createWebviewPanel(
         "apiTester",
         "API Tester Pro",
@@ -748,25 +787,28 @@ export function apiTest(context: vscode.ExtensionContext) {
         }
       );
 
+      activePanel = panel;
       const iconPath = path.resolve(context.extensionPath, "logo.png");
       panel.iconPath = vscode.Uri.file(iconPath);
       panel.webview.html = getWebviewContent(apiTester.getHistory());
+      const post = (message: unknown) => safePostMessage(panel, message);
 
-      panel.webview.onDidReceiveMessage(
+      const messageSubscription = panel.webview.onDidReceiveMessage(
         async (message) => {
+          if (!message || typeof message.command !== "string") return;
           switch (message.command) {
             case "testAPI":
               try {
-                panel.webview.postMessage({ command: "requestStarted" });
+                post({ command: "requestStarted" });
 
                 const result = await apiTester.makeRequest(buildApiRequestFromMessage(message));
 
-                panel.webview.postMessage({
+                post({
                   command: "apiResponse",
                   ...result
                 });
               } catch (error: any) {
-                panel.webview.postMessage({
+                post({
                   command: "apiError",
                   error: error.message || "Request failed",
                   status: error.status || 0,
@@ -779,24 +821,24 @@ export function apiTest(context: vscode.ExtensionContext) {
 
             case "cancelRequest":
               apiTester.cancelCurrentRequest();
-              panel.webview.postMessage({ command: "requestCancelled" });
+              post({ command: "requestCancelled" });
               break;
 
             case "generateCurl":
               try {
                 const curl = apiTester.generateCurlCommand(buildApiRequestFromMessage(message));
-                panel.webview.postMessage({ command: "curlGenerated", curl });
+                post({ command: "curlGenerated", curl });
               } catch (error: any) {
-                panel.webview.postMessage({ command: "curlGenerated", error: error.message || "Failed to generate cURL command" });
+                post({ command: "curlGenerated", error: error.message || "Failed to generate cURL command" });
               }
               break;
 
             case "parseCurl":
               try {
                 const parsed = apiTester.parseCurlCommand(message.curl || "");
-                panel.webview.postMessage({ command: "curlParsed", request: parsed });
+                post({ command: "curlParsed", request: parsed });
               } catch (error: any) {
-                panel.webview.postMessage({ command: "curlParsed", error: error.message || "Failed to parse cURL command" });
+                post({ command: "curlParsed", error: error.message || "Failed to parse cURL command" });
               }
               break;
 
@@ -810,16 +852,16 @@ export function apiTest(context: vscode.ExtensionContext) {
                 });
                 if (uri) {
                   await vscode.workspace.fs.writeFile(uri, Buffer.from(data, "utf8"));
-                  panel.webview.postMessage({ command: "historyExported", success: true });
+                  post({ command: "historyExported", success: true });
                   vscode.window.showInformationMessage(`API history exported to ${uri.fsPath}`);
                 }
               } catch (error: any) {
-                panel.webview.postMessage({ command: "historyExported", success: false, error: error.message || "Export failed" });
+                post({ command: "historyExported", success: false, error: error.message || "Export failed" });
               }
               break;
 
             case "getCookies":
-              panel.webview.postMessage({
+              post({
                 command: "showCookies",
                 cookies: apiTester.getCookies(),
               });
@@ -827,7 +869,7 @@ export function apiTest(context: vscode.ExtensionContext) {
 
             case "clearHistory":
               apiTester.clearHistory();
-              panel.webview.postMessage({
+              post({
                 command: "historyCleared",
                 history: []
               });
@@ -835,13 +877,13 @@ export function apiTest(context: vscode.ExtensionContext) {
 
             case "clearCookies":
               apiTester.clearCookies();
-              panel.webview.postMessage({
+              post({
                 command: "cookiesCleared"
               });
               break;
 
             case "getEnvironments":
-              panel.webview.postMessage({
+              post({
                 command: "showEnvironments",
                 environments: apiTester.getEnvironments(),
                 activeIndex: apiTester.getActiveEnvironmentIndex()
@@ -850,7 +892,7 @@ export function apiTest(context: vscode.ExtensionContext) {
 
             case "saveEnvironment":
               await apiTester.saveEnvironment(message.environment);
-              panel.webview.postMessage({
+              post({
                 command: "environmentSaved",
                 environments: apiTester.getEnvironments(),
                 activeIndex: apiTester.getActiveEnvironmentIndex()
@@ -859,7 +901,7 @@ export function apiTest(context: vscode.ExtensionContext) {
 
             case "deleteEnvironment":
               await apiTester.deleteEnvironment(message.name);
-              panel.webview.postMessage({
+              post({
                 command: "environmentDeleted",
                 environments: apiTester.getEnvironments(),
                 activeIndex: apiTester.getActiveEnvironmentIndex()
@@ -868,27 +910,28 @@ export function apiTest(context: vscode.ExtensionContext) {
 
             case "setActiveEnvironment":
               await apiTester.setActiveEnvironment(message.index);
-              panel.webview.postMessage({
+              post({
                 command: "environmentActivated",
                 environments: apiTester.getEnvironments(),
                 activeIndex: apiTester.getActiveEnvironmentIndex()
               });
               break;
 
-            case "getPoints":
+            case "getPoints": {
               const stats = getUserStats(context);
-              panel.webview.postMessage({
+              post({
                 command: "showPoints",
                 points: stats.totalPoints
               });
               break;
+            }
 
-            case "runPremiumFeature":
+            case "runPremiumFeature": {
               const { featureId, cost, requestData } = message;
               const success = await redeemPoints(context, cost, `API Client Premium Tool: ${featureId}`);
               if (!success) {
                 const currentStats = getUserStats(context);
-                panel.webview.postMessage({
+                post({
                   command: "premiumError",
                   error: `Insufficient points! Required: ${cost} pts, Available: ${currentStats.totalPoints} pts. Earn more points using DevSnip Pro tools!`
                 });
@@ -1008,29 +1051,39 @@ export function apiTest(context: vscode.ExtensionContext) {
                     }, null, 2);
                 }
 
+                if (!resultOutput) {
+                  throw new Error(`Unknown premium feature "${featureId}"`);
+                }
+
                 const updatedStats = getUserStats(context);
-                panel.webview.postMessage({
+                post({
                   command: "premiumResult",
                   featureId,
                   result: resultOutput,
                   remainingPoints: updatedStats.totalPoints
                 });
               } catch (err: any) {
-                panel.webview.postMessage({
+                // The points were already deducted, so give them back rather
+                // than charging the user for work that produced nothing.
+                await refundPoints(context, cost, `Failed premium tool: ${featureId}`);
+                const refreshed = getUserStats(context);
+                post({
                   command: "premiumError",
-                  error: err.message || "Premium feature execution failed"
+                  error: `${err?.message || "Premium feature execution failed"} - your ${cost} points were refunded.`,
+                  remainingPoints: refreshed.totalPoints
                 });
               }
               break;
+            }
           }
         },
-        undefined,
-        context.subscriptions
       );
 
       // Clean up on panel disposal
       panel.onDidDispose(() => {
+        messageSubscription.dispose();
         apiTester.cancelCurrentRequest();
+        if (activePanel === panel) activePanel = undefined;
       });
     }
   );

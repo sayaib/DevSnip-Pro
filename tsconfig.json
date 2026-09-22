@@ -1,14 +1,18 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es6",
+    "target": "es2020",
     "outDir": "out",
+    "rootDir": "src",
     "lib": ["es2020", "dom"],
     "sourceMap": true,
-    "rootDir": "src",
     "strict": true,
-    "types": ["node", "mocha"],
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": ["node", "mocha"]
   },
-  "exclude": ["node_modules", ".vscode-test"]
+  "exclude": ["node_modules", ".vscode-test", "out"]
 }

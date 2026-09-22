@@ -1,363 +1,97 @@
 import * as vscode from 'vscode';
+import { registerTrackedCommand } from "../utils/command-registry";
+import { openToolPanel } from "../utils/webview-ui";
+import { TOOL_CSS, getNonce, toastScript } from "../utils/webview-ui";
 import { executeQueuedCommand } from '../utils/command-dispatch';
 
-function getNonce(): string {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let text = '';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
+/** Shared panel styling lives in utils/webview-ui so every tool page stays consistent. */
+const SHARED_CSS = TOOL_CSS;
 
-const SHARED_CSS = `
-:root {
-    --bg-0: var(--vscode-editor-background);
-    --bg-1: var(--vscode-sideBar-background);
-    --bg-2: var(--vscode-input-background);
-    --bg-3: var(--vscode-textCodeBlock-background);
-    --fg-0: var(--vscode-editor-foreground);
-    --fg-1: var(--vscode-descriptionForeground);
-    --fg-2: var(--vscode-disabledForeground);
-    --border: var(--vscode-input-border);
-    --border-focus: var(--vscode-focusBorder);
-    --accent: var(--vscode-button-background);
-    --accent-fg: var(--vscode-button-foreground);
-    --success: #4caf50;
-    --success-bg: rgba(76, 175, 80, 0.15);
-    --error: #f44336;
-    --error-bg: rgba(244, 67, 54, 0.15);
-    --warning: #ff9800;
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-    --transition: 0.2s ease;
-    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    font-family: var(--sans);
-    background: var(--bg-0);
-    color: var(--fg-0);
-    line-height: 1.5;
-    padding: 0;
-    overflow-x: hidden;
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--fg-2); border-radius: 3px; }
-
-.tool-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px 24px;
-    background: var(--bg-1);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 50;
-}
-.tool-header h1 { font-size: 16px; font-weight: 700; white-space: nowrap; }
-.tool-header .subtitle { font-size: 12px; color: var(--fg-1); }
-
-.tool-body { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
-
-.section {
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    margin-bottom: 16px;
-}
-.section-title {
-    font-size: 13px; font-weight: 700;
-    color: var(--fg-1);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 14px;
-}
-
-label {
-    display: block;
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 4px;
-}
-.input, input[type="text"], input[type="number"], select {
-    width: 100%;
-    padding: 8px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    outline: none;
-    transition: border-color var(--transition);
-}
-.input:focus, input:focus, textarea:focus, select:focus {
-    border-color: var(--border-focus);
-}
-textarea {
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    resize: vertical;
-    outline: none;
-    transition: border-color var(--transition);
-}
-select {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23999'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 30px;
-}
-
-.btn {
-    padding: 8px 16px;
-    background: var(--accent);
-    color: var(--accent-fg);
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-.btn:hover { opacity: 0.85; }
-.btn-secondary {
-    background: var(--bg-3);
-    color: var(--fg-0);
-}
-.btn-ghost {
-    background: transparent;
-    color: var(--fg-1);
-    border: 1px solid var(--border);
-}
-.btn-ghost:hover { background: var(--bg-2); color: var(--fg-0); }
-.btn-danger {
-    background: var(--error);
-    color: #fff;
-}
-.btn-row {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-}
-
-.result-block {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 14px;
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 400px;
-    overflow-y: auto;
-    color: var(--fg-0);
-}
-
-.panels {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-.panel-label {
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-@media (max-width: 768px) {
-    .panels { grid-template-columns: 1fr; }
-    .tool-body { padding: 16px; }
-    .btn-row { flex-direction: column; align-items: stretch; }
-}
-
-.toast-container {
-    position: fixed; top: 12px; right: 12px; z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px;
-}
-.toast {
-    padding: 10px 16px;
-    border-radius: var(--radius-md);
-    font-size: 13px; font-weight: 500;
-    color: #fff;
-    box-shadow: var(--shadow);
-    transform: translateX(120%);
-    transition: transform 0.3s ease;
-    max-width: 320px;
-}
-.toast.show { transform: translateX(0); }
-.toast.success { background: #2e7d32; }
-.toast.error { background: #c62828; }
-.toast.info { background: #1565c0; }
-`;
-
-function toastScript(): string {
-    return `
-        function _toast(msg, type) {
-            var c = document.querySelector('.toast-container');
-            if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
-            var t = document.createElement('div');
-            t.className = 'toast ' + (type || 'success');
-            t.textContent = msg;
-            c.appendChild(t);
-            requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('show'); }); });
-            setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 2000);
-        }
-    `;
-}
 
 export function registerAiMlToolsCommands(context: vscode.ExtensionContext) {
-    const hubCmd = vscode.commands.registerCommand('sayaib.hue-console.aiMlHub', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'aiMlHub',
-            'DevSnip Pro - AI/ML & LLM Tools',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const hubCmd = registerTrackedCommand('sayaib.hue-console.aiMlHub', () => {
+        const { panel, created } = openToolPanel('aiMlHub', 'DevSnip Pro - AI/ML & LLM Tools', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getAiMlHubHtml(getNonce());
-        panel.webview.onDidReceiveMessage(
-            message => {
-                switch (message.command) {
-                    case 'openTool':
-                        executeQueuedCommand(message.toolCommand);
-                        break;
-                }
-            },
-            undefined,
-            context.subscriptions
-        );
+        // executeQueuedCommand validates the id against the commands this
+        // extension registered, so a hub can only open DevSnip Pro tools.
+        const messageSubscription = panel.webview.onDidReceiveMessage(message => {
+            if (message?.command === 'openTool') {
+                void executeQueuedCommand(message.toolCommand);
+            }
+        });
+        panel.onDidDispose(() => messageSubscription.dispose());
     });
 
-    const tokenCounterCmd = vscode.commands.registerCommand('sayaib.hue-console.tokenCounter', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'tokenCounter',
-            'Token Counter & Cost Calculator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const tokenCounterCmd = registerTrackedCommand('sayaib.hue-console.tokenCounter', () => {
+        const { panel, created } = openToolPanel('tokenCounter', 'Token Counter & Cost Calculator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getTokenCounterHtml(getNonce());
     });
 
-    const promptTemplateCmd = vscode.commands.registerCommand('sayaib.hue-console.promptTemplate', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'promptTemplate',
-            'Prompt Template Manager',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const promptTemplateCmd = registerTrackedCommand('sayaib.hue-console.promptTemplate', () => {
+        const { panel, created } = openToolPanel('promptTemplate', 'Prompt Template Manager', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getPromptTemplateHtml(getNonce());
     });
 
-    const mlCodeGenCmd = vscode.commands.registerCommand('sayaib.hue-console.mlCodeGen', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'mlCodeGen',
-            'Python ML Code Generator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const mlCodeGenCmd = registerTrackedCommand('sayaib.hue-console.mlCodeGen', () => {
+        const { panel, created } = openToolPanel('mlCodeGen', 'Python ML Code Generator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getMlCodeGenHtml(getNonce());
     });
 
-    const llmApiTesterCmd = vscode.commands.registerCommand('sayaib.hue-console.llmApiTester', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'llmApiTester',
-            'LLM API Tester',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const llmApiTesterCmd = registerTrackedCommand('sayaib.hue-console.llmApiTester', () => {
+        const { panel, created } = openToolPanel('llmApiTester', 'LLM API Tester', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getLlmApiTesterHtml(getNonce());
     });
 
-    const datasetSplitCmd = vscode.commands.registerCommand('sayaib.hue-console.datasetSplit', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'datasetSplit',
-            'Dataset Split Calculator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const datasetSplitCmd = registerTrackedCommand('sayaib.hue-console.datasetSplit', () => {
+        const { panel, created } = openToolPanel('datasetSplit', 'Dataset Split Calculator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getDatasetSplitHtml(getNonce());
     });
 
-    const gpuVramCmd = vscode.commands.registerCommand('sayaib.hue-console.gpuVram', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'gpuVram',
-            'GPU VRAM Calculator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const gpuVramCmd = registerTrackedCommand('sayaib.hue-console.gpuVram', () => {
+        const { panel, created } = openToolPanel('gpuVram', 'GPU VRAM Calculator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getGpuVramHtml(getNonce());
     });
 
-    const experimentLoggerCmd = vscode.commands.registerCommand('sayaib.hue-console.experimentLogger', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'experimentLogger',
-            'Experiment Logger',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const experimentLoggerCmd = registerTrackedCommand('sayaib.hue-console.experimentLogger', () => {
+        const { panel, created } = openToolPanel('experimentLogger', 'Experiment Logger', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getExperimentLoggerHtml(getNonce());
     });
 
-    const modelCardCmd = vscode.commands.registerCommand('sayaib.hue-console.modelCard', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'modelCard',
-            'Model Card Generator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const modelCardCmd = registerTrackedCommand('sayaib.hue-console.modelCard', () => {
+        const { panel, created } = openToolPanel('modelCard', 'Model Card Generator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getModelCardHtml(getNonce());
     });
 
-    const jsonlViewerCmd = vscode.commands.registerCommand('sayaib.hue-console.jsonlViewer', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'jsonlViewer',
-            'JSONL Viewer',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const jsonlViewerCmd = registerTrackedCommand('sayaib.hue-console.jsonlViewer', () => {
+        const { panel, created } = openToolPanel('jsonlViewer', 'JSONL Viewer', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getJsonlViewerHtml(getNonce());
     });
 
-    const mdTableCmd = vscode.commands.registerCommand('sayaib.hue-console.mdTableGen', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'mdTableGen',
-            'Markdown Table Generator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const mdTableCmd = registerTrackedCommand('sayaib.hue-console.mdTableGen', () => {
+        const { panel, created } = openToolPanel('mdTableGen', 'Markdown Table Generator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getMdTableGenHtml(getNonce());
     });
 
-    const lrSchedulerCmd = vscode.commands.registerCommand('sayaib.hue-console.lrScheduler', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'lrScheduler',
-            'Learning Rate Scheduler Visualizer',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const lrSchedulerCmd = registerTrackedCommand('sayaib.hue-console.lrScheduler', () => {
+        const { panel, created } = openToolPanel('lrScheduler', 'Learning Rate Scheduler Visualizer', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getLrSchedulerHtml(getNonce());
     });
 
-    const inferenceEstimatorCmd = vscode.commands.registerCommand('sayaib.hue-console.inferenceEstimator', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'inferenceEstimator',
-            'LLM Inference Latency & VRAM Estimator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const inferenceEstimatorCmd = registerTrackedCommand('sayaib.hue-console.inferenceEstimator', () => {
+        const { panel, created } = openToolPanel('inferenceEstimator', 'LLM Inference Latency & VRAM Estimator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getInferenceEstimatorHtml(getNonce());
     });
 

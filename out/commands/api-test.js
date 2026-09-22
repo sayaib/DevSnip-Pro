@@ -22,28 +22,23 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.apiTest = exports.ApiTester = void 0;
+exports.apiTest = exports.ApiTester = exports.shellQuote = void 0;
 const vscode = __importStar(require("vscode"));
+const command_registry_1 = require("../utils/command-registry");
 const axios_1 = __importDefault(require("axios"));
 const https = __importStar(require("https"));
 const path = __importStar(require("path"));
 const milestoneTracker_1 = require("./milestoneTracker");
+const webview_ui_1 = require("../utils/webview-ui");
+/** POSIX single-quote escaping, exported so the quoting can be verified against a real shell in tests. */
 function shellQuote(value) {
     return `'${value.replace(/'/g, `'\\''`)}'`;
 }
+exports.shellQuote = shellQuote;
 class ApiTester {
     constructor(context) {
         this.context = context;
@@ -51,12 +46,16 @@ class ApiTester {
         this.cookies = {};
         this.cancelTokenSource = null;
         this.MAX_HISTORY_SIZE = 50;
-        this.DEFAULT_TIMEOUT = 30000;
         this.MAX_RESPONSE_DISPLAY_SIZE = 2 * 1024 * 1024; // 2MB
         this.DEFAULT_RETRY_STATUS_CODES = [429, 502, 503, 504];
         this.environments = [];
         this.activeEnvironmentIndex = -1;
         this.loadStoredData();
+    }
+    /** Default request timeout, from the `devsnip.apiTimeout` setting. */
+    get defaultTimeout() {
+        const configured = vscode.workspace.getConfiguration("devsnip").get("apiTimeout", 30000);
+        return Number.isFinite(configured) && configured > 0 ? Math.min(configured, 300000) : 30000;
     }
     loadStoredData() {
         try {
@@ -73,20 +72,18 @@ class ApiTester {
             this.activeEnvironmentIndex = -1;
         }
     }
-    saveData() {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                yield Promise.all([
-                    this.context.globalState.update("cookies", this.cookies),
-                    this.context.globalState.update("apiHistory", this.history),
-                    this.context.globalState.update("environments", this.environments),
-                    this.context.globalState.update("activeEnvironmentIndex", this.activeEnvironmentIndex)
-                ]);
-            }
-            catch (error) {
-                console.error("Failed to save data:", error);
-            }
-        });
+    async saveData() {
+        try {
+            await Promise.all([
+                this.context.globalState.update("cookies", this.cookies),
+                this.context.globalState.update("apiHistory", this.history),
+                this.context.globalState.update("environments", this.environments),
+                this.context.globalState.update("activeEnvironmentIndex", this.activeEnvironmentIndex)
+            ]);
+        }
+        catch (error) {
+            console.error("Failed to save data:", error);
+        }
     }
     resolveVariables(text) {
         if (!text || this.activeEnvironmentIndex < 0 || !this.environments[this.activeEnvironmentIndex]) {
@@ -103,39 +100,33 @@ class ApiTester {
     getActiveEnvironmentIndex() {
         return this.activeEnvironmentIndex;
     }
-    saveEnvironment(env) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const existingIndex = this.environments.findIndex(e => e.name === env.name);
-            if (existingIndex >= 0) {
-                this.environments[existingIndex] = env;
-            }
-            else {
-                this.environments.push(env);
-            }
-            yield this.saveData();
-        });
+    async saveEnvironment(env) {
+        const existingIndex = this.environments.findIndex(e => e.name === env.name);
+        if (existingIndex >= 0) {
+            this.environments[existingIndex] = env;
+        }
+        else {
+            this.environments.push(env);
+        }
+        await this.saveData();
     }
-    deleteEnvironment(name) {
-        return __awaiter(this, void 0, void 0, function* () {
-            this.environments = this.environments.filter(e => e.name !== name);
-            if (this.activeEnvironmentIndex >= this.environments.length) {
-                this.activeEnvironmentIndex = this.environments.length - 1;
-            }
-            yield this.saveData();
-        });
+    async deleteEnvironment(name) {
+        this.environments = this.environments.filter(e => e.name !== name);
+        if (this.activeEnvironmentIndex >= this.environments.length) {
+            this.activeEnvironmentIndex = this.environments.length - 1;
+        }
+        await this.saveData();
     }
-    setActiveEnvironment(index) {
-        return __awaiter(this, void 0, void 0, function* () {
-            this.activeEnvironmentIndex = index;
-            yield this.saveData();
-        });
+    async setActiveEnvironment(index) {
+        this.activeEnvironmentIndex = index;
+        await this.saveData();
     }
     validateUrl(url) {
         try {
             const parsed = new URL(url);
             return parsed.protocol === 'http:' || parsed.protocol === 'https:';
         }
-        catch (_a) {
+        catch {
             return false;
         }
     }
@@ -146,12 +137,37 @@ class ApiTester {
             JSON.parse(jsonString);
             return true;
         }
-        catch (_a) {
+        catch {
             return false;
         }
     }
+    /**
+     * Strips credential-looking query values before a URL is stored or exported.
+     * API keys are commonly passed in the query string, and request history is
+     * persisted to global state and can be exported to a file.
+     */
+    static redactUrl(url) {
+        try {
+            const parsed = new URL(url);
+            let changed = false;
+            for (const key of [...parsed.searchParams.keys()]) {
+                if (/(key|token|secret|password|passwd|pwd|auth|signature|sig|credential)/i.test(key)) {
+                    parsed.searchParams.set(key, "[redacted]");
+                    changed = true;
+                }
+            }
+            return changed ? parsed.toString() : url;
+        }
+        catch {
+            return url;
+        }
+    }
     addToHistory(item) {
-        const historyItem = Object.assign(Object.assign({}, item), { id: Date.now().toString() + Math.random().toString(36).substr(2, 9) });
+        const historyItem = {
+            ...item,
+            url: ApiTester.redactUrl(item.url),
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+        };
         this.history.unshift(historyItem);
         if (this.history.length > this.MAX_HISTORY_SIZE) {
             this.history = this.history.slice(0, this.MAX_HISTORY_SIZE);
@@ -162,7 +178,7 @@ class ApiTester {
         try {
             return new URL(url).hostname;
         }
-        catch (_a) {
+        catch {
             return '';
         }
     }
@@ -183,7 +199,6 @@ class ApiTester {
      * and generateCurlCommand() so both stay perfectly in sync.
      */
     buildRequestParts(request) {
-        var _a, _b;
         const resolvedUrl = this.resolveVariables(request.url);
         const resolvedHeaders = {};
         if (request.headers) {
@@ -220,7 +235,7 @@ class ApiTester {
             finalUrl = parsedUrl.toString();
         }
         let finalData = resolvedData;
-        let finalHeaders = Object.assign({}, resolvedHeaders);
+        let finalHeaders = { ...resolvedHeaders };
         if (request.requestType === 'graphql') {
             // For GraphQL, wrap query in JSON body
             const graphqlBody = {
@@ -230,7 +245,7 @@ class ApiTester {
                 try {
                     graphqlBody.variables = JSON.parse(this.resolveVariables(request.graphqlVariables));
                 }
-                catch (_c) {
+                catch {
                     throw new Error("Invalid GraphQL variables JSON");
                 }
             }
@@ -243,8 +258,8 @@ class ApiTester {
         // Handle request body for appropriate methods, honoring the requested body type
         let bodyData = undefined;
         if (["POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(request.method.toUpperCase()) && finalData) {
-            const contentType = ((_b = (_a = Object.entries(finalHeaders)
-                .find(([key]) => key.toLowerCase() === 'content-type')) === null || _a === void 0 ? void 0 : _a[1]) === null || _b === void 0 ? void 0 : _b.toLowerCase()) || '';
+            const contentType = Object.entries(finalHeaders)
+                .find(([key]) => key.toLowerCase() === 'content-type')?.[1]?.toLowerCase() || '';
             const bodyType = request.bodyType || 'json';
             if (bodyType === 'form-urlencoded') {
                 let formObject;
@@ -254,7 +269,7 @@ class ApiTester {
                         formObject = parsed;
                     }
                 }
-                catch (_d) {
+                catch {
                     // Not JSON - treat the raw text as an already-encoded form body (e.g. a=1&b=2)
                 }
                 if (formObject) {
@@ -283,7 +298,7 @@ class ApiTester {
                         finalHeaders['Content-Type'] = 'application/json';
                     }
                 }
-                catch (_e) {
+                catch {
                     if (contentType.includes('application/json')) {
                         throw new Error("Invalid JSON in request body");
                     }
@@ -322,11 +337,10 @@ class ApiTester {
      * Includes any cookies currently stored for the target domain.
      */
     generateCurlCommand(request) {
-        var _a;
         const { finalUrl, headers, bodyData, auth } = this.buildRequestParts(request);
         const domain = this.getDomainFromUrl(finalUrl);
-        const allHeaders = Object.assign({}, headers);
-        if (domain && ((_a = this.cookies[domain]) === null || _a === void 0 ? void 0 : _a.length) && !Object.keys(allHeaders).some(h => h.toLowerCase() === 'cookie')) {
+        const allHeaders = { ...headers };
+        if (domain && this.cookies[domain]?.length && !Object.keys(allHeaders).some(h => h.toLowerCase() === 'cookie')) {
             allHeaders['Cookie'] = this.cookies[domain].join('; ');
         }
         const parts = ['curl', '-X', request.method.toUpperCase()];
@@ -455,7 +469,7 @@ class ApiTester {
                             auth: proxyUrl.username ? { username: proxyUrl.username, password: proxyUrl.password } : undefined
                         };
                     }
-                    catch (_a) {
+                    catch {
                         // Ignore malformed proxy value
                     }
                     break;
@@ -480,138 +494,147 @@ class ApiTester {
     exportHistory(format = 'json') {
         if (format === 'csv') {
             const header = 'id,method,url,status,responseTime,size,attempts,timestamp';
-            const rows = this.history.map(h => {
-                var _a, _b, _c, _d;
-                return [
-                    h.id,
-                    h.method,
-                    JSON.stringify(h.url),
-                    (_a = h.status) !== null && _a !== void 0 ? _a : '',
-                    (_b = h.responseTime) !== null && _b !== void 0 ? _b : '',
-                    (_c = h.size) !== null && _c !== void 0 ? _c : '',
-                    (_d = h.attempts) !== null && _d !== void 0 ? _d : 1,
-                    new Date(h.timestamp).toISOString()
-                ].join(',');
-            });
+            const rows = this.history.map(h => [
+                h.id,
+                h.method,
+                JSON.stringify(h.url),
+                h.status ?? '',
+                h.responseTime ?? '',
+                h.size ?? '',
+                h.attempts ?? 1,
+                new Date(h.timestamp).toISOString()
+            ].join(','));
             return [header, ...rows].join('\n');
         }
         return JSON.stringify(this.history, null, 2);
     }
-    makeRequest(request) {
-        var _a, _b, _c, _d, _e, _f, _g;
-        return __awaiter(this, void 0, void 0, function* () {
-            const { finalUrl, headers, bodyData, auth } = this.buildRequestParts(request);
-            // Cancel previous request if exists
-            if (this.cancelTokenSource) {
-                this.cancelTokenSource.cancel("New request initiated");
-            }
-            this.cancelTokenSource = axios_1.default.CancelToken.source();
-            const domain = this.getDomainFromUrl(finalUrl);
-            const requestHeaders = Object.assign({ 'User-Agent': 'DevSnip-Pro API Tester' }, headers);
-            if (domain && ((_a = this.cookies[domain]) === null || _a === void 0 ? void 0 : _a.length)) {
-                requestHeaders['Cookie'] = this.cookies[domain].join("; ");
-            }
-            const maxRedirects = request.followRedirects === false ? 0 : Math.max(0, (_b = request.maxRedirects) !== null && _b !== void 0 ? _b : 5);
-            const httpsAgent = request.rejectUnauthorized === false
-                ? new https.Agent({ rejectUnauthorized: false })
-                : undefined;
-            const config = Object.assign(Object.assign({ method: request.method, url: finalUrl, timeout: Number.isFinite(request.timeout) && request.timeout > 0
-                    ? Math.min(request.timeout, 300000)
-                    : this.DEFAULT_TIMEOUT, validateStatus: () => true, cancelToken: this.cancelTokenSource.token, headers: requestHeaders, maxRedirects, data: bodyData, auth }, (httpsAgent ? { httpsAgent } : {})), (request.proxy === false ? { proxy: false } : request.proxy ? { proxy: request.proxy } : {}));
-            const maxRetries = Math.max(0, Math.min((_c = request.retries) !== null && _c !== void 0 ? _c : 0, 5));
-            const retryStatusCodes = request.retryStatusCodes && request.retryStatusCodes.length
-                ? request.retryStatusCodes
-                : this.DEFAULT_RETRY_STATUS_CODES;
-            const baseDelay = Math.max(0, (_d = request.retryDelay) !== null && _d !== void 0 ? _d : 500);
-            const startTime = Date.now();
-            let attempt = 0;
-            while (true) {
-                try {
-                    const response = yield (0, axios_1.default)(config);
-                    if (attempt < maxRetries && retryStatusCodes.includes(response.status)) {
-                        attempt++;
-                        yield this.delay(baseDelay * Math.pow(2, attempt - 1));
-                        continue;
-                    }
-                    const endTime = Date.now();
-                    const responseTime = endTime - startTime;
-                    // Calculate response size
-                    const serializedResponse = typeof response.data === 'string'
-                        ? response.data
-                        : JSON.stringify((_e = response.data) !== null && _e !== void 0 ? _e : '');
-                    const responseSize = Buffer.byteLength(serializedResponse, 'utf8');
-                    let responseData = response.data;
-                    let truncated = false;
-                    if (responseSize > this.MAX_RESPONSE_DISPLAY_SIZE) {
-                        truncated = true;
-                        responseData = typeof response.data === 'string'
-                            ? response.data.slice(0, this.MAX_RESPONSE_DISPLAY_SIZE) + '\n... [response truncated]'
-                            : response.data;
-                    }
-                    // Store cookies from response
-                    if (response.headers["set-cookie"]) {
-                        const existingCookies = this.cookies[domain] || [];
-                        const newCookies = response.headers["set-cookie"]
-                            .map(cookie => cookie.split(';', 1)[0])
-                            .filter(Boolean);
-                        this.cookies[domain] = Array.from(new Set([...existingCookies, ...newCookies]));
-                        this.saveData();
-                    }
-                    // Add to history
-                    this.addToHistory({
-                        url: finalUrl,
-                        method: request.method,
-                        timestamp: Date.now(),
-                        status: response.status,
-                        responseTime,
-                        size: responseSize,
-                        attempts: attempt + 1
-                    });
-                    return {
-                        status: response.status,
-                        headers: response.headers,
-                        data: responseData,
-                        responseTime,
-                        size: this.formatBytes(responseSize),
-                        truncated,
-                        attempts: attempt + 1,
-                        history: this.history.slice(0, 10) // Only send last 10 for UI
-                    };
+    async makeRequest(request) {
+        const { finalUrl, headers, bodyData, auth } = this.buildRequestParts(request);
+        // Cancel previous request if exists
+        if (this.cancelTokenSource) {
+            this.cancelTokenSource.cancel("New request initiated");
+        }
+        this.cancelTokenSource = axios_1.default.CancelToken.source();
+        const domain = this.getDomainFromUrl(finalUrl);
+        const requestHeaders = {
+            'User-Agent': 'DevSnip-Pro API Tester',
+            ...headers
+        };
+        if (domain && this.cookies[domain]?.length) {
+            requestHeaders['Cookie'] = this.cookies[domain].join("; ");
+        }
+        const maxRedirects = request.followRedirects === false ? 0 : Math.max(0, request.maxRedirects ?? 5);
+        const httpsAgent = request.rejectUnauthorized === false
+            ? new https.Agent({ rejectUnauthorized: false })
+            : undefined;
+        const config = {
+            method: request.method,
+            url: finalUrl,
+            timeout: Number.isFinite(request.timeout) && request.timeout > 0
+                ? Math.min(request.timeout, 300000)
+                : this.defaultTimeout,
+            validateStatus: () => true,
+            cancelToken: this.cancelTokenSource.token,
+            headers: requestHeaders,
+            maxRedirects,
+            data: bodyData,
+            auth,
+            ...(httpsAgent ? { httpsAgent } : {}),
+            ...(request.proxy === false ? { proxy: false } : request.proxy ? { proxy: request.proxy } : {})
+        };
+        const maxRetries = Math.max(0, Math.min(request.retries ?? 0, 5));
+        const retryStatusCodes = request.retryStatusCodes && request.retryStatusCodes.length
+            ? request.retryStatusCodes
+            : this.DEFAULT_RETRY_STATUS_CODES;
+        const baseDelay = Math.max(0, request.retryDelay ?? 500);
+        const startTime = Date.now();
+        let attempt = 0;
+        while (true) {
+            try {
+                const response = await (0, axios_1.default)(config);
+                if (attempt < maxRetries && retryStatusCodes.includes(response.status)) {
+                    attempt++;
+                    await this.delay(baseDelay * Math.pow(2, attempt - 1));
+                    continue;
                 }
-                catch (error) {
-                    if (axios_1.default.isCancel(error)) {
-                        throw new Error("Request was cancelled");
-                    }
-                    const isNetworkError = !error.response;
-                    const errorStatus = ((_f = error.response) === null || _f === void 0 ? void 0 : _f.status) || 0;
-                    const canRetry = attempt < maxRetries && (isNetworkError || retryStatusCodes.includes(errorStatus));
-                    if (canRetry) {
-                        attempt++;
-                        yield this.delay(baseDelay * Math.pow(2, attempt - 1));
-                        continue;
-                    }
-                    const endTime = Date.now();
-                    const responseTime = endTime - startTime;
-                    const errorData = ((_g = error.response) === null || _g === void 0 ? void 0 : _g.data) || error.message;
-                    // Add failed request to history
-                    this.addToHistory({
-                        url: finalUrl,
-                        method: request.method,
-                        timestamp: Date.now(),
-                        status: errorStatus,
-                        responseTime,
-                        attempts: attempt + 1
-                    });
-                    throw {
-                        message: error.message,
-                        status: errorStatus,
-                        response: errorData,
-                        responseTime,
-                        attempts: attempt + 1
-                    };
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+                // Calculate response size
+                const serializedResponse = typeof response.data === 'string'
+                    ? response.data
+                    : JSON.stringify(response.data ?? '');
+                const responseSize = Buffer.byteLength(serializedResponse, 'utf8');
+                let responseData = response.data;
+                let truncated = false;
+                if (responseSize > this.MAX_RESPONSE_DISPLAY_SIZE) {
+                    truncated = true;
+                    responseData = typeof response.data === 'string'
+                        ? response.data.slice(0, this.MAX_RESPONSE_DISPLAY_SIZE) + '\n... [response truncated]'
+                        : response.data;
                 }
+                // Store cookies from response
+                if (response.headers["set-cookie"]) {
+                    const existingCookies = this.cookies[domain] || [];
+                    const newCookies = response.headers["set-cookie"]
+                        .map(cookie => cookie.split(';', 1)[0])
+                        .filter(Boolean);
+                    this.cookies[domain] = Array.from(new Set([...existingCookies, ...newCookies]));
+                    this.saveData();
+                }
+                // Add to history
+                this.addToHistory({
+                    url: finalUrl,
+                    method: request.method,
+                    timestamp: Date.now(),
+                    status: response.status,
+                    responseTime,
+                    size: responseSize,
+                    attempts: attempt + 1
+                });
+                return {
+                    status: response.status,
+                    headers: response.headers,
+                    data: responseData,
+                    responseTime,
+                    size: this.formatBytes(responseSize),
+                    truncated,
+                    attempts: attempt + 1,
+                    history: this.history.slice(0, 10) // Only send last 10 for UI
+                };
             }
-        });
+            catch (error) {
+                if (axios_1.default.isCancel(error)) {
+                    throw new Error("Request was cancelled");
+                }
+                const isNetworkError = !error.response;
+                const errorStatus = error.response?.status || 0;
+                const canRetry = attempt < maxRetries && (isNetworkError || retryStatusCodes.includes(errorStatus));
+                if (canRetry) {
+                    attempt++;
+                    await this.delay(baseDelay * Math.pow(2, attempt - 1));
+                    continue;
+                }
+                const endTime = Date.now();
+                const responseTime = endTime - startTime;
+                const errorData = error.response?.data || error.message;
+                // Add failed request to history
+                this.addToHistory({
+                    url: finalUrl,
+                    method: request.method,
+                    timestamp: Date.now(),
+                    status: errorStatus,
+                    responseTime,
+                    attempts: attempt + 1
+                });
+                throw {
+                    message: error.message,
+                    status: errorStatus,
+                    response: errorData,
+                    responseTime,
+                    attempts: attempt + 1
+                };
+            }
+        }
     }
     cancelCurrentRequest() {
         if (this.cancelTokenSource) {
@@ -667,25 +690,40 @@ function buildApiRequestFromMessage(message) {
 }
 function apiTest(context) {
     const apiTester = new ApiTester(context);
-    const disposable = vscode.commands.registerCommand("sayaib.hue-console.openGUI", () => {
+    let activePanel;
+    const disposable = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.openGUI", () => {
+        // A single ApiTester backs the client (shared history, cookies and one
+        // cancel token), so a second panel would cancel the first panel's
+        // request. Reveal the existing panel instead.
+        if (activePanel) {
+            activePanel.reveal(vscode.ViewColumn.One);
+            return;
+        }
         const panel = vscode.window.createWebviewPanel("apiTester", "API Tester Pro", vscode.ViewColumn.One, {
             enableScripts: true,
             retainContextWhenHidden: true,
             localResourceRoots: [vscode.Uri.file(context.extensionPath)]
         });
+        activePanel = panel;
         const iconPath = path.resolve(context.extensionPath, "logo.png");
         panel.iconPath = vscode.Uri.file(iconPath);
         panel.webview.html = getWebviewContent(apiTester.getHistory());
-        panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
+        const post = (message) => (0, webview_ui_1.safePostMessage)(panel, message);
+        const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {
+            if (!message || typeof message.command !== "string")
+                return;
             switch (message.command) {
                 case "testAPI":
                     try {
-                        panel.webview.postMessage({ command: "requestStarted" });
-                        const result = yield apiTester.makeRequest(buildApiRequestFromMessage(message));
-                        panel.webview.postMessage(Object.assign({ command: "apiResponse" }, result));
+                        post({ command: "requestStarted" });
+                        const result = await apiTester.makeRequest(buildApiRequestFromMessage(message));
+                        post({
+                            command: "apiResponse",
+                            ...result
+                        });
                     }
                     catch (error) {
-                        panel.webview.postMessage({
+                        post({
                             command: "apiError",
                             error: error.message || "Request failed",
                             status: error.status || 0,
@@ -697,107 +735,108 @@ function apiTest(context) {
                     break;
                 case "cancelRequest":
                     apiTester.cancelCurrentRequest();
-                    panel.webview.postMessage({ command: "requestCancelled" });
+                    post({ command: "requestCancelled" });
                     break;
                 case "generateCurl":
                     try {
                         const curl = apiTester.generateCurlCommand(buildApiRequestFromMessage(message));
-                        panel.webview.postMessage({ command: "curlGenerated", curl });
+                        post({ command: "curlGenerated", curl });
                     }
                     catch (error) {
-                        panel.webview.postMessage({ command: "curlGenerated", error: error.message || "Failed to generate cURL command" });
+                        post({ command: "curlGenerated", error: error.message || "Failed to generate cURL command" });
                     }
                     break;
                 case "parseCurl":
                     try {
                         const parsed = apiTester.parseCurlCommand(message.curl || "");
-                        panel.webview.postMessage({ command: "curlParsed", request: parsed });
+                        post({ command: "curlParsed", request: parsed });
                     }
                     catch (error) {
-                        panel.webview.postMessage({ command: "curlParsed", error: error.message || "Failed to parse cURL command" });
+                        post({ command: "curlParsed", error: error.message || "Failed to parse cURL command" });
                     }
                     break;
                 case "exportHistory":
                     try {
                         const format = message.format === "csv" ? "csv" : "json";
                         const data = apiTester.exportHistory(format);
-                        const uri = yield vscode.window.showSaveDialog({
+                        const uri = await vscode.window.showSaveDialog({
                             filters: format === "csv" ? { "CSV Files": ["csv"] } : { "JSON Files": ["json"] },
                             defaultUri: vscode.Uri.file(path.join(context.extensionPath, `devsnip-api-history.${format}`))
                         });
                         if (uri) {
-                            yield vscode.workspace.fs.writeFile(uri, Buffer.from(data, "utf8"));
-                            panel.webview.postMessage({ command: "historyExported", success: true });
+                            await vscode.workspace.fs.writeFile(uri, Buffer.from(data, "utf8"));
+                            post({ command: "historyExported", success: true });
                             vscode.window.showInformationMessage(`API history exported to ${uri.fsPath}`);
                         }
                     }
                     catch (error) {
-                        panel.webview.postMessage({ command: "historyExported", success: false, error: error.message || "Export failed" });
+                        post({ command: "historyExported", success: false, error: error.message || "Export failed" });
                     }
                     break;
                 case "getCookies":
-                    panel.webview.postMessage({
+                    post({
                         command: "showCookies",
                         cookies: apiTester.getCookies(),
                     });
                     break;
                 case "clearHistory":
                     apiTester.clearHistory();
-                    panel.webview.postMessage({
+                    post({
                         command: "historyCleared",
                         history: []
                     });
                     break;
                 case "clearCookies":
                     apiTester.clearCookies();
-                    panel.webview.postMessage({
+                    post({
                         command: "cookiesCleared"
                     });
                     break;
                 case "getEnvironments":
-                    panel.webview.postMessage({
+                    post({
                         command: "showEnvironments",
                         environments: apiTester.getEnvironments(),
                         activeIndex: apiTester.getActiveEnvironmentIndex()
                     });
                     break;
                 case "saveEnvironment":
-                    yield apiTester.saveEnvironment(message.environment);
-                    panel.webview.postMessage({
+                    await apiTester.saveEnvironment(message.environment);
+                    post({
                         command: "environmentSaved",
                         environments: apiTester.getEnvironments(),
                         activeIndex: apiTester.getActiveEnvironmentIndex()
                     });
                     break;
                 case "deleteEnvironment":
-                    yield apiTester.deleteEnvironment(message.name);
-                    panel.webview.postMessage({
+                    await apiTester.deleteEnvironment(message.name);
+                    post({
                         command: "environmentDeleted",
                         environments: apiTester.getEnvironments(),
                         activeIndex: apiTester.getActiveEnvironmentIndex()
                     });
                     break;
                 case "setActiveEnvironment":
-                    yield apiTester.setActiveEnvironment(message.index);
-                    panel.webview.postMessage({
+                    await apiTester.setActiveEnvironment(message.index);
+                    post({
                         command: "environmentActivated",
                         environments: apiTester.getEnvironments(),
                         activeIndex: apiTester.getActiveEnvironmentIndex()
                     });
                     break;
-                case "getPoints":
+                case "getPoints": {
                     const stats = (0, milestoneTracker_1.getUserStats)(context);
-                    panel.webview.postMessage({
+                    post({
                         command: "showPoints",
                         points: stats.totalPoints
                     });
                     break;
-                case "runPremiumFeature":
+                }
+                case "runPremiumFeature": {
                     const { featureId, cost, requestData } = message;
-                    const success = yield (0, milestoneTracker_1.redeemPoints)(context, cost, `API Client Premium Tool: ${featureId}`);
+                    const success = await (0, milestoneTracker_1.redeemPoints)(context, cost, `API Client Premium Tool: ${featureId}`);
                     if (!success) {
                         const currentStats = (0, milestoneTracker_1.getUserStats)(context);
-                        panel.webview.postMessage({
+                        post({
                             command: "premiumError",
                             error: `Insufficient points! Required: ${cost} pts, Available: ${currentStats.totalPoints} pts. Earn more points using DevSnip Pro tools!`
                         });
@@ -805,13 +844,13 @@ function apiTest(context) {
                     }
                     try {
                         let resultOutput = "";
-                        const targetUrl = (requestData === null || requestData === void 0 ? void 0 : requestData.url) || 'https://api.example.com';
-                        const targetMethod = (requestData === null || requestData === void 0 ? void 0 : requestData.method) || 'GET';
-                        const targetHeaders = (requestData === null || requestData === void 0 ? void 0 : requestData.headers) || {};
-                        const targetBody = requestData === null || requestData === void 0 ? void 0 : requestData.data;
+                        const targetUrl = requestData?.url || 'https://api.example.com';
+                        const targetMethod = requestData?.method || 'GET';
+                        const targetHeaders = requestData?.headers || {};
+                        const targetBody = requestData?.data;
                         if (featureId === "secScan") {
                             try {
-                                const res = yield (0, axios_1.default)({ method: targetMethod, url: targetUrl, validateStatus: () => true, timeout: 10000 });
+                                const res = await (0, axios_1.default)({ method: targetMethod, url: targetUrl, validateStatus: () => true, timeout: 10000 });
                                 const headers = res.headers;
                                 const issues = [];
                                 if (!headers['strict-transport-security'])
@@ -846,7 +885,7 @@ function apiTest(context) {
                                         .then(r => ({ status: r.status, time: Date.now() - t0, success: r.status < 500 }))
                                         .catch(e => ({ status: 0, time: Date.now() - t0, success: false, error: e.message }));
                                 });
-                                const results = yield Promise.all(promises);
+                                const results = await Promise.all(promises);
                                 const totalTime = Date.now() - startTime;
                                 const avgTime = Math.round(results.reduce((acc, r) => acc + r.time, 0) / results.length);
                                 const successCount = results.filter(r => r.success).length;
@@ -886,14 +925,14 @@ function apiTest(context) {
                             try {
                                 parsedData = targetBody ? JSON.parse(targetBody) : { sampleResponse: "OK", timestamp: Date.now() };
                             }
-                            catch (_a) {
+                            catch {
                                 parsedData = { rawData: targetBody || "Sample" };
                             }
                             let parsedPath = '/api/endpoint';
                             try {
                                 parsedPath = new URL(targetUrl).pathname || '/api/endpoint';
                             }
-                            catch (_b) { }
+                            catch { }
                             resultOutput = `🤖 AI Response Mock Server & JSON Schema Contract Generator\n` +
                                 `--------------------------------------------------\n\n` +
                                 `// Express.js Mock Route Implementation\n` +
@@ -921,8 +960,11 @@ function apiTest(context) {
                                     }
                                 }, null, 2);
                         }
+                        if (!resultOutput) {
+                            throw new Error(`Unknown premium feature "${featureId}"`);
+                        }
                         const updatedStats = (0, milestoneTracker_1.getUserStats)(context);
-                        panel.webview.postMessage({
+                        post({
                             command: "premiumResult",
                             featureId,
                             result: resultOutput,
@@ -930,17 +972,26 @@ function apiTest(context) {
                         });
                     }
                     catch (err) {
-                        panel.webview.postMessage({
+                        // The points were already deducted, so give them back rather
+                        // than charging the user for work that produced nothing.
+                        await (0, milestoneTracker_1.refundPoints)(context, cost, `Failed premium tool: ${featureId}`);
+                        const refreshed = (0, milestoneTracker_1.getUserStats)(context);
+                        post({
                             command: "premiumError",
-                            error: err.message || "Premium feature execution failed"
+                            error: `${err?.message || "Premium feature execution failed"} - your ${cost} points were refunded.`,
+                            remainingPoints: refreshed.totalPoints
                         });
                     }
                     break;
+                }
             }
-        }), undefined, context.subscriptions);
+        });
         // Clean up on panel disposal
         panel.onDidDispose(() => {
+            messageSubscription.dispose();
             apiTester.cancelCurrentRequest();
+            if (activePanel === panel)
+                activePanel = undefined;
         });
     });
     context.subscriptions.push(disposable);

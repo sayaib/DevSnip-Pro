@@ -22,48 +22,90 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLanguageFromFileName = exports.saveSnippets = exports.readExistingSnippets = exports.getLanguageSnippetsPath = void 0;
+exports.getLanguageFromFileName = exports.saveSnippets = exports.readExistingSnippets = exports.getLanguageSnippetsPath = exports.isLanguageSupported = exports.getSupportedLanguages = exports.getSnippetsFolder = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-function getLanguageSnippetsPath(context, language) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const snippetsPath = path.join(context.extensionPath, "custom");
-        if (!fs.existsSync(snippetsPath)) {
-            fs.mkdirSync(snippetsPath, { recursive: true });
-        }
-        return path.join(snippetsPath, `custom_${language}.json`);
-    });
+/** Directory holding the snippet files contributed through package.json. */
+function getSnippetsFolder(context) {
+    return path.join(context.extensionPath, "custom");
+}
+exports.getSnippetsFolder = getSnippetsFolder;
+/**
+ * Languages VS Code will actually load snippets for: only the files declared
+ * in `contributes.snippets` are read at startup, so writing to any other
+ * language would silently produce a snippet that never appears.
+ */
+function getSupportedLanguages(context) {
+    try {
+        const manifest = JSON.parse(fs.readFileSync(path.join(context.extensionPath, "package.json"), "utf8"));
+        const languages = (manifest.contributes?.snippets ?? [])
+            .map(entry => entry.language)
+            .filter((language) => Boolean(language));
+        if (languages.length)
+            return [...new Set(languages)].sort();
+    }
+    catch (error) {
+        console.error("DevSnip Pro: unable to read contributed snippet languages.", error);
+    }
+    // Fall back to whatever snippet files are on disk.
+    try {
+        return fs
+            .readdirSync(getSnippetsFolder(context))
+            .filter(file => file.startsWith("custom_") && file.endsWith(".json"))
+            .map(file => file.slice("custom_".length, -".json".length))
+            .sort();
+    }
+    catch {
+        return [];
+    }
+}
+exports.getSupportedLanguages = getSupportedLanguages;
+function isLanguageSupported(context, language) {
+    return getSupportedLanguages(context).includes(language);
+}
+exports.isLanguageSupported = isLanguageSupported;
+async function getLanguageSnippetsPath(context, language) {
+    const snippetsPath = getSnippetsFolder(context);
+    if (!fs.existsSync(snippetsPath)) {
+        fs.mkdirSync(snippetsPath, { recursive: true });
+    }
+    return path.join(snippetsPath, `custom_${language}.json`);
 }
 exports.getLanguageSnippetsPath = getLanguageSnippetsPath;
-function readExistingSnippets(filePath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            if (fs.existsSync(filePath)) {
-                const content = fs.readFileSync(filePath, "utf8");
-                return JSON.parse(content);
-            }
-        }
-        catch (error) {
-            console.error("Error reading snippets:", error);
-        }
+/**
+ * Reads a snippet file. A hand-edited or truncated file must not take the whole
+ * command down, so a parse failure is surfaced to the caller instead.
+ */
+async function readExistingSnippets(filePath) {
+    if (!fs.existsSync(filePath))
         return {};
-    });
+    let content;
+    try {
+        content = fs.readFileSync(filePath, "utf8");
+    }
+    catch (error) {
+        throw new Error(`Could not read ${path.basename(filePath)}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!content.trim())
+        return {};
+    try {
+        const parsed = JSON.parse(content);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    }
+    catch (error) {
+        throw new Error(`${path.basename(filePath)} is not valid JSON (${error instanceof Error ? error.message : String(error)}). Fix or delete the file, then try again.`);
+    }
 }
 exports.readExistingSnippets = readExistingSnippets;
-function saveSnippets(filePath, snippets) {
-    return __awaiter(this, void 0, void 0, function* () {
-        fs.writeFileSync(filePath, JSON.stringify(snippets, null, 2));
-    });
+async function saveSnippets(filePath, snippets) {
+    try {
+        fs.writeFileSync(filePath, `${JSON.stringify(snippets, null, 2)}\n`, "utf8");
+    }
+    catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(`Could not write ${path.basename(filePath)} (${reason}). Snippets are stored inside the extension folder, which must be writable.`);
+    }
 }
 exports.saveSnippets = saveSnippets;
 function getLanguageFromFileName(fileName) {

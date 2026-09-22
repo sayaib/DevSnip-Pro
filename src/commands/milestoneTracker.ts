@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
+import { confirmAction, escapeHtml, getNonce } from "../utils/webview-ui";
 
 export interface UserStats {
     totalPoints: number;
@@ -10,6 +12,22 @@ export interface UserStats {
     claimedRewards: string[];
     dailyClaims: { [date: string]: boolean };
     dailyToolUsage: { [toolKey: string]: number };
+    /**
+     * Points earned today from repeatable actions. The daily cap is applied to
+     * this value only, so one-time milestone bonuses are never swallowed by it.
+     */
+    dailyEarnedPoints: number;
+    /**
+     * Lifetime run counters. Milestone progress is derived from these rather
+     * than from the (capped) activity log, so long-term achievements stay
+     * reachable and cannot regress when old activities are trimmed.
+     */
+    counters: {
+        toolRuns: number;
+        snippetRuns: number;
+        securityRuns: number;
+        aiRuns: number;
+    };
 }
 
 export interface LevelInfo {
@@ -52,9 +70,20 @@ export const MILESTONES: Milestone[] = [
     { id: "ai_explorer", title: "AI/ML Enthusiast", description: "Use AI/ML or RAG tools 10 times", target: 10, points: 90, category: "AI", icon: "🤖" },
     { id: "points_5000", title: "Point Tycoon", description: "Accumulate 5,000 total points", target: 5000, points: 500, category: "Milestone", icon: "💰" }
 ];
-
 let globalContext: vscode.ExtensionContext | undefined;
 let refreshCallback: (() => void) | undefined;
+
+/** Every mutation runs through this queue so concurrent tool runs cannot lose points. */
+let stateQueue: Promise<unknown> = Promise.resolve();
+
+/** Points a single day can produce, so levels stay a long-term signal. */
+const DAILY_POINT_CAP = 120;
+/** After this many runs of the same tool in a day, further runs are worth 1 point. */
+const RATE_LIMIT_AFTER = 5;
+/** Daily-claim keys older than this are pruned so global state cannot grow forever. */
+const DAILY_CLAIM_HISTORY_DAYS = 60;
+const MAX_ACTIVITIES = 100;
+const STATE_KEY = 'devsnip_user_stats';
 
 export function setMilestoneContext(context: vscode.ExtensionContext) {
     globalContext = context;
@@ -64,13 +93,23 @@ export function setTreeRefreshCallback(cb: () => void) {
     refreshCallback = cb;
 }
 
-function getTodayString(): string {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
+/** Local calendar date (YYYY-MM-DD). Using UTC here would roll the day over at the wrong time. */
+function getTodayString(date: Date = new Date()): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
-export function getUserStats(context: vscode.ExtensionContext): UserStats {
-    const defaultStats: UserStats = {
+function daysBetween(fromIsoDate: string, toIsoDate: string): number | undefined {
+    const from = Date.parse(`${fromIsoDate}T00:00:00Z`);
+    const to = Date.parse(`${toIsoDate}T00:00:00Z`);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return undefined;
+    return Math.round((to - from) / 86400000);
+}
+
+function createDefaultStats(): UserStats {
+    return {
         totalPoints: 0,
         dailyPoints: 0,
         lastActiveDate: getTodayString(),
@@ -79,57 +118,228 @@ export function getUserStats(context: vscode.ExtensionContext): UserStats {
         completedMilestones: [],
         claimedRewards: [],
         dailyClaims: {},
-        dailyToolUsage: {}
+        dailyToolUsage: {},
+        dailyEarnedPoints: 0,
+        counters: { toolRuns: 0, snippetRuns: 0, securityRuns: 0, aiRuns: 0 }
     };
+}
 
-    const stats = context.globalState.get<UserStats>('devsnip_user_stats', defaultStats);
+function toFiniteNumber(value: unknown, fallback: number): number {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toStringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function toStringMap<T>(value: unknown, coerce: (entry: unknown) => T | undefined): { [key: string]: T } {
+    const result: { [key: string]: T } = {};
+    if (!value || typeof value !== 'object') return result;
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        const coerced = coerce(entry);
+        if (coerced !== undefined) result[key] = coerced;
+    }
+    return result;
+}
+
+/**
+ * Rebuilds a usable stats object from whatever is in global state. Data written
+ * by an older version, hand-edited state, or a partially written object must
+ * never throw or wipe a user's progress - unknown fields are repaired in place.
+ */
+function sanitizeStats(raw: unknown): UserStats {
+    const defaults = createDefaultStats();
+    if (!raw || typeof raw !== 'object') return defaults;
+    const source = raw as Partial<UserStats> & { counters?: Partial<UserStats['counters']> };
+
+    const activities = Array.isArray(source.activities)
+        ? source.activities
+              .filter((entry): entry is UserStats['activities'][number] => !!entry && typeof entry === 'object')
+              .map(entry => ({
+                  id: typeof entry.id === 'string' ? entry.id : 'activity',
+                  title: typeof entry.title === 'string' ? entry.title : 'Activity',
+                  points: toFiniteNumber(entry.points, 0),
+                  timestamp: toFiniteNumber(entry.timestamp, Date.now()),
+                  category: typeof entry.category === 'string' ? entry.category : 'Core'
+              }))
+              .slice(0, MAX_ACTIVITIES)
+        : [];
+
+    const lastActiveDate = typeof source.lastActiveDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(source.lastActiveDate)
+        ? source.lastActiveDate
+        : getTodayString();
+
+    const counters = source.counters && typeof source.counters === 'object'
+        ? {
+              toolRuns: Math.max(0, Math.trunc(toFiniteNumber(source.counters.toolRuns, 0))),
+              snippetRuns: Math.max(0, Math.trunc(toFiniteNumber(source.counters.snippetRuns, 0))),
+              securityRuns: Math.max(0, Math.trunc(toFiniteNumber(source.counters.securityRuns, 0))),
+              aiRuns: Math.max(0, Math.trunc(toFiniteNumber(source.counters.aiRuns, 0)))
+          }
+        : {
+              // Migration from versions that derived progress from the capped
+              // activity log: seed the counters from whatever history exists.
+              toolRuns: activities.filter(a => a.category !== 'Milestone' && a.category !== 'Redemption').length,
+              snippetRuns: activities.filter(a => a.category === 'Snippets').length,
+              securityRuns: activities.filter(a => a.category === 'Security').length,
+              aiRuns: activities.filter(a => a.category === 'AI').length
+          };
+
+    return {
+        totalPoints: Math.max(0, Math.trunc(toFiniteNumber(source.totalPoints, 0))),
+        dailyPoints: Math.max(0, Math.trunc(toFiniteNumber(source.dailyPoints, 0))),
+        lastActiveDate,
+        streakDays: Math.max(1, Math.trunc(toFiniteNumber(source.streakDays, 1))),
+        activities,
+        completedMilestones: toStringArray(source.completedMilestones),
+        claimedRewards: toStringArray(source.claimedRewards),
+        dailyClaims: toStringMap(source.dailyClaims, entry => (entry === true ? true : undefined)),
+        dailyToolUsage: toStringMap(source.dailyToolUsage, entry => {
+            const count = toFiniteNumber(entry, NaN);
+            return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : undefined;
+        }),
+        dailyEarnedPoints: Math.max(0, Math.trunc(toFiniteNumber(source.dailyEarnedPoints, 0))),
+        counters
+    };
+}
+
+/** Applies the day rollover (streak, daily counters, claim pruning). */
+function applyDayRollover(stats: UserStats): boolean {
     const today = getTodayString();
+    if (stats.lastActiveDate === today) return false;
 
-    if (stats.lastActiveDate !== today) {
-        const lastDate = new Date(stats.lastActiveDate);
-        const currentDate = new Date(today);
-        const diffTime = currentDate.getTime() - lastDate.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+    const gap = daysBetween(stats.lastActiveDate, today);
+    if (gap === 1) stats.streakDays += 1;
+    else if (gap === undefined || gap > 1) stats.streakDays = 1;
 
-        if (diffDays === 1) {
-            stats.streakDays += 1;
-        } else if (diffDays > 1) {
-            stats.streakDays = 1;
-        }
-        stats.dailyPoints = 0;
-        stats.lastActiveDate = today;
-        stats.dailyToolUsage = {};
+    stats.dailyPoints = 0;
+    stats.dailyEarnedPoints = 0;
+    stats.lastActiveDate = today;
+    stats.dailyToolUsage = {};
+
+    const cutoff = getTodayString(new Date(Date.now() - DAILY_CLAIM_HISTORY_DAYS * 86400000));
+    for (const key of Object.keys(stats.dailyClaims)) {
+        if (key.slice(0, 10) < cutoff) delete stats.dailyClaims[key];
     }
+    return true;
+}
 
-    if (!stats.dailyToolUsage) {
-        stats.dailyToolUsage = {};
+/** Reads a consistent, repaired snapshot of the user's progress. Never throws. */
+export function getUserStats(context: vscode.ExtensionContext): UserStats {
+    let stored: unknown;
+    try {
+        stored = context.globalState.get<unknown>(STATE_KEY);
+    } catch (error) {
+        console.error('DevSnip Pro: unable to read milestone state.', error);
+        stored = undefined;
     }
-
+    const stats = sanitizeStats(stored);
+    applyDayRollover(stats);
     return stats;
 }
 
 export async function saveUserStats(context: vscode.ExtensionContext, stats: UserStats): Promise<void> {
-    await context.globalState.update('devsnip_user_stats', stats);
+    try {
+        await context.globalState.update(STATE_KEY, stats);
+    } catch (error) {
+        console.error('DevSnip Pro: unable to save milestone state.', error);
+    }
+}
+
+/**
+ * Serialised read-modify-write. Two tools finishing at the same moment would
+ * otherwise both read the same snapshot and one update would be lost.
+ */
+function mutateStats<T>(
+    context: vscode.ExtensionContext,
+    mutate: (stats: UserStats) => T
+): Promise<{ stats: UserStats; result: T }> {
+    const next = stateQueue.then(async () => {
+        const stats = getUserStats(context);
+        const result = mutate(stats);
+        await saveUserStats(context, stats);
+        if (refreshCallback) refreshCallback();
+        return { stats, result };
+    });
+    stateQueue = next.catch(() => undefined);
+    return next;
 }
 
 export async function redeemPoints(context: vscode.ExtensionContext, cost: number, reason: string): Promise<boolean> {
-    const stats = getUserStats(context);
-    if (stats.totalPoints < cost) {
-        return false;
-    }
-    stats.totalPoints -= cost;
-    stats.activities.unshift({
-        id: `redeem_${Date.now()}`,
-        title: `Redeemed Points: ${reason} (-${cost} pts)`,
-        points: -cost,
-        timestamp: Date.now(),
-        category: 'Redemption'
+    const amount = Math.max(0, Math.trunc(toFiniteNumber(cost, 0)));
+    const { result } = await mutateStats(context, stats => {
+        if (stats.totalPoints < amount) return false;
+        stats.totalPoints -= amount;
+        pushActivity(stats, {
+            id: `redeem_${Date.now()}`,
+            title: `Redeemed Points: ${reason} (-${amount} pts)`,
+            points: -amount,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+        return true;
     });
-    await saveUserStats(context, stats);
-    if (refreshCallback) {
-        refreshCallback();
+    return result;
+}
+
+/** Returns points that were spent but whose work failed, so nothing is silently lost. */
+export async function refundPoints(context: vscode.ExtensionContext, amount: number, reason: string): Promise<void> {
+    const points = Math.max(0, Math.trunc(toFiniteNumber(amount, 0)));
+    if (!points) return;
+    await mutateStats(context, stats => {
+        stats.totalPoints += points;
+        pushActivity(stats, {
+            id: `refund_${Date.now()}`,
+            title: `Refunded Points: ${reason} (+${points} pts)`,
+            points,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+    });
+}
+
+function pushActivity(stats: UserStats, activity: UserStats['activities'][number]): void {
+    stats.activities.unshift(activity);
+    if (stats.activities.length > MAX_ACTIVITIES) {
+        stats.activities = stats.activities.slice(0, MAX_ACTIVITIES);
     }
-    return true;
+}
+
+function milestoneProgress(stats: UserStats, milestoneId: string): number {
+    switch (milestoneId) {
+        case 'first_tool': return Math.min(stats.counters.toolRuns, 1);
+        case 'tool_explorer':
+        case 'power_user': return stats.counters.toolRuns;
+        case 'snippet_creator': return stats.counters.snippetRuns;
+        case 'streak_5':
+        case 'streak_14': return stats.streakDays;
+        case 'security_audit': return stats.counters.securityRuns;
+        case 'ai_explorer': return stats.counters.aiRuns;
+        case 'points_5000': return stats.totalPoints;
+        default: return 0;
+    }
+}
+
+/** Awards any milestone whose target is now met. Returns the newly unlocked titles. */
+function awardMilestones(stats: UserStats): string[] {
+    const unlocked: string[] = [];
+    for (const milestone of MILESTONES) {
+        if (stats.completedMilestones.includes(milestone.id)) continue;
+        if (milestoneProgress(stats, milestone.id) < milestone.target) continue;
+        stats.completedMilestones.push(milestone.id);
+        stats.totalPoints += milestone.points;
+        stats.dailyPoints += milestone.points;
+        unlocked.push(milestone.title);
+        pushActivity(stats, {
+            id: `milestone_${milestone.id}`,
+            title: `Milestone Unlocked: ${milestone.title} (+${milestone.points} pts)`,
+            points: milestone.points,
+            timestamp: Date.now(),
+            category: 'Milestone'
+        });
+    }
+    return unlocked;
 }
 
 export async function recordActivity(
@@ -139,106 +349,87 @@ export async function recordActivity(
     points: number,
     category: string
 ): Promise<{ stats: UserStats; newMilestones: string[]; levelUp: boolean }> {
-    const stats = getUserStats(context);
-    const today = getTodayString();
+    const { stats, result } = await mutateStats(context, current => {
+        const before = getCurrentLevelName(current.totalPoints);
+        const allowance = Math.max(0, DAILY_POINT_CAP - current.dailyEarnedPoints);
+        const awarded = Math.min(Math.max(0, Math.trunc(toFiniteNumber(points, 0))), allowance);
 
-    stats.totalPoints += points;
-    stats.dailyPoints += points;
-    stats.lastActiveDate = today;
+        current.totalPoints += awarded;
+        current.dailyPoints += awarded;
+        current.dailyEarnedPoints += awarded;
+        current.lastActiveDate = getTodayString();
+        pushActivity(current, {
+            id: activityId,
+            title,
+            points: awarded,
+            timestamp: Date.now(),
+            category
+        });
 
-    stats.activities.unshift({
-        id: activityId,
-        title,
-        points,
-        timestamp: Date.now(),
-        category
+        const newMilestones = awardMilestones(current);
+        return { newMilestones, levelUp: before !== getCurrentLevelName(current.totalPoints) };
     });
-
-    if (stats.activities.length > 100) {
-        stats.activities = stats.activities.slice(0, 100);
-    }
-
-    const oldLevel = getCurrentLevelName(stats.totalPoints - points);
-    const newLevel = getCurrentLevelName(stats.totalPoints);
-    const levelUp = oldLevel !== newLevel;
-
-    const newMilestones: string[] = [];
-    for (const m of MILESTONES) {
-        if (!stats.completedMilestones.includes(m.id)) {
-            let progress = 0;
-            if (m.id === 'first_tool') {
-                progress = stats.activities.length > 0 ? 1 : 0;
-            } else if (m.id === 'tool_explorer' || m.id === 'power_user') {
-                progress = stats.activities.filter(a => a.category === 'Core' || a.id.startsWith('sayaib.')).length;
-            } else if (m.id === 'snippet_creator') {
-                progress = stats.activities.filter(a => a.id.includes('snippet') || a.category === 'Snippets').length;
-            } else if (m.id === 'streak_5') {
-                progress = stats.streakDays >= 5 ? 5 : stats.streakDays;
-            } else if (m.id === 'streak_14') {
-                progress = stats.streakDays >= 14 ? 14 : stats.streakDays;
-            } else if (m.id === 'security_audit') {
-                progress = stats.activities.filter(a => a.category === 'Security').length;
-            } else if (m.id === 'ai_explorer') {
-                progress = stats.activities.filter(a => a.category === 'AI').length;
-            } else if (m.id === 'points_5000') {
-                progress = stats.totalPoints;
-            }
-
-            if (progress >= m.target) {
-                stats.completedMilestones.push(m.id);
-                stats.totalPoints += m.points;
-                stats.dailyPoints += m.points;
-                newMilestones.push(m.title);
-                stats.activities.unshift({
-                    id: `milestone_${m.id}`,
-                    title: `Milestone Unlocked: ${m.title} (+${m.points} pts)`,
-                    points: m.points,
-                    timestamp: Date.now(),
-                    category: 'Milestone'
-                });
-            }
-        }
-    }
-
-    await saveUserStats(context, stats);
-    if (refreshCallback) {
-        refreshCallback();
-    }
-    return { stats, newMilestones, levelUp };
+    return { stats, newMilestones: result.newMilestones, levelUp: result.levelUp };
 }
 
-export async function autoRecordToolUsage(command: string) {
+/** Maps a command id to its points category. */
+function categoryForCommand(commandId: string): { category: string; points: number } {
+    const name = commandId.replace(COMMAND_PREFIX, '');
+    if (/snippet/i.test(name)) return { category: 'Snippets', points: 10 };
+    if (/security|audit/i.test(name)) return { category: 'Security', points: 8 };
+    if (/^(ai|ml|rag)|prompt|model|llm|token|embedding|dataset|inference|gpu|chunking|semantic|hallucination/i.test(name)) {
+        return { category: 'AI', points: 5 };
+    }
+    return { category: 'Core', points: 3 };
+}
+
+/**
+ * Records one tool run. Called exactly once per command invocation by
+ * registerTrackedCommand, so the same run can never be counted twice.
+ */
+export async function autoRecordToolUsage(command: string): Promise<void> {
     if (!globalContext) return;
-    if (command === 'sayaib.hue-console.milestoneTracker') return;
-    const stats = getUserStats(globalContext);
-    
-    if (!stats.dailyToolUsage) {
-        stats.dailyToolUsage = {};
-    }
-    const usageCount = stats.dailyToolUsage[command] || 0;
-    stats.dailyToolUsage[command] = usageCount + 1;
-    await saveUserStats(globalContext, stats);
+    if (command === `${COMMAND_PREFIX}milestoneTracker`) return;
 
-    let pts = 3;
-    const cleanName = command.replace('sayaib.hue-console.', '');
-    let category = 'Core';
-    if (cleanName.includes('Snippet') || cleanName.includes('snippet')) {
-        category = 'Snippets';
-        pts = 10;
-    } else if (cleanName.includes('Security') || cleanName.includes('Audit')) {
-        category = 'Security';
-        pts = 8;
-    } else if (cleanName.includes('Ai') || cleanName.includes('Rag') || cleanName.includes('Prompt') || cleanName.includes('Model')) {
-        category = 'AI';
-        pts = 5;
-    }
+    const { category, points } = categoryForCommand(command);
+    const label = command.replace(COMMAND_PREFIX, '');
 
-    if (usageCount >= 5) {
-        pts = 1;
-    }
+    await mutateStats(globalContext, stats => {
+        const usedToday = stats.dailyToolUsage[command] || 0;
+        stats.dailyToolUsage[command] = usedToday + 1;
 
-    await recordActivity(globalContext, command, `Tool Use: ${cleanName}`, pts, category);
+        stats.counters.toolRuns += 1;
+        if (category === 'Snippets') stats.counters.snippetRuns += 1;
+        if (category === 'Security') stats.counters.securityRuns += 1;
+        if (category === 'AI') stats.counters.aiRuns += 1;
+
+        const basePoints = usedToday >= RATE_LIMIT_AFTER ? 1 : points;
+        const allowance = Math.max(0, DAILY_POINT_CAP - stats.dailyEarnedPoints);
+        const awarded = Math.min(basePoints, allowance);
+
+        stats.totalPoints += awarded;
+        stats.dailyPoints += awarded;
+        stats.dailyEarnedPoints += awarded;
+        stats.lastActiveDate = getTodayString();
+        pushActivity(stats, {
+            id: command,
+            title: `Tool Use: ${label}`,
+            points: awarded,
+            timestamp: Date.now(),
+            category
+        });
+        awardMilestones(stats);
+    });
 }
+
+/** Resets all progress. Used by the tracker's reset button. */
+export async function resetUserStats(context: vscode.ExtensionContext): Promise<void> {
+    await mutateStats(context, stats => {
+        Object.assign(stats, createDefaultStats());
+    });
+}
+
+export { milestoneProgress, DAILY_POINT_CAP, RATE_LIMIT_AFTER, sanitizeStats, createDefaultStats };
 
 export function getCurrentLevel(totalPoints: number): LevelInfo {
     let current = LEVELS[0];
@@ -265,77 +456,95 @@ export function getNextLevel(totalPoints: number): LevelInfo | null {
     return null;
 }
 
-function getNonce(): string {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let text = '';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
-
 export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext) {
     setMilestoneContext(context);
-    (async () => {
-        const stats = getUserStats(context);
-        const today = getTodayString();
-        if (!stats.dailyClaims[today]) {
-            stats.dailyClaims[today] = true;
-            await recordActivity(context, 'daily_login', 'Daily Login Bonus', 5, 'Activity');
+
+    // Award the once-a-day login bonus, guarded by a persisted claim key so a
+    // reload (or several windows) cannot award it twice.
+    void (async () => {
+        try {
+            const today = getTodayString();
+            const { result } = await mutateStats(context, stats => {
+                if (stats.dailyClaims[today]) return false;
+                stats.dailyClaims[today] = true;
+                return true;
+            });
+            if (result) {
+                await recordActivity(context, 'daily_login', 'Daily Login Bonus', 5, 'Activity');
+            }
+        } catch (error) {
+            console.error('DevSnip Pro: daily login bonus failed.', error);
         }
     })();
 
-    const command = vscode.commands.registerCommand('sayaib.hue-console.milestoneTracker', () => {
+    let activePanel: vscode.WebviewPanel | undefined;
+
+    const command = registerTrackedCommand('sayaib.hue-console.milestoneTracker', () => {
+        if (activePanel) {
+            activePanel.reveal(vscode.ViewColumn.One);
+            activePanel.webview.html = getMilestoneTrackerHtml(context);
+            return;
+        }
+
         const panel = vscode.window.createWebviewPanel(
             'milestoneTracker',
             'DevSnip Pro - Milestone & Points Tracker',
             vscode.ViewColumn.One,
             { enableScripts: true }
         );
-
+        activePanel = panel;
         panel.webview.html = getMilestoneTrackerHtml(context);
 
-        panel.webview.onDidReceiveMessage(
-            async message => {
-                switch (message.command) {
+        const messageSubscription = panel.webview.onDidReceiveMessage(async message => {
+            try {
+                switch (message?.command) {
                     case 'claimBonus': {
-                        const s = getUserStats(context);
-                        const td = getTodayString();
-                        if (!s.dailyClaims[td + '_bonus']) {
-                            s.dailyClaims[td + '_bonus'] = true;
-                            const res = await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', 10, 'Activity');
-                            panel.webview.html = getMilestoneTrackerHtml(context);
-                            vscode.window.showInformationMessage(`Successfully claimed +10 daily bonus points! Total: ${res.stats.totalPoints}`);
-                        } else {
+                        const key = `${getTodayString()}_bonus`;
+                        const { result: claimed } = await mutateStats(context, stats => {
+                            if (stats.dailyClaims[key]) return false;
+                            stats.dailyClaims[key] = true;
+                            return true;
+                        });
+                        if (!claimed) {
                             vscode.window.showWarningMessage('You have already claimed your daily bonus today.');
+                        } else {
+                            const res = await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', 10, 'Activity');
+                            vscode.window.showInformationMessage(
+                                `Claimed +10 daily bonus points. Total: ${res.stats.totalPoints} pts.`
+                            );
                         }
+                        panel.webview.html = getMilestoneTrackerHtml(context);
                         break;
                     }
                     case 'resetData': {
-                        const fresh: UserStats = {
-                            totalPoints: 0,
-                            dailyPoints: 0,
-                            lastActiveDate: getTodayString(),
-                            streakDays: 1,
-                            activities: [],
-                            completedMilestones: [],
-                            claimedRewards: [],
-                            dailyClaims: {},
-                            dailyToolUsage: {}
-                        };
-                        await saveUserStats(context, fresh);
+                        // Webview modals (confirm/alert) are blocked by the VS Code
+                        // webview sandbox, so the confirmation must be a native dialog.
+                        const confirmed = await confirmAction(
+                            'Reset all DevSnip Pro points, streaks and milestones? This cannot be undone.',
+                            'Reset everything'
+                        );
+                        if (!confirmed) break;
+                        await resetUserStats(context);
                         panel.webview.html = getMilestoneTrackerHtml(context);
-                        if (refreshCallback) {
-                            refreshCallback();
-                        }
                         vscode.window.showInformationMessage('Milestone and points data reset.');
                         break;
                     }
+                    case 'refresh': {
+                        panel.webview.html = getMilestoneTrackerHtml(context);
+                        break;
+                    }
                 }
-            },
-            undefined,
-            context.subscriptions
-        );
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Milestone tracker action failed: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        });
+
+        panel.onDidDispose(() => {
+            messageSubscription.dispose();
+            if (activePanel === panel) activePanel = undefined;
+        });
     });
 
     context.subscriptions.push(command);
@@ -362,34 +571,15 @@ function getMilestoneTrackerHtml(context: vscode.ExtensionContext): string {
 
     const milestonesHtml = MILESTONES.map(m => {
         const completed = stats.completedMilestones.includes(m.id);
-        let currentCount = 0;
-        if (completed) {
-            currentCount = m.target;
-        } else {
-            if (m.id === 'tool_explorer' || m.id === 'power_user') {
-                currentCount = stats.activities.filter(a => a.category === 'Core' || a.id.startsWith('sayaib.')).length;
-            } else if (m.id === 'snippet_creator') {
-                currentCount = stats.activities.filter(a => a.id.includes('snippet') || a.category === 'Snippets').length;
-            } else if (m.id === 'streak_5' || m.id === 'streak_14') {
-                currentCount = stats.streakDays;
-            } else if (m.id === 'security_audit') {
-                currentCount = stats.activities.filter(a => a.category === 'Security').length;
-            } else if (m.id === 'ai_explorer') {
-                currentCount = stats.activities.filter(a => a.category === 'AI').length;
-            } else if (m.id === 'points_5000') {
-                currentCount = stats.totalPoints;
-            } else if (m.id === 'first_tool') {
-                currentCount = stats.activities.length > 0 ? 1 : 0;
-            }
-        }
+        const currentCount = completed ? m.target : milestoneProgress(stats, m.id);
         const pct = Math.min(100, Math.round((currentCount / m.target) * 100));
 
         return `
             <div class="milestone-card ${completed ? 'completed' : ''}">
-                <div class="milestone-icon">${m.icon}</div>
+                <div class="milestone-icon">${escapeHtml(m.icon)}</div>
                 <div class="milestone-info">
-                    <div class="milestone-title">${m.title} ${completed ? '✓' : ''}</div>
-                    <div class="milestone-desc">${m.description}</div>
+                    <div class="milestone-title">${escapeHtml(m.title)} ${completed ? '✓' : ''}</div>
+                    <div class="milestone-desc">${escapeHtml(m.description)}</div>
                     <div class="progress-bar-container" style="margin-top: 8px;">
                         <div class="progress-bar-fill" style="width: ${pct}%;"></div>
                     </div>
@@ -409,10 +599,10 @@ function getMilestoneTrackerHtml(context: vscode.ExtensionContext): string {
             return `
                 <div class="activity-item">
                     <div>
-                        <div class="activity-title">${a.title}</div>
-                        <div class="activity-time">${dateStr} • <span style="color: var(--accent);">${a.category}</span></div>
+                        <div class="activity-title">${escapeHtml(a.title)}</div>
+                        <div class="activity-time">${escapeHtml(dateStr)} • <span style="color: var(--accent);">${escapeHtml(a.category)}</span></div>
                     </div>
-                    <div class="activity-points">+${a.points} pts</div>
+                    <div class="activity-points">${a.points >= 0 ? '+' : ''}${a.points} pts</div>
                 </div>
             `;
         }).join('');
@@ -421,12 +611,12 @@ function getMilestoneTrackerHtml(context: vscode.ExtensionContext): string {
         const unlocked = stats.totalPoints >= lvl.minPoints;
         return `
             <div class="reward-card ${unlocked ? 'unlocked' : 'locked'}">
-                <div style="font-size: 28px; margin-bottom: 8px;">${lvl.badge}</div>
-                <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${lvl.name} Level</div>
-                <div style="font-size: 11px; color: var(--fg-1); margin-bottom: 4px;">${lvl.rank}</div>
+                <div style="font-size: 28px; margin-bottom: 8px;">${escapeHtml(lvl.badge)}</div>
+                <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${escapeHtml(lvl.name)} Level</div>
+                <div style="font-size: 11px; color: var(--fg-1); margin-bottom: 4px;">${escapeHtml(lvl.rank)}</div>
                 <div style="font-size: 11px; color: var(--fg-1); margin-bottom: 8px;">Requirement: ${lvl.minPoints} pts</div>
                 <div style="font-size: 12px; font-weight: 600; color: ${unlocked ? 'var(--success)' : 'var(--fg-2)'};">
-                    ${unlocked ? '✓ Unlocked: ' + lvl.reward : '🔒 Locked: ' + lvl.reward}
+                    ${unlocked ? '✓ Unlocked: ' + escapeHtml(lvl.reward) : '🔒 Locked: ' + escapeHtml(lvl.reward)}
                 </div>
             </div>
         `;
@@ -676,11 +866,23 @@ function getMilestoneTrackerHtml(context: vscode.ExtensionContext): string {
         var resetBtn = document.getElementById('resetDataBtn');
         if (resetBtn) {
             resetBtn.addEventListener('click', function() {
-                if (confirm('Are you sure you want to reset all milestone progress and points?')) {
-                    vscode.postMessage({ command: 'resetData' });
-                }
+                // VS Code webviews are sandboxed without modals, so confirmation
+                // happens in the extension host with a native dialog.
+                vscode.postMessage({ command: 'resetData' });
             });
         }
+
+        // Keep the selected tab across re-renders (claim/reset re-render the page).
+        var saved = vscode.getState() || {};
+        if (saved.tab) {
+            var savedTab = document.querySelector('.tab[data-tab="' + saved.tab + '"]');
+            if (savedTab) savedTab.click();
+        }
+        document.querySelectorAll('.tab').forEach(function(tab) {
+            tab.addEventListener('click', function(e) {
+                vscode.setState({ tab: e.currentTarget.getAttribute('data-tab') });
+            });
+        });
     </script>
 </body>
 </html>`;

@@ -136,5 +136,8 @@
             inputEl.value = msg.text;
         }
     });
+    // Tell the extension the listener is installed; anything posted before this
+    // point never reaches the page.
+    if (vscode) { vscode.postMessage({ command: 'ready' }); }
 })();
 

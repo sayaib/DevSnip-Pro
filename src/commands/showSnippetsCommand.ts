@@ -1,359 +1,263 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-
-interface Snippet {
-  prefix: string;
-  body: string | string[];
-  description?: string;
-}
+import { registerTrackedCommand } from "../utils/command-registry";
+import { THEME_TOKENS, confirmAction, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
+import { readExistingSnippets, saveSnippets, type SnippetDefinition } from "../utils/snippet-utils";
 
 interface SnippetFile {
   language: string;
-  snippets: { [key: string]: Snippet };
+  snippets: { [key: string]: SnippetDefinition };
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+interface LoadResult {
+  files: SnippetFile[];
+  errors: string[];
 }
 
-function getNonce(): string {
-  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let text = '';
-  for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
+/** Reads every contributed snippet file; a broken file is reported, not fatal. */
+async function loadSnippets(snippetsFolderPath: string): Promise<LoadResult> {
+  const files: SnippetFile[] = [];
+  const errors: string[] = [];
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(snippetsFolderPath).filter(file => file.endsWith(".json"));
+  } catch (error) {
+    return { files, errors: [`Could not read the snippets folder: ${error instanceof Error ? error.message : String(error)}`] };
   }
-  return text;
+
+  for (const file of entries.sort()) {
+    const language = file.replace(/^custom_/, "").replace(/\.json$/, "");
+    try {
+      files.push({ language, snippets: await readExistingSnippets(path.join(snippetsFolderPath, file)) });
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return { files, errors };
+}
+
+function bodyToText(body: SnippetDefinition["body"]): string {
+  return Array.isArray(body) ? body.join("\n") : String(body ?? "");
 }
 
 export function registerShowSnippetsCommand(
   context: vscode.ExtensionContext,
   snippetsFolderPath: string
 ) {
-  const loadSnippets = (): SnippetFile[] =>
-    fs
-      .readdirSync(snippetsFolderPath)
-      .filter((file) => file.endsWith(".json"))
-      .map((file) => {
-        const language = file.replace("custom_", "").replace(".json", "");
-        const content = JSON.parse(
-          fs.readFileSync(path.join(snippetsFolderPath, file), "utf-8")
-        );
-        return { language, snippets: content };
-      });
+  let activePanel: vscode.WebviewPanel | undefined;
 
-  const command = vscode.commands.registerCommand(
-    "sayaib.hue-console.showSnippets",
-    () => {
-      const snippetsData = loadSnippets();
-      const panel = vscode.window.createWebviewPanel(
-        "showSnippets",
-        "Custom Snippets",
-        vscode.ViewColumn.One,
-        { enableScripts: true }
-      );
-      const iconPath = path.resolve(context.extensionPath, "logo.png");
-      panel.iconPath = vscode.Uri.file(iconPath);
-      panel.webview.html = generateWebviewContent(snippetsData);
-
-      panel.webview.onDidReceiveMessage(
-        (message) => {
-          if (message.command === "deleteSnippet") {
-            const { language, snippetKey } = message;
-            const snippetFile = snippetsData.find(
-              (data) => data.language === language
-            );
-
-            if (snippetFile && snippetFile.snippets[snippetKey]) {
-              delete snippetFile.snippets[snippetKey];
-
-              fs.writeFileSync(
-                path.join(snippetsFolderPath, `custom_${language}.json`),
-                JSON.stringify(snippetFile.snippets, null, 4)
-              );
-
-              vscode.window.showInformationMessage(
-                `Deleted snippet: ${snippetKey}`
-              );
-              panel.webview.html = generateWebviewContent(snippetsData);
-            }
-          }
-        },
-        undefined,
-        context.subscriptions
-      );
+  const command = registerTrackedCommand("sayaib.hue-console.showSnippets", async () => {
+    if (activePanel) {
+      activePanel.reveal(vscode.ViewColumn.One);
+      return;
     }
-  );
+
+    const panel = vscode.window.createWebviewPanel(
+      "showSnippets",
+      "DevSnip Pro - Custom Snippets",
+      vscode.ViewColumn.One,
+      { enableScripts: true }
+    );
+    activePanel = panel;
+    panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, "logo.png"));
+
+    let loaded = await loadSnippets(snippetsFolderPath);
+    const render = (status?: string) => {
+      panel.webview.html = generateWebviewContent(loaded, status);
+    };
+    render();
+
+    const messageSubscription = panel.webview.onDidReceiveMessage(async (message: {
+      command?: string;
+      language?: string;
+      snippetKey?: string;
+    }) => {
+      try {
+        if (message?.command === "refresh") {
+          loaded = await loadSnippets(snippetsFolderPath);
+          render("Snippet list refreshed.");
+          return;
+        }
+
+        if (message?.command !== "deleteSnippet") return;
+
+        const { language, snippetKey } = message;
+        const file = loaded.files.find(entry => entry.language === language);
+        if (!language || !snippetKey || !file || !file.snippets[snippetKey]) {
+          loaded = await loadSnippets(snippetsFolderPath);
+          render("That snippet no longer exists. The list has been refreshed.");
+          return;
+        }
+
+        // The webview sandbox blocks confirm(), so confirm in the extension host.
+        if (!(await confirmAction(`Delete the ${language} snippet "${snippetKey}"?`, "Delete snippet"))) return;
+
+        delete file.snippets[snippetKey];
+        await saveSnippets(path.join(snippetsFolderPath, `custom_${language}.json`), file.snippets);
+        render(`Deleted "${snippetKey}". Reload the window to remove it from IntelliSense.`);
+
+        const action = await vscode.window.showInformationMessage(
+          `Deleted snippet "${snippetKey}".`,
+          "Reload Window",
+          "Later"
+        );
+        if (action === "Reload Window") {
+          await vscode.commands.executeCommand("workbench.action.reloadWindow");
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Snippet action failed: ${detail}`);
+        safePostMessage(panel, { command: "error", message: detail });
+      }
+    });
+
+    panel.onDidDispose(() => {
+      messageSubscription.dispose();
+      if (activePanel === panel) activePanel = undefined;
+    });
+  });
 
   context.subscriptions.push(command);
 }
 
-function generateWebviewContent(snippetsData: SnippetFile[]): string {
-  const nonEmptyGroups = snippetsData.filter(
-    (file) => Object.keys(file.snippets).length > 0
-  );
+function generateWebviewContent(loaded: LoadResult, status?: string): string {
+  const nonce = getNonce();
+  const groups = loaded.files.filter(file => Object.keys(file.snippets).length > 0);
+  const total = groups.reduce((count, group) => count + Object.keys(group.snippets).length, 0);
 
-  if (nonEmptyGroups.length === 0) {
-    return `
-      <!DOCTYPE html>
+  const errorBanner = loaded.errors.length
+    ? `<div class="banner fail">${loaded.errors.map(escapeHtml).join("<br>")}</div>`
+    : "";
+  const statusBanner = status ? `<div class="banner ok">${escapeHtml(status)}</div>` : "";
+
+  const body = groups.length
+    ? groups
+        .map(
+          group => `
+        <section class="group">
+          <h2>${escapeHtml(group.language)} <span class="count">${Object.keys(group.snippets).length}</span></h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Prefix</th><th>Name</th><th>Description</th><th>Body</th><th>Action</th></tr></thead>
+              <tbody>
+                ${Object.entries(group.snippets)
+                  .map(
+                    ([key, snippet]) => `
+                  <tr>
+                    <td><code>${escapeHtml(snippet?.prefix ?? "")}</code></td>
+                    <td>${escapeHtml(key)}</td>
+                    <td>${escapeHtml(snippet?.description ?? "")}</td>
+                    <td><pre>${escapeHtml(bodyToText(snippet?.body))}</pre></td>
+                    <td><button class="danger delete-btn" type="button" data-language="${escapeHtml(group.language)}" data-key="${escapeHtml(key)}">Delete</button></td>
+                  </tr>`
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        </section>`
+        )
+        .join("")
+    : `<section class="empty">
+         <h2>No custom snippets yet</h2>
+         <p>Select code in an editor and run <strong>DevSnip Pro: Create Your Own Perfect Code Snippet</strong> from the Command Palette. Saved snippets appear here, and in IntelliSense after a window reload.</p>
+       </section>`;
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How to Create Custom Snippets with DevSnip Pro</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 0;
-            background-color: #101D26;
-        }
-        .container {
-            max-width: 800px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-          h2 {
-                  margin-top: 50px;
-                  font-size: 2rem;
-                  color: #FFFFFF;
-                  text-align: center;
-              }
-        h1 {
-            color: #333;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-        ol {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
-        li {
-          color: black;
-            margin-bottom: 10px;
-        }
-        strong {
-            color: #0073e6;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <title>Custom Snippets</title>
+  <style>
+    ${THEME_TOKENS}
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: clamp(16px, 4vw, 32px); background: var(--bg); color: var(--text); font: 13px var(--font); }
+    .shell { max-width: 1180px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .intro { color: var(--muted); margin: 0 0 18px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    input[type="search"] { flex: 1; min-width: 220px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: inherit; }
+    input[type="search"]:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+    button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+    button:hover { border-color: var(--focus); }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    button.danger { color: var(--danger); }
+    .banner { padding: 10px 13px; border-radius: 7px; border: 1px solid var(--line); margin-bottom: 14px; }
+    .banner.ok { border-color: var(--success); }
+    .banner.fail { border-color: var(--danger); }
+    .group { margin-bottom: 26px; }
+    .group h2 { font-size: 15px; margin: 0 0 10px; text-transform: capitalize; display: flex; align-items: center; gap: 8px; }
+    .count { font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); background: var(--panel); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: var(--panel-2); }
+    code, pre { font-family: var(--mono); font-size: 12px; }
+    pre { margin: 0; max-width: 420px; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+    .empty { border: 1px solid var(--line); border-radius: 10px; padding: 44px 24px; text-align: center; background: var(--panel); }
+    .empty h2 { margin: 0 0 8px; font-size: 17px; }
+    .empty p { margin: 0 auto; max-width: 540px; color: var(--muted); line-height: 1.6; }
+    .no-results { display: none; padding: 20px; color: var(--muted); }
+  </style>
 </head>
 <body>
-    <h2>No Custom Snippets Found.</h2>
-    <div class="container">
-        <h1>How to Create and Use Custom Snippets with DevSnip Pro</h1>
-        <ol>
-            <li><strong>Select Your Code:</strong> Highlight the code snippet you want to save in the VS Code editor.</li>
-            <li><strong>Right-Click on the Editor:</strong> Open the context menu by right-clicking on the selected code.</li>
-            <li><strong>Choose "DevSnip Pro: Create Your Own Perfect Code Snippet":</strong> Select this option from the context menu.</li>
-            <li><strong>Enter Snippet Details:</strong> Provide the following information:
-                <ul>
-                    <li><strong>Snippet Prefix:</strong> A unique identifier for your snippet.</li>
-                    <li><strong>Snippet Name:</strong> A descriptive name for the snippet.</li>
-                    <li><strong>Snippet Description (optional):</strong> Add a brief explanation of the snippet.</li>
-                </ul>
-            </li>
-            <li><strong>Call Your Snippets:</strong> Use the given prefix name to quickly insert your saved snippet in the editor.</li>
-        </ol>
+  <main class="shell">
+    <h1>Custom snippets</h1>
+    <p class="intro">${total} snippet${total === 1 ? "" : "s"} across ${groups.length} language${groups.length === 1 ? "" : "s"}. Snippets are stored with the extension and loaded by VS Code at startup.</p>
+    ${errorBanner}
+    ${statusBanner}
+    <div class="toolbar">
+      <input id="searchInput" type="search" placeholder="Filter by prefix, name, description or body..." aria-label="Filter snippets">
+      <span id="resultCount" class="count"></span>
+      <button id="refreshBtn" type="button">Refresh</button>
     </div>
+    ${body}
+    <div id="noResults" class="no-results">No snippets match that filter.</div>
+  </main>
+  <script nonce="${nonce}">
+    (function () {
+      const vscode = acquireVsCodeApi();
+      const input = document.getElementById('searchInput');
+      const rows = Array.prototype.slice.call(document.querySelectorAll('tbody tr'));
+      const groups = Array.prototype.slice.call(document.querySelectorAll('.group'));
+      const count = document.getElementById('resultCount');
+      const noResults = document.getElementById('noResults');
+
+      function filter() {
+        const query = input.value.trim().toLowerCase();
+        let visible = 0;
+        rows.forEach(function (row) {
+          const match = !query || row.textContent.toLowerCase().indexOf(query) !== -1;
+          row.hidden = !match;
+          if (match) visible++;
+        });
+        groups.forEach(function (group) {
+          const anyVisible = Array.prototype.slice.call(group.querySelectorAll('tbody tr')).some(function (row) { return !row.hidden; });
+          group.hidden = !anyVisible;
+        });
+        count.textContent = visible + ' shown';
+        noResults.style.display = rows.length && !visible ? 'block' : 'none';
+      }
+
+      if (input) { input.addEventListener('input', filter); filter(); }
+      document.getElementById('refreshBtn').addEventListener('click', function () { vscode.postMessage({ command: 'refresh' }); });
+      document.querySelectorAll('.delete-btn').forEach(function (button) {
+        button.addEventListener('click', function () {
+          vscode.postMessage({
+            command: 'deleteSnippet',
+            language: button.getAttribute('data-language'),
+            snippetKey: button.getAttribute('data-key')
+          });
+        });
+      });
+    })();
+  </script>
 </body>
-</html>
-
-    `;
-  }
-
-  const nonce = getNonce();
-
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                margin: 0;
-                background-color: #0C1118;
-                color: #FFFFFF;
-                text-align: center;
-            }
-            h1 {
-                margin-top: 30px;
-                font-size: 2rem;
-                color: #FFFFFF;
-            }
-            h1 span {
-                color: #19C8D9;
-            }
-            /* Search Input */
-        #searchInput {
-            margin: 20px auto;
-            width: 80%;
-            max-width: 600px;
-            padding: 12px;
-            border-radius: 8px;
-            border: 2px solid #273341;
-            background-color: #1C2630;
-            color: #FFFFFF;
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        #searchInput:focus {
-            border-color: #19C8D9;
-        }
-
-             table {
-            width: 95%;
-            max-width: 1200px;
-            margin: 30px auto;
-            border-collapse: collapse;
-            background-color: #1C2630;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-        }
-
-        thead {
-            background-color: #273341;
-        }
-
-        th, td {
-            padding: 15px;
-            text-align: center;
-            border-bottom: 1px solid #303A45;
-        }
-
-        th {
-            font-weight: 600;
-            color: #19C8D9;
-        }
-
-        tbody tr:hover {
-            background-color: #303A45;
-            transition: background-color 0.3s;
-        }
-
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-              button {
-            background-color: #A61E1E;
-            color: white;
-            font-weight: bold;
-            padding: 10px 25px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        button:hover {
-            background-color: #8A1A1A;
-        }
-               .remove-log-btn {
-            background-color: #273341;
-            color: #FFFFFF;
-            padding: 8px 15px;
-            border-radius: 5px;
-            border: 1px solid #19C8D9;
-            transition: background-color 0.3s;
-        }
-
-        .remove-log-btn:hover {
-            background-color: #19C8D9;
-            color: #0C1118;
-        }
-
-            tbody tr:last-child td {
-                border-bottom: none;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Custom Snippets in <span style="color:#48FFF1;">DevSnip Pro</span></h1>
-        <input
-            id="searchInput"
-            type="text"
-            placeholder="Search across all the snippet fields in the table."
-        />
-        ${nonEmptyGroups
-          .map(
-            (group) => `
-            <h3>${group.language}</h3>
-            <table id="snippetsTable">
-                <thead>
-                    <tr>
-                        <th>Prefix</th>
-                        <th>Snippet Key</th>
-                        <th>Description</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${Object.entries(group.snippets)
-                      .map(
-                        ([key, snippet]) => `
-                        <tr>
-                        
-                            <td><pre>${escapeHtml(snippet.prefix)}</pre></td>
-                            <td>${escapeHtml(key)}</td>
-                            <td>${escapeHtml(snippet.description || "")}</td>
-                            <td>
-                                <button class="remove-log-btn delete-btn" data-language="${escapeHtml(group.language)}" data-key="${escapeHtml(key)}">
-                                    Delete
-                                </button>
-                            </td>
-                        </tr>`
-                      )
-                      .join("")}
-                </tbody>
-            </table>
-          `
-          )
-          .join("")}
-        <script nonce="${nonce}">
-            const vscode = acquireVsCodeApi();
-
-            document.getElementById('searchInput').addEventListener('input', function() {
-                const searchInput = this.value.trim();
-                const rows = document.querySelectorAll("#snippetsTable tbody tr");
-                let regex;
-                try {
-                    regex = new RegExp(searchInput, "i");
-                } catch {
-                    rows.forEach((row) => row.style.display = "none");
-                    return;
-                }
-
-                rows.forEach((row) => {
-                    const cells = Array.from(row.querySelectorAll("td"));
-                    const matches = cells.some((cell) => regex.test(cell.textContent));
-                    row.style.display = matches ? "" : "none";
-                });
-            });
-
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const language = this.getAttribute('data-language');
-                    const snippetKey = this.getAttribute('data-key');
-                    vscode.postMessage({ command: 'deleteSnippet', language, snippetKey });
-                });
-            });
-        </script>
-    </body>
-    </html>
-  `;
+</html>`;
 }

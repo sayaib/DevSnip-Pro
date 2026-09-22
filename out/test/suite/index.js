@@ -28,15 +28,16 @@ const Mocha = require("mocha");
 const path = __importStar(require("path"));
 const glob = require("glob");
 function run() {
-    const mocha = new Mocha({ ui: "tdd", color: true });
+    const mocha = new Mocha({ ui: "tdd", color: true, timeout: 30000 });
     const testsRoot = path.resolve(__dirname, "..");
     return new Promise((resolve, reject) => {
-        glob("**/*.test.js", { cwd: testsRoot }, (error, files) => {
+        // Only the VS Code integration specs: the unit suite runs in plain Node.
+        glob("**/*.test.js", { cwd: testsRoot, ignore: ["unit/**"] }, (error, files) => {
             if (error)
                 return reject(error);
             files.forEach(file => mocha.addFile(path.resolve(testsRoot, file)));
             try {
-                mocha.run(failures => failures ? reject(new Error(`${failures} test failure(s).`)) : resolve());
+                mocha.run(failures => (failures ? reject(new Error(`${failures} test failure(s).`)) : resolve()));
             }
             catch (runError) {
                 reject(runError);

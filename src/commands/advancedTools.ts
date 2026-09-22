@@ -1,339 +1,102 @@
 import * as vscode from 'vscode';
+import { registerTrackedCommand } from "../utils/command-registry";
+import { openToolPanel } from "../utils/webview-ui";
+import { UTILITY_CSS, getNonce, safePostMessage, toastScript } from "../utils/webview-ui";
 import * as path from 'path';
 import { executeQueuedCommand } from '../utils/command-dispatch';
 
-function getNonce(): string {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let text = '';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
+/** Shared panel styling lives in utils/webview-ui so every tool page stays consistent. */
+const SHARED_CSS = UTILITY_CSS;
 
-const SHARED_CSS = `
-:root {
-    --bg-0: var(--vscode-editor-background);
-    --bg-1: var(--vscode-sideBar-background);
-    --bg-2: var(--vscode-input-background);
-    --bg-3: var(--vscode-textCodeBlock-background);
-    --fg-0: var(--vscode-editor-foreground);
-    --fg-1: var(--vscode-descriptionForeground);
-    --fg-2: var(--vscode-disabledForeground);
-    --border: var(--vscode-input-border);
-    --border-focus: var(--vscode-focusBorder);
-    --accent: var(--vscode-button-background);
-    --accent-fg: var(--vscode-button-foreground);
-    --success: #4caf50;
-    --success-bg: rgba(76, 175, 80, 0.15);
-    --error: #f44336;
-    --error-bg: rgba(244, 67, 54, 0.15);
-    --warning: #ff9800;
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-    --transition: 0.2s ease;
-    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    font-family: var(--sans);
-    background: var(--bg-0);
-    color: var(--fg-0);
-    line-height: 1.5;
-    padding: 0;
-    overflow-x: hidden;
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--fg-2); border-radius: 3px; }
-
-.tool-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px 24px;
-    background: var(--bg-1);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 50;
-}
-.tool-header h1 { font-size: 16px; font-weight: 700; white-space: nowrap; }
-.tool-header .subtitle { font-size: 12px; color: var(--fg-1); }
-
-.tool-body { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
-
-.section {
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    margin-bottom: 16px;
-}
-.section-title {
-    font-size: 13px; font-weight: 700;
-    color: var(--fg-1);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 14px;
-}
-
-label {
-    display: block;
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 4px;
-}
-.input, input[type="text"], input[type="number"] {
-    width: 100%;
-    padding: 8px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    outline: none;
-    transition: border-color var(--transition);
-}
-.input:focus, input:focus, textarea:focus, select:focus {
-    border-color: var(--border-focus);
-}
-textarea {
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    resize: vertical;
-    outline: none;
-    transition: border-color var(--transition);
-}
-select {
-    padding: 8px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    outline: none;
-}
-
-.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 7px 14px;
-    background: var(--accent);
-    color: var(--accent-fg);
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 12px; font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-.btn:hover { opacity: 0.85; }
-.btn:active { transform: scale(0.97); }
-.btn-secondary {
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-}
-.btn-ghost {
-    background: transparent;
-    color: var(--fg-1);
-    border: 1px solid var(--border);
-}
-.btn-ghost:hover { background: var(--bg-2); }
-.btn-success { background: var(--success); color: #fff; }
-.btn-danger { background: var(--error); color: #fff; }
-.btn-sm { padding: 4px 10px; font-size: 11px; }
-
-.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 768px) { .panels { grid-template-columns: 1fr; } }
-
-.panel-label {
-    font-size: 11px; font-weight: 700;
-    color: var(--fg-1);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 6px;
-}
-
-.result-block {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 12px 14px;
-    font-family: var(--mono);
-    font-size: 13px;
-    word-break: break-all;
-    line-height: 1.6;
-}
-
-.toast-container {
-    position: fixed; bottom: 16px; right: 16px;
-    z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px;
-    pointer-events: none;
-}
-.toast {
-    padding: 10px 16px;
-    border-radius: var(--radius-md);
-    font-size: 12px; font-weight: 600;
-    color: #fff;
-    transform: translateY(20px);
-    opacity: 0;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: auto;
-    box-shadow: var(--shadow);
-}
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { background: var(--success); }
-.toast.error { background: var(--error); }
-`;
-
-function toastScript(): string {
-    return `
-        function _toast(msg, type) {
-            var c = document.querySelector('.toast-container');
-            if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
-            var t = document.createElement('div');
-            t.className = 'toast ' + (type || 'success');
-            t.textContent = msg;
-            c.appendChild(t);
-            requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('show'); }); });
-            setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 2000);
-        }
-    `;
-}
 
 export function registerAdvancedToolsCommands(context: vscode.ExtensionContext) {
-    const advancedToolsHubCommand = vscode.commands.registerCommand('sayaib.hue-console.advancedToolsHub', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'advancedToolsHub',
-            'DevSnip Pro - Developer Tools',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const advancedToolsHubCommand = registerTrackedCommand('sayaib.hue-console.advancedToolsHub', () => {
+        const { panel, created } = openToolPanel('advancedToolsHub', 'DevSnip Pro - Developer Tools', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getAdvancedToolsHubHtml();
-        panel.webview.onDidReceiveMessage(
-            message => {
-                switch (message.command) {
-                    case 'openTool':
-                        executeQueuedCommand(message.toolCommand);
-                        break;
-                }
-            },
-            undefined,
-            context.subscriptions
-        );
+        // executeQueuedCommand validates the id against the commands this
+        // extension registered, so a hub can only open DevSnip Pro tools.
+        const messageSubscription = panel.webview.onDidReceiveMessage(message => {
+            if (message?.command === 'openTool') {
+                void executeQueuedCommand(message.toolCommand);
+            }
+        });
+        panel.onDidDispose(() => messageSubscription.dispose());
     });
 
-    const regexBuilderCommand = vscode.commands.registerCommand('sayaib.hue-console.regexBuilder', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'regexBuilder',
-            'Regex Builder & Tester',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const regexBuilderCommand = registerTrackedCommand('sayaib.hue-console.regexBuilder', () => {
+        const { panel, created } = openToolPanel('regexBuilder', 'Regex Builder & Tester', { enableScripts: true });
+        if (!created) return;
         const scriptUri = panel.webview.asWebviewUri(
             vscode.Uri.file(path.join(context.extensionPath, 'media', 'regex-builder.js'))
         );
         panel.webview.html = getRegexBuilderHtml(panel.webview.cspSource, String(scriptUri));
     });
 
-    const jsonFormatterCommand = vscode.commands.registerCommand('sayaib.hue-console.jsonFormatter', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'jsonFormatter',
-            'JSON/XML Formatter',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const jsonFormatterCommand = registerTrackedCommand('sayaib.hue-console.jsonFormatter', () => {
+        const { panel, created } = openToolPanel('jsonFormatter', 'JSON/XML Formatter', { enableScripts: true });
+        if (!created) return;
         const scriptUri = panel.webview.asWebviewUri(
             vscode.Uri.file(path.join(context.extensionPath, 'media', 'json-xml-formatter.js'))
         );
         panel.webview.html = getJsonFormatterHtml(panel.webview.cspSource, String(scriptUri));
+
+        // Capture the selection now, but only send it once the webview script
+        // has loaded: a message posted before that is dropped, which is why the
+        // selection used to arrive empty.
         const editor = vscode.window.activeTextEditor;
         const text = editor ? editor.document.getText(editor.selection.isEmpty ? undefined : editor.selection) : '';
-        if (text) {
-            panel.webview.postMessage({ command: 'prefill', text });
-        }
+        const readySubscription = panel.webview.onDidReceiveMessage(message => {
+            if (message?.command === 'ready' && text) {
+                safePostMessage(panel, { command: 'prefill', text });
+            }
+        });
+        panel.onDidDispose(() => readySubscription.dispose());
     });
 
-    const hashGeneratorCommand = vscode.commands.registerCommand('sayaib.hue-console.hashGenerator', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'hashGenerator',
-            'Hash Generator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const hashGeneratorCommand = registerTrackedCommand('sayaib.hue-console.hashGenerator', () => {
+        const { panel, created } = openToolPanel('hashGenerator', 'Hash Generator', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getHashGeneratorHtml(panel.webview.cspSource, getNonce());
     });
 
-    const base64EncoderCommand = vscode.commands.registerCommand('sayaib.hue-console.base64Encoder', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'base64Encoder',
-            'Base64 Encoder/Decoder',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const base64EncoderCommand = registerTrackedCommand('sayaib.hue-console.base64Encoder', () => {
+        const { panel, created } = openToolPanel('base64Encoder', 'Base64 Encoder/Decoder', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getBase64EncoderHtml(panel.webview.cspSource, getNonce());
     });
 
-    const urlEncoderCommand = vscode.commands.registerCommand('sayaib.hue-console.urlEncoder', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'urlEncoder',
-            'URL Encoder/Decoder',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const urlEncoderCommand = registerTrackedCommand('sayaib.hue-console.urlEncoder', () => {
+        const { panel, created } = openToolPanel('urlEncoder', 'URL Encoder/Decoder', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getUrlEncoderHtml(panel.webview.cspSource, getNonce());
     });
 
-    const timestampConverterCommand = vscode.commands.registerCommand('sayaib.hue-console.timestampConverter', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'timestampConverter',
-            'Timestamp Converter',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const timestampConverterCommand = registerTrackedCommand('sayaib.hue-console.timestampConverter', () => {
+        const { panel, created } = openToolPanel('timestampConverter', 'Timestamp Converter', { enableScripts: true });
+        if (!created) return;
         panel.webview.html = getTimestampConverterHtml(panel.webview.cspSource, getNonce());
     });
 
-    const jsonToToonCommand = vscode.commands.registerCommand('sayaib.hue-console.jsonToToon', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'jsonToToon',
-            'JSON \u2192 TOON Converter',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const jsonToToonCommand = registerTrackedCommand('sayaib.hue-console.jsonToToon', () => {
+        const { panel, created } = openToolPanel('jsonToToon', 'JSON \u2192 TOON Converter', { enableScripts: true });
+        if (!created) return;
         const scriptUri = panel.webview.asWebviewUri(
             vscode.Uri.file(path.join(context.extensionPath, 'media', 'json-to-toon.js'))
         );
         panel.webview.html = getJsonToToonHtml(panel.webview.cspSource, String(scriptUri));
     });
 
-    const colorPaletteCommand = vscode.commands.registerCommand('sayaib.hue-console.colorPalette', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'colorPalette',
-            'Color Palette',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const colorPaletteCommand = registerTrackedCommand('sayaib.hue-console.colorPalette', () => {
+        const { panel, created } = openToolPanel('colorPalette', 'Color Palette', { enableScripts: true });
+        if (!created) return;
         const nonce = getNonce();
         panel.webview.html = getColorPaletteHtml(panel.webview.cspSource, nonce);
     });
 
-    const loremGeneratorCommand = vscode.commands.registerCommand('sayaib.hue-console.loremGenerator', () => {
-        const panel = vscode.window.createWebviewPanel(
-            'loremGenerator',
-            'Lorem Ipsum Generator',
-            vscode.ViewColumn.One,
-            { enableScripts: true }
-        );
+    const loremGeneratorCommand = registerTrackedCommand('sayaib.hue-console.loremGenerator', () => {
+        const { panel, created } = openToolPanel('loremGenerator', 'Lorem Ipsum Generator', { enableScripts: true });
+        if (!created) return;
         const nonce = getNonce();
         panel.webview.html = getLoremGeneratorHtml(panel.webview.cspSource, nonce);
     });

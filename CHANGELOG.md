@@ -1,5 +1,62 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.60.0 - 2026-09-22
+
+Stabilisation release. Every feature was audited end to end; the fixes below are behavioural, not cosmetic.
+
+### Fixed - correctness
+
+- **Removing a `console.log` left `);` behind.** The scanner reported a range that excluded the closing parenthesis and the semicolon, so cleanup corrupted the edited line. Ranges are now exact, and a removal is skipped (with a warning) when the file changed since the scan.
+- **"Remove all" buttons did nothing.** Console-log cleanup, unused-import cleanup and the Milestone Tracker reset all asked for confirmation with `confirm()`, which the VS Code webview sandbox blocks. Confirmation now happens in the extension host through a guarded dialog helper that treats an unavailable prompt as "not confirmed".
+- **Errors in the Dataset Profiler, Metrics Calculator and Prompt Playground were invisible** - they used `alert()`, also blocked in webviews. They now render an inline status banner, and copy actions report success or failure.
+- **Tool usage was counted twice** for any tool opened from a hub: the global `registerCommand` monkey-patch and the hub dispatcher both awarded points. Points are now awarded in exactly one place.
+- **Concurrent tool runs lost points.** Every read-modify-write of the points store is serialised through a queue.
+- **The daily streak could advance just by reading stats**, because the day rollover mutated state that was not always persisted. The rollover is now idempotent, and uses the local calendar date instead of UTC.
+- **Long-term milestones were unreachable.** Progress was derived from an activity log capped at 100 entries, so the 100-run milestone could never complete. Progress now comes from lifetime counters, migrated from existing history.
+- **The JSON/XML Formatter never received the editor selection** - the prefill message was posted before the webview script existed. The webview now signals readiness first.
+- **Missing snippet files.** 35 of the 40 snippet files declared in `package.json` did not exist, so VS Code logged a load error for each at startup. All declared files are present.
+- **Creating a snippet for an unsupported language silently did nothing.** The language is validated against the contributed set, with a picker when it does not match.
+- **Stale compiled output shipped in the VSIX**, including JavaScript for features deleted from source. Builds now start from a clean `out/`.
+- **The integration test suite never ran.** The deprecated `vscode-test` package looked for an `Electron` binary that current VS Code builds do not ship; migrated to `@vscode/test-electron`.
+
+### Fixed - security
+
+- **The README preview loaded `marked` from a public CDN and rendered README content through `innerHTML` under `script-src 'unsafe-inline'`** - remote code plus HTML injection from any file in the workspace. Markdown is now rendered by a dependency-free renderer that escapes the source first, under a nonce CSP, with no network access. `javascript:` and `data:` links are dropped.
+- **A webview could ask the extension to run any VS Code command.** Hub dispatch now validates the id against the commands this extension registered.
+- **Workspace content could break out of an inline `<script>`.** Console-log data embedded in the cleaner page is now escaped so a `</script>` sequence in a source file cannot inject markup.
+- **The extension trusted file offsets sent from a webview** when deleting code. Selections are matched against the scan results and re-verified against the file before any edit.
+- **API keys passed in a query string were persisted and exportable in plain text.** Credential-like query values are redacted before request history is stored.
+- **Shell-string command execution** in the OpenCode hub was replaced with argument-array `execFile` calls. cURL export quoting is verified against a real shell in the test suite.
+
+### Fixed - reliability and platform support
+
+- The OpenCode hub rendered a blank panel for up to 18 seconds while detection ran; it now renders immediately with a loading state and streams results in. Failures report the actual reason instead of being swallowed, repeat clicks are ignored while work is in flight, and posting to a closed panel no longer throws.
+- OpenCode detection searches the locations a desktop-launched VS Code misses (`/opt/homebrew/bin`, `~/.opencode/bin`, `~/.local/bin`, `~/.bun/bin`, the npm prefix, Scoop shims on Windows).
+- `terminal.shellIntegration` (VS Code 1.93+) is feature-checked before use; the manifest now declares `^1.93.0` instead of `^1.86.0`, which it silently required.
+- The generated Terraform artifact was not valid HCL (commas inside blocks).
+- Directory creation and stack detection use URI-based filesystem APIs, so generators work in remote and virtual workspaces.
+- Security audits used a `**/*` glob against a 500-file cap, so binaries consumed the budget and real findings were missed. Scans are now extension-targeted with a configurable 2000-file budget.
+- One output channel is reused instead of leaking a new one per run; every webview message listener is disposed with its panel; running a tool twice reveals the open panel instead of stacking another.
+- A failure in one command group no longer prevents the rest of the extension from registering.
+
+### Changed
+
+- Removed the global monkey-patch of `vscode.commands.registerCommand` in favour of an explicit tracked-registration helper.
+- All panels follow the active VS Code theme; the hard-coded dark palettes (which were unreadable in light and high-contrast themes) are gone, and borrowed theme colours have fallbacks.
+- The README Manager is now a real manager: create, open, save, insert section templates, reset to template, and delete, with live preview and word counts.
+- Points economy: a per-day cap on repeatable points, with one-time milestone bonuses exempt, so levels reflect sustained use.
+- Corrupted or partial points data is repaired on read instead of throwing or resetting progress.
+- Deduplicated ~830 lines of copied CSS and helpers into `src/utils/webview-ui.ts`; deleted ~700 lines of dead code (unused legacy webviews, an orphaned snippet generator, commented-out implementations).
+- `devsnip.apiTimeout`, `devsnip.consoleLogCleanup.confirmBeforeDelete` and `devsnip.securityAudit.maxFiles` are now real contributed settings - they were documented but never existed.
+- Added the editor context submenu the README described but the manifest never contributed.
+- `mongodb` (unused) and `@vscode/vsce` (a build tool) were removed from runtime dependencies, and `.vscodeignore` was corrected. The VSIX went from 13,822 files / 35.5 MB to 477 files / 1.6 MB.
+- Declared workspace-trust and virtual-workspace capabilities, and removed the `browser` entry point the extension could never satisfy.
+
+### Tests
+
+- New unit suite (63 tests) covering points/state handling, the markdown renderer, webview escaping, command validation, the console-log scanner and the unused-import analyser. Runs in plain Node via `npm run test:unit`.
+- Integration suite extended to 43 tests: activation, registration of all 57 commands, opening all 45 webview tools, panel reuse, settings and menu wiring, and the security rules against real fixture files.
+
 ## Version 10.59.2 - 2026-09-21
 
 ### Fixes

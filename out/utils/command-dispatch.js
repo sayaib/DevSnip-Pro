@@ -22,26 +22,33 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeQueuedCommand = void 0;
 const vscode = __importStar(require("vscode"));
-const milestoneTracker_1 = require("../commands/milestoneTracker");
+const command_registry_1 = require("./command-registry");
 let commandQueue = Promise.resolve();
-/** Serialize extension commands triggered by rapid webview clicks. */
+/**
+ * Serialises extension commands triggered by rapid webview clicks.
+ *
+ * The command id arrives from a webview, so it is validated against the set of
+ * commands this extension registered before it is executed - a webview must
+ * never be able to invoke an arbitrary VS Code command. Usage points are
+ * awarded by the command registration wrapper, not here, so a tool opened from
+ * a hub is counted exactly once.
+ */
 function executeQueuedCommand(command) {
-    (0, milestoneTracker_1.autoRecordToolUsage)(command);
-    const next = commandQueue.then(() => __awaiter(this, void 0, void 0, function* () {
-        yield vscode.commands.executeCommand(command);
-    }));
+    if (!(0, command_registry_1.isKnownCommand)(command)) {
+        console.warn(`DevSnip Pro: ignored unknown command request "${String(command)}".`);
+        return Promise.resolve();
+    }
+    const next = commandQueue.then(async () => {
+        try {
+            await vscode.commands.executeCommand(command);
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`DevSnip Pro could not open that tool: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    });
     commandQueue = next.catch(() => undefined);
     return next;
 }

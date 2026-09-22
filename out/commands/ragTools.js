@@ -1,285 +1,68 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerRagToolsCommands = void 0;
-const vscode = __importStar(require("vscode"));
+const command_registry_1 = require("../utils/command-registry");
+const webview_ui_1 = require("../utils/webview-ui");
+const webview_ui_2 = require("../utils/webview-ui");
 const command_dispatch_1 = require("../utils/command-dispatch");
-function getNonce() {
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let text = '';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
-const SHARED_CSS = `
-:root {
-    --bg-0: var(--vscode-editor-background);
-    --bg-1: var(--vscode-sideBar-background);
-    --bg-2: var(--vscode-input-background);
-    --bg-3: var(--vscode-textCodeBlock-background);
-    --fg-0: var(--vscode-editor-foreground);
-    --fg-1: var(--vscode-descriptionForeground);
-    --fg-2: var(--vscode-disabledForeground);
-    --border: var(--vscode-input-border);
-    --border-focus: var(--vscode-focusBorder);
-    --accent: var(--vscode-button-background);
-    --accent-fg: var(--vscode-button-foreground);
-    --success: #4caf50;
-    --success-bg: rgba(76, 175, 80, 0.15);
-    --error: #f44336;
-    --error-bg: rgba(244, 67, 54, 0.15);
-    --warning: #ff9800;
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
-    --transition: 0.2s ease;
-    --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    font-family: var(--sans);
-    background: var(--bg-0);
-    color: var(--fg-0);
-    line-height: 1.5;
-    padding: 0;
-    overflow-x: hidden;
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--fg-2); border-radius: 3px; }
-
-.tool-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px 24px;
-    background: var(--bg-1);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 50;
-}
-.tool-header h1 { font-size: 16px; font-weight: 700; white-space: nowrap; }
-.tool-header .subtitle { font-size: 12px; color: var(--fg-1); }
-
-.tool-body { padding: 20px 24px; max-width: 1100px; margin: 0 auto; }
-
-.section {
-    background: var(--bg-1);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    margin-bottom: 16px;
-}
-.section-title {
-    font-size: 13px; font-weight: 700;
-    color: var(--fg-1);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 14px;
-}
-
-label {
-    display: block;
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 4px;
-}
-.input, input[type="text"], input[type="number"], select {
-    width: 100%;
-    padding: 8px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    outline: none;
-    transition: border-color var(--transition);
-}
-.input:focus, input:focus, textarea:focus, select:focus {
-    border-color: var(--border-focus);
-}
-textarea {
-    width: 100%;
-    padding: 10px 12px;
-    background: var(--bg-2);
-    color: var(--fg-0);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    resize: vertical;
-    outline: none;
-    transition: border-color var(--transition);
-}
-select {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23999'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    padding-right: 30px;
-}
-
-.btn {
-    padding: 8px 16px;
-    background: var(--accent);
-    color: var(--accent-fg);
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition);
-    white-space: nowrap;
-}
-.btn:hover { opacity: 0.85; }
-.btn-secondary {
-    background: var(--bg-3);
-    color: var(--fg-0);
-}
-.btn-ghost {
-    background: transparent;
-    color: var(--fg-1);
-    border: 1px solid var(--border);
-}
-.btn-ghost:hover { background: var(--bg-2); color: var(--fg-0); }
-.btn-danger {
-    background: var(--error);
-    color: #fff;
-}
-.btn-row {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-}
-
-.result-block {
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 14px;
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 400px;
-    overflow-y: auto;
-    color: var(--fg-0);
-}
-
-.panels {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-.panel-label {
-    font-size: 12px; font-weight: 600;
-    color: var(--fg-1);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-@media (max-width: 768px) {
-    .panels { grid-template-columns: 1fr; }
-    .tool-body { padding: 16px; }
-    .btn-row { flex-direction: column; align-items: stretch; }
-}
-
-.toast-container {
-    position: fixed; top: 12px; right: 12px; z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px;
-}
-.toast {
-    padding: 10px 16px;
-    border-radius: var(--radius-md);
-    font-size: 13px; font-weight: 500;
-    color: #fff;
-    box-shadow: var(--shadow);
-    transform: translateX(120%);
-    transition: transform 0.3s ease;
-    max-width: 320px;
-}
-.toast.show { transform: translateX(0); }
-.toast.success { background: #2e7d32; }
-.toast.error { background: #c62828; }
-.toast.info { background: #1565c0; }
-`;
-function toastScript() {
-    return `
-        function _toast(msg, type) {
-            var c = document.querySelector('.toast-container');
-            if (!c) { c = document.createElement('div'); c.className = 'toast-container'; document.body.appendChild(c); }
-            var t = document.createElement('div');
-            t.className = 'toast ' + (type || 'success');
-            t.textContent = msg;
-            c.appendChild(t);
-            requestAnimationFrame(function() { requestAnimationFrame(function() { t.classList.add('show'); }); });
-            setTimeout(function() { t.classList.remove('show'); setTimeout(function() { t.remove(); }, 300); }, 2000);
-        }
-    `;
-}
+/** Shared panel styling lives in utils/webview-ui so every tool page stays consistent. */
+const SHARED_CSS = webview_ui_2.TOOL_CSS;
 function registerRagToolsCommands(context) {
-    const hubCmd = vscode.commands.registerCommand('sayaib.hue-console.ragHub', () => {
-        const panel = vscode.window.createWebviewPanel('ragHub', 'DevSnip Pro - RAG & Vector Pipeline Tools', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getRagHubHtml(getNonce());
-        panel.webview.onDidReceiveMessage(message => {
-            switch (message.command) {
-                case 'openTool':
-                    (0, command_dispatch_1.executeQueuedCommand)(message.toolCommand);
-                    break;
+    const hubCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.ragHub', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('ragHub', 'DevSnip Pro - RAG & Vector Pipeline Tools', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getRagHubHtml((0, webview_ui_2.getNonce)());
+        // executeQueuedCommand validates the id against the commands this
+        // extension registered, so a hub can only open DevSnip Pro tools.
+        const messageSubscription = panel.webview.onDidReceiveMessage(message => {
+            if (message?.command === 'openTool') {
+                void (0, command_dispatch_1.executeQueuedCommand)(message.toolCommand);
             }
-        }, undefined, context.subscriptions);
+        });
+        panel.onDidDispose(() => messageSubscription.dispose());
     });
-    const chunkingTesterCmd = vscode.commands.registerCommand('sayaib.hue-console.chunkingTester', () => {
-        const panel = vscode.window.createWebviewPanel('chunkingTester', 'Chunking Strategy Tester', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getChunkingTesterHtml(getNonce());
+    const chunkingTesterCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.chunkingTester', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('chunkingTester', 'Chunking Strategy Tester', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getChunkingTesterHtml((0, webview_ui_2.getNonce)());
     });
-    const embeddingCostCmd = vscode.commands.registerCommand('sayaib.hue-console.embeddingCost', () => {
-        const panel = vscode.window.createWebviewPanel('embeddingCost', 'Embedding & Vector DB Cost Calculator', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getEmbeddingCostHtml(getNonce());
+    const embeddingCostCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.embeddingCost', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('embeddingCost', 'Embedding & Vector DB Cost Calculator', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getEmbeddingCostHtml((0, webview_ui_2.getNonce)());
     });
-    const contextWindowCmd = vscode.commands.registerCommand('sayaib.hue-console.contextWindow', () => {
-        const panel = vscode.window.createWebviewPanel('contextWindow', 'RAG Context Window & Token Budget Calculator', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getContextWindowHtml(getNonce());
+    const contextWindowCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.contextWindow', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('contextWindow', 'RAG Context Window & Token Budget Calculator', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getContextWindowHtml((0, webview_ui_2.getNonce)());
     });
-    const semanticDedupCmd = vscode.commands.registerCommand('sayaib.hue-console.semanticDedup', () => {
-        const panel = vscode.window.createWebviewPanel('semanticDedup', 'Semantic Dedup & Quality Checker', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getSemanticDedupHtml(getNonce());
+    const semanticDedupCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.semanticDedup', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('semanticDedup', 'Semantic Dedup & Quality Checker', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getSemanticDedupHtml((0, webview_ui_2.getNonce)());
     });
-    const ragEvalCmd = vscode.commands.registerCommand('sayaib.hue-console.ragEvalScores', () => {
-        const panel = vscode.window.createWebviewPanel('ragEvalScores', 'RAG Eval Calculator', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getRagEvalHtml(getNonce());
+    const ragEvalCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.ragEvalScores', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('ragEvalScores', 'RAG Eval Calculator', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getRagEvalHtml((0, webview_ui_2.getNonce)());
     });
-    const hybridSearchRrfCmd = vscode.commands.registerCommand('sayaib.hue-console.hybridSearchRrf', () => {
-        const panel = vscode.window.createWebviewPanel('hybridSearchRrf', 'Hybrid Search & RRF Simulator', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getHybridSearchRrfHtml(getNonce());
+    const hybridSearchRrfCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.hybridSearchRrf', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('hybridSearchRrf', 'Hybrid Search & RRF Simulator', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getHybridSearchRrfHtml((0, webview_ui_2.getNonce)());
     });
-    const ragHallucinationAnalyzerCmd = vscode.commands.registerCommand('sayaib.hue-console.ragHallucinationAnalyzer', () => {
-        const panel = vscode.window.createWebviewPanel('ragHallucinationAnalyzer', 'RAG Hallucination & Attribution Analyzer', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = getRagHallucinationAnalyzerHtml(getNonce());
+    const ragHallucinationAnalyzerCmd = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.ragHallucinationAnalyzer', () => {
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('ragHallucinationAnalyzer', 'RAG Hallucination & Attribution Analyzer', { enableScripts: true });
+        if (!created)
+            return;
+        panel.webview.html = getRagHallucinationAnalyzerHtml((0, webview_ui_2.getNonce)());
     });
     context.subscriptions.push(hubCmd, chunkingTesterCmd, embeddingCostCmd, contextWindowCmd, semanticDedupCmd, ragEvalCmd, hybridSearchRrfCmd, ragHallucinationAnalyzerCmd);
 }
@@ -351,7 +134,7 @@ function getRagHubHtml(nonce) {
         <div class="hub-grid" id="grid"></div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
         var tools = [
             { cmd: 'sayaib.hue-console.chunkingTester', icon: '\\u{2702}', title: 'Chunking Strategy Tester', desc: 'Test text splitting, token overlap, sentence boundaries, and markdown chunking.', tag: 'Ingestion' },
             { cmd: 'sayaib.hue-console.embeddingCost', icon: '\\u{1F4B0}', title: 'Embedding & Vector Cost Calculator', desc: 'Calculate API token costs for OpenAI, Cohere, and vector database RAM/storage.', tag: 'Infrastructure' },
@@ -450,7 +233,7 @@ function getChunkingTesterHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('splitBtn').addEventListener('click', function() {
             var text = document.getElementById('docInput').value.trim();
@@ -552,7 +335,7 @@ function getEmbeddingCostHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('calcBtn').addEventListener('click', function() {
             var docs = parseFloat(document.getElementById('docCount').value) || 100000;
@@ -651,7 +434,7 @@ function getContextWindowHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('calcBtn').addEventListener('click', function() {
             var total = parseInt(document.getElementById('totalContext').value) || 128000;
@@ -721,7 +504,7 @@ function getSemanticDedupHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('checkBtn').addEventListener('click', function() {
             var raw = document.getElementById('chunksInput').value.trim();
@@ -819,7 +602,7 @@ function getRagEvalHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         ['faith', 'relev', 'prec', 'rec'].forEach(function(id) {
             var slider = document.getElementById(id);
@@ -905,7 +688,7 @@ function getHybridSearchRrfHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('simBtn').addEventListener('click', function() {
             var bm25 = document.getElementById('bm25List').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
@@ -982,7 +765,7 @@ function getRagHallucinationAnalyzerHtml(nonce) {
         </div>
     </div>
     <script nonce="${nonce}">
-        ${toastScript()}
+        ${(0, webview_ui_2.toastScript)()}
 
         document.getElementById('analyzeBtn').addEventListener('click', function() {
             var context = document.getElementById('contextInput').value.trim();

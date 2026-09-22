@@ -22,15 +22,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const http = __importStar(require("http"));
@@ -41,7 +32,7 @@ function createMockContext() {
     return {
         globalState: {
             get: (key, defaultValue) => (key in store ? store[key] : defaultValue),
-            update: (key, value) => __awaiter(this, void 0, void 0, function* () { store[key] = value; }),
+            update: async (key, value) => { store[key] = value; },
             keys: () => Object.keys(store)
         }
     };
@@ -145,11 +136,10 @@ suite('API Tester - cURL Export/Import', () => {
         assert.ok(queryCurl.includes('apiKey=abc123'));
     });
     test('parseCurlCommand extracts method, url, headers, body and basic auth', () => {
-        var _a;
         const parsed = apiTester.parseCurlCommand(`curl -X POST 'https://api.example.com/login' -H 'Content-Type: application/json' -d '{"user":"bob"}' -u admin:pw123`);
         assert.strictEqual(parsed.method, 'POST');
         assert.strictEqual(parsed.url, 'https://api.example.com/login');
-        assert.strictEqual((_a = parsed.headers) === null || _a === void 0 ? void 0 : _a['Content-Type'], 'application/json');
+        assert.strictEqual(parsed.headers?.['Content-Type'], 'application/json');
         assert.strictEqual(parsed.data, '{"user":"bob"}');
         assert.strictEqual(parsed.authType, 'Basic');
         assert.strictEqual(parsed.username, 'admin');
@@ -226,20 +216,20 @@ suite('API Tester - makeRequest against a local test server', () => {
     let apiTester;
     let server;
     let baseUrl;
-    setup(() => __awaiter(void 0, void 0, void 0, function* () {
+    setup(async () => {
         apiTester = new api_test_1.ApiTester(createMockContext());
-    }));
-    teardown(() => __awaiter(void 0, void 0, void 0, function* () {
+    });
+    teardown(async () => {
         apiTester.cancelCurrentRequest();
         if (server)
-            yield new Promise((resolve) => server.close(() => resolve()));
-    }));
-    test('sends Bearer auth header and receives echoed response', () => __awaiter(void 0, void 0, void 0, function* () {
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+            await new Promise((resolve) => server.close(() => resolve()));
+    });
+    test('sends Bearer auth header and receives echoed response', async () => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ auth: req.headers['authorization'] || null }));
         }));
-        const result = yield apiTester.makeRequest({
+        const result = await apiTester.makeRequest({
             method: 'GET',
             url: baseUrl,
             authType: 'Bearer',
@@ -247,13 +237,13 @@ suite('API Tester - makeRequest against a local test server', () => {
         });
         assert.strictEqual(result.status, 200);
         assert.strictEqual(result.data.auth, 'Bearer my-token');
-    }));
-    test('sends API Key as a custom header when apiKeyLocation is header', () => __awaiter(void 0, void 0, void 0, function* () {
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+    });
+    test('sends API Key as a custom header when apiKeyLocation is header', async () => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ key: req.headers['x-api-key'] || null }));
         }));
-        const result = yield apiTester.makeRequest({
+        const result = await apiTester.makeRequest({
             method: 'GET',
             url: baseUrl,
             authType: 'ApiKey',
@@ -262,13 +252,13 @@ suite('API Tester - makeRequest against a local test server', () => {
             apiKeyLocation: 'header'
         });
         assert.strictEqual(result.data.key, 'super-secret');
-    }));
-    test('sends API Key as a query parameter when apiKeyLocation is query', () => __awaiter(void 0, void 0, void 0, function* () {
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+    });
+    test('sends API Key as a query parameter when apiKeyLocation is query', async () => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ url: req.url }));
         }));
-        const result = yield apiTester.makeRequest({
+        const result = await apiTester.makeRequest({
             method: 'GET',
             url: baseUrl,
             authType: 'ApiKey',
@@ -277,10 +267,10 @@ suite('API Tester - makeRequest against a local test server', () => {
             apiKeyLocation: 'query'
         });
         assert.ok(result.data.url.includes('apiKey=super-secret'));
-    }));
-    test('retries on a 503 response and eventually succeeds', () => __awaiter(void 0, void 0, void 0, function* () {
+    });
+    test('retries on a 503 response and eventually succeeds', async () => {
         let hitCount = 0;
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             hitCount++;
             if (hitCount < 3) {
                 res.statusCode = 503;
@@ -290,7 +280,7 @@ suite('API Tester - makeRequest against a local test server', () => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ ok: true }));
         }));
-        const result = yield apiTester.makeRequest({
+        const result = await apiTester.makeRequest({
             method: 'GET',
             url: baseUrl,
             retries: 3,
@@ -300,48 +290,48 @@ suite('API Tester - makeRequest against a local test server', () => {
         assert.strictEqual(result.status, 200);
         assert.strictEqual(result.attempts, 3);
         assert.strictEqual(hitCount, 3);
-    }));
-    test('does not retry when retries is 0 (default, backward compatible)', () => __awaiter(void 0, void 0, void 0, function* () {
+    });
+    test('does not retry when retries is 0 (default, backward compatible)', async () => {
         let hitCount = 0;
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             hitCount++;
             res.statusCode = 503;
             res.end('Service Unavailable');
         }));
-        const result = yield apiTester.makeRequest({ method: 'GET', url: baseUrl });
+        const result = await apiTester.makeRequest({ method: 'GET', url: baseUrl });
         assert.strictEqual(result.status, 503);
         assert.strictEqual(hitCount, 1);
-    }));
-    test('sends form-urlencoded body with correct Content-Type', () => __awaiter(void 0, void 0, void 0, function* () {
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+    });
+    test('sends form-urlencoded body with correct Content-Type', async () => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ contentType: req.headers['content-type'] || null }));
         }));
-        const result = yield apiTester.makeRequest({
+        const result = await apiTester.makeRequest({
             method: 'POST',
             url: baseUrl,
             data: '{"a":"1","b":"2"}',
             bodyType: 'form-urlencoded'
         });
         assert.ok(result.data.contentType.includes('application/x-www-form-urlencoded'));
-    }));
-    test('records attempt count and status in history after a failed request', () => __awaiter(void 0, void 0, void 0, function* () {
-        ({ server, url: baseUrl } = yield startTestServer((req, res) => {
+    });
+    test('records attempt count and status in history after a failed request', async () => {
+        ({ server, url: baseUrl } = await startTestServer((req, res) => {
             res.statusCode = 500;
             res.end('error');
         }));
-        const result = yield apiTester.makeRequest({ method: 'GET', url: baseUrl });
+        const result = await apiTester.makeRequest({ method: 'GET', url: baseUrl });
         assert.strictEqual(result.status, 500);
         const history = apiTester.getHistory();
         assert.strictEqual(history[0].status, 500);
         assert.strictEqual(history[0].attempts, 1);
-    }));
+    });
 });
 suite('API Test Integration Tests', () => {
-    test('Should create webview panel correctly', () => __awaiter(void 0, void 0, void 0, function* () {
+    test('Should create webview panel correctly', async () => {
         // This test would require a full VS Code environment
         // For now, we'll just test that the command exists
         assert.ok(true, 'Integration test placeholder');
-    }));
+    });
 });
 //# sourceMappingURL=api-test.test.js.map

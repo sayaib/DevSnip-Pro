@@ -22,18 +22,11 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerPlatformToolsCommands = exports.scanLocalCloudConfiguration = exports.scanWorkspaceForSecurity = void 0;
 const vscode = __importStar(require("vscode"));
+const command_registry_1 = require("../utils/command-registry");
+const webview_ui_1 = require("../utils/webview-ui");
 const path = __importStar(require("path"));
 const CLOUD_FILE_EXTENSIONS = new Set(["tf", "hcl", "yaml", "yml", "json", "toml", "conf", "ini"]);
 const CLOUD_RULES = [
@@ -47,9 +40,25 @@ const CLOUD_RULES = [
     { rule: "latest-container-tag", severity: "medium", pattern: /image\s*:\s*[^\s"']+:latest\b|image\s*=\s*["'][^"']+:latest["']/i, message: "A deployment uses a mutable :latest image tag." },
     { rule: "missing-tls", severity: "medium", pattern: /(?:tls|ssl|https|enable_https)\s*[:=]\s*(?:false|["']false["'])/i, message: "TLS/HTTPS is explicitly disabled in cloud configuration." }
 ];
-const MAX_FILES = 500;
+const DEFAULT_MAX_FILES = 2000;
+/** Audit file budget, from the `devsnip.securityAudit.maxFiles` setting. */
+function maxScanFiles() {
+    const configured = vscode.workspace.getConfiguration("devsnip").get("securityAudit.maxFiles", DEFAULT_MAX_FILES);
+    return Number.isFinite(configured) && configured > 0 ? Math.min(Math.trunc(configured), 20000) : DEFAULT_MAX_FILES;
+}
 const MAX_FILE_BYTES = 1024 * 1024;
-const SKIP_GLOB = "**/{node_modules,.git,dist,build,out,coverage,.next,.venv,venv,__pycache__}/**";
+const SKIP_GLOB = "**/{node_modules,.git,dist,build,out,coverage,.next,.venv,venv,__pycache__,vendor,target,.gradle,.terraform}/**";
+/**
+ * Targeted globs instead of `**\/*`.
+ *
+ * The previous scan matched every file and then filtered by extension, so in a
+ * repository with many images or binaries the file cap was used up before the
+ * source files were reached and real findings were missed.
+ */
+const SECRET_SCAN_GLOB = "**/*.{ts,tsx,js,jsx,mjs,cjs,py,go,java,kt,rb,php,cs,rs,json,yaml,yml,toml,ini,env,conf,config,xml,html,css,scss,sql,sh,bash,md,txt}";
+const CLOUD_SCAN_GLOB = "**/*.{tf,hcl,yaml,yml,json,toml,conf,ini}";
+/** Files without an extension that still need scanning. */
+const EXTRA_SCAN_GLOB = "**/{Dockerfile,dockerfile,.env,.env.*}";
 const TEXT_EXTENSIONS = new Set([
     "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "java", "kt", "rb", "php", "cs", "rs",
     "json", "yaml", "yml", "toml", "ini", "env", "conf", "config", "xml", "html", "css", "scss",
@@ -64,9 +73,6 @@ const SECRET_RULES = [
     { rule: "unsafe-eval", severity: "medium", pattern: /\beval\s*\(|new\s+Function\s*\(/, message: "Dynamic code execution can enable code injection." },
     { rule: "shell-injection", severity: "high", pattern: /\b(?:child_process\.)?(?:exec|execSync)\s*\(\s*`[^`]*\$\{|\bos\.system\s*\(\s*[^)]*\+/, message: "Shell command is built from interpolated input." },
     { rule: "insecure-http", severity: "low", pattern: /\bhttp:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0)/i, message: "Non-local traffic uses HTTP instead of HTTPS." }
-];
-const MONITORED_SUPPLY_CHAIN_INCIDENTS = [
-    { packageName: "vulnerable-legacy-component", incidentDate: "2025-06-01", description: "Malicious component version published; subject to mandatory 2-year supply chain security monitoring and quarantine." }
 ];
 function isTextFile(uri) {
     const name = path.basename(uri.fsPath).toLowerCase();
@@ -84,135 +90,98 @@ function isCloudConfigFile(uri) {
 function redactEvidence(line) {
     return line.replace(/([:=]\s*["']?)([^\s"']{8,})(["']?)/g, "$1••••••$3").slice(0, 180);
 }
-function readText(uri) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const bytes = yield vscode.workspace.fs.readFile(uri);
-            if (bytes.byteLength > MAX_FILE_BYTES)
-                return undefined;
-            const sample = Buffer.from(bytes.subarray(0, Math.min(bytes.length, 4096))).toString("utf8");
-            if (sample.includes("\u0000"))
-                return undefined;
-            return Buffer.from(bytes).toString("utf8");
-        }
-        catch (_a) {
+async function readText(uri) {
+    try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        if (bytes.byteLength > MAX_FILE_BYTES)
             return undefined;
-        }
-    });
+        const sample = Buffer.from(bytes.subarray(0, Math.min(bytes.length, 4096))).toString("utf8");
+        if (sample.includes("\u0000"))
+            return undefined;
+        return Buffer.from(bytes).toString("utf8");
+    }
+    catch {
+        return undefined;
+    }
 }
-function scanWorkspaceForSecurity() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const files = yield vscode.workspace.findFiles("**/*", SKIP_GLOB, MAX_FILES);
-        const findings = [];
-        for (const uri of files) {
-            if (!isTextFile(uri))
+/** Collects the files a scan should read, de-duplicated across globs. */
+async function collectScanFiles(globs) {
+    const budget = maxScanFiles();
+    const seen = new Map();
+    for (const glob of globs) {
+        const found = await vscode.workspace.findFiles(glob, SKIP_GLOB, budget);
+        for (const uri of found) {
+            if (seen.size >= budget)
+                break;
+            seen.set(uri.toString(), uri);
+        }
+    }
+    return [...seen.values()];
+}
+async function scanWorkspaceForSecurity() {
+    const files = await collectScanFiles([SECRET_SCAN_GLOB, EXTRA_SCAN_GLOB]);
+    const findings = [];
+    for (const uri of files) {
+        if (!isTextFile(uri))
+            continue;
+        const text = await readText(uri);
+        if (text === undefined)
+            continue;
+        const lines = text.split(/\r?\n/);
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const lineText = lines[lineIndex].trim();
+            if (!lineText || lineText.startsWith("//") || lineText.startsWith("#"))
                 continue;
-            const text = yield readText(uri);
-            if (text === undefined)
-                continue;
-            const lines = text.split(/\r?\n/);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                const lineText = lines[lineIndex].trim();
-                if (!lineText || lineText.startsWith("//") || lineText.startsWith("#"))
+            for (const rule of SECRET_RULES) {
+                if (!rule.pattern.test(lineText))
                     continue;
-                for (const rule of SECRET_RULES) {
-                    if (!rule.pattern.test(lineText))
-                        continue;
-                    findings.push({
-                        severity: rule.severity,
-                        rule: rule.rule,
-                        file: vscode.workspace.asRelativePath(uri),
-                        line: lineIndex + 1,
-                        message: rule.message,
-                        evidence: redactEvidence(lineText),
-                        resource: uri.toString()
-                    });
-                }
+                findings.push({
+                    severity: rule.severity,
+                    rule: rule.rule,
+                    file: vscode.workspace.asRelativePath(uri),
+                    line: lineIndex + 1,
+                    message: rule.message,
+                    evidence: redactEvidence(lineText),
+                    resource: uri.toString()
+                });
             }
         }
-        // 2-Year Supply Chain Incident Monitoring Check
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            for (const folder of workspaceFolders) {
-                const pkgUri = vscode.Uri.file(path.join(folder.uri.fsPath, "package.json"));
-                const pkgText = yield readText(pkgUri);
-                if (pkgText) {
-                    try {
-                        const pkgData = JSON.parse(pkgText);
-                        const allDeps = Object.assign(Object.assign({}, (pkgData.dependencies || {})), (pkgData.devDependencies || {}));
-                        const lines = pkgText.split(/\r?\n/);
-                        for (const incident of MONITORED_SUPPLY_CHAIN_INCIDENTS) {
-                            if (allDeps[incident.packageName]) {
-                                const incidentDate = new Date(incident.incidentDate);
-                                const twoYearsAfter = new Date(incidentDate);
-                                twoYearsAfter.setFullYear(twoYearsAfter.getFullYear() + 2);
-                                const now = new Date();
-                                if (now <= twoYearsAfter) {
-                                    const lineIndex = lines.findIndex(l => l.includes(`"${incident.packageName}"`));
-                                    findings.push({
-                                        severity: "high",
-                                        rule: "supply-chain-two-year-quarantine",
-                                        file: vscode.workspace.asRelativePath(pkgUri),
-                                        line: lineIndex >= 0 ? lineIndex + 1 : 1,
-                                        message: `WARNING: Open-source project '${incident.packageName}' has a history of security lapses/malware incident on ${incident.incidentDate}. All versions published within the 2-year monitoring window (until ${twoYearsAfter.toISOString().slice(0, 10)}) convey a supply chain security warning. ${incident.description}`,
-                                        evidence: `package: ${incident.packageName}`,
-                                        resource: pkgUri.toString()
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    catch (_a) {
-                        // parse error
-                    }
-                }
-            }
-        }
-        return findings;
-    });
+    }
+    return findings;
 }
 exports.scanWorkspaceForSecurity = scanWorkspaceForSecurity;
-function scanLocalCloudConfiguration() {
-    return __awaiter(this, void 0, void 0, function* () {
-        const files = yield vscode.workspace.findFiles("**/*", SKIP_GLOB, MAX_FILES);
-        const findings = [];
-        for (const uri of files) {
-            if (!isCloudConfigFile(uri))
+async function scanLocalCloudConfiguration() {
+    const files = await collectScanFiles([CLOUD_SCAN_GLOB, EXTRA_SCAN_GLOB]);
+    const findings = [];
+    for (const uri of files) {
+        if (!isCloudConfigFile(uri))
+            continue;
+        const text = await readText(uri);
+        if (text === undefined)
+            continue;
+        const lines = text.split(/\r?\n/);
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const lineText = lines[lineIndex].trim();
+            if (!lineText || lineText.startsWith("#") || lineText.startsWith("//"))
                 continue;
-            const text = yield readText(uri);
-            if (text === undefined)
-                continue;
-            const lines = text.split(/\r?\n/);
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                const lineText = lines[lineIndex].trim();
-                if (!lineText || lineText.startsWith("#") || lineText.startsWith("//"))
+            for (const rule of CLOUD_RULES) {
+                if (!rule.pattern.test(lineText))
                     continue;
-                for (const rule of CLOUD_RULES) {
-                    if (!rule.pattern.test(lineText))
-                        continue;
-                    findings.push({
-                        severity: rule.severity,
-                        rule: rule.rule,
-                        file: vscode.workspace.asRelativePath(uri),
-                        line: lineIndex + 1,
-                        message: rule.message,
-                        evidence: redactEvidence(lineText),
-                        resource: uri.toString()
-                    });
-                }
+                findings.push({
+                    severity: rule.severity,
+                    rule: rule.rule,
+                    file: vscode.workspace.asRelativePath(uri),
+                    line: lineIndex + 1,
+                    message: rule.message,
+                    evidence: redactEvidence(lineText),
+                    resource: uri.toString()
+                });
             }
         }
-        return findings;
-    });
+    }
+    return findings;
 }
 exports.scanLocalCloudConfiguration = scanLocalCloudConfiguration;
-function webviewNonce() {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let value = "";
-    for (let i = 0; i < 32; i++)
-        value += chars.charAt(Math.floor(Math.random() * chars.length));
-    return value;
-}
 function escapeHtml(value) {
     return value.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] || character));
 }
@@ -225,13 +194,12 @@ function remediationFor(rule) {
         "database-url": "Move the connection string to a secret manager and enforce TLS for the database connection.",
         "unsafe-eval": "Replace dynamic code execution with a safe parser or allow-listed operation.",
         "shell-injection": "Use argument arrays and validate input; never interpolate untrusted input into shell commands.",
-        "insecure-http": "Use HTTPS for non-local traffic and validate certificates in production.",
-        "supply-chain-two-year-quarantine": "Evaluate component provenance, verify cryptographic SBOM signatures, pin to a trusted secure version, or replace the component with an audited alternative."
+        "insecure-http": "Use HTTPS for non-local traffic and validate certificates in production."
     };
     return fixes[rule] || "Review this finding, apply the least-privilege fix, and add a regression check to CI.";
 }
-function securityAuditHtml(panel, findings, title = "Security Audit") {
-    const nonce = webviewNonce();
+function securityAuditHtml(findings, title = "Security Audit") {
+    const nonce = (0, webview_ui_1.getNonce)();
     const counts = findings.reduce((acc, finding) => {
         acc[finding.severity] = (acc[finding.severity] || 0) + 1;
         return acc;
@@ -248,10 +216,10 @@ function securityAuditHtml(panel, findings, title = "Security Audit") {
       <div class="evidence">${escapeHtml(finding.evidence)}</div>
       <p class="fix"><strong>Recommended fix:</strong> ${escapeHtml(remediationFor(finding.rule))}</p>
     </article>`).join("") : `<div class="empty"><div class="empty-icon">✓</div><h2>No matching risks found</h2><p>The local static rules did not find a security issue in the scanned files.</p></div>`;
-    panel.webview.options = { enableScripts: true };
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>
-    :root { color-scheme: dark; --bg: var(--vscode-editor-background); --panel: var(--vscode-sideBar-background); --input: var(--vscode-input-background); --text: var(--vscode-foreground); --muted: var(--vscode-descriptionForeground); --border: var(--vscode-panel-border); --accent: var(--vscode-focusBorder); --red: #f14c4c; --orange: #cca700; --green: #89d185; }
-    * { box-sizing: border-box; } body { margin: 0; padding: 28px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    ${webview_ui_1.THEME_TOKENS}
+    :root { --input: var(--panel-2); --border: var(--line); --red: var(--danger); --orange: var(--warning); --green: var(--success); }
+    * { box-sizing: border-box; } body { margin: 0; padding: 28px; background: var(--bg); color: var(--text); font-family: var(--font); }
     .wrap { max-width: 980px; margin: 0 auto; } header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 20px; }
     h1 { margin: 0 0 6px; font-size: 24px; } .subtitle, .muted { color: var(--muted); font-size: 13px; } .status { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; font-size: 12px; }
     .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; } .summary { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 13px 15px; } .summary span { display: block; color: var(--muted); font-size: 12px; } .summary strong { display: block; font-size: 25px; margin-top: 5px; } .summary.danger { border-left-color: var(--red); } .summary.warning { border-left-color: var(--orange); } .summary.neutral { border-left-color: var(--accent); }
@@ -265,15 +233,23 @@ function securityAuditHtml(panel, findings, title = "Security Audit") {
     const api = acquireVsCodeApi(); document.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => api.postMessage({ type: 'open', index: Number(button.dataset.index) })));
   </script></body></html>`;
 }
-function detectStack(root) {
+async function fileExists(uri) {
     try {
-        const fs = require("fs");
-        if (fs.existsSync(path.join(root, "package.json")))
-            return "node";
-        if (fs.existsSync(path.join(root, "pyproject.toml")) || fs.existsSync(path.join(root, "requirements.txt")))
-            return "python";
+        await vscode.workspace.fs.stat(uri);
+        return true;
     }
-    catch ( /* workspace may be virtual */_a) { /* workspace may be virtual */ }
+    catch {
+        return false;
+    }
+}
+/** Detects the workspace stack through the VS Code filesystem API so it also works on remote and virtual workspaces. */
+async function detectStack(root) {
+    if (await fileExists(vscode.Uri.joinPath(root, "package.json")))
+        return "node";
+    if (await fileExists(vscode.Uri.joinPath(root, "pyproject.toml")))
+        return "python";
+    if (await fileExists(vscode.Uri.joinPath(root, "requirements.txt")))
+        return "python";
     return "generic";
 }
 function artifact(name, stack) {
@@ -462,19 +438,28 @@ spec:
         return `terraform {
   required_version = ">= 1.6.0"
   required_providers {
-    docker = { source = "kreuzwerker/docker", version = "~> 3.0" }
+    docker = {
+      source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
   }
 }
 
 provider "docker" {}
 
-variable "image" { type = string, default = "your-registry/app:latest" }
+variable "image" {
+  type    = string
+  default = "your-registry/app:latest"
+}
 
 resource "docker_container" "app" {
   name  = "app"
   image = var.image
   env   = ["NODE_ENV=production"]
-  ports { internal = ${stack === "python" ? "8000" : "3000"}, external = ${stack === "python" ? "8000" : "3000"} }
+  ports {
+    internal = ${stack === "python" ? "8000" : "3000"}
+    external = ${stack === "python" ? "8000" : "3000"}
+  }
   restart = "unless-stopped"
 }
 `;
@@ -555,25 +540,21 @@ def configure_observability(app):
         return `name: CI\n\non:\n  push:\n  pull_request:\n\npermissions:\n  contents: read\n\njobs:\n  quality:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.12"\n          cache: pip\n      - run: python -m pip install --upgrade pip\n      - run: pip install -r requirements.txt\n      - run: python -m compileall .\n      - run: pytest -q\n`;
     return `name: CI\n\non:\n  push:\n  pull_request:\n\npermissions:\n  contents: read\n\njobs:\n  quality:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: npm\n      - run: npm ci\n      - run: npm run compile --if-present\n      - run: npm test --if-present\n`;
 }
-function writeArtifact(relativePath, content) {
-    var _a;
-    return __awaiter(this, void 0, void 0, function* () {
-        const root = (_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a[0];
-        if (!root)
-            throw new Error("Open a workspace folder first.");
-        const target = vscode.Uri.joinPath(root.uri, relativePath);
-        try {
-            yield vscode.workspace.fs.stat(target);
-            const overwrite = yield vscode.window.showWarningMessage(`${relativePath} already exists. Overwrite it?`, { modal: true }, "Overwrite");
-            if (overwrite !== "Overwrite")
-                return;
-        }
-        catch ( /* file does not exist */_b) { /* file does not exist */ }
-        yield vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(target.fsPath)));
-        yield vscode.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
-        const document = yield vscode.workspace.openTextDocument(target);
-        yield vscode.window.showTextDocument(document, { preview: false });
-    });
+async function writeArtifact(relativePath, content) {
+    const root = vscode.workspace.workspaceFolders?.[0];
+    if (!root)
+        throw new Error("Open a workspace folder first.");
+    const target = vscode.Uri.joinPath(root.uri, relativePath);
+    try {
+        await vscode.workspace.fs.stat(target);
+        if (!(await (0, webview_ui_1.confirmAction)(`${relativePath} already exists. Overwrite it?`, "Overwrite")))
+            return;
+    }
+    catch { /* file does not exist */ }
+    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(target, ".."));
+    await vscode.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
+    const document = await vscode.workspace.openTextDocument(target);
+    await vscode.window.showTextDocument(document, { preview: false });
 }
 function analyzeLogText(text) {
     const lines = text.split(/\r?\n/).filter(Boolean);
@@ -598,7 +579,7 @@ function analyzeLogText(text) {
                 jsonLines++;
             }
         }
-        catch ( /* not JSON */_a) { /* not JSON */ }
+        catch { /* not JSON */ }
         if (/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/.test(line))
             timestamped++;
     }
@@ -610,99 +591,108 @@ function analyzeLogText(text) {
     ];
     return `DevSnip Pro Observability Report\n${"=".repeat(31)}\nLines: ${lines.length}\nError: ${levels.error} | Warn: ${levels.warn} | Info: ${levels.info} | Debug: ${levels.debug} | Unknown: ${levels.unknown}\nValid JSON lines: ${jsonLines}\nTimestamped lines: ${timestamped}\n\nRecommendations:\n${recommendations.map((item, index) => `${index + 1}. ${item}`).join("\n")}`;
 }
+/** Findings currently shown in each audit panel, so the click handler stays in step with a re-run. */
+const auditFindings = new Map();
+const auditListeners = new Set();
+/**
+ * Runs an audit and shows it in that audit's panel, reusing an open panel and
+ * refreshing its findings rather than stacking a new report every run.
+ */
+async function runAudit(options) {
+    if (!vscode.workspace.workspaceFolders?.length) {
+        vscode.window.showErrorMessage(options.missingWorkspace);
+        return;
+    }
+    try {
+        await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: options.progressTitle }, async () => {
+            const findings = await options.scan();
+            auditFindings.set(options.viewType, findings);
+            const { panel, created } = (0, webview_ui_1.openToolPanel)(options.viewType, options.title, {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            });
+            if (created || !auditListeners.has(options.viewType)) {
+                auditListeners.add(options.viewType);
+                const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {
+                    const current = auditFindings.get(options.viewType) ?? [];
+                    if (message?.type !== "open" || !Number.isInteger(message.index) || !current[message.index])
+                        return;
+                    await revealFinding(current[message.index]);
+                });
+                panel.onDidDispose(() => {
+                    messageSubscription.dispose();
+                    auditListeners.delete(options.viewType);
+                    auditFindings.delete(options.viewType);
+                });
+            }
+            panel.webview.html = securityAuditHtml(findings, options.title);
+            if (findings.some(finding => finding.severity === "critical" || finding.severity === "high")) {
+                vscode.window.showWarningMessage(`${options.label} found ${findings.length} potential issue(s). Review the ${options.title} panel.`);
+            }
+            else {
+                vscode.window.showInformationMessage(`${options.label} complete: ${findings.length} finding(s).`);
+            }
+        });
+    }
+    catch (error) {
+        vscode.window.showErrorMessage(`${options.label} failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+/** Opens the file a finding points at, positioned on the reported line. */
+async function revealFinding(finding) {
+    const root = vscode.workspace.workspaceFolders?.[0];
+    if (!root)
+        return;
+    try {
+        const fileUri = finding.resource
+            ? vscode.Uri.parse(finding.resource)
+            : vscode.Uri.joinPath(root.uri, finding.file);
+        const document = await vscode.workspace.openTextDocument(fileUri);
+        const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
+        const position = new vscode.Position(line, 0);
+        await vscode.window.showTextDocument(document, {
+            viewColumn: vscode.ViewColumn.One,
+            preview: false,
+            selection: new vscode.Range(position, position)
+        });
+    }
+    catch (error) {
+        vscode.window.showErrorMessage(`Unable to open ${finding.file}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+let observabilityChannel;
+/** One shared output channel; creating one per run leaked a channel each time. */
+function getObservabilityChannel(context) {
+    if (!observabilityChannel) {
+        observabilityChannel = vscode.window.createOutputChannel("DevSnip Pro Observability");
+        context.subscriptions.push(observabilityChannel);
+    }
+    return observabilityChannel;
+}
 function registerPlatformToolsCommands(context) {
-    const security = vscode.commands.registerCommand("sayaib.hue-console.securityAudit", () => __awaiter(this, void 0, void 0, function* () {
-        var _a;
-        if (!((_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a.length)) {
-            vscode.window.showErrorMessage("Open a workspace before running the security audit.");
-            return;
-        }
-        try {
-            yield vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "DevSnip Pro: Scanning workspace security" }, () => __awaiter(this, void 0, void 0, function* () {
-                const findings = yield scanWorkspaceForSecurity();
-                const panel = vscode.window.createWebviewPanel("devsnipSecurityAudit", "Security Audit", vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
-                panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
-                    var _b;
-                    if ((message === null || message === void 0 ? void 0 : message.type) !== "open" || !Number.isInteger(message.index) || !findings[message.index])
-                        return;
-                    const finding = findings[message.index];
-                    const root = (_b = vscode.workspace.workspaceFolders) === null || _b === void 0 ? void 0 : _b[0];
-                    if (!root)
-                        return;
-                    try {
-                        const fileUri = finding.resource
-                            ? vscode.Uri.parse(finding.resource)
-                            : vscode.Uri.file(path.join(root.uri.fsPath, finding.file));
-                        const document = yield vscode.workspace.openTextDocument(fileUri);
-                        const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
-                        const position = new vscode.Position(line, 0);
-                        yield vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false, selection: new vscode.Range(position, position) });
-                    }
-                    catch (error) {
-                        vscode.window.showErrorMessage(`Unable to open ${finding.file}: ${error instanceof Error ? error.message : String(error)}`);
-                    }
-                }), undefined, context.subscriptions);
-                panel.webview.html = securityAuditHtml(panel, findings);
-                if (findings.some(f => f.severity === "critical" || f.severity === "high"))
-                    vscode.window.showWarningMessage(`Security audit found ${findings.length} potential issue(s). Review the Security Audit panel.`);
-                else
-                    vscode.window.showInformationMessage(`Security audit complete: ${findings.length} finding(s).`);
-            }));
-        }
-        catch (error) {
-            vscode.window.showErrorMessage(`Security audit failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
+    const security = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.securityAudit", () => runAudit({
+        viewType: "devsnipSecurityAudit",
+        title: "Security Audit",
+        progressTitle: "DevSnip Pro: Scanning workspace security",
+        missingWorkspace: "Open a workspace before running the security audit.",
+        label: "Security audit",
+        scan: scanWorkspaceForSecurity
     }));
-    const cloudSecurity = vscode.commands.registerCommand("sayaib.hue-console.cloudSecurityAudit", () => __awaiter(this, void 0, void 0, function* () {
-        var _c;
-        if (!((_c = vscode.workspace.workspaceFolders) === null || _c === void 0 ? void 0 : _c.length)) {
-            vscode.window.showErrorMessage("Open a workspace before running the cloud security audit.");
-            return;
-        }
-        try {
-            yield vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "DevSnip Pro: Auditing local cloud configuration" }, () => __awaiter(this, void 0, void 0, function* () {
-                const findings = yield scanLocalCloudConfiguration();
-                const panel = vscode.window.createWebviewPanel("devsnipCloudSecurityAudit", "Cloud Config Security Audit", vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
-                panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
-                    var _d;
-                    if ((message === null || message === void 0 ? void 0 : message.type) !== "open" || !Number.isInteger(message.index) || !findings[message.index])
-                        return;
-                    const finding = findings[message.index];
-                    const root = (_d = vscode.workspace.workspaceFolders) === null || _d === void 0 ? void 0 : _d[0];
-                    if (!root)
-                        return;
-                    try {
-                        const fileUri = finding.resource
-                            ? vscode.Uri.parse(finding.resource)
-                            : vscode.Uri.file(path.join(root.uri.fsPath, finding.file));
-                        const document = yield vscode.workspace.openTextDocument(fileUri);
-                        const line = Math.max(0, Math.min(finding.line - 1, document.lineCount - 1));
-                        const position = new vscode.Position(line, 0);
-                        yield vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false, selection: new vscode.Range(position, position) });
-                    }
-                    catch (error) {
-                        vscode.window.showErrorMessage(`Unable to open ${finding.file}: ${error instanceof Error ? error.message : String(error)}`);
-                    }
-                }), undefined, context.subscriptions);
-                panel.webview.html = securityAuditHtml(panel, findings, "Cloud Config Security Audit");
-                if (findings.some(f => f.severity === "critical" || f.severity === "high"))
-                    vscode.window.showWarningMessage(`Cloud configuration audit found ${findings.length} potential issue(s). Review the Cloud Security Audit panel.`);
-                else
-                    vscode.window.showInformationMessage(`Cloud configuration audit complete: ${findings.length} finding(s).`);
-            }));
-        }
-        catch (error) {
-            vscode.window.showErrorMessage(`Cloud security audit failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
+    const cloudSecurity = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.cloudSecurityAudit", () => runAudit({
+        viewType: "devsnipCloudSecurityAudit",
+        title: "Cloud Config Security Audit",
+        progressTitle: "DevSnip Pro: Auditing local cloud configuration",
+        missingWorkspace: "Open a workspace before running the cloud security audit.",
+        label: "Cloud configuration audit",
+        scan: scanLocalCloudConfiguration
     }));
-    const devops = vscode.commands.registerCommand("sayaib.hue-console.devopsGenerator", () => __awaiter(this, void 0, void 0, function* () {
-        var _e;
-        const root = (_e = vscode.workspace.workspaceFolders) === null || _e === void 0 ? void 0 : _e[0];
+    const devops = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.devopsGenerator", async () => {
+        const root = vscode.workspace.workspaceFolders?.[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating DevOps files.");
             return;
         }
-        const choice = yield vscode.window.showQuickPick([
+        const choice = await vscode.window.showQuickPick([
             "Dockerfile", ".dockerignore", "docker-compose.yml", ".github/workflows/ci.yml",
             "k8s/deployment.yml", "k8s/service.yml", "terraform/main.tf", ".github/workflows/secure-ci.yml"
         ], { title: "Generate production starter artifact" });
@@ -714,21 +704,20 @@ function registerPlatformToolsCommands(context) {
                 : choice === ".github/workflows/secure-ci.yml"
                     ? "secure-ci.yml"
                     : choice;
-            yield writeArtifact(choice, artifact(templateName, detectStack(root.uri.fsPath)));
+            await writeArtifact(choice, artifact(templateName, await detectStack(root.uri)));
             vscode.window.showInformationMessage(`${choice} generated. Review it before deploying.`);
         }
         catch (error) {
             vscode.window.showErrorMessage(`Artifact generation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }));
-    const mlops = vscode.commands.registerCommand("sayaib.hue-console.mlopsGenerator", () => __awaiter(this, void 0, void 0, function* () {
-        var _f;
-        const root = (_f = vscode.workspace.workspaceFolders) === null || _f === void 0 ? void 0 : _f[0];
+    });
+    const mlops = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.mlopsGenerator", async () => {
+        const root = vscode.workspace.workspaceFolders?.[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating MLOps files.");
             return;
         }
-        const choice = yield vscode.window.showQuickPick([
+        const choice = await vscode.window.showQuickPick([
             "mlops/Dockerfile", "mlops/Dockerfile.gpu", "mlops/k8s-gpu-deployment.yml",
             ".github/workflows/ml-ci.yml", "mlops/model-serving-contract.md"
         ], { title: "Generate AI/ML DevOps artifact" });
@@ -736,47 +725,47 @@ function registerPlatformToolsCommands(context) {
             return;
         const templateName = choice === ".github/workflows/ml-ci.yml" ? "mlops/ml-ci.yml" : choice;
         try {
-            yield writeArtifact(choice, artifact(templateName, "python"));
+            await writeArtifact(choice, artifact(templateName, "python"));
             vscode.window.showInformationMessage(`${choice} generated. Review model, image, and registry settings before deployment.`);
         }
         catch (error) {
             vscode.window.showErrorMessage(`MLOps artifact generation failed: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }));
-    const observability = vscode.commands.registerCommand("sayaib.hue-console.observabilityAnalyze", () => __awaiter(this, void 0, void 0, function* () {
+    });
+    const observability = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.observabilityAnalyze", async () => {
         const editor = vscode.window.activeTextEditor;
-        let text = editor === null || editor === void 0 ? void 0 : editor.document.getText(editor.selection);
+        let text = editor?.document.getText(editor.selection);
         if (!text)
-            text = editor === null || editor === void 0 ? void 0 : editor.document.getText();
+            text = editor?.document.getText();
         if (!text) {
             vscode.window.showErrorMessage("Open a log file or select log text first.");
             return;
         }
-        const channel = vscode.window.createOutputChannel("DevSnip Pro Observability");
+        const channel = getObservabilityChannel(context);
         channel.clear();
         channel.appendLine(analyzeLogText(text));
         channel.show(true);
-    }));
-    const observabilityStarter = vscode.commands.registerCommand("sayaib.hue-console.observabilityStarter", () => __awaiter(this, void 0, void 0, function* () {
-        var _g;
-        const root = (_g = vscode.workspace.workspaceFolders) === null || _g === void 0 ? void 0 : _g[0];
+        vscode.window.showInformationMessage("Observability report written to the DevSnip Pro Observability output channel.");
+    });
+    const observabilityStarter = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.observabilityStarter", async () => {
+        const root = vscode.workspace.workspaceFolders?.[0];
         if (!root) {
             vscode.window.showErrorMessage("Open a workspace before generating observability files.");
             return;
         }
-        const choice = yield vscode.window.showQuickPick([
+        const choice = await vscode.window.showQuickPick([
             "observability/log-schema.json", "observability/otel-node.ts", "observability/otel-python.py"
         ], { title: "Generate observability starter" });
         if (!choice)
             return;
         try {
-            yield writeArtifact(choice, artifact(choice, detectStack(root.uri.fsPath)));
+            await writeArtifact(choice, artifact(choice, await detectStack(root.uri)));
             vscode.window.showInformationMessage(`${choice} generated. Install the matching OpenTelemetry packages before running it.`);
         }
         catch (error) {
             vscode.window.showErrorMessage(`Observability starter failed: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }));
+    });
     context.subscriptions.push(security, cloudSecurity, devops, mlops, observability, observabilityStarter);
 }
 exports.registerPlatformToolsCommands = registerPlatformToolsCommands;
