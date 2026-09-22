@@ -214,9 +214,21 @@ suite("Command execution", () => {
       "sayaib.hue-console.removeUnusedImports"
     ];
     for (const command of workspaceCommands) {
-      await assert.doesNotReject(
-        () => Promise.resolve(vscode.commands.executeCommand(command)),
-        `${command} threw instead of reporting its result`
+      // Some of these open a QuickPick and wait for a choice, which a headless
+      // run can never make. The assertion is that the command does not throw,
+      // so a still-open picker counts as success; it is dismissed afterwards
+      // rather than awaited forever.
+      const settled = await Promise.race([
+        Promise.resolve(vscode.commands.executeCommand(command)).then(
+          () => "resolved",
+          (error: unknown) => ({ failed: `${command} threw: ${error instanceof Error ? error.message : String(error)}` })
+        ),
+        new Promise(resolve => setTimeout(() => resolve("awaiting-input"), 2000))
+      ]);
+      await vscode.commands.executeCommand("workbench.action.closeQuickOpen");
+      assert.ok(
+        typeof settled === "string",
+        typeof settled === "object" && settled && "failed" in settled ? String((settled as { failed: string }).failed) : "unknown failure"
       );
     }
   });

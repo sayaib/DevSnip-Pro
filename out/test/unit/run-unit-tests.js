@@ -30,6 +30,10 @@ async function main() {
     require("./milestone.unit");
     require("./analysis.unit");
     require("./api-client.unit");
+    require("./premium.unit");
+    require("./feature-services.unit");
+    require("./webview-scripts.unit");
+    require("./api-client-ui.unit");
     /* eslint-enable @typescript-eslint/no-var-requires */
     let passed = 0;
     const failures = [];

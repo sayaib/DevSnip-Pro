@@ -43,6 +43,10 @@ const readmeManager_1 = require("./commands/readmeManager");
 const openCodeIntegration_1 = require("./commands/openCodeIntegration");
 const command_dispatch_1 = require("./utils/command-dispatch");
 const webview_ui_1 = require("./utils/webview-ui");
+const entitlement_1 = require("./premium/entitlement");
+const feature_access_1 = require("./premium/feature-access");
+const collections_1 = require("./services/collections");
+const premium_commands_1 = require("./premium/premium-commands");
 function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     // The milestone store needs its context before any command can record usage.
@@ -51,6 +55,15 @@ function activate(context) {
     // DevSnip Pro command is registered through. The recorder is installed before
     // any command is registered, so no invocation is missed and none is counted twice.
     (0, command_registry_1.setUsageRecorder)(command => { void (0, milestoneTracker_1.autoRecordToolUsage)(command); });
+    // Free/Premium feature system. One entitlement store and one access service
+    // are shared by every consumer, so the tier is decided in exactly one place.
+    const entitlements = new entitlement_1.EntitlementStore(context, new entitlement_1.OfflineLicenseVerifier());
+    const access = new feature_access_1.FeatureAccessService(context, entitlements);
+    const collections = new collections_1.CollectionStore(context, access);
+    context.subscriptions.push(entitlements);
+    void entitlements.refresh().catch(error => {
+        console.error("DevSnip Pro: initial entitlement check failed.", error);
+    });
     const myTreeView = new MyTreeDataProvider(context);
     (0, milestoneTracker_1.setTreeRefreshCallback)(() => myTreeView.refresh());
     const treeView = vscode.window.createTreeView("myView", {
@@ -71,7 +84,8 @@ function activate(context) {
                 (0, readmeManager_1.registerReadmeManagerCommand)(context);
             }],
         ["OpenCode integration", () => (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context)],
-        ["REST API client", () => (0, api_test_1.apiTest)(context)],
+        ["REST API client", () => (0, api_test_1.apiTest)(context, { access, entitlements, collections })],
+        ["premium commands", () => (0, premium_commands_1.registerPremiumCommands)(context, entitlements, access)],
         ["developer utilities", () => (0, advancedTools_1.registerAdvancedToolsCommands)(context)],
         ["AI/ML tools", () => {
                 (0, aiMlTools_1.registerAiMlToolsCommands)(context);

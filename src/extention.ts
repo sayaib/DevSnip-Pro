@@ -17,6 +17,10 @@ import { registerReadmeManagerCommand } from "./commands/readmeManager";
 import { registerOpenCodeIntegrationCommand } from "./commands/openCodeIntegration";
 import { executeQueuedCommand } from "./utils/command-dispatch";
 import { disposeAllToolPanels } from "./utils/webview-ui";
+import { EntitlementStore, OfflineLicenseVerifier } from "./premium/entitlement";
+import { FeatureAccessService } from "./premium/feature-access";
+import { CollectionStore } from "./services/collections";
+import { registerPremiumCommands } from "./premium/premium-commands";
 
 export function activate(context: vscode.ExtensionContext) {
   const snippetsFolderPath = path.join(context.extensionPath, "custom");
@@ -28,6 +32,16 @@ export function activate(context: vscode.ExtensionContext) {
   // DevSnip Pro command is registered through. The recorder is installed before
   // any command is registered, so no invocation is missed and none is counted twice.
   setUsageRecorder(command => { void autoRecordToolUsage(command); });
+
+  // Free/Premium feature system. One entitlement store and one access service
+  // are shared by every consumer, so the tier is decided in exactly one place.
+  const entitlements = new EntitlementStore(context, new OfflineLicenseVerifier());
+  const access = new FeatureAccessService(context, entitlements);
+  const collections = new CollectionStore(context, access);
+  context.subscriptions.push(entitlements);
+  void entitlements.refresh().catch(error => {
+    console.error("DevSnip Pro: initial entitlement check failed.", error);
+  });
 
   const myTreeView = new MyTreeDataProvider(context);
   setTreeRefreshCallback(() => myTreeView.refresh());
@@ -50,7 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
       registerReadmeManagerCommand(context);
     }],
     ["OpenCode integration", () => registerOpenCodeIntegrationCommand(context)],
-    ["REST API client", () => apiTest(context)],
+    ["REST API client", () => apiTest(context, { access, entitlements, collections })],
+    ["premium commands", () => registerPremiumCommands(context, entitlements, access)],
     ["developer utilities", () => registerAdvancedToolsCommands(context)],
     ["AI/ML tools", () => {
       registerAiMlToolsCommands(context);

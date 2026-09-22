@@ -51,10 +51,23 @@ const api = {
     }
   },
   ViewColumn: { One: 1, Two: 2 },
+  ExtensionMode: { Production: 1, Development: 2, Test: 3 },
   EventEmitter: class {
-    event = () => disposable();
-    fire() { /* no subscribers in the stub */ }
-    dispose() { /* nothing to release */ }
+    private listeners: Listener[] = [];
+    event = (listener: Listener) => {
+      this.listeners.push(listener);
+      return {
+        dispose: () => {
+          this.listeners = this.listeners.filter(entry => entry !== listener);
+        }
+      };
+    };
+    fire(value?: unknown) {
+      for (const listener of [...this.listeners]) listener(value);
+    }
+    dispose() {
+      this.listeners = [];
+    }
   },
   ThemeIcon: class { constructor(public id: string) {} },
   ThemeColor: class { constructor(public id: string) {} },

@@ -1,5 +1,87 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.61.3 - 2026-09-22
+
+REST API Client accessibility, performance and polish pass. The layout, navigation, collections, history and response panels were already in place; this release fixes what an audit of that UI turned up.
+
+### Fixed - performance
+
+- **A large JSON response built a DOM of tens of thousands of nodes.** Syntax highlighting wraps every token in an element, so a 900 KB payload produced over 60,000 of them and left the panel slow to scroll, search and select. Rendering is now capped, with a one-click option to highlight the whole payload: the same response now renders 478 nodes in 30 ms instead of 60,475 in 156 ms. Copy and Save still operate on the complete payload, and the in-response search reports matches found beyond the rendered portion.
+
+### Fixed - accessibility
+
+- **Two tab groups never updated `aria-selected`**, so a screen reader always announced the first tab as the active one no matter which panel was showing. The visual and accessible states are now set together.
+- **Tab groups could not be driven from the keyboard.** Left/Right/Up/Down, Home and End now move between tabs, and a roving tabindex means Tab steps past the group rather than through every tab in it.
+- **URL validity was conveyed only by colour and a hint.** The field now sets `aria-invalid` and points at its message with `aria-describedby`, and the message is a polite live region.
+- **Five authentication inputs had visible labels that were not associated with their fields** (bearer token, basic username and password, API key name and value), so their accessible name was missing.
+
+### Fixed - theming
+
+- The in-response search highlight was the one colour in the sheet that ignored the VS Code theme; it now uses the editor's own find-match colours with a themed outline.
+
+### Tests
+
+- New suite asserting the client's markup invariants: every tab exposes a selected state, every tab list is labelled, every input has an accessible name, status uses a glyph as well as colour, the palette resolves through VS Code variables, the response render budget is present, and the WebSocket allowance still tracks entitlement.
+- The inline-script scanner now models template-literal escape handling correctly, including unrecognised escapes, so it no longer reports valid regular expressions as broken.
+- `workspace tools complete without throwing` no longer waits on a QuickPick that a headless run can never answer; the suite went from one 30-second timeout to green in 7 seconds.
+
+## Version 10.61.1 - 2026-09-22
+
+### Fixed
+
+- **Every button in the REST API Client stopped working.** Introduced in 10.61.0. The webview script is written inside a TypeScript template literal, where `\n` is an escape the compiler consumes - so what reached the browser was a real newline in the middle of a JavaScript string literal. That single unterminated string made the whole inline script fail to parse, which disables every control in the panel at once, not just the new ones. The compiler could not see it, because to TypeScript the script is only a string. All 33 affected escape sequences are now written as `\\n` so the browser receives `\n`.
+
+### Added - regression guard
+
+- The unit suite now renders the REST API Client exactly as the extension host does and parses the resulting script, in both CSP modes. It also scans every inline webview script in the codebase and parses each one, so this class of bug fails the build instead of reaching a panel.
+- `getWebviewContent` is exported so the rendered page can be asserted on directly.
+
+## Version 10.61.0 - 2026-09-22
+
+Adds a Free/Premium feature system to the REST API Client, organised around AI/ML and software-development workflows. Every feature listed is implemented and works end to end; nothing is a badge over an empty code path.
+
+### Added - feature access architecture
+
+- **Central feature registry** (`src/premium/feature-registry.ts`): one definition per feature with its category, group, tier, description and limits. Nothing else in the codebase defines a tier, so changing one is a single edit.
+- **Entitlement store** (`src/premium/entitlement.ts`): subscription state behind a pluggable `LicenseVerifier`, so a licensing backend can be connected later without touching callers. No payment provider is referenced anywhere.
+- **Feature access service** (`src/premium/feature-access.ts`): the single decision point. Every operation runs through `access.run(featureId, ...)`, which checks entitlement immediately before the work and records usage only after it succeeds.
+- **Usage limits** are declared in the registry, never inline. Free allowances: 25 AI requests, 25 prompt runs, 10 streamed responses and 15 saved requests per day.
+- **Licence keys are stored in VS Code SecretStorage**, never in settings, global state or a webview. Tests assert the key cannot be found in global state.
+
+### Added - Software Developer tools
+
+- Free: client code generation for JavaScript (fetch and axios), Python, Go, Java and C#; JSON format, minify, validate and path query; JWT decoding with expiry and unsafe-algorithm warnings; request collections.
+- Premium: WebSocket testing; OAuth 2.0 helper (client-credentials, password and refresh-token grants) with the token held in secret storage and only a masked preview shown; declarative assertions on status, latency, headers and JSON paths; request chaining with value extraction between steps; batch performance testing with p50/p90/p99; structural response comparison; unlimited collections with import and export.
+
+### Added - AI/ML Developer tools
+
+- Provider adapters for OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama and any OpenAI-compatible endpoint, each with the correct request shape, auth header, response parsing and streaming format.
+- Free: single LLM requests, prompt testing, token and cost estimation, basic streaming, and JSON Schema validation of model output.
+- Premium: multi-model comparison, LLM benchmarking with latency percentiles and tokens/second, streaming diagnostics (time to first token, inter-chunk latency), embeddings testing with cosine similarity, vector database testing (Qdrant, Pinecone, Weaviate, Chroma), RAG pipeline testing with a grounding score, agent tool-calling traces, prompt evaluation against declarative criteria, prompt versioning with diffs, and AI request analytics.
+
+### Security
+
+- Entitlement is enforced in the extension host at the operation layer. Hiding a control is presentation only; a locked feature cannot be reached through an alternate command or a crafted webview message.
+- Assertions and prompt criteria are declarative data, not scripts. Nothing from a saved collection is ever evaluated as code.
+- The agent tester returns caller-supplied canned tool results; the extension never executes what a model asks for.
+- Every webview payload is coerced and bounded before it reaches a service.
+- The development tier override is read only in a development or test host and is ignored by an installed extension, so it cannot bypass licensing in production.
+
+### Offline behaviour
+
+- A successful licence check is cached for 24 hours; the licence server is not contacted on every feature call.
+- If verification is unreachable, a previously valid licence keeps working for up to 14 days rather than revoking a paying user's access. After that the tier drops to free with a clear explanation.
+
+### Compatibility
+
+- Every existing REST API Client capability is unchanged and still free.
+- The four points-unlocked tools (security header scan, load test, SDK export, mock generator) remain unlockable with DevSnip Pro points for free users, with the points refunded if the tool fails.
+
+### Tests
+
+- Unit suite grows to 139 tests, covering tier decisions, expiry, invalid licences, offline grace and its expiry, cache TTL, the development override being ignored in production, daily limits (including that a failed call does not consume allowance), collection caps, and every provider adapter, assertion operator, JSON tool and code generator.
+- Integration suite grows to 51 tests, covering command registration, licence round-trip through real secret storage, and a sweep proving no premium feature is reachable for a free user and no free feature is blocked.
+
 ## Version 10.60.0 - 2026-09-22
 
 Stabilisation release. Every feature was audited end to end; the fixes below are behavioural, not cosmetic.

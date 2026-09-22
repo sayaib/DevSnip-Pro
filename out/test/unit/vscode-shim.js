@@ -49,12 +49,26 @@ const api = {
         }
     },
     ViewColumn: { One: 1, Two: 2 },
+    ExtensionMode: { Production: 1, Development: 2, Test: 3 },
     EventEmitter: class {
         constructor() {
-            this.event = () => disposable();
+            this.listeners = [];
+            this.event = (listener) => {
+                this.listeners.push(listener);
+                return {
+                    dispose: () => {
+                        this.listeners = this.listeners.filter(entry => entry !== listener);
+                    }
+                };
+            };
         }
-        fire() { }
-        dispose() { }
+        fire(value) {
+            for (const listener of [...this.listeners])
+                listener(value);
+        }
+        dispose() {
+            this.listeners = [];
+        }
     },
     ThemeIcon: class {
         constructor(id) {

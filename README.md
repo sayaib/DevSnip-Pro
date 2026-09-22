@@ -36,6 +36,45 @@ A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS C
 | **Lorem Ipsum Generator**     | `sayaib.hue-console.loremGenerator`           | Generate placeholder text with custom lengths                                                                                                                                                                                |
 | **Milestone Tracker**         | `sayaib.hue-console.milestoneTracker`         | Track development milestones and activity                                                                                                                                                                                    |
 
+### Free and Premium tools
+
+The REST API Client organises its tools into two categories, each with a Free and a Premium tier. Open the **Tools** tab inside the client to browse them.
+
+```text
+REST API Client
+├── Software Developer
+│   ├── REST              REST requests, response inspector, history
+│   ├── GraphQL           queries, variables, operation name
+│   ├── WebSocket         connect, send, message log            (Premium)
+│   ├── Authentication    Bearer / Basic / API key, JWT inspector, OAuth 2.0 (Premium)
+│   ├── API Testing       assertions, chaining, batch, diff      (Premium)
+│   └── Developer Tools   environments, collections, cURL, code generation, JSON tools
+└── AI / ML Developer
+    ├── LLM APIs          OpenAI, Anthropic, Gemini, Azure, Ollama; tokens and cost; streaming
+    ├── Embeddings        embeddings testing, vector DB search    (Premium)
+    ├── RAG               retrieve-then-generate with a grounding score (Premium)
+    ├── AI Agents         tool-calling loop with a full trace     (Premium)
+    ├── Prompt Testing    prompt runs, JSON schema validation; evaluation and versioning (Premium)
+    └── Model Comparison  multi-model comparison, benchmarking, analytics (Premium)
+```
+
+**Free tier.** The complete REST workflow stays free: every HTTP method, headers, query parameters, request bodies, authentication, the response inspector, history, environments, cURL import/export, client code generation, JSON formatting and validation, JWT decoding, GraphQL, and up to 15 saved requests. On the AI side, free covers single requests to any supported provider, prompt testing, token and cost estimation, basic streaming, and JSON schema validation of model output, with a daily allowance (25 AI requests, 25 prompt runs, 10 streamed responses).
+
+**Premium tier.** Adds WebSocket testing, OAuth 2.0 token helpers, declarative assertions, request chaining, batch and performance testing with latency percentiles, response comparison, unlimited collections with import/export, multi-model comparison, LLM benchmarking, streaming diagnostics, embeddings and vector database testing, RAG pipeline testing, agent testing, prompt evaluation and versioning, and AI request analytics. Daily limits are removed.
+
+| Command | Purpose |
+| :------ | :------ |
+| `sayaib.hue-console.activatePremium` | Enter a licence key. It is stored in VS Code secret storage, never in settings or a webview. |
+| `sayaib.hue-console.premiumStatus` | Show the current tier, expiry and how many features are available. |
+| `sayaib.hue-console.deactivatePremium` | Remove the stored licence from this machine. |
+
+Notes on how the tier system behaves:
+
+- **Entitlement is enforced in the extension host**, immediately before each operation runs, not by hiding buttons. A locked feature cannot be reached through an alternate command or a crafted webview message.
+- **Offline is handled.** A successful licence check is cached for 24 hours and keeps working for up to 14 days while the licence server is unreachable, so a paying user is never locked out by a dropped connection. The licence server is not contacted on every feature call.
+- **Points still work.** The four tools that were previously unlocked with DevSnip Pro points (security header scan, load test, SDK export, mock generator) remain unlockable that way for free users, so nobody loses access they already had. Points are refunded if the tool fails.
+- **Development mode.** In an Extension Development Host, `DevSnip Pro: Simulate Subscription Tier` switches between free and premium for testing. The override is ignored entirely in an installed extension, so it cannot be used to bypass licensing.
+
 ### OpenCode Integration
 
 The OpenCode Integration Hub (`sayaib.hue-console.openCodeIntegration`) manages the OpenCode CLI from inside VS Code. It works on Windows, macOS, and Linux.
