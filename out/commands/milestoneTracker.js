@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerMilestoneTrackerCommand = exports.getNextLevel = exports.getCurrentLevel = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.saveUserStats = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.MILESTONES = exports.LEVELS = void 0;
+exports.registerMilestoneTrackerCommand = exports.getNextLevel = exports.getCurrentLevel = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.saveUserStats = exports.getPointsBalance = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.onDidChangePoints = exports.MILESTONES = exports.LEVELS = void 0;
 const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 const webview_ui_1 = require("../utils/webview-ui");
@@ -49,6 +49,14 @@ exports.MILESTONES = [
 ];
 let globalContext;
 let refreshCallback;
+/**
+ * Fires whenever the stored points change.
+ *
+ * Premium REST API Client tools are unlocked by spending points, so anything
+ * showing a balance or an affordability state needs to know the moment it moves.
+ */
+const pointsChangeEmitter = new vscode.EventEmitter();
+exports.onDidChangePoints = pointsChangeEmitter.event;
 /** Every mutation runs through this queue so concurrent tool runs cannot lose points. */
 let stateQueue = Promise.resolve();
 /** Points a single day can produce, so levels stay a long-term signal. */
@@ -211,6 +219,17 @@ function getUserStats(context) {
     return stats;
 }
 exports.getUserStats = getUserStats;
+/** Current points balance. Never negative, and never throws. */
+function getPointsBalance(context) {
+    try {
+        return Math.max(0, Math.trunc(getUserStats(context).totalPoints));
+    }
+    catch (error) {
+        console.error('DevSnip Pro: could not read the points balance.', error);
+        return 0;
+    }
+}
+exports.getPointsBalance = getPointsBalance;
 async function saveUserStats(context, stats) {
     try {
         await context.globalState.update(STATE_KEY, stats);
@@ -231,6 +250,7 @@ function mutateStats(context, mutate) {
         await saveUserStats(context, stats);
         if (refreshCallback)
             refreshCallback();
+        pointsChangeEmitter.fire(stats.totalPoints);
         return { stats, result };
     });
     stateQueue = next.catch(() => undefined);

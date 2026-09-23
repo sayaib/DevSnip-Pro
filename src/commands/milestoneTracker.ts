@@ -73,6 +73,15 @@ export const MILESTONES: Milestone[] = [
 let globalContext: vscode.ExtensionContext | undefined;
 let refreshCallback: (() => void) | undefined;
 
+/**
+ * Fires whenever the stored points change.
+ *
+ * Premium REST API Client tools are unlocked by spending points, so anything
+ * showing a balance or an affordability state needs to know the moment it moves.
+ */
+const pointsChangeEmitter = new vscode.EventEmitter<number>();
+export const onDidChangePoints: vscode.Event<number> = pointsChangeEmitter.event;
+
 /** Every mutation runs through this queue so concurrent tool runs cannot lose points. */
 let stateQueue: Promise<unknown> = Promise.resolve();
 
@@ -239,6 +248,16 @@ export function getUserStats(context: vscode.ExtensionContext): UserStats {
     return stats;
 }
 
+/** Current points balance. Never negative, and never throws. */
+export function getPointsBalance(context: vscode.ExtensionContext): number {
+    try {
+        return Math.max(0, Math.trunc(getUserStats(context).totalPoints));
+    } catch (error) {
+        console.error('DevSnip Pro: could not read the points balance.', error);
+        return 0;
+    }
+}
+
 export async function saveUserStats(context: vscode.ExtensionContext, stats: UserStats): Promise<void> {
     try {
         await context.globalState.update(STATE_KEY, stats);
@@ -260,6 +279,7 @@ function mutateStats<T>(
         const result = mutate(stats);
         await saveUserStats(context, stats);
         if (refreshCallback) refreshCallback();
+        pointsChangeEmitter.fire(stats.totalPoints);
         return { stats, result };
     });
     stateQueue = next.catch(() => undefined);

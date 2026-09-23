@@ -26,32 +26,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const vscode = __importStar(require("vscode"));
 const feature_registry_1 = require("../premium/feature-registry");
-const entitlement_1 = require("../premium/entitlement");
 const feature_access_1 = require("../premium/feature-access");
 /**
- * Integration checks for the Free/Premium system inside a real VS Code host.
+ * Integration checks for the points-based premium system inside a real VS Code
+ * host: command registration, the balance gate, and the guarantee that no
+ * premium operation is reachable without going through the access service.
  *
- * The unit suite covers the decision logic; these tests cover the parts that
- * only exist in the host: command registration, secret storage, and the
- * guarantee that no registered command reaches a premium operation without
- * going through the access service.
+ * There is no licence key in this product, so nothing here tests one.
  */
 const EXTENSION_ID = "sayaib.hue-console";
-function contextFor() {
-    // The extension does not export its context, so tests build their own with
-    // the same APIs. Secret storage is real here, unlike in the unit suite.
-    const extension = vscode.extensions.getExtension(EXTENSION_ID);
-    assert.ok(extension, "extension not found");
-    return {
-        subscriptions: [],
-        extensionPath: extension.extensionPath,
-        extensionUri: extension.extensionUri,
-        extensionMode: vscode.ExtensionMode.Test,
-        globalState: new MemoryState(),
-        workspaceState: new MemoryState(),
-        secrets: new MemorySecrets()
-    };
-}
 class MemoryState {
     constructor() {
         this.store = new Map();
@@ -71,95 +54,102 @@ class MemoryState {
     }
     setKeysForSync() { }
 }
-class MemorySecrets {
-    constructor() {
-        this.values = new Map();
-        this.onDidChange = new vscode.EventEmitter().event;
-    }
-    async get(key) {
-        return this.values.get(key);
-    }
-    async store(key, value) {
-        this.values.set(key, value);
-    }
-    async delete(key) {
-        this.values.delete(key);
-    }
+function contextFor() {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    assert.ok(extension, "extension not found");
+    return {
+        subscriptions: [],
+        extensionPath: extension.extensionPath,
+        extensionUri: extension.extensionUri,
+        extensionMode: vscode.ExtensionMode.Test,
+        globalState: new MemoryState(),
+        workspaceState: new MemoryState()
+    };
 }
-suite("Premium system in the extension host", () => {
+/** In-memory points ledger with the same contract as the milestone tracker. */
+function ledgerWith(points) {
+    let balance = points;
+    return {
+        balance: () => balance,
+        spend: async (amount) => {
+            if (balance < amount)
+                return false;
+            balance -= amount;
+            return true;
+        },
+        refund: async (amount) => { balance += amount; }
+    };
+}
+suite("Points-based premium system in the extension host", () => {
     suiteSetup(async () => {
         await vscode.extensions.getExtension(EXTENSION_ID)?.activate();
     });
-    test("the subscription commands are registered", async () => {
+    test("the points status command is registered", async () => {
         const commands = await vscode.commands.getCommands(true);
-        for (const command of [
+        assert.ok(commands.includes("sayaib.hue-console.premiumStatus"), "the status command is missing");
+    });
+    test("no licence commands remain registered", async () => {
+        const commands = await vscode.commands.getCommands(true);
+        for (const removed of [
             "sayaib.hue-console.activatePremium",
             "sayaib.hue-console.deactivatePremium",
-            "sayaib.hue-console.premiumStatus"
+            "sayaib.hue-console.setDevelopmentTier"
         ]) {
-            assert.ok(commands.includes(command), `${command} is not registered`);
+            assert.ok(!commands.includes(removed), `${removed} should have been removed with the licence system`);
         }
     });
-    test("a licence key round-trips through real secret storage", async () => {
-        const context = contextFor();
-        const store = new entitlement_1.EntitlementStore(context, new entitlement_1.OfflineLicenseVerifier());
-        const key = entitlement_1.OfflineLicenseVerifier.issue(new Date(Date.now() + 86400000 * 30));
-        const state = await store.activate(key);
-        assert.strictEqual(state.isPremium, true, state.detail);
-        assert.strictEqual(await store.hasStoredLicense(), true);
-        await store.deactivate();
-        assert.strictEqual(await store.hasStoredLicense(), false);
-        assert.strictEqual(store.current().isPremium, false);
+    test("the manifest contributes no licence command or setting", () => {
+        const extension = vscode.extensions.getExtension(EXTENSION_ID);
+        const manifest = JSON.stringify(extension?.packageJSON ?? {});
+        assert.ok(!/licen[cs]e/i.test(manifest.replace(/"license":\s*"[^"]*"/i, "")), "the manifest still mentions a licence outside its own SPDX field");
     });
-    test("the licence never lands in global state", async () => {
-        const context = contextFor();
-        const store = new entitlement_1.EntitlementStore(context, new entitlement_1.OfflineLicenseVerifier());
-        const key = entitlement_1.OfflineLicenseVerifier.issue(new Date(Date.now() + 86400000 * 30));
-        await store.activate(key);
-        const dump = context.globalState
-            .keys()
-            .map(stateKey => JSON.stringify(context.globalState.get(stateKey)))
-            .join("|");
-        assert.ok(!dump.includes(key), "the licence key must only live in secret storage");
-    });
-    test("every premium feature is gated and every free feature is not", async () => {
-        const context = contextFor();
-        const store = new entitlement_1.EntitlementStore(context, new entitlement_1.OfflineLicenseVerifier());
-        await store.refresh();
-        const access = new feature_access_1.FeatureAccessService(context, store);
-        const wronglyOpen = feature_registry_1.DEVELOPER_FEATURES.filter(feature => feature.tier === "premium" && access.check(feature.id).allowed);
-        assert.deepStrictEqual(wronglyOpen.map(f => f.id), [], "these premium features were reachable for a free user");
-        const wronglyClosed = feature_registry_1.DEVELOPER_FEATURES.filter(feature => feature.tier === "free" && !access.check(feature.id).allowed);
+    test("a zero balance blocks every premium feature and no free one", () => {
+        const access = new feature_access_1.FeatureAccessService(contextFor(), ledgerWith(0));
+        const wronglyOpen = feature_registry_1.DEVELOPER_FEATURES.filter(f => f.tier === "premium" && access.check(f.id).allowed);
+        assert.deepStrictEqual(wronglyOpen.map(f => f.id), [], "these premium features were reachable with no points");
+        const wronglyClosed = feature_registry_1.DEVELOPER_FEATURES.filter(f => f.tier === "free" && !access.check(f.id).allowed);
         assert.deepStrictEqual(wronglyClosed.map(f => f.id), [], "these free features were blocked");
     });
-    test("activating a licence unlocks premium features immediately", async () => {
-        const context = contextFor();
-        const store = new entitlement_1.EntitlementStore(context, new entitlement_1.OfflineLicenseVerifier());
-        const access = new feature_access_1.FeatureAccessService(context, store);
-        await store.refresh();
+    test("earning points unlocks features without a reload", () => {
+        const ledger = ledgerWith(0);
+        const access = new feature_access_1.FeatureAccessService(contextFor(), ledger);
+        const cost = (0, feature_registry_1.pointCostFor)("llm-compare");
         assert.strictEqual(access.check("llm-compare").allowed, false);
-        await store.activate(entitlement_1.OfflineLicenseVerifier.issue(new Date(Date.now() + 86400000 * 30)));
-        assert.strictEqual(access.check("llm-compare").allowed, true, "activation must take effect without a reload");
+        void ledger.refund(cost);
+        assert.strictEqual(access.check("llm-compare").allowed, true, "a new balance must take effect immediately");
     });
-    test("an expired licence key is rejected at activation", async () => {
-        const context = contextFor();
-        const store = new entitlement_1.EntitlementStore(context, new entitlement_1.OfflineLicenseVerifier());
-        const state = await store.activate(entitlement_1.OfflineLicenseVerifier.issue(new Date(Date.now() - 86400000)));
-        assert.strictEqual(state.isPremium, false);
-        assert.strictEqual(state.status, "expired");
+    test("running a premium feature deducts exactly its price", async () => {
+        const ledger = ledgerWith(100);
+        const access = new feature_access_1.FeatureAccessService(contextFor(), ledger);
+        const cost = (0, feature_registry_1.pointCostFor)("assertions");
+        await access.run("assertions", async () => "ok");
+        assert.strictEqual(ledger.balance(), 100 - cost);
     });
-    test("points-unlockable features are premium and priced", () => {
+    test("a failed run leaves the balance untouched", async () => {
+        const ledger = ledgerWith(100);
+        const access = new feature_access_1.FeatureAccessService(contextFor(), ledger);
+        await assert.rejects(() => access.run("assertions", async () => { throw new Error("boom"); }), /boom/);
+        assert.strictEqual(ledger.balance(), 100, "a failed run must not cost points");
+    });
+    test("the balance can never be driven negative", async () => {
+        const cost = (0, feature_registry_1.pointCostFor)("llm-benchmark");
+        const ledger = ledgerWith(cost);
+        const access = new feature_access_1.FeatureAccessService(contextFor(), ledger);
+        await access.run("llm-benchmark", async () => "ok");
+        assert.strictEqual(ledger.balance(), 0);
+        await assert.rejects(() => access.run("llm-benchmark", async () => "ok"));
+        assert.ok(ledger.balance() >= 0, "the balance went negative");
+    });
+    test("every premium feature is priced so none is unreachable", () => {
+        const unpriced = feature_registry_1.DEVELOPER_FEATURES.filter(f => f.tier === "premium" && !f.pointCost);
+        assert.deepStrictEqual(unpriced.map(f => f.id), [], "these premium features have no price");
         for (const [id, cost] of Object.entries(feature_registry_1.POINT_UNLOCKABLE)) {
-            const feature = feature_registry_1.DEVELOPER_FEATURES.find(entry => entry.id === id);
-            assert.ok(feature, `${id} is priced in points but missing from the registry`);
-            assert.strictEqual(feature.tier, "premium", `${id} should be premium`);
-            assert.ok(cost > 0, `${id} needs a positive point cost`);
+            assert.ok(cost > 0, `${id} needs a positive price`);
         }
     });
-    test("the REST API Client still opens and its free workflow is intact", async () => {
+    test("the REST API Client opens and its free workflow is intact", async () => {
         await vscode.commands.executeCommand("sayaib.hue-console.openGUI");
         const isOpen = () => vscode.window.tabGroups.all.flatMap(group => group.tabs).some(tab => tab.label === "API Tester Pro");
-        // Tab bookkeeping is asynchronous, so poll rather than sampling once.
         for (let attempt = 0; attempt < 40 && !isOpen(); attempt++) {
             await new Promise(resolve => setTimeout(resolve, 50));
         }

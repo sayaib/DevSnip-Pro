@@ -11,13 +11,12 @@ import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
 import { registerAiMlExtraTools } from "./commands/aiMlExtraTools";
 import { registerPlatformToolsCommands } from "./commands/platformTools";
-import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage } from "./commands/milestoneTracker";
+import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance } from "./commands/milestoneTracker";
 import { registerTrackedCommand, setUsageRecorder } from "./utils/command-registry";
 import { registerReadmeManagerCommand } from "./commands/readmeManager";
 import { registerOpenCodeIntegrationCommand } from "./commands/openCodeIntegration";
 import { executeQueuedCommand } from "./utils/command-dispatch";
 import { disposeAllToolPanels } from "./utils/webview-ui";
-import { EntitlementStore, OfflineLicenseVerifier } from "./premium/entitlement";
 import { FeatureAccessService } from "./premium/feature-access";
 import { CollectionStore } from "./services/collections";
 import { registerPremiumCommands } from "./premium/premium-commands";
@@ -33,15 +32,16 @@ export function activate(context: vscode.ExtensionContext) {
   // any command is registered, so no invocation is missed and none is counted twice.
   setUsageRecorder(command => { void autoRecordToolUsage(command); });
 
-  // Free/Premium feature system. One entitlement store and one access service
-  // are shared by every consumer, so the tier is decided in exactly one place.
-  const entitlements = new EntitlementStore(context, new OfflineLicenseVerifier());
-  const access = new FeatureAccessService(context, entitlements);
-  const collections = new CollectionStore(context, access);
-  context.subscriptions.push(entitlements);
-  void entitlements.refresh().catch(error => {
-    console.error("DevSnip Pro: initial entitlement check failed.", error);
+  // Premium REST API Client features are unlocked by spending DevSnip Pro
+  // points, so the access service is given a ledger over the milestone
+  // tracker's balance. There is no licence and no subscription.
+  const access = new FeatureAccessService(context, {
+    balance: () => getPointsBalance(context),
+    spend: (amount, reason) => redeemPoints(context, amount, reason),
+    refund: (amount, reason) => refundPoints(context, amount, reason)
   });
+
+  const collections = new CollectionStore(context, access);
 
   const myTreeView = new MyTreeDataProvider(context);
   setTreeRefreshCallback(() => myTreeView.refresh());
@@ -64,8 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
       registerReadmeManagerCommand(context);
     }],
     ["OpenCode integration", () => registerOpenCodeIntegrationCommand(context)],
-    ["REST API client", () => apiTest(context, { access, entitlements, collections })],
-    ["premium commands", () => registerPremiumCommands(context, entitlements, access)],
+    ["REST API client", () => apiTest(context, { access, collections })],
+    ["premium commands", () => registerPremiumCommands(context, access)],
     ["developer utilities", () => registerAdvancedToolsCommands(context)],
     ["AI/ML tools", () => {
       registerAiMlToolsCommands(context);

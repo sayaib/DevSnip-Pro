@@ -1,12 +1,4 @@
 import * as assert from "assert";
-import {
-  EntitlementStore,
-  LicenseVerification,
-  LicenseVerifier,
-  OfflineLicenseVerifier,
-  OFFLINE_GRACE_MS,
-  VERIFICATION_TTL_MS
-} from "../../premium/entitlement";
 import { FeatureAccessError, FeatureAccessService } from "../../premium/feature-access";
 import {
   CATEGORY_GROUPS,
@@ -20,18 +12,6 @@ import { CollectionStore } from "../../services/collections";
 import { createExtensionContext } from "./vscode-stub";
 import { suite, test } from "./run-unit-tests";
 
-/** Verifier whose behaviour each test controls. */
-class StubVerifier implements LicenseVerifier {
-  calls = 0;
-  constructor(private behaviour: () => Promise<LicenseVerification>) {}
-  setBehaviour(behaviour: () => Promise<LicenseVerification>): void {
-    this.behaviour = behaviour;
-  }
-  async verify(): Promise<LicenseVerification> {
-    this.calls++;
-    return this.behaviour();
-  }
-}
 
 /** Context with a working SecretStorage, which the real stub omits. */
 function premiumContext(extensionMode = 3 /* Test */): any {
@@ -46,26 +26,28 @@ function premiumContext(extensionMode = 3 /* Test */): any {
   return context;
 }
 
-function futureIso(days = 30): string {
-  return new Date(Date.now() + days * 86400000).toISOString();
+
+/** In-memory stand-in for the milestone tracker's points balance. */
+function createLedger(initial = 0) {
+  let points = initial;
+  return {
+    balance: () => points,
+    spend: async (amount: number) => {
+      if (points < amount) return false;
+      points -= amount;
+      return true;
+    },
+    refund: async (amount: number) => { points += amount; },
+    set: (value: number) => { points = value; }
+  };
 }
 
-async function premiumSetup(options: { expiresAt?: string } = {}) {
+/** A client with the given points balance. Premium is unlocked by spending them. */
+async function setupWithPoints(points = 0) {
   const context = premiumContext();
-  const verifier = new StubVerifier(async () => ({ valid: true, expiresAt: options.expiresAt ?? futureIso() }));
-  const store = new EntitlementStore(context, verifier);
-  await store.activate("DSP-PREMIUM-20991231-ABCDEF");
-  const access = new FeatureAccessService(context, store);
-  return { context, verifier, store, access };
-}
-
-async function freeSetup() {
-  const context = premiumContext();
-  const verifier = new StubVerifier(async () => ({ valid: false, reason: "no licence" }));
-  const store = new EntitlementStore(context, verifier);
-  await store.refresh();
-  const access = new FeatureAccessService(context, store);
-  return { context, verifier, store, access };
+  const ledger = createLedger(points);
+  const access = new FeatureAccessService(context, ledger);
+  return { context, access, ledger };
 }
 
 suite("feature registry", () => {
@@ -104,209 +86,106 @@ suite("feature registry", () => {
   });
 });
 
-suite("entitlement store", () => {
-  test("a fresh install is free", async () => {
-    const { store } = await freeSetup();
-    const state = store.current();
-    assert.strictEqual(state.tier, "free");
-    assert.strictEqual(state.isPremium, false);
-    assert.strictEqual(state.status, "free");
-  });
 
-  test("a valid licence grants premium", async () => {
-    const { store } = await premiumSetup();
-    assert.strictEqual(store.current().isPremium, true);
-    assert.strictEqual(store.current().status, "active");
-  });
-
-  test("an expired licence falls back to free", async () => {
-    const context = premiumContext();
-    const verifier = new StubVerifier(async () => ({ valid: true, expiresAt: new Date(Date.now() - 86400000).toISOString() }));
-    const store = new EntitlementStore(context, verifier);
-    await store.activate("DSP-PREMIUM-20200101-ABCDEF");
-    assert.strictEqual(store.current().isPremium, false);
-    assert.strictEqual(store.current().status, "expired");
-  });
-
-  test("an invalid licence falls back to free with a reason", async () => {
-    const context = premiumContext();
-    const verifier = new StubVerifier(async () => ({ valid: false, reason: "revoked" }));
-    const store = new EntitlementStore(context, verifier);
-    await store.activate("DSP-PREMIUM-20991231-ABCDEF");
-    assert.strictEqual(store.current().isPremium, false);
-    assert.strictEqual(store.current().status, "invalid");
-    assert.match(store.current().detail ?? "", /revoked/);
-  });
-
-  test("a cached verification is reused instead of re-checking every time", async () => {
-    const { verifier, store } = await premiumSetup();
-    const afterActivation = verifier.calls;
-    await store.refresh();
-    await store.refresh();
-    assert.strictEqual(verifier.calls, afterActivation, "the licence server must not be polled on every check");
-  });
-
-  test("premium survives the licence server being unreachable", async () => {
-    const { verifier, store } = await premiumSetup();
-    verifier.setBehaviour(async () => {
-      throw new Error("ENOTFOUND licence.example.com");
-    });
-    const state = await store.refresh({ force: true });
-    assert.strictEqual(state.isPremium, true, "an offline check must not revoke a paying user");
-    assert.strictEqual(state.offline, true);
-    assert.strictEqual(state.status, "offline-grace");
-  });
-
-  test("an offline cache older than the grace period stops granting premium", async () => {
-    const context = premiumContext();
-    let now = Date.now();
-    const verifier = new StubVerifier(async () => ({ valid: true, expiresAt: futureIso(400) }));
-    const store = new EntitlementStore(context, verifier, () => now);
-    await store.activate("DSP-PREMIUM-20991231-ABCDEF");
-    assert.strictEqual(store.current().isPremium, true);
-
-    verifier.setBehaviour(async () => {
-      throw new Error("offline");
-    });
-    now += OFFLINE_GRACE_MS + 1000;
-    const state = await store.refresh({ force: true });
-    assert.strictEqual(state.isPremium, false, "the grace period must eventually end");
-    assert.strictEqual(state.offline, true);
-  });
-
-  test("the cache is re-checked once the TTL passes", async () => {
-    const context = premiumContext();
-    let now = Date.now();
-    const verifier = new StubVerifier(async () => ({ valid: true, expiresAt: futureIso(400) }));
-    const store = new EntitlementStore(context, verifier, () => now);
-    await store.activate("DSP-PREMIUM-20991231-ABCDEF");
-    const afterActivation = verifier.calls;
-
-    await store.refresh();
-    assert.strictEqual(verifier.calls, afterActivation, "still inside the TTL");
-
-    now += VERIFICATION_TTL_MS + 1000;
-    await store.refresh();
-    assert.strictEqual(verifier.calls, afterActivation + 1, "the licence should be re-checked after the TTL");
-  });
-
-  test("deactivation clears the licence and the cache", async () => {
-    const { store } = await premiumSetup();
-    await store.deactivate();
-    assert.strictEqual(store.current().isPremium, false);
-    assert.strictEqual(await store.hasStoredLicense(), false);
-  });
-
-  test("the licence key is never exposed in the state object", async () => {
-    const { store } = await premiumSetup();
-    const serialised = JSON.stringify(store.current());
-    assert.ok(!serialised.includes("DSP-PREMIUM-20991231-ABCDEF"), "the key must not leak into state");
-  });
-
-  test("state changes are announced once", async () => {
-    const { store, verifier } = await premiumSetup();
-    let events = 0;
-    store.onDidChange(() => events++);
-    await store.refresh({ force: true });
-    assert.strictEqual(events, 0, "an unchanged state should not fire");
-    verifier.setBehaviour(async () => ({ valid: false, reason: "revoked" }));
-    await store.refresh({ force: true });
-    assert.strictEqual(events, 1, "a real change should fire exactly once");
-  });
-
-  test("the offline verifier accepts its own keys and rejects tampering", async () => {
-    const verifier = new OfflineLicenseVerifier();
-    const key = OfflineLicenseVerifier.issue(new Date(Date.now() + 86400000 * 30));
-    const good = await verifier.verify(key);
-    assert.strictEqual(good.valid, true);
-
-    const tampered = key.slice(0, -1) + (key.endsWith("A") ? "B" : "A");
-    assert.strictEqual((await verifier.verify(tampered)).valid, false);
-    assert.strictEqual((await verifier.verify("not-a-key")).valid, false);
-  });
-});
-
-suite("development mode", () => {
-  test("the override works in a development host", async () => {
-    const { store } = await freeSetup();
-    assert.strictEqual(store.developmentModeAvailable(), true);
-    const state = await store.setDevelopmentTier("premium");
-    assert.strictEqual(state.isPremium, true);
-    assert.strictEqual(state.status, "development");
-  });
-
-  test("the override is refused and ignored in an installed extension", async () => {
-    const devContext = premiumContext(3);
-    const devStore = new EntitlementStore(devContext, new StubVerifier(async () => ({ valid: false })));
-    await devStore.setDevelopmentTier("premium");
-    assert.strictEqual(devStore.current().isPremium, true);
-
-    // Same stored state, but now running as a normal installed extension.
-    const installedContext = premiumContext(1 /* Production */);
-    installedContext.globalState = devContext.globalState;
-    const installedStore = new EntitlementStore(installedContext, new StubVerifier(async () => ({ valid: false })));
-    await installedStore.refresh();
-
-    assert.strictEqual(installedStore.developmentModeAvailable(), false);
-    assert.strictEqual(installedStore.current().isPremium, false, "a stored override must never grant premium in production");
-    await assert.rejects(() => installedStore.setDevelopmentTier("premium"), /development host/);
-  });
-
-  test("clearing the override restores the real licence state", async () => {
-    const { store } = await premiumSetup();
-    await store.setDevelopmentTier("free");
-    assert.strictEqual(store.current().isPremium, false);
-    await store.setDevelopmentTier(undefined);
-    assert.strictEqual(store.current().isPremium, true);
-  });
-});
 
 suite("feature access", () => {
   test("a free user can use every free feature", async () => {
-    const { access } = await freeSetup();
+    const { access } = await setupWithPoints(0);
     for (const feature of DEVELOPER_FEATURES.filter(f => f.tier === "free")) {
       const decision = access.check(feature.id);
       assert.strictEqual(decision.allowed, true, `${feature.id} should be free: ${decision.message}`);
     }
   });
 
-  test("a free user is blocked from every premium feature", async () => {
-    const { access } = await freeSetup();
+  test("a user with no points is blocked from every premium feature", async () => {
+    const { access } = await setupWithPoints(0);
     for (const feature of DEVELOPER_FEATURES.filter(f => f.tier === "premium")) {
       const decision = access.check(feature.id);
-      assert.strictEqual(decision.allowed, false, `${feature.id} must require premium`);
-      assert.strictEqual(decision.reason, "requires-premium");
-      assert.ok(decision.message, `${feature.id} should explain why it is locked`);
+      assert.strictEqual(decision.allowed, false, `${feature.id} must be gated`);
+      assert.strictEqual(decision.reason, "insufficient-points", `${feature.id} should be gated on points`);
+      assert.ok(decision.pointCost && decision.pointCost > 0, `${feature.id} needs a points price`);
+      assert.ok(decision.message?.includes("Earn"), `${feature.id} should say how to proceed`);
     }
   });
 
-  test("a premium user can use everything", async () => {
-    const { access } = await premiumSetup();
+  test("points unlock premium features", async () => {
+    const { access, ledger } = await setupWithPoints(1000);
+    for (const feature of DEVELOPER_FEATURES.filter(f => f.tier === "premium")) {
+      const decision = access.check(feature.id);
+      assert.strictEqual(decision.allowed, true, `${feature.id} should be affordable: ${decision.message}`);
+      assert.strictEqual(decision.pointCost, feature.pointCost);
+    }
+    assert.strictEqual(ledger.balance(), 1000, "checking access must not spend anything");
+  });
+
+  test("a successful run deducts exactly the feature's price", async () => {
+    const { access, ledger } = await setupWithPoints(100);
+    const cost = getFeature("llm-compare")!.pointCost!;
+    await access.run("llm-compare", async () => "done");
+    assert.strictEqual(ledger.balance(), 100 - cost);
+  });
+
+  test("a failed run costs nothing", async () => {
+    const { access, ledger } = await setupWithPoints(100);
+    await assert.rejects(() => access.run("llm-compare", async () => { throw new Error("upstream failed"); }), /upstream failed/);
+    assert.strictEqual(ledger.balance(), 100, "points must only be charged for work that succeeded");
+  });
+
+  test("running down the balance closes access again", async () => {
+    const cost = getFeature("assertions")!.pointCost!;
+    const { access, ledger } = await setupWithPoints(cost);
+    assert.strictEqual(access.check("assertions").allowed, true);
+
+    await access.run("assertions", async () => "ok");
+    assert.strictEqual(ledger.balance(), 0);
+
+    const after = access.check("assertions");
+    assert.strictEqual(after.allowed, false);
+    assert.strictEqual(after.reason, "insufficient-points");
+    assert.strictEqual(after.pointsShort, cost);
+  });
+
+  test("free features never cost points", async () => {
+    const { access, ledger } = await setupWithPoints(50);
+    assert.strictEqual(access.costFor("llm-request"), 0, "a free feature has no price");
+    await access.run("llm-request", async () => "done");
+    assert.strictEqual(ledger.balance(), 50, "running a free feature leaves the balance alone");
+  });
+
+  test("every premium feature carries a price so none is unreachable", () => {
+    const unpriced = DEVELOPER_FEATURES.filter(f => f.tier === "premium" && !f.pointCost);
+    assert.deepStrictEqual(unpriced.map(f => f.id), [], "these premium features cannot be earned into");
+  });
+
+  test("a large balance unlocks everything", async () => {
+    const { access } = await setupWithPoints(10000);
     for (const feature of DEVELOPER_FEATURES) {
-      assert.strictEqual(access.check(feature.id).allowed, true, `${feature.id} should be unlocked for premium`);
+      assert.strictEqual(access.check(feature.id).allowed, true, `${feature.id} should be affordable`);
     }
   });
 
   test("an unknown feature id is denied rather than allowed by default", async () => {
-    const { access } = await freeSetup();
+    const { access } = await setupWithPoints(0);
     const decision = access.check("totally-made-up");
     assert.strictEqual(decision.allowed, false);
     assert.strictEqual(decision.reason, "unknown-feature");
   });
 
   test("assertAccess throws a typed error carrying the decision", async () => {
-    const { access } = await freeSetup();
+    const { access } = await setupWithPoints(0);
     try {
       access.assertAccess("llm-compare");
       assert.fail("expected a FeatureAccessError");
     } catch (error) {
       assert.ok(error instanceof FeatureAccessError);
-      assert.strictEqual((error as FeatureAccessError).decision.reason, "requires-premium");
+      const decision = (error as FeatureAccessError).decision;
+      assert.strictEqual(decision.reason, "insufficient-points");
+      assert.ok(decision.pointCost && decision.pointsShort);
     }
   });
 
   test("run() refuses to execute the operation when access is denied", async () => {
-    const { access } = await freeSetup();
+    const { access } = await setupWithPoints(0);
     let executed = false;
     await assert.rejects(
       () => access.run("rag-pipeline-test", async () => { executed = true; return 1; }),
@@ -315,21 +194,42 @@ suite("feature access", () => {
     assert.strictEqual(executed, false, "the operation must never run for a denied feature");
   });
 
-  test("expired premium is treated as free at the operation layer", async () => {
-    const context = premiumContext();
-    const verifier = new StubVerifier(async () => ({ valid: true, expiresAt: new Date(Date.now() - 1000).toISOString() }));
-    const store = new EntitlementStore(context, verifier);
-    await store.activate("DSP-PREMIUM-20200101-ABCDEF");
-    const access = new FeatureAccessService(context, store);
+  test("spending everything blocks premium but leaves free features working", async () => {
+    const { access } = await setupWithPoints(0);
 
     let executed = false;
     await assert.rejects(() => access.run("llm-compare", async () => { executed = true; return 1; }), FeatureAccessError);
     assert.strictEqual(executed, false);
-    assert.strictEqual(access.check("llm-request").allowed, true, "free features stay available after expiry");
+    assert.strictEqual(access.check("llm-request").allowed, true, "free features never depend on the balance");
+  });
+
+  test("a negative or nonsense balance is treated as zero, never as credit", async () => {
+    const context = premiumContext();
+    for (const broken of [-500, NaN, Infinity]) {
+      const access = new FeatureAccessService(context, {
+        balance: () => broken,
+        spend: async () => false,
+        refund: async () => undefined
+      });
+      assert.strictEqual(access.pointBalance(), 0, `${broken} should read as a zero balance`);
+      assert.strictEqual(access.check("llm-compare").allowed, false, `${broken} must not unlock anything`);
+    }
+  });
+
+  test("a ledger that throws does not break access checks", async () => {
+    const context = premiumContext();
+    const access = new FeatureAccessService(context, {
+      balance: () => { throw new Error("storage unavailable"); },
+      spend: async () => false,
+      refund: async () => undefined
+    });
+    assert.strictEqual(access.pointBalance(), 0);
+    assert.strictEqual(access.check("llm-request").allowed, true, "free features survive a broken ledger");
+    assert.strictEqual(access.check("llm-compare").allowed, false);
   });
 
   test("daily limits are enforced and only count successful runs", async () => {
-    const { access } = await freeSetup();
+    const { access } = await setupWithPoints(0);
     const limit = access.limitFor("llm-request");
     assert.ok(limit && limit.max !== "unlimited", "llm-request should be limited on the free tier");
     const max = limit!.max as number;
@@ -349,81 +249,60 @@ suite("feature access", () => {
     await assert.rejects(() => access.run("llm-request", async () => "ok"), FeatureAccessError);
   });
 
-  test("premium removes the daily limit", async () => {
-    const { access } = await premiumSetup();
-    assert.strictEqual(access.limitFor("llm-request")?.max, "unlimited");
-    for (let index = 0; index < 40; index++) {
+  test("the daily cap applies regardless of balance", async () => {
+    const { access } = await setupWithPoints(10000);
+    const max = access.limitFor("llm-request")!.max as number;
+    for (let index = 0; index < max; index++) {
       await access.run("llm-request", async () => "ok");
     }
-    assert.strictEqual(access.check("llm-request").allowed, true);
+    const decision = access.check("llm-request");
+    assert.strictEqual(decision.allowed, false, "a large balance must not bypass the daily cap");
+    assert.strictEqual(decision.reason, "limit-reached");
   });
 
   test("concurrent metered runs all get counted", async () => {
-    const { access } = await premiumSetup();
+    const { access } = await setupWithPoints(0);
     await Promise.all(Array.from({ length: 10 }, () => access.run("llm-request", async () => "ok")));
     assert.strictEqual(access.usageFor("llm-request"), 10);
   });
 
   test("corrupted usage state does not break access checks", async () => {
-    const { context, access } = await freeSetup();
+    const { context, access } = await setupWithPoints(0);
     await context.globalState.update("devsnip.premium.dailyUsage", { date: "nonsense", counts: "not an object" });
     assert.strictEqual(access.usageFor("llm-request"), 0);
     assert.strictEqual(access.check("llm-request").allowed, true);
   });
 
   test("the snapshot the webview renders matches the real decisions", async () => {
-    const { access } = await freeSetup();
+    const { access } = await setupWithPoints(0);
     const snapshot = access.snapshot();
     assert.strictEqual(snapshot.features.length, DEVELOPER_FEATURES.length);
     for (const feature of snapshot.features) {
       assert.strictEqual(feature.locked, !access.check(feature.id).allowed, `${feature.id} snapshot disagrees with the live check`);
     }
-    assert.strictEqual(snapshot.state.isPremium, false);
+    assert.strictEqual(snapshot.pointBalance, 0);
   });
 });
 
 suite("collections and limits", () => {
-  test("the free tier caps saved requests at the registry limit", async () => {
-    const { context, access } = await freeSetup();
+  test("saving requests is unlimited and updates replace in place", async () => {
+    const { context, access } = await setupWithPoints(0);
     const collections = new CollectionStore(context, access);
-    const max = access.limitFor("collections-basic")!.max as number;
-
-    for (let index = 0; index < max; index++) {
-      await collections.save({ name: `Request ${index}`, url: `https://example.com/${index}` });
-    }
-    assert.strictEqual(collections.list().length, max);
-    await assert.rejects(
-      () => collections.save({ name: "One too many", url: "https://example.com/extra" }),
-      /free tier stores up to/
-    );
-  });
-
-  test("updating an existing request is allowed at the cap", async () => {
-    const { context, access } = await freeSetup();
-    const collections = new CollectionStore(context, access);
-    const max = access.limitFor("collections-basic")!.max as number;
 
     const ids: string[] = [];
-    for (let index = 0; index < max; index++) {
+    for (let index = 0; index < 40; index++) {
       const { saved } = await collections.save({ name: `Request ${index}`, url: `https://example.com/${index}` });
       ids.push(saved.id);
     }
+    assert.strictEqual(collections.list().length, 40, "saving a request must never be capped");
+
     const updated = await collections.save({ id: ids[0], name: "Renamed", url: "https://example.com/0" });
     assert.strictEqual(updated.saved.name, "Renamed");
-    assert.strictEqual(collections.list().length, max, "an update must not grow the collection");
-  });
-
-  test("premium storage is unlimited", async () => {
-    const { context, access } = await premiumSetup();
-    const collections = new CollectionStore(context, access);
-    for (let index = 0; index < 40; index++) {
-      await collections.save({ name: `Request ${index}`, url: `https://example.com/${index}` });
-    }
-    assert.strictEqual(collections.list().length, 40);
+    assert.strictEqual(collections.list().length, 40, "an update must not grow the collection");
   });
 
   test("imported entries are sanitised and malformed ones are skipped", async () => {
-    const { context, access } = await premiumSetup();
+    const { context, access } = await setupWithPoints(0);
     const collections = new CollectionStore(context, access);
     const result = await collections.import({
       kind: "devsnip-collection",
@@ -442,13 +321,13 @@ suite("collections and limits", () => {
   });
 
   test("export round-trips through import", async () => {
-    const { context, access } = await premiumSetup();
+    const { context, access } = await setupWithPoints(0);
     const collections = new CollectionStore(context, access);
     await collections.save({ name: "Alpha", url: "https://example.com/a" });
     const exported = collections.export();
     assert.strictEqual(exported.kind, "devsnip-collection");
 
-    const { context: other, access: otherAccess } = await premiumSetup();
+    const { context: other, access: otherAccess } = await setupWithPoints(0);
     const target = new CollectionStore(other, otherAccess);
     const result = await target.import(exported);
     assert.strictEqual(result.imported, 1);

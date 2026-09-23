@@ -1,11 +1,9 @@
 import * as vscode from "vscode";
 import { FeatureAccessError, FeatureAccessService } from "../premium/feature-access";
-import { EntitlementStore } from "../premium/entitlement";
 import {
   CATEGORY_GROUPS,
   CATEGORY_LABELS,
   FEATURE_GROUP_LABELS,
-  POINT_UNLOCKABLE,
   getFeature
 } from "../premium/feature-registry";
 import { CollectionStore, SavedRequest } from "../services/collections";
@@ -32,7 +30,7 @@ import { VECTOR_DBS, VectorDbId } from "../services/vector-db";
 import { CODE_LANGUAGES, CodeLanguage, generateClientCode, inspectJwt, requestOAuthToken } from "../services/dev-operations";
 import { diffJson, extractJson, readPath, validateSchema } from "../services/json-tools";
 import { AssertionSubject, parseAssertionRules, percentiles, runAssertions } from "../services/assertions";
-import { redeemPoints, refundPoints, getUserStats } from "./milestoneTracker";
+import { getUserStats } from "./milestoneTracker";
 
 /**
  * Bridges the REST API Client webview to the feature services.
@@ -48,7 +46,6 @@ import { redeemPoints, refundPoints, getUserStats } from "./milestoneTracker";
 
 export interface FeatureContext {
   access: FeatureAccessService;
-  entitlements: EntitlementStore;
   collections: CollectionStore;
   extensionContext: vscode.ExtensionContext;
   /** Sends a message back to the webview, tolerating a disposed panel. */
@@ -914,13 +911,23 @@ async function handleStream(message: Record<string, any>, context: FeatureContex
   }
 }
 
-function describeError(error: unknown): { error: string; denial?: string; pointCost?: number; upgradeable?: boolean } {
+function describeError(error: unknown): {
+  error: string;
+  denial?: string;
+  pointCost?: number;
+  pointBalance?: number;
+  pointsShort?: number;
+  upgradeable?: boolean;
+} {
   if (error instanceof FeatureAccessError) {
+    const decision = error.decision;
     return {
-      error: error.decision.message || "This feature is not available.",
-      denial: error.decision.reason,
-      pointCost: error.decision.pointCost,
-      upgradeable: error.decision.reason === "requires-premium"
+      error: decision.message || "This feature is not available.",
+      denial: decision.reason,
+      pointCost: decision.pointCost,
+      pointBalance: decision.pointBalance,
+      pointsShort: decision.pointsShort,
+      upgradeable: decision.reason === "insufficient-points"
     };
   }
   return { error: error instanceof Error ? error.message : String(error) };
@@ -947,31 +954,19 @@ export async function handleFeatureMessage(
     return true;
   }
 
-  if (command === "feature:refreshEntitlement") {
-    await context.entitlements.refresh({ force: message.force === true });
+  // Re-reads the balance and every access decision.
+  if (command === "feature:refresh") {
     context.post({ command: "featureCatalog", ...buildCatalog(context) });
     return true;
   }
 
-  if (command === "feature:setDevTier") {
-    // Guarded inside the store: an installed extension throws here.
-    try {
-      const tier = asString(message.tier);
-      await context.entitlements.setDevelopmentTier(tier === "free" || tier === "premium" ? tier : undefined);
-    } catch (error) {
-      context.post({ command: "featureError", featureId: "development", ...describeError(error) });
-    }
+  // Opens the tracker, where points are earned and the daily bonus is claimed.
+  if (command === "feature:openPointsTracker") {
+    await vscode.commands.executeCommand("sayaib.hue-console.milestoneTracker");
     context.post({ command: "featureCatalog", ...buildCatalog(context) });
     return true;
   }
 
-  if (command === "feature:activate") {
-    await vscode.commands.executeCommand("sayaib.hue-console.activatePremium");
-    context.post({ command: "featureCatalog", ...buildCatalog(context) });
-    return true;
-  }
-
-  // Free users may still pay points for the tools that predate subscriptions.
   if (command === "feature:unlockWithPoints") {
     await handlePointUnlock(message, context);
     return true;
@@ -983,20 +978,25 @@ export async function handleFeatureMessage(
     return true;
   }
 
+  const targetFeature = asString(message.featureId) || command.replace("feature:", "");
+  const chargeable = context.access.costFor(targetFeature);
   try {
     const result = await handler(message, context);
     context.post({
       command: "featureResult",
-      featureId: asString(message.featureId) || command.replace("feature:", ""),
+      featureId: targetFeature,
       requestId: asString(message.requestId),
-      result
+      result,
+      pointsCharged: chargeable,
+      remainingPoints: getUserStats(context.extensionContext).totalPoints
     });
   } catch (error) {
     context.post({
       command: "featureError",
-      featureId: asString(message.featureId) || command.replace("feature:", ""),
+      featureId: targetFeature,
       requestId: asString(message.requestId),
-      ...describeError(error)
+      ...describeError(error),
+      remainingPoints: getUserStats(context.extensionContext).totalPoints
     });
   }
   // The catalog carries usage counters, so refresh it after any metered call.
@@ -1011,41 +1011,30 @@ export async function handleFeatureMessage(
 async function handlePointUnlock(message: Record<string, any>, context: FeatureContext): Promise<void> {
   const featureId = asString(message.featureId);
   const feature = getFeature(featureId);
-  const cost = POINT_UNLOCKABLE[featureId];
 
-  if (!feature || !cost) {
-    context.post({ command: "featureError", featureId, error: "That feature cannot be unlocked with points." });
-    return;
-  }
-  if (context.access.state().isPremium) {
-    context.post({ command: "featureError", featureId, error: "Premium already includes this feature - no points needed." });
-    return;
-  }
-
-  const paid = await redeemPoints(context.extensionContext, cost, `API Client: ${feature.name}`);
-  if (!paid) {
-    const stats = getUserStats(context.extensionContext);
-    context.post({
-      command: "featureError",
-      featureId,
-      error: `Not enough points: ${feature.name} costs ${cost}, you have ${stats.totalPoints}. Keep using DevSnip Pro tools to earn more, or upgrade to Premium.`,
-      upgradeable: true
-    });
+  if (!feature) {
+    context.post({ command: "featureError", featureId, error: "That feature does not exist." });
     return;
   }
 
   try {
-    const result = await runPointUnlockedFeature(featureId, message, context);
+    // access.run enforces the balance and charges the cost only once the work
+    // has succeeded, so a failed run never costs the user anything.
+    const result = await context.access.run(featureId, () => runPointUnlockedFeature(featureId, message, context));
     const stats = getUserStats(context.extensionContext);
-    context.post({ command: "featureResult", featureId, result, remainingPoints: stats.totalPoints });
+    context.post({
+      command: "featureResult",
+      featureId,
+      result,
+      remainingPoints: stats.totalPoints,
+      pointsCharged: context.access.costFor(featureId)
+    });
   } catch (error) {
-    // The points were already spent, so return them when the work failed.
-    await refundPoints(context.extensionContext, cost, `Failed: ${feature.name}`);
     const stats = getUserStats(context.extensionContext);
     context.post({
       command: "featureError",
       featureId,
-      error: `${error instanceof Error ? error.message : String(error)} - your ${cost} points were refunded.`,
+      ...describeError(error),
       remainingPoints: stats.totalPoints
     });
   }
@@ -1054,9 +1043,9 @@ async function handlePointUnlock(message: Record<string, any>, context: FeatureC
 /**
  * Runs a points-unlocked tool.
  *
- * This deliberately bypasses `access.run`, because the points payment is the
- * entitlement for this call. The set of features reachable here is fixed by
- * POINT_UNLOCKABLE, so no other premium feature can be reached this way.
+ * The caller wraps this in `access.run`, which enforces the points balance and
+ * charges the cost once the work succeeds. The switch below is the whole set of
+ * features reachable through this path.
  */
 async function runPointUnlockedFeature(
   featureId: string,
@@ -1148,7 +1137,7 @@ async function runPointUnlockedFeature(
 export function buildCatalog(context: FeatureContext): Record<string, unknown> {
   const snapshot = context.access.snapshot();
   return {
-    state: snapshot.state,
+    pointBalance: snapshot.pointBalance,
     categories: (Object.keys(CATEGORY_GROUPS) as Array<keyof typeof CATEGORY_GROUPS>).map(category => ({
       id: category,
       label: CATEGORY_LABELS[category],
@@ -1166,7 +1155,8 @@ export function buildCatalog(context: FeatureContext): Record<string, unknown> {
             locked: feature.locked,
             reason: feature.decision.reason,
             message: feature.decision.message,
-            pointCost: feature.decision.pointCost,
+            pointCost: feature.tier === "premium" ? feature.pointCost ?? 0 : 0,
+            pointsShort: feature.decision.pointsShort,
             limit: feature.decision.limit
           }))
       }))
@@ -1182,7 +1172,6 @@ export function buildCatalog(context: FeatureContext): Record<string, unknown> {
     })),
     vectorDbs: VECTOR_DBS,
     codeLanguages: CODE_LANGUAGES,
-    developmentMode: context.entitlements.developmentModeAvailable(),
-    developmentTier: context.entitlements.developmentTier()
+    developmentMode: false
   };
 }

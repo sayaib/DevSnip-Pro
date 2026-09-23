@@ -11,7 +11,7 @@
  * corresponds to working functionality behind it.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.allFeatureIds = exports.featuresByGroup = exports.featuresByCategory = exports.getFeatureLimit = exports.getFeature = exports.POINT_UNLOCKABLE = exports.FEATURE_LIMITS = exports.DEVELOPER_FEATURES = exports.CATEGORY_GROUPS = exports.CATEGORY_LABELS = exports.FEATURE_GROUP_LABELS = void 0;
+exports.allFeatureIds = exports.featuresByGroup = exports.featuresByCategory = exports.getFeatureLimit = exports.getFeature = exports.pointCostFor = exports.POINT_UNLOCKABLE = exports.FEATURE_LIMITS = exports.DEVELOPER_FEATURES = exports.CATEGORY_GROUPS = exports.CATEGORY_LABELS = exports.FEATURE_GROUP_LABELS = void 0;
 exports.FEATURE_GROUP_LABELS = {
     rest: "REST",
     graphql: "GraphQL",
@@ -80,8 +80,7 @@ exports.DEVELOPER_FEATURES = [
         group: "developer-tools",
         tier: "free",
         enabled: true,
-        description: "Save requests and reopen them later.",
-        premiumBenefit: "Free saves a limited number of requests; Premium is unlimited and adds import and export."
+        description: "Save any number of requests, organised into folders, and reopen them later."
     },
     {
         id: "graphql-client",
@@ -140,6 +139,7 @@ exports.DEVELOPER_FEATURES = [
     // ------------------------------------------------------------- premium: REST
     {
         id: "websocket-client",
+        pointCost: 10,
         name: "WebSocket Testing",
         category: "software-development",
         group: "websocket",
@@ -150,6 +150,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "oauth2-helper",
+        pointCost: 12,
         name: "OAuth 2.0 Helper",
         category: "software-development",
         group: "authentication",
@@ -160,6 +161,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "assertions",
+        pointCost: 8,
         name: "Automated Assertions",
         category: "software-development",
         group: "api-testing",
@@ -170,6 +172,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "request-chaining",
+        pointCost: 15,
         name: "Request Chaining",
         category: "software-development",
         group: "api-testing",
@@ -180,6 +183,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "batch-performance",
+        pointCost: 20,
         name: "Batch and Performance Testing",
         category: "software-development",
         group: "api-testing",
@@ -190,6 +194,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "response-diff",
+        pointCost: 8,
         name: "Response Comparison",
         category: "software-development",
         group: "api-testing",
@@ -200,16 +205,18 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "collections-advanced",
+        pointCost: 10,
         name: "Advanced Collections",
         category: "software-development",
         group: "developer-tools",
         tier: "premium",
         enabled: true,
-        description: "Unlimited saved requests, plus collection import and export as JSON for sharing with a team.",
+        description: "Export a whole collection to JSON and import one back, for sharing a set of requests with a team.",
         premiumBenefit: "Share a whole collection instead of one request at a time."
     },
     {
         id: "security-headers-scan",
+        pointCost: 15,
         name: "Security Header Scan",
         category: "software-development",
         group: "api-testing",
@@ -220,6 +227,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "sdk-export",
+        pointCost: 10,
         name: "Typed SDK Export",
         category: "software-development",
         group: "developer-tools",
@@ -230,6 +238,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "mock-generator",
+        pointCost: 15,
         name: "Mock Server and Schema",
         category: "software-development",
         group: "developer-tools",
@@ -288,6 +297,7 @@ exports.DEVELOPER_FEATURES = [
     // --------------------------------------------------------- premium: AI / ML
     {
         id: "llm-compare",
+        pointCost: 30,
         name: "Multi-Model Comparison",
         category: "ai-ml",
         group: "model-comparison",
@@ -298,6 +308,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "llm-benchmark",
+        pointCost: 35,
         name: "LLM Benchmarking",
         category: "ai-ml",
         group: "model-comparison",
@@ -308,6 +319,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "streaming-diagnostics",
+        pointCost: 12,
         name: "Streaming Diagnostics",
         category: "ai-ml",
         group: "llm-apis",
@@ -318,6 +330,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "embeddings-test",
+        pointCost: 18,
         name: "Embeddings Testing",
         category: "ai-ml",
         group: "embeddings",
@@ -328,6 +341,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "vector-search-test",
+        pointCost: 18,
         name: "Vector Database Testing",
         category: "ai-ml",
         group: "embeddings",
@@ -338,6 +352,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "rag-pipeline-test",
+        pointCost: 30,
         name: "RAG Pipeline Testing",
         category: "ai-ml",
         group: "rag",
@@ -348,6 +363,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "agent-test",
+        pointCost: 30,
         name: "AI Agent Testing",
         category: "ai-ml",
         group: "ai-agents",
@@ -358,6 +374,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "prompt-eval",
+        pointCost: 25,
         name: "Prompt Evaluation",
         category: "ai-ml",
         group: "prompt-testing",
@@ -368,6 +385,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "prompt-versioning",
+        pointCost: 8,
         name: "Prompt Versioning",
         category: "ai-ml",
         group: "prompt-testing",
@@ -378,6 +396,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "ai-history-analytics",
+        pointCost: 10,
         name: "AI Request Analytics",
         category: "ai-ml",
         group: "model-comparison",
@@ -388,6 +407,7 @@ exports.DEVELOPER_FEATURES = [
     },
     {
         id: "load-test",
+        pointCost: 20,
         name: "Concurrent Load Test",
         category: "software-development",
         group: "api-testing",
@@ -402,26 +422,24 @@ exports.DEVELOPER_FEATURES = [
  * anything absent is unlimited for both tiers.
  */
 exports.FEATURE_LIMITS = [
-    { featureId: "llm-request", freeLimit: 25, premiumLimit: "unlimited", unit: "AI requests" },
-    { featureId: "prompt-test", freeLimit: 25, premiumLimit: "unlimited", unit: "prompt runs" },
-    { featureId: "llm-streaming", freeLimit: 10, premiumLimit: "unlimited", unit: "streamed responses" },
-    { featureId: "collections-basic", freeLimit: 15, premiumLimit: "unlimited", unit: "saved requests" },
-    { featureId: "llm-compare", premiumLimit: "unlimited", unit: "model comparisons" },
-    { featureId: "prompt-eval", premiumLimit: "unlimited", unit: "prompt evaluations" },
-    { featureId: "rag-pipeline-test", premiumLimit: "unlimited", unit: "RAG tests" },
-    { featureId: "llm-benchmark", premiumLimit: "unlimited", unit: "benchmark runs" }
+    { featureId: "llm-request", freeLimit: 25, unit: "AI requests" },
+    { featureId: "prompt-test", freeLimit: 25, unit: "prompt runs" },
+    { featureId: "llm-streaming", freeLimit: 10, unit: "streamed responses" }
 ];
 /**
- * Features that a free user may also unlock by spending DevSnip Pro points.
- * This preserves the points-based tools that shipped before subscriptions
- * existed - a free user keeps exactly the access they had.
+ * Every premium feature and what it costs in points, derived from the registry
+ * so a price is never defined in two places.
  */
-exports.POINT_UNLOCKABLE = {
-    "security-headers-scan": 15,
-    "load-test": 20,
-    "sdk-export": 10,
-    "mock-generator": 15
-};
+const featureIndexEarly = new Map(exports.DEVELOPER_FEATURES.map(feature => [feature.id, feature]));
+exports.POINT_UNLOCKABLE = Object.fromEntries(exports.DEVELOPER_FEATURES
+    .filter(feature => feature.tier === "premium" && typeof feature.pointCost === "number")
+    .map(feature => [feature.id, feature.pointCost]));
+/** Points charged to run a feature, or 0 when it is free. */
+function pointCostFor(featureId) {
+    const feature = featureIndexEarly.get(featureId);
+    return feature && feature.tier === "premium" ? feature.pointCost ?? 0 : 0;
+}
+exports.pointCostFor = pointCostFor;
 const featureIndex = new Map(exports.DEVELOPER_FEATURES.map(feature => [feature.id, feature]));
 const limitIndex = new Map(exports.FEATURE_LIMITS.map(limit => [limit.featureId, limit]));
 function getFeature(featureId) {

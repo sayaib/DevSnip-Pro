@@ -3,10 +3,9 @@ import { registerTrackedCommand } from "../utils/command-registry";
 import axios, { AxiosRequestConfig, CancelTokenSource } from "axios";
 import * as https from "https";
 import * as path from "path";
-import { getUserStats, redeemPoints, refundPoints } from "./milestoneTracker";
+import { getUserStats, onDidChangePoints } from "./milestoneTracker";
 import { safePostMessage } from "../utils/webview-ui";
 import { FeatureAccessService } from "../premium/feature-access";
-import { EntitlementStore } from "../premium/entitlement";
 import { CollectionStore } from "../services/collections";
 import { FeatureContext, buildCatalog, handleFeatureMessage } from "./api-client-features";
 
@@ -767,7 +766,6 @@ function buildApiRequestFromMessage(message: any): ApiRequest {
 
 export interface ApiClientServices {
   access: FeatureAccessService;
-  entitlements: EntitlementStore;
   collections: CollectionStore;
 }
 
@@ -807,21 +805,20 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
       // client's own sender so batch runs and chains share history and cookies.
       const featureContext: FeatureContext = {
         access: services.access,
-        entitlements: services.entitlements,
         collections: services.collections,
         extensionContext: context,
         post,
         sendHttp: (request) => apiTester.makeRequest(buildApiRequestFromMessage(request))
       };
 
-      // Push the catalog whenever entitlement changes, so an activation in one
-      // place updates every open view without a reload.
+      // Premium tools are paid for with points, so the whole catalog - balance,
+      // prices and affordability - is republished whenever the balance moves.
       let webSocketsAllowed = services.access.check("websocket-client").allowed;
-      const entitlementSubscription = services.entitlements.onDidChange(() => {
+      const pointsSubscription = onDidChangePoints(() => {
         const nowAllowed = services.access.check("websocket-client").allowed;
         if (nowAllowed !== webSocketsAllowed) {
-          // The CSP is baked into the document, so the page has to be rebuilt
-          // for the WebSocket allowance to change.
+          // The WebSocket allowance is baked into the document's CSP, so the
+          // page has to be rebuilt when affordability crosses that threshold.
           webSocketsAllowed = nowAllowed;
           panel.webview.html = getWebviewContent(apiTester.getHistory(), nowAllowed);
           return;
@@ -829,9 +826,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
         post({ command: "featureCatalog", ...buildCatalog(featureContext) });
       });
 
-      void services.entitlements.refresh().then(() => {
-        post({ command: "featureCatalog", ...buildCatalog(featureContext) });
-      });
+      post({ command: "featureCatalog", ...buildCatalog(featureContext) });
 
       const messageSubscription = panel.webview.onDidReceiveMessage(
         async (message) => {
@@ -995,155 +990,6 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
               break;
             }
 
-            case "runPremiumFeature": {
-              const { featureId, cost, requestData } = message;
-              const success = await redeemPoints(context, cost, `API Client Premium Tool: ${featureId}`);
-              if (!success) {
-                const currentStats = getUserStats(context);
-                post({
-                  command: "premiumError",
-                  error: `Insufficient points! Required: ${cost} pts, Available: ${currentStats.totalPoints} pts. Earn more points using DevSnip Pro tools!`
-                });
-                break;
-              }
-
-              try {
-                let resultOutput = "";
-                const targetUrl = requestData?.url || 'https://api.example.com';
-                const targetMethod = requestData?.method || 'GET';
-                const targetHeaders = requestData?.headers || {};
-                const targetBody = requestData?.data;
-
-                if (featureId === "secScan") {
-                  try {
-                    const res = await axios({ method: targetMethod, url: targetUrl, validateStatus: () => true, timeout: 10000 });
-                    const headers = res.headers;
-                    const issues: string[] = [];
-                    if (!headers['strict-transport-security']) issues.push("Missing HSTS (Strict-Transport-Security) header");
-                    if (!headers['content-security-policy']) issues.push("Missing Content Security Policy (CSP)");
-                    if (!headers['x-content-type-options']) issues.push("Missing X-Content-Type-Options header");
-                    if (!headers['x-frame-options']) issues.push("Missing X-Frame-Options (Clickjacking protection)");
-                    if (targetUrl.startsWith('http://')) issues.push("Insecure protocol: using HTTP instead of HTTPS");
-
-                    resultOutput = `🛡️ Live Security Audit Report for ${targetUrl}\n` +
-                      `--------------------------------------------------\n` +
-                      `• HTTP Status: ${res.status} ${res.statusText}\n` +
-                      `• Security Headers Scanned: ${Object.keys(headers).length} found\n` +
-                      `• Vulnerabilities / Recommendations (${issues.length}):\n` +
-                      (issues.length > 0 ? issues.map(i => `  ⚠️ ${i}`).join('\n') : `  ✅ All standard security headers properly configured!`) + `\n\n` +
-                      `• OWASP API Security Top 10 Check: ${issues.length <= 1 ? 'PASSED' : 'REVIEW RECOMMENDED'}`;
-                  } catch (err: any) {
-                    resultOutput = `🛡️ Security Scan Error: Unable to reach ${targetUrl} (${err.message})`;
-                  }
-                } else if (featureId === "loadTest") {
-                  try {
-                    const startTime = Date.now();
-                    const batchSize = 3;
-                    const promises = Array.from({ length: batchSize }).map(() => {
-                      const t0 = Date.now();
-                      return axios({ method: targetMethod, url: targetUrl, validateStatus: () => true, timeout: 10000 })
-                        .then(r => ({ status: r.status, time: Date.now() - t0, success: r.status < 500 }))
-                        .catch(e => ({ status: 0, time: Date.now() - t0, success: false, error: e.message }));
-                    });
-                    const results = await Promise.all(promises);
-                    const totalTime = Date.now() - startTime;
-                    const avgTime = Math.round(results.reduce((acc, r) => acc + r.time, 0) / results.length);
-                    const successCount = results.filter(r => r.success).length;
-
-                    resultOutput = `🧪 Live Multi-Request Load & Latency Test (${batchSize} Concurrent Calls)\n` +
-                      `--------------------------------------------------\n` +
-                      `• Target Endpoint: ${targetMethod} ${targetUrl}\n` +
-                      `• Total Execution Duration: ${totalTime}ms\n` +
-                      `• Average Response Latency: ${avgTime}ms\n` +
-                      `• Success Rate: ${Math.round((successCount / batchSize) * 100)}% (${successCount}/${batchSize} successful)\n` +
-                      `• Latency Breakdown:\n` +
-                      results.map((r, idx) => `  [Call #${idx + 1}] Status: ${r.status} | Latency: ${r.time}ms | ${r.success ? 'SUCCESS' : 'FAILED'}`).join('\n');
-                  } catch (err: any) {
-                    resultOutput = `🧪 Load Test Error: ${err.message}`;
-                  }
-                } else if (featureId === "sdkExporter") {
-                  const parsedHeaders = JSON.stringify(targetHeaders, null, 2);
-                  const hasBody = targetBody && ['POST', 'PUT', 'PATCH'].includes(targetMethod.toUpperCase());
-                  
-                  resultOutput = `// 📦 Production-Ready Type-Safe SDK Exporter\n// Target: ${targetMethod} ${targetUrl}\n\n` +
-                    `// 1. TypeScript / Axios Client\nimport axios from 'axios';\n\n` +
-                    `export interface ApiRequestOptions {\n  headers?: Record<string, string>;\n  data?: any;\n}\n\n` +
-                    `export async function executeApiRequest(options?: ApiRequestOptions) {\n` +
-                    `  const response = await axios({\n` +
-                    `    method: '${targetMethod.toLowerCase()}',\n` +
-                    `    url: '${targetUrl}',\n` +
-                    `    headers: { 'Content-Type': 'application/json', ...${parsedHeaders}, ...options?.headers },\n` +
-                    (hasBody ? `    data: options?.data || ${targetBody}\n` : ``) +
-                    `  });\n  return response.data;\n}\n\n` +
-                    `// 2. Python Requests Snippet\n` +
-                    `import requests\n\nurl = "${targetUrl}"\nheaders = ${JSON.stringify(targetHeaders)}\n` +
-                    (hasBody ? `data = ${targetBody}\nresponse = requests.${targetMethod.toLowerCase()}(url, json=data, headers=headers)\n` : `response = requests.${targetMethod.toLowerCase()}(url, headers=headers)\n`) +
-                    `print(response.json())`;
-                } else if (featureId === "mockGenerator") {
-                  let parsedData = {};
-                  try {
-                    parsedData = targetBody ? JSON.parse(targetBody) : { sampleResponse: "OK", timestamp: Date.now() };
-                  } catch {
-                    parsedData = { rawData: targetBody || "Sample" };
-                  }
-
-                  let parsedPath = '/api/endpoint';
-                  try {
-                    parsedPath = new URL(targetUrl).pathname || '/api/endpoint';
-                  } catch {}
-
-                  resultOutput = `🤖 AI Response Mock Server & JSON Schema Contract Generator\n` +
-                    `--------------------------------------------------\n\n` +
-                    `// Express.js Mock Route Implementation\n` +
-                    `const express = require('express');\nconst app = express();\napp.use(express.json());\n\n` +
-                    `app.all('${parsedPath}', (req, res) => {\n` +
-                    `  console.log('[Mock Server] Received ${targetMethod} request with body:', req.body);\n` +
-                    `  res.setHeader('Content-Type', 'application/json');\n` +
-                    `  res.setHeader('X-Mocked-By', 'DevSnip-Pro');\n` +
-                    `  res.status(200).json({\n` +
-                    `    status: "success",\n` +
-                    `    endpoint: "${parsedPath}",\n` +
-                    `    mockData: ${JSON.stringify(parsedData, null, 4)},\n` +
-                    `    simulatedAt: new Date().toISOString()\n` +
-                    `  });\n});\n\n` +
-                    `// Inferred JSON Schema Contract:\n` +
-                    JSON.stringify({
-                      "$schema": "http://json-schema.org/draft-07/schema#",
-                      "title": "InferredAPIContract",
-                      "type": "object",
-                      "properties": {
-                        "status": { "type": "string" },
-                        "endpoint": { "type": "string" },
-                        "mockData": { "type": "object" },
-                        "simulatedAt": { "type": "string" }
-                      }
-                    }, null, 2);
-                }
-
-                if (!resultOutput) {
-                  throw new Error(`Unknown premium feature "${featureId}"`);
-                }
-
-                const updatedStats = getUserStats(context);
-                post({
-                  command: "premiumResult",
-                  featureId,
-                  result: resultOutput,
-                  remainingPoints: updatedStats.totalPoints
-                });
-              } catch (err: any) {
-                // The points were already deducted, so give them back rather
-                // than charging the user for work that produced nothing.
-                await refundPoints(context, cost, `Failed premium tool: ${featureId}`);
-                const refreshed = getUserStats(context);
-                post({
-                  command: "premiumError",
-                  error: `${err?.message || "Premium feature execution failed"} - your ${cost} points were refunded.`,
-                  remainingPoints: refreshed.totalPoints
-                });
-              }
-              break;
-            }
           }
         },
       );
@@ -1151,7 +997,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
       // Clean up on panel disposal
       panel.onDidDispose(() => {
         messageSubscription.dispose();
-        entitlementSubscription.dispose();
+        pointsSubscription.dispose();
         apiTester.cancelCurrentRequest();
         if (activePanel === panel) activePanel = undefined;
       });
@@ -1255,6 +1101,34 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
             background: var(--bg-raised);
             border-bottom: 1px solid var(--border);
         }
+        .tool-actions-row {
+            display: flex; flex-wrap: wrap; gap: 8px;
+            margin: 12px 0 4px;
+        }
+        .tool-actions-row .btn { min-width: 104px; justify-content: center; }
+        .points-summary { margin-bottom: 20px; }
+        .points-heading { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); margin: 0 0 8px; }
+        .points-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+        .points-row {
+            display: flex; align-items: center; gap: 8px; padding: 8px 11px;
+            border: 1px solid var(--border); border-radius: 6px; font-size: 12px;
+        }
+        .points-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .points-row .price { flex: none; font-weight: 700; font-size: 11px; color: var(--accent); }
+        .points-row.short .price { color: var(--warning); }
+        .points-row .gap { flex: none; font-size: 11px; color: var(--fg-2); }
+        .points-earn { margin: 0; padding-left: 18px; font-size: 12px; color: var(--fg-1); line-height: 1.8; }
+        .points-note { font-size: 11.5px; color: var(--fg-2); margin: 8px 0 0; }
+        .points-empty { font-size: 12px; color: var(--fg-2); }
+        .points-badge {
+            display: inline-flex; align-items: center; gap: 5px; flex: none;
+            padding: 3px 9px; margin-right: 8px; border-radius: 999px;
+            border: 1px solid var(--accent); background: transparent; color: var(--accent);
+            font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+        }
+        .points-badge .unit { font-weight: 600; opacity: .8; }
+        .points-badge:hover { border-color: var(--focus); }
+        .points-badge:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
         .topbar-brand { font-weight: 600; font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
         .topbar-brand .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
         .topbar-spacer { flex: 1 1 auto; min-width: 8px; }
@@ -1306,6 +1180,19 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
         .nav-item.active { background: var(--bg-active); color: var(--fg-0); font-weight: 600; }
         .nav-item .nav-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .nav-item .lock { flex: none; font-size: 10px; color: var(--fg-2); }
+        .nav-item .cost-tag, .feature-cost {
+            flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .02em;
+            padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+            border: 1px solid var(--accent); color: var(--accent);
+        }
+        .nav-item .cost-tag.short, .feature-cost.short { border-color: var(--warning); color: var(--warning); }
+        .points-bar {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            padding: 7px 10px; margin-bottom: 12px; font-size: 11.5px;
+            border: 1px solid var(--border); border-radius: 6px; color: var(--fg-1);
+        }
+        .points-bar strong { color: var(--fg-0); }
+        .points-bar .spacer { margin-left: auto; }
 
         .nav-group { margin-bottom: 2px; }
         .nav-group-head {
@@ -1696,6 +1583,11 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                 </select>
                 <button id="manageEnvBtn" class="btn btn-ghost btn-sm" type="button">Manage</button>
             </div>
+            <button id="pointsBadge" class="points-badge" type="button"
+                    title="Your DevSnip Pro points. Premium tools are unlocked by spending them."
+                    aria-label="Points balance">
+                <span aria-hidden="true">◆</span><span id="userPointsBadge">0</span><span class="unit">pts</span>
+            </button>
             <div class="topbar-actions">
                 <button id="copyAsCurl" class="btn btn-ghost btn-sm" type="button" title="Copy the current request as a cURL command">cURL</button>
                 <button id="exportHistoryBtn" class="btn btn-ghost btn-sm" type="button" title="Export request history to a file">Export</button>
@@ -1965,15 +1857,9 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                     <div class="tool-actions">
                         <span class="tier-pill" id="featureTierPill">Free</span>
                         <button class="btn btn-ghost btn-sm" id="featureRefreshBtn" type="button">Refresh</button>
-                        <button class="btn btn-sm" id="featureUpgradeBtn" type="button">Unlock Premium</button>
+                        <button class="btn btn-sm" id="featureUpgradeBtn" type="button">Earn points</button>
                         <button class="btn btn-ghost btn-sm" id="backToRequest" type="button">Back to request</button>
                     </div>
-                </div>
-                <div class="feature-devbar" id="featureDevBar" hidden>
-                    <span>Development mode</span>
-                    <button class="btn btn-ghost btn-sm" data-devtier="free" type="button">Act as Free</button>
-                    <button class="btn btn-ghost btn-sm" data-devtier="premium" type="button">Act as Premium</button>
-                    <button class="btn btn-ghost btn-sm" data-devtier="" type="button">Clear override</button>
                 </div>
                 <div class="pane-body">
                     <div class="tool-body">
@@ -1983,43 +1869,41 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                 </div>
             </section>
 
-            <!-- ------------------------- POINTS HUB VIEW ------------------------ -->
-            <section class="view" id="view-points" aria-label="Points hub">
+            <!-- --------------------------- POINTS VIEW --------------------------- -->
+            <section class="view" id="view-points" aria-label="Points">
                 <div class="tool-head">
                     <div>
-                        <h2 class="tool-title">Points Hub</h2>
-                        <p class="tool-sub">Spend DevSnip Pro points earned from using the extension to run a premium tool once, without a subscription.</p>
+                        <h2 class="tool-title">Your points</h2>
+                        <p class="tool-sub">Premium tools are unlocked by spending points you earn using DevSnip Pro.</p>
                     </div>
                     <div class="tool-actions">
                         <span class="tier-pill"><span id="currentPointsDisplay">0</span> pts</span>
+                        <button class="btn btn-ghost btn-sm" id="openPointsTracker" type="button">Open tracker</button>
                         <button class="btn btn-ghost btn-sm" id="backToRequestFromPoints" type="button">Back to request</button>
                     </div>
                 </div>
                 <div class="pane-body">
                     <div class="tool-body">
-                        <div class="points-grid">
-                            <div class="points-card">
-                                <h4>Security header scan</h4>
-                                <p>Check the configured endpoint for HSTS, CSP, content-type and clickjacking protections.</p>
-                                <button class="btn btn-sm" id="btnSecScan" type="button">Run for 15 pts</button>
-                            </div>
-                            <div class="points-card">
-                                <h4>Load test</h4>
-                                <p>Send a short burst of requests and report latency and success rate.</p>
-                                <button class="btn btn-sm" id="btnLoadTest" type="button">Run for 20 pts</button>
-                            </div>
-                            <div class="points-card">
-                                <h4>SDK export</h4>
-                                <p>Generate a typed client plus a Python equivalent for the current request.</p>
-                                <button class="btn btn-sm" id="btnSdkExporter" type="button">Run for 10 pts</button>
-                            </div>
-                            <div class="points-card">
-                                <h4>Mock server</h4>
-                                <p>Generate an Express mock route and an inferred JSON Schema contract.</p>
-                                <button class="btn btn-sm" id="btnMockGenerator" type="button">Run for 15 pts</button>
-                            </div>
-                        </div>
-                        <pre class="feature-output" id="premiumOutput" style="margin-top:14px;">Choose a tool above to run it with your points. Results appear here.</pre>
+                        <section class="points-summary" aria-labelledby="pointsUnlockedHeading">
+                            <h3 id="pointsUnlockedHeading" class="points-heading">Unlocked at this balance</h3>
+                            <div id="pointsUnlockedList" class="points-list"></div>
+                        </section>
+                        <section class="points-summary" aria-labelledby="pointsLockedHeading">
+                            <h3 id="pointsLockedHeading" class="points-heading">Needs more points</h3>
+                            <div id="pointsLockedList" class="points-list"></div>
+                        </section>
+                        <section class="points-summary" aria-labelledby="pointsEarnHeading">
+                            <h3 id="pointsEarnHeading" class="points-heading">How to earn points</h3>
+                            <ul class="points-earn">
+                                <li>Run any DevSnip Pro tool: <strong>+3</strong> (+1 after 5 runs of the same tool in a day)</li>
+                                <li>Create a custom snippet: <strong>+10</strong></li>
+                                <li>Run a security or cloud audit: <strong>+8</strong></li>
+                                <li>Run an AI, RAG or prompt tool: <strong>+5</strong></li>
+                                <li>Daily login <strong>+5</strong>, daily bonus <strong>+10</strong></li>
+                                <li>Milestones: <strong>+10 to +500</strong></li>
+                            </ul>
+                            <p class="points-note">Up to 120 points a day can be earned from tool use, plus one-time milestone bonuses.</p>
+                        </section>
                     </div>
                 </div>
             </section>
@@ -2792,6 +2676,10 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                         renderCatalog();
                         break;
                     case 'featureResult':
+                        if (typeof d.remainingPoints === 'number') syncPointBalance(d.remainingPoints);
+                        if (d.pointsCharged) {
+                            toast('\u2212' + d.pointsCharged + ' points \u00b7 balance ' + d.remainingPoints, 'info');
+                        }
                         if (d.featureId === 'websocket-client' && d.result && d.result.granted && window.__wsConnect) {
                             window.__wsConnect();
                             break;
@@ -2828,11 +2716,15 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                             if (d.upgradeable) toast('Premium removes the saved-request limit', 'warning');
                             break;
                         }
+                        if (typeof d.remainingPoints === 'number') syncPointBalance(d.remainingPoints);
                         featureOutput(d.error || 'That action failed.', true);
-                        if (d.upgradeable) toast('Premium is required for this tool', 'warning');
-                        if (typeof d.remainingPoints === 'number') {
-                            document.getElementById('userPointsBadge').textContent = d.remainingPoints;
-                            document.getElementById('currentPointsDisplay').textContent = d.remainingPoints;
+                        if (d.denial === 'insufficient-points') {
+                            // Running out of points is recoverable, so show the
+                            // way to earn more rather than leaving a dead end.
+                            toast('Not enough points \u00b7 ' + (d.pointsShort || 0) + ' more needed', 'warning');
+                            showEarnPoints();
+                        } else if (d.upgradeable) {
+                            toast('Premium is required for this tool', 'warning');
                         }
                         break;
                     }
@@ -2860,20 +2752,6 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                         featureOutput((window.__streamBuffer || d.text || '') + summary, Boolean(d.error));
                         break;
                     }
-                    case 'premiumResult':
-                        document.getElementById('currentPointsDisplay').textContent = d.remainingPoints;
-                        document.getElementById('userPointsBadge').textContent = d.remainingPoints;
-                        const outEl = document.getElementById('premiumOutput');
-                        outEl.textContent = d.result;
-                        outEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        toast('Premium tool executed successfully!', 'success');
-                        break;
-                    case 'premiumError':
-                        toast(d.error, 'error');
-                        const errEl = document.getElementById('premiumOutput');
-                        errEl.textContent = 'Error: ' + d.error;
-                        errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        break;
                     case 'curlGenerated':
                         if (d.error) { toast('Failed to generate cURL: ' + d.error, 'error'); break; }
                         navigator.clipboard.writeText(d.curl).then(() => toast('cURL command copied to clipboard!', 'success')).catch(() => {
@@ -2930,23 +2808,6 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                 }
             });
 
-            window.runPremium = function(featureId, cost) {
-                const url = document.getElementById('url').value.trim();
-                const method = methodSelect.value;
-                const headers = collectKV('headersContainer');
-                const data = document.getElementById('body').value.trim();
-                vscode.postMessage({
-                    command: 'runPremiumFeature',
-                    featureId,
-                    cost,
-                    requestData: { url, method, headers, data }
-                });
-            };
-
-            document.getElementById('btnSecScan')?.addEventListener('click', () => runPremium('secScan', 15));
-            document.getElementById('btnLoadTest')?.addEventListener('click', () => runPremium('loadTest', 20));
-            document.getElementById('btnSdkExporter')?.addEventListener('click', () => runPremium('sdkExporter', 10));
-            document.getElementById('btnMockGenerator')?.addEventListener('click', () => runPremium('mockGenerator', 15));
 
 
             /* ===================== FREE / PREMIUM FEATURE BROWSER =====================
@@ -2975,20 +2836,88 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
 
             function renderTier() {
                 if (!featureCatalog) return;
-                var state = featureCatalog.state || {};
-                var label = state.isPremium ? 'Premium' : 'Free';
-                if (state.status === 'development') label = 'Dev: ' + state.tier;
+                var balance = featureCatalog.pointBalance || 0;
 
                 var pill = fEl('featureTierPill');
                 if (pill) {
-                    pill.textContent = label;
-                    pill.className = 'tier-pill' + (state.isPremium ? ' premium' : '') +
-                        (state.status === 'expired' || state.status === 'invalid' ? ' warn' : '');
+                    pill.textContent = balance + ' pts';
+                    pill.className = 'tier-pill' + (balance > 0 ? ' premium' : '');
+                    pill.title = 'Your DevSnip Pro points balance';
                 }
                 var upgrade = fEl('featureUpgradeBtn');
-                if (upgrade) upgrade.textContent = state.isPremium ? 'Manage licence' : 'Unlock Premium';
-                var devBar = fEl('featureDevBar');
-                if (devBar) devBar.hidden = !featureCatalog.developmentMode;
+                if (upgrade) upgrade.textContent = 'Earn points';
+                renderPointsView();
+            }
+
+            /* Lists what the current balance does and does not unlock. */
+            function renderPointsView() {
+                var unlocked = fEl('pointsUnlockedList');
+                var locked = fEl('pointsLockedList');
+                if (!unlocked || !locked || !featureCatalog) return;
+
+                var premium = [];
+                featureCatalog.categories.forEach(function (category) {
+                    category.groups.forEach(function (group) {
+                        group.features.forEach(function (feature) {
+                            if (feature.tier === 'premium') premium.push(feature);
+                        });
+                    });
+                });
+                premium.sort(function (a, b) { return (a.pointCost || 0) - (b.pointCost || 0); });
+
+                function row(feature) {
+                    var el = document.createElement('button');
+                    el.type = 'button';
+                    el.className = 'points-row' + (feature.locked ? ' short' : '');
+                    el.style.textAlign = 'left';
+                    el.style.background = 'transparent';
+                    el.style.color = 'inherit';
+                    el.style.font = 'inherit';
+                    el.style.cursor = 'pointer';
+                    el.title = feature.description;
+
+                    var name = document.createElement('span');
+                    name.className = 'name';
+                    name.textContent = feature.name;
+                    el.appendChild(name);
+
+                    var price = document.createElement('span');
+                    price.className = 'price';
+                    price.textContent = feature.pointCost + ' pts';
+                    el.appendChild(price);
+
+                    if (feature.locked && feature.pointsShort) {
+                        var gap = document.createElement('span');
+                        gap.className = 'gap';
+                        gap.textContent = '+' + feature.pointsShort + ' needed';
+                        el.appendChild(gap);
+                    }
+                    el.addEventListener('click', function () { openFeature(feature.id); });
+                    return el;
+                }
+
+                unlocked.innerHTML = '';
+                locked.innerHTML = '';
+                var affordable = premium.filter(function (f) { return !f.locked; });
+                var tooDear = premium.filter(function (f) { return f.locked; });
+
+                if (!affordable.length) {
+                    var none = document.createElement('p');
+                    none.className = 'points-empty';
+                    none.textContent = 'No premium tool is affordable yet. Keep using DevSnip Pro to earn points.';
+                    unlocked.appendChild(none);
+                } else {
+                    affordable.forEach(function (f) { unlocked.appendChild(row(f)); });
+                }
+
+                if (!tooDear.length) {
+                    var all = document.createElement('p');
+                    all.className = 'points-empty';
+                    all.textContent = 'Every premium tool is affordable at your current balance.';
+                    locked.appendChild(all);
+                } else {
+                    tooDear.forEach(function (f) { locked.appendChild(row(f)); });
+                }
             }
 
             /* Builds the AI/ML and Developer Tools navigation in the sidebar
@@ -3076,18 +3005,18 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                             item.appendChild(name);
 
                             if (feature.tier === 'premium') {
-                                if (feature.locked) {
-                                    var lock = document.createElement('span');
-                                    lock.className = 'lock';
-                                    lock.setAttribute('aria-label', 'Premium, locked');
-                                    lock.textContent = '\u{1F512}';
-                                    item.appendChild(lock);
-                                } else {
-                                    var tag = document.createElement('span');
-                                    tag.className = 'tier-tag';
-                                    tag.textContent = 'PRO';
-                                    item.appendChild(tag);
-                                }
+                                // Points are the unlock path, so show the price
+                                // rather than a padlock.
+                                var tag = document.createElement('span');
+                                tag.className = 'cost-tag' + (feature.locked ? ' short' : '');
+                                tag.textContent = feature.pointCost + ' pts';
+                                tag.title = feature.locked
+                                    ? 'Costs ' + feature.pointCost + ' points; you need ' + feature.pointsShort + ' more'
+                                    : 'Costs ' + feature.pointCost + ' points per run';
+                                tag.setAttribute('aria-label', feature.locked
+                                    ? 'Costs ' + feature.pointCost + ' points, ' + feature.pointsShort + ' more needed'
+                                    : 'Costs ' + feature.pointCost + ' points per run');
+                                item.appendChild(tag);
                             }
 
                             item.addEventListener('click', function () { openFeature(feature.id); });
@@ -3105,8 +3034,20 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                 });
             }
 
+            function syncPointBalance(balance) {
+                if (typeof balance !== 'number') return;
+                if (featureCatalog) featureCatalog.pointBalance = balance;
+                var badge = document.getElementById('userPointsBadge');
+                if (badge) badge.textContent = balance;
+                var display = document.getElementById('currentPointsDisplay');
+                if (display) display.textContent = balance;
+                var toolBalance = document.getElementById('toolPointBalance');
+                if (toolBalance) toolBalance.textContent = balance;
+            }
+
             function renderCatalog() {
                 renderTier();
+                syncPointBalance(featureCatalog && featureCatalog.pointBalance);
                 renderToolNav();
                 if (activeFeature) {
                     var still = featureById(activeFeature);
@@ -3114,6 +3055,25 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                     if (!still) closeFeaturePanel();
                     else if (still.locked && currentView === 'tool') openFeature(activeFeature);
                 }
+            }
+
+            /* Explains how points are earned and opens the tracker. */
+            function showEarnPoints() {
+                var lines = [
+                    'Points are earned by using DevSnip Pro:',
+                    '',
+                    '\u2022 Any tool run: +3 points (+1 after 5 runs of the same tool in a day)',
+                    '\u2022 Creating a custom snippet: +10 points',
+                    '\u2022 Security or cloud audit: +8 points',
+                    '\u2022 AI, RAG or prompt tool: +5 points',
+                    '\u2022 Daily login: +5 points, daily bonus: +10 points',
+                    '\u2022 Milestones: +10 to +500 points',
+                    '',
+                    'Up to 120 points a day can be earned from tool use, plus one-time milestone bonuses.',
+                    'Open the Milestone & Points Tracker to claim your daily bonus and see your progress.'
+                ].join('\\n');
+                featureOutput(lines, false);
+                toast('Open the Milestone tracker from the Activity Bar to claim points', 'info');
             }
 
             function closeFeaturePanel() {
@@ -3240,9 +3200,25 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                 };
             }
 
+            /*
+             * Adds an action button to a tool form.
+             *
+             * Consecutive buttons share one row so they line up as a group. A
+             * new row starts whenever something else has been appended since
+             * the last button, which keeps buttons next to the fields they act
+             * on instead of collecting them all at the top.
+             */
             function actionButton(container, label, handler) {
-                var bar = document.createElement('div');
-                bar.className = 'feature-card-actions';
+                var last = container.lastElementChild;
+                var bar = last && last.classList.contains('tool-actions-row')
+                    ? last
+                    : null;
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.className = 'tool-actions-row';
+                    container.appendChild(bar);
+                }
+
                 var button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'btn btn-sm';
@@ -3252,7 +3228,6 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                     handler();
                 });
                 bar.appendChild(button);
-                container.appendChild(bar);
                 return button;
             }
 
@@ -3835,24 +3810,54 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                     var unlock = document.createElement('button');
                     unlock.type = 'button';
                     unlock.className = 'btn';
-                    unlock.textContent = 'Unlock Premium';
-                    unlock.addEventListener('click', function () { vscode.postMessage({ command: 'feature:activate' }); });
+                    unlock.textContent = 'Open points tracker';
+                    unlock.addEventListener('click', function () { vscode.postMessage({ command: 'feature:openPointsTracker' }); });
                     card.appendChild(unlock);
 
+                    // Points are the primary way in, so say exactly where the
+                    // user stands and how to close the gap.
                     if (feature.pointCost) {
-                        var points = document.createElement('button');
-                        points.type = 'button';
-                        points.className = 'btn btn-ghost';
-                        points.style.marginLeft = '8px';
-                        points.textContent = 'Run once for ' + feature.pointCost + ' pts';
-                        points.addEventListener('click', function () { runWithPoints(feature.id); });
-                        card.appendChild(points);
+                        var ledger = document.createElement('div');
+                        ledger.className = 'why';
+                        ledger.style.marginTop = '14px';
+                        ledger.textContent = 'Price ' + feature.pointCost + ' points per run \u00b7 your balance ' +
+                            (featureCatalog.pointBalance || 0) + ' points' +
+                            (feature.pointsShort ? ' \u00b7 ' + feature.pointsShort + ' more needed' : '');
+                        card.appendChild(ledger);
+
+                        var earn = document.createElement('button');
+                        earn.type = 'button';
+                        earn.className = 'btn btn-ghost';
+                        earn.style.marginLeft = '8px';
+                        earn.textContent = 'How to earn points';
+                        earn.addEventListener('click', showEarnPoints);
+                        card.appendChild(earn);
                     }
 
                     body.appendChild(card);
                     showView('tool');
                     renderToolNav();
                     return;
+                }
+
+                if (feature.pointCost) {
+                    var bar = document.createElement('div');
+                    bar.className = 'points-bar';
+                    bar.setAttribute('role', 'status');
+                    var price = document.createElement('span');
+                    price.innerHTML = 'Running this costs <strong>' + feature.pointCost + ' points</strong>';
+                    bar.appendChild(price);
+                    var bal = document.createElement('span');
+                    bal.className = 'spacer';
+                    bal.innerHTML = 'Balance <strong id="toolPointBalance">' + (featureCatalog.pointBalance || 0) + '</strong> pts';
+                    bar.appendChild(bal);
+                    var how = document.createElement('button');
+                    how.type = 'button';
+                    how.className = 'btn btn-ghost btn-sm';
+                    how.textContent = 'Earn points';
+                    how.addEventListener('click', showEarnPoints);
+                    bar.appendChild(how);
+                    body.appendChild(bar);
                 }
 
                 if (feature.limit && feature.limit.max !== 'unlimited') {
@@ -3981,17 +3986,10 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
 
             /* ---- wiring ---- */
             fEl('featureRefreshBtn')?.addEventListener('click', function () {
-                vscode.postMessage({ command: 'feature:refreshEntitlement', force: true });
+                vscode.postMessage({ command: 'feature:refresh' });
             });
-            fEl('featureUpgradeBtn')?.addEventListener('click', function () {
-                vscode.postMessage({ command: 'feature:activate' });
-            });
+            fEl('featureUpgradeBtn')?.addEventListener('click', function () { showView('points'); });
             fEl('featurePanelClose')?.addEventListener('click', closeFeaturePanel);
-            Array.prototype.slice.call(document.querySelectorAll('[data-devtier]')).forEach(function (button) {
-                button.addEventListener('click', function () {
-                    vscode.postMessage({ command: 'feature:setDevTier', tier: button.getAttribute('data-devtier') || undefined });
-                });
-            });
 
 
             /* ===================== APP SHELL =====================
@@ -4345,7 +4343,10 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
 
             document.getElementById('backToRequest').addEventListener('click', function () { showView('request'); });
             document.getElementById('backToRequestFromPoints').addEventListener('click', function () { showView('request'); });
-            document.getElementById('userPointsBadge')?.addEventListener('click', function () { showView('points'); });
+            document.getElementById('openPointsTracker')?.addEventListener('click', function () {
+                vscode.postMessage({ command: 'feature:openPointsTracker' });
+            });
+            document.getElementById('pointsBadge')?.addEventListener('click', function () { showView('points'); });
 
             /* Save the current request into a collection. */
             document.getElementById('saveToCollectionBtn').addEventListener('click', function () {

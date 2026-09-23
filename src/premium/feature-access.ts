@@ -2,22 +2,35 @@ import * as vscode from "vscode";
 import {
   DEVELOPER_FEATURES,
   DeveloperFeature,
-  POINT_UNLOCKABLE,
   getFeature,
-  getFeatureLimit
+  getFeatureLimit,
+  pointCostFor
 } from "./feature-registry";
-import { EntitlementStore, SubscriptionState } from "./entitlement";
 
 /**
- * The one place that decides whether an operation may run.
+ * The one place that decides whether a REST API Client feature may run.
  *
- * Every caller - webview message, command, or service - asks this service, and
- * the decision is made from the entitlement store plus the registry. Hiding a
- * button is presentation only; `assertAccess` is the actual boundary, and it is
- * called immediately before the work happens, not when the UI is drawn.
+ * Premium features are unlocked with DevSnip Pro points, which the user earns
+ * by using the extension. There is no licence key and no subscription: the
+ * points balance is the entitlement. Every caller - webview message, command or
+ * service - asks this service, and the check happens in the extension host
+ * immediately before the work, never by hiding a control.
  */
 
-export type DenialReason = "disabled" | "unknown-feature" | "requires-premium" | "limit-reached";
+export type DenialReason = "disabled" | "unknown-feature" | "unpriced" | "limit-reached" | "insufficient-points";
+
+/**
+ * The points balance premium features are charged against.
+ *
+ * Injected rather than imported so this service stays independent of the
+ * milestone tracker and can be tested with a simple in-memory ledger.
+ */
+export interface PointsLedger {
+  balance(): number;
+  /** Deducts the cost. Returns false when the balance is too low. */
+  spend(amount: number, reason: string): Promise<boolean>;
+  refund(amount: number, reason: string): Promise<void>;
+}
 
 export interface AccessDecision {
   allowed: boolean;
@@ -25,10 +38,14 @@ export interface AccessDecision {
   reason?: DenialReason;
   /** Message intended for the user. */
   message?: string;
-  /** Present when a daily limit applies to the caller's tier. */
+  /** Present when a daily limit applies to this feature. */
   limit?: { used: number; max: number | "unlimited"; unit: string };
-  /** Points that would unlock this feature for a free user, when applicable. */
+  /** Points charged per run, when this is a premium feature. */
   pointCost?: number;
+  /** The balance at the time of the decision. */
+  pointBalance?: number;
+  /** How many more points are needed, when the balance is short. */
+  pointsShort?: number;
 }
 
 export class FeatureAccessError extends Error {
@@ -59,12 +76,24 @@ export class FeatureAccessService {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly entitlements: EntitlementStore,
+    private readonly points: PointsLedger,
     private readonly now: () => Date = () => new Date()
   ) {}
 
-  state(): SubscriptionState {
-    return this.entitlements.current();
+  /** Current points balance. Never negative, never throws. */
+  pointBalance(): number {
+    try {
+      const balance = this.points.balance();
+      return Number.isFinite(balance) ? Math.max(0, Math.trunc(balance)) : 0;
+    } catch (error) {
+      console.error("DevSnip Pro: could not read the points balance.", error);
+      return 0;
+    }
+  }
+
+  /** What one run of this feature costs, in points. Free features cost nothing. */
+  costFor(featureId: string): number {
+    return pointCostFor(featureId);
   }
 
   private readUsage(): UsageRecord {
@@ -86,18 +115,32 @@ export class FeatureAccessService {
     return this.readUsage().counts[featureId] ?? 0;
   }
 
-  /** Effective daily cap for the caller's current tier. */
+  /** Daily cap for this feature, when it has one. */
   limitFor(featureId: string): { max: number | "unlimited"; unit: string } | undefined {
     const limit = getFeatureLimit(featureId);
     if (!limit) return undefined;
-    const max = this.state().isPremium ? limit.premiumLimit ?? "unlimited" : limit.freeLimit;
+    const max = limit.freeLimit;
     if (max === undefined) return undefined;
     return { max, unit: limit.unit };
   }
 
+  private limitDecision(featureId: string): AccessDecision | undefined {
+    const limit = this.limitFor(featureId);
+    if (!limit || limit.max === "unlimited") return undefined;
+    const used = this.usageFor(featureId);
+    if (used < limit.max) return undefined;
+    return {
+      allowed: false,
+      featureId,
+      reason: "limit-reached",
+      limit: { used, max: limit.max, unit: limit.unit },
+      message: `You have used today's allowance of ${limit.max} ${limit.unit}. It resets tomorrow.`
+    };
+  }
+
   /**
    * Decides whether a feature may be used right now. Pure and synchronous, so
-   * it can be used both to render the UI and to guard the operation.
+   * the same call renders the UI and guards the operation.
    */
   check(featureId: string): AccessDecision {
     const feature = getFeature(featureId);
@@ -118,41 +161,44 @@ export class FeatureAccessService {
       };
     }
 
-    const state = this.state();
-    const pointCost = POINT_UNLOCKABLE[featureId];
+    const limitBlocked = this.limitDecision(featureId);
+    if (limitBlocked) return limitBlocked;
 
-    if (feature.tier === "premium" && !state.isPremium) {
+    const limit = this.limitFor(featureId);
+    const limitInfo = limit ? { used: this.usageFor(featureId), max: limit.max, unit: limit.unit } : undefined;
+
+    if (feature.tier !== "premium") {
+      return { allowed: true, featureId, limit: limitInfo };
+    }
+
+    const cost = pointCostFor(featureId);
+    const balance = this.pointBalance();
+
+    if (!cost) {
+      // A premium feature with no price cannot be earned into. This is a
+      // registry mistake rather than a state a user should ever reach.
       return {
         allowed: false,
         featureId,
-        reason: "requires-premium",
-        pointCost,
-        message: pointCost
-          ? `${feature.name} is a Premium feature. Unlock it with DevSnip Pro Premium, or spend ${pointCost} points to run it once.`
-          : `${feature.name} is a Premium feature. ${state.status === "expired" ? "Your subscription has expired." : "Activate a licence to use it."}`
+        reason: "unpriced",
+        pointBalance: balance,
+        message: `${feature.name} has no points price set, so it cannot be unlocked. Please report this.`
       };
     }
 
-    const limit = this.limitFor(featureId);
-    if (limit && limit.max !== "unlimited") {
-      const used = this.usageFor(featureId);
-      if (used >= limit.max) {
-        return {
-          allowed: false,
-          featureId,
-          reason: "limit-reached",
-          limit: { used, max: limit.max, unit: limit.unit },
-          message: `You have used today's free allowance of ${limit.max} ${limit.unit}. It resets tomorrow, or Premium removes the limit.`
-        };
-      }
-      return { allowed: true, featureId, limit: { used, max: limit.max, unit: limit.unit } };
+    if (balance < cost) {
+      return {
+        allowed: false,
+        featureId,
+        reason: "insufficient-points",
+        pointCost: cost,
+        pointBalance: balance,
+        pointsShort: cost - balance,
+        message: `${feature.name} costs ${cost} points and you have ${balance}. Earn ${cost - balance} more by using DevSnip Pro tools, then run it again.`
+      };
     }
 
-    return {
-      allowed: true,
-      featureId,
-      limit: limit ? { used: this.usageFor(featureId), max: limit.max, unit: limit.unit } : undefined
-    };
+    return { allowed: true, featureId, pointCost: cost, pointBalance: balance, limit: limitInfo };
   }
 
   /** Throws unless the feature may run. Call this immediately before the work. */
@@ -178,12 +224,36 @@ export class FeatureAccessService {
   }
 
   /**
-   * Runs an operation behind the access boundary: checks entitlement, runs the
-   * work, and only then counts the use.
+   * Runs an operation behind the access boundary.
+   *
+   * The work happens first and the points are charged only once it has
+   * succeeded, so a failed request never costs the user anything. The charge
+   * itself is atomic: if the balance moved in between, the run is reported as
+   * unaffordable rather than being given away.
    */
   async run<T>(featureId: string, operation: () => Promise<T>): Promise<T> {
-    this.assertAccess(featureId);
+    const decision = this.assertAccess(featureId);
     const result = await operation();
+
+    const cost = decision.pointCost ?? 0;
+    if (cost > 0) {
+      const feature = getFeature(featureId);
+      const name = feature?.name ?? featureId;
+      const paid = await this.points.spend(cost, `API Client: ${name}`);
+      if (!paid) {
+        const balance = this.pointBalance();
+        throw new FeatureAccessError({
+          allowed: false,
+          featureId,
+          reason: "insufficient-points",
+          pointCost: cost,
+          pointBalance: balance,
+          pointsShort: Math.max(0, cost - balance),
+          message: `${name} costs ${cost} points and your balance changed before it could be charged. Earn more points and try again.`
+        });
+      }
+    }
+
     await this.recordUsage(featureId);
     return result;
   }
@@ -195,14 +265,14 @@ export class FeatureAccessService {
 
   /**
    * A snapshot of every feature with its current access state, for rendering
-   * the client's navigation. The webview never computes entitlement itself.
+   * the client's navigation. The webview never computes access itself.
    */
   snapshot(): {
-    state: SubscriptionState;
+    pointBalance: number;
     features: Array<DeveloperFeature & { locked: boolean; decision: AccessDecision }>;
   } {
     return {
-      state: this.state(),
+      pointBalance: this.pointBalance(),
       features: DEVELOPER_FEATURES.map(feature => {
         const decision = this.check(feature.id);
         return { ...feature, locked: !decision.allowed, decision };

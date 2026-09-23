@@ -29,110 +29,49 @@ const command_registry_1 = require("../utils/command-registry");
 const feature_registry_1 = require("./feature-registry");
 Object.defineProperty(exports, "CATEGORY_LABELS", { enumerable: true, get: function () { return feature_registry_1.CATEGORY_LABELS; } });
 /**
- * User-facing commands for managing the subscription, plus the development
- * tier switcher.
+ * Commands for the points-based premium system.
  *
- * The switcher is registered only in a development or test host, so an
- * installed extension does not even expose a command that could be used to
- * bypass licensing.
+ * Premium REST API Client tools are unlocked by spending DevSnip Pro points,
+ * so the only thing to show here is the balance, what it can already afford,
+ * and how to earn more. There is no licence to enter or manage.
  */
-function describeStatus(state) {
-    switch (state.status) {
-        case "active":
-            return state.expiresAt
-                ? `Premium - active until ${new Date(state.expiresAt).toLocaleDateString()}`
-                : "Premium - active";
-        case "expired":
-            return "Premium - expired";
-        case "invalid":
-            return "Premium - licence rejected";
-        case "offline-grace":
-            return "Premium - active (cached, licence server unreachable)";
-        case "offline-expired":
-            return "Premium - cached licence too old to trust";
-        case "development":
-            return `Development override - acting as ${state.tier}`;
-        default:
-            return "Free";
-    }
-}
-function registerPremiumCommands(context, entitlements, access) {
-    const activate = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.activatePremium", async () => {
-        const key = await vscode.window.showInputBox({
-            title: "Activate DevSnip Pro Premium",
-            prompt: "Paste your licence key. It is stored in VS Code secret storage, never in settings or a webview.",
-            placeHolder: "DSP-PREMIUM-YYYYMMDD-XXXXXX",
-            password: true,
-            ignoreFocusOut: true,
-            validateInput: value => (value.trim() ? null : "Enter a licence key")
-        });
-        if (key === undefined)
-            return;
-        const state = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "DevSnip Pro: verifying licence" }, () => entitlements.activate(key));
-        if (state.isPremium) {
-            vscode.window.showInformationMessage(`DevSnip Pro Premium activated. ${state.detail ?? ""}`.trim());
-        }
-        else {
-            vscode.window.showErrorMessage(state.detail || "That licence key could not be activated.");
-        }
-    });
-    const deactivate = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.deactivatePremium", async () => {
-        if (!(await entitlements.hasStoredLicense())) {
-            vscode.window.showInformationMessage("No DevSnip Pro licence is currently stored.");
-            return;
-        }
-        const choice = await vscode.window.showWarningMessage("Remove the stored DevSnip Pro licence from this machine?", { modal: true }, "Remove licence");
-        if (choice !== "Remove licence")
-            return;
-        await entitlements.deactivate();
-        vscode.window.showInformationMessage("Licence removed. Free features remain available.");
-    });
+function registerPremiumCommands(context, access) {
     const status = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.premiumStatus", async () => {
-        const state = await entitlements.refresh();
-        const premiumCount = feature_registry_1.DEVELOPER_FEATURES.filter(feature => feature.tier === "premium").length;
-        const freeCount = feature_registry_1.DEVELOPER_FEATURES.length - premiumCount;
-        const unlocked = feature_registry_1.DEVELOPER_FEATURES.filter(feature => access.check(feature.id).allowed).length;
+        const balance = access.pointBalance();
+        const premium = feature_registry_1.DEVELOPER_FEATURES.filter(feature => feature.tier === "premium");
+        const affordable = premium.filter(feature => access.check(feature.id).allowed);
+        const cheapest = premium
+            .filter(feature => (feature.pointCost ?? 0) > balance)
+            .sort((a, b) => (a.pointCost ?? 0) - (b.pointCost ?? 0))[0];
         const lines = [
-            describeStatus(state),
-            state.detail ?? "",
+            `You have ${balance} DevSnip Pro point${balance === 1 ? "" : "s"}.`,
             "",
-            `Features available to you: ${unlocked} of ${feature_registry_1.DEVELOPER_FEATURES.length} (${freeCount} free, ${premiumCount} premium).`
-        ].filter(Boolean);
-        const actions = state.isPremium ? ["Open API Client", "Remove Licence"] : ["Open API Client", "Activate Licence"];
-        const choice = await vscode.window.showInformationMessage(lines.join("\n"), { modal: true }, ...actions);
+            `${affordable.length} of ${premium.length} premium REST API Client tools are unlocked at this balance.`
+        ];
+        if (cheapest) {
+            const short = (cheapest.pointCost ?? 0) - balance;
+            lines.push("", `Next to unlock: ${cheapest.name} (${feature_registry_1.CATEGORY_LABELS[cheapest.category]}) at ${cheapest.pointCost} points - ${short} more needed.`);
+        }
+        else if (premium.length) {
+            lines.push("", "Every premium tool is currently affordable.");
+        }
+        lines.push("", "Points are earned by using DevSnip Pro: any tool run, creating snippets, running audits, AI tools, the daily bonus and milestones.");
+        const choice = await vscode.window.showInformationMessage(lines.join("\n"), { modal: true }, "Open API Client", "Open Points Tracker");
         if (choice === "Open API Client")
             await vscode.commands.executeCommand("sayaib.hue-console.openGUI");
-        else if (choice === "Activate Licence")
-            await vscode.commands.executeCommand("sayaib.hue-console.activatePremium");
-        else if (choice === "Remove Licence")
-            await vscode.commands.executeCommand("sayaib.hue-console.deactivatePremium");
+        else if (choice === "Open Points Tracker")
+            await vscode.commands.executeCommand("sayaib.hue-console.milestoneTracker");
     });
-    context.subscriptions.push(activate, deactivate, status);
-    // ---------------------------------------------------------- development
-    if (!entitlements.developmentModeAvailable())
-        return;
-    const devSwitch = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.setDevelopmentTier", async () => {
-        const options = [
-            { label: "Free", description: "Act as a free user", value: "free" },
-            { label: "Premium", description: "Act as a premium subscriber", value: "premium" },
-            { label: "Clear override", description: "Use the real licence state", value: undefined }
-        ];
-        const picked = await vscode.window.showQuickPick(options, {
-            title: "Development: simulate a subscription tier",
-            placeHolder: "Only available in an extension development host"
-        });
-        if (!picked)
-            return;
-        const state = await entitlements.setDevelopmentTier(picked.value);
-        vscode.window.showInformationMessage(picked.value
-            ? `Development override active: ${picked.value}. ${describeStatus(state)}`
-            : `Development override cleared. ${describeStatus(state)}`);
-    });
-    const resetUsage = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.resetFeatureUsage", async () => {
-        await access.resetUsage();
-        vscode.window.showInformationMessage("DevSnip Pro: today's feature usage counters were reset.");
-    });
-    context.subscriptions.push(devSwitch, resetUsage);
+    context.subscriptions.push(status);
+    // Development helper: clears today's per-feature usage counters so the daily
+    // limits can be exercised repeatedly. Not registered in an installed build.
+    if (context.extensionMode === vscode.ExtensionMode.Development ||
+        context.extensionMode === vscode.ExtensionMode.Test) {
+        context.subscriptions.push((0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.resetFeatureUsage", async () => {
+            await access.resetUsage();
+            vscode.window.showInformationMessage("DevSnip Pro: today's feature usage counters were reset.");
+        }));
+    }
 }
 exports.registerPremiumCommands = registerPremiumCommands;
 //# sourceMappingURL=premium-commands.js.map

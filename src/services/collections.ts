@@ -4,11 +4,10 @@ import { FeatureAccessService } from "../premium/feature-access";
 /**
  * Saved request collections.
  *
- * The free tier keeps a limited number of saved requests and the premium tier
- * is unlimited with import/export - but that rule lives in the feature
- * registry, and this store asks FeatureAccessService rather than deciding for
- * itself. Chaining runs through here too, since a chain is just an ordered run
- * over saved requests.
+ * Saving and reopening requests is free and unlimited; exporting and importing
+ * a whole collection is the premium half, priced in points and enforced by
+ * FeatureAccessService at the message boundary. Chaining runs through here too,
+ * since a chain is just an ordered run over saved requests.
  */
 
 export interface SavedRequest {
@@ -99,25 +98,13 @@ export class CollectionStore {
     await next;
   }
 
-  /**
-   * Saves a request. The free-tier cap is enforced here, at the storage layer,
-   * so it cannot be bypassed by a webview that does not render the limit.
-   */
+  /** Saves or updates a request. Saving is free and unlimited. */
   async save(input: unknown): Promise<{ saved: SavedRequest; total: number }> {
     const request = sanitiseRequest(input);
     if (!request) throw new Error("A saved request needs at least a name and a URL.");
 
     const existing = this.list();
     const isUpdate = existing.some(entry => entry.id === request.id);
-
-    if (!isUpdate) {
-      const limit = this.access.limitFor("collections-basic");
-      if (limit && limit.max !== "unlimited" && existing.length >= limit.max) {
-        throw new Error(
-          `The free tier stores up to ${limit.max} saved requests (you have ${existing.length}). Delete one, or upgrade to Premium for unlimited collections.`
-        );
-      }
-    }
 
     const next = isUpdate
       ? existing.map(entry => (entry.id === request.id ? request : entry))

@@ -1,8 +1,8 @@
 {
   "name": "hue-console",
   "displayName": "DevSnip Pro",
-  "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.61.3",
+  "description": "\u26a1A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
+  "version": "10.63.2",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -327,251 +327,239 @@
     "commands": [
       {
         "command": "sayaib.hue-console.showSnippets",
-        "title": " 🚀 DevSnip Pro: Show Custom Snippets"
+        "title": " \ud83d\ude80 DevSnip Pro: Show Custom Snippets"
       },
       {
         "command": "sayaib.hue-console.createCustomSnippet",
-        "title": "🚀 DevSnip Pro: Create Your Own Perfect Code Snippet"
+        "title": "\ud83d\ude80 DevSnip Pro: Create Your Own Perfect Code Snippet"
       },
       {
         "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-        "title": "🛠️ DevSnip Pro: List and Remove Console Logs"
+        "title": "\ud83d\udee0\ufe0f DevSnip Pro: List and Remove Console Logs"
       },
       {
         "command": "sayaib.hue-console.openGUI",
-        "title": "🛢 DevSnip Pro: Rest API Client "
+        "title": "\ud83d\udee2 DevSnip Pro: Rest API Client "
       },
       {
         "command": "sayaib.hue-console.advancedToolsHub",
-        "title": "🧰 DevSnip Pro: Advanced Developer Tools Hub"
+        "title": "\ud83e\uddf0 DevSnip Pro: Advanced Developer Tools Hub"
       },
       {
         "command": "sayaib.hue-console.regexBuilder",
-        "title": "🔍 DevSnip Pro: Regex Builder & Tester"
+        "title": "\ud83d\udd0d DevSnip Pro: Regex Builder & Tester"
       },
       {
         "command": "sayaib.hue-console.removeUnusedImports",
-        "title": "🧹 DevSnip Pro: Remove Unused Imports"
+        "title": "\ud83e\uddf9 DevSnip Pro: Remove Unused Imports"
       },
       {
         "command": "sayaib.hue-console.readmeManager",
-        "title": "📝 DevSnip Pro: README Viewer & CRUD Manager"
+        "title": "\ud83d\udcdd DevSnip Pro: README Viewer & CRUD Manager"
       },
       {
         "command": "sayaib.hue-console.openCodeIntegration",
-        "title": "⚡ DevSnip Pro: OpenCode Integration"
+        "title": "\u26a1 DevSnip Pro: OpenCode Integration"
       },
       {
         "command": "sayaib.hue-console.jsonFormatter",
-        "title": "📝 DevSnip Pro: JSON/XML Formatter"
+        "title": "\ud83d\udcdd DevSnip Pro: JSON/XML Formatter"
       },
       {
         "command": "sayaib.hue-console.hashGenerator",
-        "title": "🔐 DevSnip Pro: Hash Generator"
+        "title": "\ud83d\udd10 DevSnip Pro: Hash Generator"
       },
       {
         "command": "sayaib.hue-console.base64Encoder",
-        "title": "🔤 DevSnip Pro: Base64 Encoder/Decoder"
+        "title": "\ud83d\udd24 DevSnip Pro: Base64 Encoder/Decoder"
       },
       {
         "command": "sayaib.hue-console.colorPalette",
-        "title": "🎨 DevSnip Pro: Color Palette Manager"
+        "title": "\ud83c\udfa8 DevSnip Pro: Color Palette Manager"
       },
       {
         "command": "sayaib.hue-console.urlEncoder",
-        "title": "🔗 DevSnip Pro: URL Encoder/Decoder"
+        "title": "\ud83d\udd17 DevSnip Pro: URL Encoder/Decoder"
       },
       {
         "command": "sayaib.hue-console.timestampConverter",
-        "title": "⏰ DevSnip Pro: Timestamp Converter"
+        "title": "\u23f0 DevSnip Pro: Timestamp Converter"
       },
       {
         "command": "sayaib.hue-console.loremGenerator",
-        "title": "📄 DevSnip Pro: Lorem Ipsum Generator"
+        "title": "\ud83d\udcc4 DevSnip Pro: Lorem Ipsum Generator"
       },
       {
         "command": "sayaib.hue-console.jsonToToon",
-        "title": "🎭 DevSnip Pro: JSON → TOON Converter"
+        "title": "\ud83c\udfad DevSnip Pro: JSON \u2192 TOON Converter"
       },
       {
         "command": "sayaib.hue-console.aiMlHub",
-        "title": "🤖 DevSnip Pro: AI/ML & LLM Tools Hub"
+        "title": "\ud83e\udd16 DevSnip Pro: AI/ML & LLM Tools Hub"
       },
       {
         "command": "sayaib.hue-console.tokenCounter",
-        "title": "💰 DevSnip Pro: Token Counter & Cost Calculator"
+        "title": "\ud83d\udcb0 DevSnip Pro: Token Counter & Cost Calculator"
       },
       {
         "command": "sayaib.hue-console.promptTemplate",
-        "title": "📝 DevSnip Pro: Prompt Template Manager"
+        "title": "\ud83d\udcdd DevSnip Pro: Prompt Template Manager"
       },
       {
         "command": "sayaib.hue-console.mlCodeGen",
-        "title": "🐍 DevSnip Pro: Python ML Code Generator"
+        "title": "\ud83d\udc0d DevSnip Pro: Python ML Code Generator"
       },
       {
         "command": "sayaib.hue-console.llmApiTester",
-        "title": "📡 DevSnip Pro: LLM API Tester"
+        "title": "\ud83d\udce1 DevSnip Pro: LLM API Tester"
       },
       {
         "command": "sayaib.hue-console.datasetSplit",
-        "title": "📊 DevSnip Pro: Dataset Split Calculator"
+        "title": "\ud83d\udcca DevSnip Pro: Dataset Split Calculator"
       },
       {
         "command": "sayaib.hue-console.gpuVram",
-        "title": "🖥️ DevSnip Pro: GPU VRAM Calculator"
+        "title": "\ud83d\udda5\ufe0f DevSnip Pro: GPU VRAM Calculator"
       },
       {
         "command": "sayaib.hue-console.experimentLogger",
-        "title": "📓 DevSnip Pro: Experiment Logger"
+        "title": "\ud83d\udcd3 DevSnip Pro: Experiment Logger"
       },
       {
         "command": "sayaib.hue-console.modelCard",
-        "title": "📄 DevSnip Pro: Model Card Generator"
+        "title": "\ud83d\udcc4 DevSnip Pro: Model Card Generator"
       },
       {
         "command": "sayaib.hue-console.jsonlViewer",
-        "title": "📋 DevSnip Pro: JSONL Viewer"
+        "title": "\ud83d\udccb DevSnip Pro: JSONL Viewer"
       },
       {
         "command": "sayaib.hue-console.mdTableGen",
-        "title": "📐 DevSnip Pro: Markdown Table Generator"
+        "title": "\ud83d\udcd0 DevSnip Pro: Markdown Table Generator"
       },
       {
         "command": "sayaib.hue-console.datasetProfiler",
-        "title": "🔎 DevSnip Pro: Dataset Profiler"
+        "title": "\ud83d\udd0e DevSnip Pro: Dataset Profiler"
       },
       {
         "command": "sayaib.hue-console.metricsCalculator",
-        "title": "📈 DevSnip Pro: Model Metrics Calculator"
+        "title": "\ud83d\udcc8 DevSnip Pro: Model Metrics Calculator"
       },
       {
         "command": "sayaib.hue-console.promptPlayground",
-        "title": "🧪 DevSnip Pro: Prompt Playground"
+        "title": "\ud83e\uddea DevSnip Pro: Prompt Playground"
       },
       {
         "command": "sayaib.hue-console.lrScheduler",
-        "title": "📈 DevSnip Pro: LR Scheduler Visualizer"
+        "title": "\ud83d\udcc8 DevSnip Pro: LR Scheduler Visualizer"
       },
       {
         "command": "sayaib.hue-console.inferenceEstimator",
-        "title": "⚡ DevSnip Pro: LLM Inference & VRAM Estimator"
+        "title": "\u26a1 DevSnip Pro: LLM Inference & VRAM Estimator"
       },
       {
         "command": "sayaib.hue-console.searchTools",
-        "title": "🔎 DevSnip Pro: Search All Tools (Regex)"
+        "title": "\ud83d\udd0e DevSnip Pro: Search All Tools (Regex)"
       },
       {
         "command": "sayaib.hue-console.bigDataHub",
-        "title": "🗄️ DevSnip Pro: Big Data Tools Hub"
+        "title": "\ud83d\uddc4\ufe0f DevSnip Pro: Big Data Tools Hub"
       },
       {
         "command": "sayaib.hue-console.schemaViewer",
-        "title": "📋 DevSnip Pro: Schema Viewer"
+        "title": "\ud83d\udccb DevSnip Pro: Schema Viewer"
       },
       {
         "command": "sayaib.hue-console.sparkSqlFormatter",
-        "title": "🔤 DevSnip Pro: Spark SQL Formatter"
+        "title": "\ud83d\udd24 DevSnip Pro: Spark SQL Formatter"
       },
       {
         "command": "sayaib.hue-console.dataQualityChecker",
-        "title": "🔍 DevSnip Pro: Data Quality Checker"
+        "title": "\ud83d\udd0d DevSnip Pro: Data Quality Checker"
       },
       {
         "command": "sayaib.hue-console.schemaDiff",
-        "title": "🔀 DevSnip Pro: Schema Diff Tool"
+        "title": "\ud83d\udd00 DevSnip Pro: Schema Diff Tool"
       },
       {
         "command": "sayaib.hue-console.partitionCalc",
-        "title": "📊 DevSnip Pro: Partition Calculator"
+        "title": "\ud83d\udcca DevSnip Pro: Partition Calculator"
       },
       {
         "command": "sayaib.hue-console.deltaLakeAnalyzer",
-        "title": "🗄️ DevSnip Pro: Delta Lake Log Analyzer"
+        "title": "\ud83d\uddc4\ufe0f DevSnip Pro: Delta Lake Log Analyzer"
       },
       {
         "command": "sayaib.hue-console.sparkCostEstimator",
-        "title": "📊 DevSnip Pro: Spark Cluster & Cost Estimator"
+        "title": "\ud83d\udcca DevSnip Pro: Spark Cluster & Cost Estimator"
       },
       {
         "command": "sayaib.hue-console.ragHub",
-        "title": "🧬 DevSnip Pro: RAG Tools Hub"
+        "title": "\ud83e\uddec DevSnip Pro: RAG Tools Hub"
       },
       {
         "command": "sayaib.hue-console.chunkingTester",
-        "title": "✂️ DevSnip Pro: Chunking Strategy Tester"
+        "title": "\u2702\ufe0f DevSnip Pro: Chunking Strategy Tester"
       },
       {
         "command": "sayaib.hue-console.embeddingCost",
-        "title": "💰 DevSnip Pro: Embedding Cost Calculator"
+        "title": "\ud83d\udcb0 DevSnip Pro: Embedding Cost Calculator"
       },
       {
         "command": "sayaib.hue-console.contextWindow",
-        "title": "🪟 DevSnip Pro: Context Window Calculator"
+        "title": "\ud83e\ude9f DevSnip Pro: Context Window Calculator"
       },
       {
         "command": "sayaib.hue-console.semanticDedup",
-        "title": "🔄 DevSnip Pro: Semantic Dedup Checker"
+        "title": "\ud83d\udd04 DevSnip Pro: Semantic Dedup Checker"
       },
       {
         "command": "sayaib.hue-console.ragEvalScores",
-        "title": "📈 DevSnip Pro: RAG Eval Calculator"
+        "title": "\ud83d\udcc8 DevSnip Pro: RAG Eval Calculator"
       },
       {
         "command": "sayaib.hue-console.hybridSearchRrf",
-        "title": "🧬 DevSnip Pro: Hybrid Search RRF Simulator"
+        "title": "\ud83e\uddec DevSnip Pro: Hybrid Search RRF Simulator"
       },
       {
         "command": "sayaib.hue-console.ragHallucinationAnalyzer",
-        "title": "🛡️ DevSnip Pro: RAG Hallucination Analyzer"
+        "title": "\ud83d\udee1\ufe0f DevSnip Pro: RAG Hallucination Analyzer"
       },
       {
         "command": "sayaib.hue-console.securityAudit",
-        "title": "🛡️ DevSnip Pro: Security Audit"
+        "title": "\ud83d\udee1\ufe0f DevSnip Pro: Security Audit"
       },
       {
         "command": "sayaib.hue-console.cloudSecurityAudit",
-        "title": "☁️ DevSnip Pro: Local Cloud Security Audit"
+        "title": "\u2601\ufe0f DevSnip Pro: Local Cloud Security Audit"
       },
       {
         "command": "sayaib.hue-console.devopsGenerator",
-        "title": "☁️ DevSnip Pro: DevOps Artifact Generator"
+        "title": "\u2601\ufe0f DevSnip Pro: DevOps Artifact Generator"
       },
       {
         "command": "sayaib.hue-console.mlopsGenerator",
-        "title": "🤖 DevSnip Pro: AI/ML DevOps Generator"
+        "title": "\ud83e\udd16 DevSnip Pro: AI/ML DevOps Generator"
       },
       {
         "command": "sayaib.hue-console.observabilityAnalyze",
-        "title": "📡 DevSnip Pro: Observability Log Analyzer"
+        "title": "\ud83d\udce1 DevSnip Pro: Observability Log Analyzer"
       },
       {
         "command": "sayaib.hue-console.observabilityStarter",
-        "title": "📡 DevSnip Pro: Observability Starter Generator"
+        "title": "\ud83d\udce1 DevSnip Pro: Observability Starter Generator"
       },
       {
         "command": "sayaib.hue-console.milestoneTracker",
-        "title": "🏆 DevSnip Pro: Milestone & Points Tracker"
-      },
-      {
-        "command": "sayaib.hue-console.activatePremium",
-        "title": "🔑 DevSnip Pro: Activate Premium Licence"
-      },
-      {
-        "command": "sayaib.hue-console.deactivatePremium",
-        "title": "🔓 DevSnip Pro: Remove Premium Licence"
+        "title": "\ud83c\udfc6 DevSnip Pro: Milestone & Points Tracker"
       },
       {
         "command": "sayaib.hue-console.premiumStatus",
-        "title": "👑 DevSnip Pro: Subscription Status"
-      },
-      {
-        "command": "sayaib.hue-console.setDevelopmentTier",
-        "title": "🧪 DevSnip Pro: Simulate Subscription Tier (development)"
+        "title": "\u2b50 DevSnip Pro: Points & Premium Features"
       },
       {
         "command": "sayaib.hue-console.resetFeatureUsage",
-        "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)"
+        "title": "\ud83e\uddea DevSnip Pro: Reset Feature Usage Counters (development)"
       }
     ],
     "configuration": {
@@ -595,11 +583,6 @@
           "minimum": 50,
           "maximum": 20000,
           "description": "Maximum number of files each security or cloud configuration audit reads."
-        },
-        "devsnip.premium.licensePortalUrl": {
-          "type": "string",
-          "default": "",
-          "description": "URL opened by the Unlock Premium action. Leave empty to use the in-editor licence key prompt."
         }
       }
     },
@@ -661,10 +644,6 @@
         }
       ],
       "commandPalette": [
-        {
-          "command": "sayaib.hue-console.setDevelopmentTier",
-          "when": "isDevelopment"
-        },
         {
           "command": "sayaib.hue-console.resetFeatureUsage",
           "when": "isDevelopment"

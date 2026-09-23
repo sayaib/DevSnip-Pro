@@ -1,232 +1,134 @@
 # DevSnip Pro
 
-A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code. 57 commands across 6 specialised hubs, available from the Activity Bar, the Command Palette, and an editor context submenu.
+A developer toolkit for VS Code: a full REST and AI API client, code snippets, workspace cleanup, security audits, and generators for DevOps, MLOps and observability. 59 commands, all local, no account needed.
 
-- Publisher: `sayaib`
-- Marketplace: https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console
-- Repository: https://github.com/sayaib/DevSnip-Pro
+## Getting started
 
-## Quick Start
+Install the extension, then open any tool one of three ways:
 
-| Method                 | Action                                                  | Description                                                                                                 |
-| :--------------------- | :------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------- |
-| **1. Activity Bar**    | Click the **DevSnip Pro** icon                          | Opens the tool tree grouped by workflow                                                                     |
-| **2. Command Palette** | `Ctrl+Shift+P` / `Cmd+Shift+P`, then type `DevSnip Pro` | Access all commands                                                                                         |
-| **3. Context Menu**    | Right-click in the editor, then **DevSnip Pro**         | Snippet creation, JSON/XML formatting, console-log and unused-import cleanup, log analysis, and tool search |
+- **Activity Bar** — click the DevSnip Pro icon for the tool tree, grouped by workflow.
+- **Command Palette** — `Ctrl+Shift+P` (`Cmd+Shift+P` on macOS), then type `DevSnip Pro`.
+- **Editor right-click** — the **DevSnip Pro** submenu, for tools that act on the file you are in.
 
-## Core and Developer Utilities
+Most people start with the **REST API Client** (`DevSnip Pro: Rest API Client`).
 
-| Feature                       | Command / Trigger                             | Description                                                                                                                                                                                                                  |
-| :---------------------------- | :-------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Developer Tools Hub** | `sayaib.hue-console.advancedToolsHub` | Landing page for the utilities below; each card opens its tool |
-| **Search All Tools** | `sayaib.hue-console.searchTools` | Find any tool by name, category or command with a regular expression |
-| **REST API Client**           | `sayaib.hue-console.openGUI`                  | Full HTTP/GraphQL client with headers, auth (Bearer/Basic/API Key), body types (JSON/Text/Form URL Encoded), auto-retry with backoff, redirect/SSL/proxy controls, cURL import & export, history export, cookies and history |
-| **OpenCode Integration**      | `sayaib.hue-console.openCodeIntegration`      | Check, install/repair, and launch the OpenCode CLI (see below)                                                                                                                                                               |
-| **Console Log Cleanup**       | `sayaib.hue-console.listAndRemoveConsoleLogs` | Scan and remove `console.log` statements project-wide                                                                                                                                                                        |
-| **Unused Imports Remover**    | `sayaib.hue-console.removeUnusedImports`      | Automatically strip unused import statements                                                                                                                                                                                 |
-| **README Viewer and Manager** | `sayaib.hue-console.readmeManager`            | View, edit, create, and manage workspace README.md files                                                                                                                                                                     |
-| **Regex Builder and Tester**  | `sayaib.hue-console.regexBuilder`             | Live pattern matching and component explanations                                                                                                                                                                             |
-| **JSON/XML Formatter**        | `sayaib.hue-console.jsonFormatter`            | Format, minify, validate, and syntax highlight                                                                                                                                                                               |
-| **Hash Generator**            | `sayaib.hue-console.hashGenerator`            | Generate SHA-1, SHA-256, SHA-384, SHA-512 hashes                                                                                                                                                                             |
-| **Base64 Encoder/Decoder**    | `sayaib.hue-console.base64Encoder`            | Encode/decode strings with UTF-8 support                                                                                                                                                                                     |
-| **URL Encoder/Decoder**       | `sayaib.hue-console.urlEncoder`               | Encode/decode components and full URLs                                                                                                                                                                                       |
-| **Timestamp Converter**       | `sayaib.hue-console.timestampConverter`       | Convert between Unix timestamps and human dates                                                                                                                                                                              |
-| **JSON to TOON Converter**    | `sayaib.hue-console.jsonToToon`               | Tree Outline notation for fast data reviews                                                                                                                                                                                  |
-| **Color Palette Manager**     | `sayaib.hue-console.colorPalette`             | Color picker, shade generator and WCAG contrast checker                                                                                                                                                                      |
-| **Lorem Ipsum Generator**     | `sayaib.hue-console.loremGenerator`           | Generate placeholder text with custom lengths                                                                                                                                                                                |
-| **Milestone Tracker**         | `sayaib.hue-console.milestoneTracker`         | Track development milestones and activity                                                                                                                                                                                    |
+## What you can do
 
-### Free and Premium tools
+### Test APIs
 
-The REST API Client organises its tools into two categories, each with a Free and a Premium tier. Open the **Tools** tab inside the client to browse them.
+The REST API Client handles the whole request cycle: pick a method, enter a URL, set headers, query parameters, a body and authentication, then send and inspect the response.
 
-```text
-REST API Client
-├── Software Developer
-│   ├── REST              REST requests, response inspector, history
-│   ├── GraphQL           queries, variables, operation name
-│   ├── WebSocket         connect, send, message log            (Premium)
-│   ├── Authentication    Bearer / Basic / API key, JWT inspector, OAuth 2.0 (Premium)
-│   ├── API Testing       assertions, chaining, batch, diff      (Premium)
-│   └── Developer Tools   environments, collections, cURL, code generation, JSON tools
-└── AI / ML Developer
-    ├── LLM APIs          OpenAI, Anthropic, Gemini, Azure, Ollama; tokens and cost; streaming
-    ├── Embeddings        embeddings testing, vector DB search    (Premium)
-    ├── RAG               retrieve-then-generate with a grounding score (Premium)
-    ├── AI Agents         tool-calling loop with a full trace     (Premium)
-    ├── Prompt Testing    prompt runs, JSON schema validation; evaluation and versioning (Premium)
-    └── Model Comparison  multi-model comparison, benchmarking, analytics (Premium)
-```
+- All HTTP methods, plus GraphQL and WebSocket
+- Bearer, Basic and API-key authentication, and an OAuth 2.0 token helper
+- Named environments with `{{variable}}` substitution
+- Saved collections, organised in folders, with request history
+- Import and export cURL commands, and generate client code in JavaScript, Python, Go, Java or C#
+- Response viewer with formatting, search, copy and save
+- Automated assertions, request chaining and batch performance testing
 
-**Free tier.** The complete REST workflow stays free: every HTTP method, headers, query parameters, request bodies, authentication, the response inspector, history, environments, cURL import/export, client code generation, JSON formatting and validation, JWT decoding, GraphQL, and up to 15 saved requests. On the AI side, free covers single requests to any supported provider, prompt testing, token and cost estimation, basic streaming, and JSON schema validation of model output, with a daily allowance (25 AI requests, 25 prompt runs, 10 streamed responses).
+### Work with AI and LLM APIs
 
-**Premium tier.** Adds WebSocket testing, OAuth 2.0 token helpers, declarative assertions, request chaining, batch and performance testing with latency percentiles, response comparison, unlimited collections with import/export, multi-model comparison, LLM benchmarking, streaming diagnostics, embeddings and vector database testing, RAG pipeline testing, agent testing, prompt evaluation and versioning, and AI request analytics. Daily limits are removed.
+The same client speaks to OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama and any OpenAI-compatible endpoint — each with the correct request shape and response parsing.
 
-| Command | Purpose |
-| :------ | :------ |
-| `sayaib.hue-console.activatePremium` | Enter a licence key. It is stored in VS Code secret storage, never in settings or a webview. |
-| `sayaib.hue-console.premiumStatus` | Show the current tier, expiry and how many features are available. |
-| `sayaib.hue-console.deactivatePremium` | Remove the stored licence from this machine. |
+- Send prompts, stream replies, estimate tokens and cost before you send
+- Validate a model's JSON output against a schema
+- Compare several models side by side, and benchmark latency and throughput
+- Test embeddings, vector databases (Qdrant, Pinecone, Weaviate, Chroma) and full RAG pipelines
+- Trace an agent's tool-calling loop, and score prompt variants against your own criteria
 
-Notes on how the tier system behaves:
+### Clean up a codebase
 
-- **Entitlement is enforced in the extension host**, immediately before each operation runs, not by hiding buttons. A locked feature cannot be reached through an alternate command or a crafted webview message.
-- **Offline is handled.** A successful licence check is cached for 24 hours and keeps working for up to 14 days while the licence server is unreachable, so a paying user is never locked out by a dropped connection. The licence server is not contacted on every feature call.
-- **Points still work.** The four tools that were previously unlocked with DevSnip Pro points (security header scan, load test, SDK export, mock generator) remain unlockable that way for free users, so nobody loses access they already had. Points are refunded if the tool fails.
-- **Development mode.** In an Extension Development Host, `DevSnip Pro: Simulate Subscription Tier` switches between free and premium for testing. The override is ignored entirely in an installed extension, so it cannot be used to bypass licensing.
+- Find and remove `console.log` statements across the workspace
+- Find and remove unused imports in JavaScript, TypeScript, Python and Java
+- Audit for hard-coded secrets, unsafe code and insecure cloud configuration
+- View, edit and manage README files with a live preview
 
-### OpenCode Integration
+### Generate what you would otherwise write by hand
 
-The OpenCode Integration Hub (`sayaib.hue-console.openCodeIntegration`) manages the OpenCode CLI from inside VS Code. It works on Windows, macOS, and Linux.
+- Dockerfiles, Compose files, Kubernetes manifests, Terraform, GitHub Actions
+- GPU containers, model-serving manifests and ML CI pipelines
+- OpenTelemetry starters and structured log schemas
 
-How it works:
+### Everyday utilities
 
-1. **System check** -- verifies Node.js (`node -v`) and the `opencode` binary (`opencode --version`, with PATH and global npm fallbacks).
-2. **Install / Repair** -- installs the official `opencode-ai` npm package globally. If a partial install is detected (npm lists the package but the binary does not run), it removes the stale package and reinstalls cleanly. If automated install fails (for example a permissions issue), it opens a terminal with the install command ready to run.
-3. **Recheck System** -- re-runs detection and updates the status badges and available actions.
-4. **Launch** -- opens OpenCode in an integrated terminal rooted at the current workspace folder.
+Regex builder, JSON/XML formatter, JSON→TOON converter, hash generator, Base64 and URL encoders, timestamp converter, colour palette with contrast checking, and a Lorem Ipsum generator. Plus calculators for tokens, GPU VRAM, dataset splits, Spark partitions and cluster cost.
 
-Install success is only reported after `opencode --version` is verified to run. Per-OS alternatives are shown in the hub: npm, Homebrew (`brew install anomalyco/tap/opencode`), the install script (`curl -fsSL https://opencode.ai/install | bash`), Chocolatey/Scoop on Windows, and WSL guidance.
+### Save your own snippets
 
-Windows note: PowerShell may show a script security prompt for VS Code's shell integration when launching. The hub waits for the shell to be ready before running `opencode`. If the prompt blocks the launch, answer it in the terminal, use the offered Command Prompt fallback, or permanently allow local scripts by running `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in PowerShell.
+Select code, run **Create Your Own Perfect Code Snippet**, and give it a prefix. Snippets are contributed for 40 languages and appear in IntelliSense after a window reload. Browse and delete them under **Show Custom Snippets**.
 
-## Snippets and Templates
+## Points and premium tools
 
-| Feature                   | Command / Trigger                        | Description                                                                                                                                                                 |
-| :------------------------ | :--------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Create Custom Snippet** | `sayaib.hue-console.createCustomSnippet` | Turn the current selection into a reusable snippet. Prompts for a prefix, name and description, warns before overwriting, and offers a window reload so VS Code picks it up |
-| **Saved Snippets**        | `sayaib.hue-console.showSnippets`        | Browse, filter and delete the snippets you have created, grouped by language                                                                                                |
+Most of DevSnip Pro is free and always available. A set of advanced REST API Client tools is unlocked with **points**, which you earn by using the extension — there is no licence key, subscription or account.
 
-Snippets are stored as `custom/custom_<language>.json` inside the extension folder and are contributed for **40 languages** (JavaScript, TypeScript, React, Python, Java, Go, Rust, C/C++, C#, PHP, Ruby, Swift, Dart, SQL, YAML, Dockerfile and more). The extension ships those files empty: the library is the one you build. VS Code reads contributed snippet files at startup, so a new snippet becomes available after a window reload.
+**How points work**
 
-> Snippets live inside the extension directory, which means a marketplace update replaces them. Export anything you want to keep, or store long-lived snippets in a VS Code user snippet file (`Preferences: Configure User Snippets`).
+- Using DevSnip Pro earns points: any tool run (+3), creating a snippet (+10), running an audit (+8), using an AI tool (+5), a daily login (+5) and bonus (+10), plus milestones (+10 to +500). Up to 120 points a day come from tool use, plus one-time milestone bonuses.
+- Each premium tool has a price from 8 to 35 points, shown next to it in the navigation and charged per run.
+- Points are deducted **only after a run succeeds**. A bad key, a network error or a failing endpoint costs nothing.
+- When your balance is short, the tool tells you the price, your balance and how many more points you need.
 
-## AI and ML Tools Hub (`sayaib.hue-console.aiMlHub`)
+Your balance sits in the client header. The **Your points** view lists what your balance unlocks, what it does not, and how to earn more. Points are stored on your machine and work offline.
 
-| Feature                      | Command / Trigger                       | Description                                                |
-| :--------------------------- | :-------------------------------------- | :--------------------------------------------------------- |
-| **Token Counter and Cost**   | `sayaib.hue-console.tokenCounter`       | Count LLM tokens and estimate API costs                    |
-| **Prompt Template Manager**  | `sayaib.hue-console.promptTemplate`     | Manage templates with `{{variable}}` substitution          |
-| **Python ML Code Generator** | `sayaib.hue-console.mlCodeGen`          | PyTorch, TensorFlow, HuggingFace and LangChain boilerplate |
-| **LLM API Tester**           | `sayaib.hue-console.llmApiTester`       | Test OpenAI, Anthropic, Gemini and Ollama endpoints        |
-| **Dataset Split Calculator** | `sayaib.hue-console.datasetSplit`       | Train/val/test splits with stratification                  |
-| **GPU VRAM Calculator**      | `sayaib.hue-console.gpuVram`            | Estimate VRAM by model size and precision                  |
-| **Experiment Logger**        | `sayaib.hue-console.experimentLogger`   | Log hyperparameters/metrics with Markdown export           |
-| **Model Card Generator**     | `sayaib.hue-console.modelCard`          | Generate HuggingFace-format model docs                     |
-| **JSONL Viewer**             | `sayaib.hue-console.jsonlViewer`        | Parse and inspect training data in table format            |
-| **Markdown Table Generator** | `sayaib.hue-console.mdTableGen`         | Generate clean markdown tables                             |
-| **Dataset Profiler**         | `sayaib.hue-console.datasetProfiler`    | Inspect dataset columns and distributions                  |
-| **Model Metrics Calculator** | `sayaib.hue-console.metricsCalculator`  | Calculate accuracy, F1, precision, recall                  |
-| **Prompt Playground**        | `sayaib.hue-console.promptPlayground`   | Interactive prompt experimentation                         |
-| **LR Scheduler Visualizer**  | `sayaib.hue-console.lrScheduler`        | Visualize learning rate schedules                          |
-| **Inference Estimator**      | `sayaib.hue-console.inferenceEstimator` | LLM inference speed and memory estimator                   |
+Free tools include the full REST and GraphQL workflow, response inspection, history, environments, unlimited saved collections, cURL import/export, code generation, JWT decoding, JSON tools, and single AI requests with prompt testing, token costing, streaming and schema validation. Free AI use is capped per day at 25 requests, 25 prompt runs and 10 streamed responses.
 
-## Big Data Tools Hub (`sayaib.hue-console.bigDataHub`)
+## OpenCode integration
 
-| Feature                  | Command / Trigger                       | Description                                         |
-| :----------------------- | :-------------------------------------- | :-------------------------------------------------- |
-| **Schema Viewer**        | `sayaib.hue-console.schemaViewer`       | Interactive tree for Parquet, Avro and JSON schemas |
-| **Spark SQL Formatter**  | `sayaib.hue-console.sparkSqlFormatter`  | Format Spark SQL, Presto, and Trino queries         |
-| **Data Quality Checker** | `sayaib.hue-console.dataQualityChecker` | Scan datasets for missing values and duplicates     |
-| **Schema Diff Tool**     | `sayaib.hue-console.schemaDiff`         | Compare two JSON schemas side-by-side               |
-| **Partition Calculator** | `sayaib.hue-console.partitionCalc`      | Optimize Hadoop/Hive partitions and Spark configs   |
-| **Delta Lake Analyzer**  | `sayaib.hue-console.deltaLakeAnalyzer`  | Inspect Delta Lake transaction logs                 |
-| **Spark Cost Estimator** | `sayaib.hue-console.sparkCostEstimator` | Estimate Spark cluster execution costs              |
+**DevSnip Pro: OpenCode Integration** manages the OpenCode CLI from inside VS Code on Windows, macOS and Linux. It checks for Node.js and the `opencode` binary, installs or repairs it via npm, and launches it in a terminal rooted at your workspace.
 
-## RAG and Vector Search Hub (`sayaib.hue-console.ragHub`)
+Install is only reported as successful once `opencode --version` actually runs, so a partial install shows as broken rather than green. Per-OS alternatives are shown in the panel: npm, Homebrew, the install script, and Chocolatey or Scoop on Windows.
 
-| Feature                       | Command / Trigger                             | Description                                             |
-| :---------------------------- | :-------------------------------------------- | :------------------------------------------------------ |
-| **Chunking Strategy Tester**  | `sayaib.hue-console.chunkingTester`           | Compare fixed, sentence, recursive and overlap chunking |
-| **Embedding Cost Calculator** | `sayaib.hue-console.embeddingCost`            | Calculate embedding costs (OpenAI, Cohere, and others)  |
-| **Context Window Calculator** | `sayaib.hue-console.contextWindow`            | Visual utilization bars and token budgeting             |
-| **Semantic Dedup Checker**    | `sayaib.hue-console.semanticDedup`            | Find near-duplicate lines using n-gram similarity       |
-| **RAG Eval Calculator**       | `sayaib.hue-console.ragEvalScores`            | Precision, recall, MRR, and faithfulness metrics        |
-| **Hybrid Search RRF**         | `sayaib.hue-console.hybridSearchRrf`          | Reciprocal Rank Fusion simulation                       |
-| **Hallucination Analyzer**    | `sayaib.hue-console.ragHallucinationAnalyzer` | Analyze RAG response grounding                          |
+## Settings
 
-## Production Security, DevOps and Observability
+| Setting | Default | What it does |
+| :--- | :--- | :--- |
+| `devsnip.apiTimeout` | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it. |
+| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true` | Ask before removing `console.log` statements. |
+| `devsnip.securityAudit.maxFiles` | `2000` | How many files each security or cloud audit reads. |
 
-| Feature                    | Command / Trigger                         | Description                                                    |
-| :------------------------- | :---------------------------------------- | :------------------------------------------------------------- |
-| **Security Audit**         | `sayaib.hue-console.securityAudit`        | Bounded scan for hardcoded secrets, keys and unsafe code       |
-| **Cloud Security Audit**   | `sayaib.hue-console.cloudSecurityAudit`   | Scan Terraform, Kubernetes, Docker and IAM for public exposure |
-| **DevOps Generator**       | `sayaib.hue-console.devopsGenerator`      | Generate Dockerfiles, Compose files and GitHub Actions         |
-| **AI/ML DevOps Generator** | `sayaib.hue-console.mlopsGenerator`       | CPU/GPU containers and Kubernetes serving manifests            |
-| **Log Analyzer**           | `sayaib.hue-console.observabilityAnalyze` | Inspect log levels, JSON structure and recommendations         |
-| **Observability Starter**  | `sayaib.hue-console.observabilityStarter` | OpenTelemetry starters for Node.js / Python                    |
+## Keyboard shortcuts
 
-## Supported Languages and Technologies
-
-- **Frontend and Mobile:** JavaScript, TypeScript, React, Vue.js, HTML, CSS, Tailwind, Flutter, Swift, Kotlin
-- **Backend and Database:** Node.js, Python, PHP, Java, C#, Go, Ruby, SQL, Spark, Delta Lake
-- **DevOps and Cloud:** Docker, Kubernetes, Terraform, GitHub Actions, OpenTelemetry
-
-## Keyboard Shortcuts
-
-Add these to your VS Code `keybindings.json`:
+None are set by default, so nothing conflicts with your existing bindings. To add your own, open **Preferences: Open Keyboard Shortcuts (JSON)**:
 
 ```json
 [
-  {
-    "key": "ctrl+shift+a",
-    "command": "sayaib.hue-console.openGUI",
-    "when": "editorTextFocus"
-  },
-  {
-    "key": "ctrl+shift+s",
-    "command": "sayaib.hue-console.createCustomSnippet",
-    "when": "editorTextFocus"
-  },
-  {
-    "key": "ctrl+shift+l",
-    "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-    "when": "editorTextFocus"
-  }
+  { "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" },
+  { "key": "ctrl+shift+s", "command": "sayaib.hue-console.createCustomSnippet" },
+  { "key": "ctrl+shift+l", "command": "sayaib.hue-console.listAndRemoveConsoleLogs" }
 ]
 ```
 
-## Configuration
+## Requirements
 
-| Setting                                         | Default | Description                                                                                                 |
-| :---------------------------------------------- | :------ | :---------------------------------------------------------------------------------------------------------- |
-| `devsnip.apiTimeout`                            | `30000` | Default request timeout (ms) for the REST API Client. A per-request timeout set in the client overrides it. |
-| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before removing console.log statements. Set to `false` to remove them immediately.                      |
-| `devsnip.securityAudit.maxFiles`                | `2000`  | Maximum number of files each security or cloud audit reads.                                                 |
+- **VS Code 1.93 or newer.**
+- **A trusted workspace** for anything that reads your files or runs a command. DevSnip Pro does not run in Restricted Mode.
+- **An open folder** for audits, cleanup tools, the README manager and the generators. They tell you to open one rather than failing quietly.
+- **Node.js and npm** only for the OpenCode integration. Everything else runs without them.
+- **Network access** only for the API clients and the OpenCode install. Every other tool works offline.
 
-```json
-{
-  "devsnip.apiTimeout": 30000,
-  "devsnip.consoleLogCleanup.confirmBeforeDelete": true,
-  "devsnip.securityAudit.maxFiles": 2000
-}
-```
-
-## Requirements and Platform Support
-
-| Requirement           | Needed for                                                                            | Notes                                                                                        |
-| :-------------------- | :------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------- |
-| VS Code 1.93 or newer | Everything                                                                            | Terminal shell integration is used to launch OpenCode reliably                               |
-| A trusted workspace   | Workspace scans, generators, OpenCode                                                 | The extension reads workspace files and can run `npm`, so it does not run in Restricted Mode |
-| An open folder        | Security audits, cleanup tools, README manager, DevOps/MLOps/observability generators | These tools tell you to open a folder rather than failing silently                           |
-| Node.js and npm       | OpenCode Integration only                                                             | Detected automatically; every other tool runs without them                                   |
-| Network access        | REST API Client, LLM API Tester, OpenCode install                                     | All other tools run fully offline                                                            |
-
-Tested and supported on **Windows, macOS and Linux**. Paths, executable names (`npm` vs `npm.cmd`), process spawning and shell behaviour are handled per platform, and no platform-specific path is hard-coded. Desktop VS Code only: several tools use Node APIs (`child_process`, `fs`), so the extension does not run in a browser-only environment such as vscode.dev. In a virtual (remote filesystem) workspace everything works except the OpenCode Integration Hub, which needs a local process.
+Works on Windows, macOS and Linux. Desktop VS Code only — several tools use Node APIs, so it does not run in browser-only environments such as vscode.dev. In a remote or virtual workspace everything works except the OpenCode hub, which needs a local process.
 
 ## Troubleshooting
 
-| Symptom                                                | Cause and fix                                                                                                                                                                                                                                                                                                                                      |
-| :----------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A new snippet does not appear in IntelliSense          | VS Code loads contributed snippets at startup. Reload the window (the extension offers this after saving).                                                                                                                                                                                                                                         |
-| "OpenCode is not detected" although it is installed    | A VS Code window launched from the Dock or a desktop entry inherits a minimal `PATH`. The hub also searches `/usr/local/bin`, `/opt/homebrew/bin`, `~/.opencode/bin`, `~/.local/bin`, `~/.bun/bin` and the npm prefix. If your install is elsewhere, launch VS Code from a terminal or add the directory to `PATH`, then press **Recheck System**. |
-| "Broken install" reported for OpenCode                 | The package is present but `opencode --version` does not run. Press **Repair OpenCode Now**, which removes and reinstalls it cleanly.                                                                                                                                                                                                              |
-| The automated OpenCode install fails                   | Usually a permissions problem with the global npm prefix. The hub opens a terminal with the command ready; run it there (with `sudo` on macOS/Linux if your prefix needs it), then press **Recheck System**.                                                                                                                                       |
-| Windows: OpenCode does not start after clicking Launch | PowerShell may show a script security prompt. Answer it in the terminal, use the offered **Launch in Command Prompt** fallback, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.                                                                                                                                                      |
-| A security audit reports nothing in a large repository | The audit reads up to `devsnip.securityAudit.maxFiles` files (default 2000) and skips dependency, build and cache directories. Raise the setting for very large repositories.                                                                                                                                                                      |
-| A REST request never completes                         | Requests time out after `devsnip.apiTimeout` (default 30s). Use **Cancel** to abort a running request.                                                                                                                                                                                                                                             |
-| Snippet creation reports it cannot write               | Snippets are written into the extension folder, which must be writable. This can fail if the extension was installed to a read-only location.                                                                                                                                                                                                      |
-| Points or milestones look wrong                        | Progress is stored per machine in VS Code global state. Corrupted data is repaired automatically on read; **Reset Data** in the Milestone Tracker clears it.                                                                                                                                                                                       |
+**A new snippet does not appear in IntelliSense.** VS Code loads snippets at startup. Reload the window — the extension offers this after you save one.
+
+**OpenCode is installed but not detected.** A VS Code window launched from the Dock or a desktop shortcut inherits a minimal `PATH`. The hub also searches the usual install locations; if yours is elsewhere, start VS Code from a terminal or add the directory to `PATH`, then press **Recheck System**.
+
+**The OpenCode install fails.** Usually a permissions problem with the global npm prefix. The hub opens a terminal with the command ready — run it there (with `sudo` if your prefix needs it) and press **Recheck System**.
+
+**On Windows, OpenCode does not start when launched.** PowerShell may show a script security prompt. Answer it in the terminal, use the **Launch in Command Prompt** fallback, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+**A security audit finds nothing in a large repository.** It reads up to `devsnip.securityAudit.maxFiles` files and skips dependency, build and cache folders. Raise the setting for very large repositories.
+
+**A request never finishes.** Requests time out after `devsnip.apiTimeout`. Use **Cancel** to stop one that is running.
+
+**Saving a snippet reports it cannot write.** Snippets live in the extension folder, which must be writable. This can fail if the extension was installed somewhere read-only.
+
+**Points look wrong.** Progress is stored per machine. Corrupted data is repaired automatically when read, and **Reset Data** in the Milestone Tracker clears it.
+
+## Privacy
+
+Everything runs locally. DevSnip Pro has no backend, no telemetry and no account. Requests go only to the URLs you enter, and API keys you type are used for that request and are not written to history or to disk. Credential-looking values in a URL are redacted before a request is stored in history.
 
 ## Development
 
@@ -234,15 +136,15 @@ Tested and supported on **Windows, macOS and Linux**. Paths, executable names (`
 npm install          # install dependencies
 npm run compile      # clean build to out/
 npm run lint         # ESLint over src/
-npm run test:unit    # fast unit suite (plain Node, no VS Code needed)
-npm test             # compile + lint + VS Code integration suite
+npm run test:unit    # fast unit suite, plain Node, no VS Code needed
+npm test             # compile, lint, then the VS Code integration suite
 npm run package      # produce the .vsix
 ```
 
-## Contributing and Support
+## Links and support
 
-- Documentation and guides: https://sayaibsarkar.net/#/dev-snip-pro/document/en
-- Report bugs and requests: https://github.com/sayaib/DevSnip-Pro/issues
-- Marketplace reviews: https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console
+- Marketplace: https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console
+- Source and issues: https://github.com/sayaib/DevSnip-Pro
+- Documentation: https://sayaibsarkar.net/#/dev-snip-pro/document/en
 
-Made by Sayaib Sarkar (https://www.linkedin.com/in/sayaib/).
+Made by Sayaib Sarkar — https://www.linkedin.com/in/sayaib/

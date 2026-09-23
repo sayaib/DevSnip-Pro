@@ -1,5 +1,77 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.63.2 - 2026-09-23
+
+### Documentation
+
+- **Rewrote the README for people rather than for the command list.** It now opens with what you can actually do - test APIs, work with LLM and vector endpoints, clean up a codebase, generate infrastructure files - instead of tables of internal command identifiers. Tools are grouped by the job you came to do, and commands are reached the way people reach them, by typing "DevSnip Pro" in the Command Palette.
+- Cut from 247 lines to 151 (28.6 KB to 9.2 KB) by dropping six command-id tables that duplicated the Command Palette, and trimming the troubleshooting entries to the symptom and the fix.
+- Every remaining fact is checked against the source: the command count, the snippet language count, the minimum VS Code version, the points prices and daily caps, the three settings, and every command id referenced.
+- Documented the points system as it now works, with no mention of licences or subscriptions.
+- Corrected the keyboard-shortcuts section, which presented three bindings as though they shipped; the extension contributes none, so they are now shown as an example to add.
+- Added a Privacy section: no backend, no telemetry, no account, and credential-looking values redacted before a request enters history.
+- Contains no images or badges.
+
+## Version 10.63.1 - 2026-09-23
+
+### Fixed
+
+- **Tool action buttons were stacked and ragged instead of sitting in a row.** Each button was wrapped in its own container, and that container's class had no CSS rule left after an earlier UI change - so every button became an unstyled block sized to its own label. Consecutive buttons now share one flex row with a common minimum width, while a button that follows other fields still starts a new row beside the fields it acts on (Prompt Versioning's "Diff versions" stays with its compare inputs rather than jumping to the top).
+
+## Version 10.63.0 - 2026-09-23
+
+The licence-key system is gone. Premium REST API Client features are unlocked purely by spending DevSnip Pro points.
+
+### Removed - licence system
+
+- **The licence key entry, storage and verification are deleted**, along with the commands that managed them (`activatePremium`, `deactivatePremium`, `setDevelopmentTier`), the licence portal setting, the subscription state, the offline verification cache and its grace period, and the development tier override. `src/premium/entitlement.ts` no longer exists.
+- **The duplicate Points Hub is gone.** It hand-rolled four tools that are already priced registry features, charging points with its own bespoke redeem-and-refund code (149 lines). Those tools now run through the same access service as everything else.
+- Points Hub has been replaced by a real **Your points** view listing what the current balance unlocks, what it does not and by how much, and how points are earned.
+
+### Changed - points are the only entitlement
+
+- `FeatureAccessService` takes a points ledger instead of an entitlement store. A premium feature is available when the balance covers its price and unavailable when it does not.
+- The header shows the live balance; every premium tool shows its price in the navigation, in the accent colour when affordable and the warning colour when short.
+- **Saved requests are now unlimited for everyone.** The 15-request cap existed only to differentiate a paid tier; with no tier to sell, keeping it would have removed capability. Collection import and export remains the premium half, priced in points.
+- Daily caps on AI requests, prompt runs and streamed responses apply to everyone; a large balance does not bypass them.
+
+### Correctness
+
+- Points are charged only after the work succeeds, so a failed request costs nothing.
+- The charge is atomic: if the balance moves between the check and the charge, the run is refused rather than given away.
+- A negative, NaN or infinite balance reads as zero and unlocks nothing; a ledger that throws leaves free features working.
+- Verified end to end through the real host code: fresh install locked, earning by tool use unlocks, running deducts exactly the price, draining locks again with the correct shortfall, a denied run neither executes nor moves the balance, an overdraw attempt leaves the balance at zero, and the balance persists across service instances.
+
+### Fixed
+
+- A stray closing brace left by removing the development tier controls would have broken the whole inline script. The parse guard caught it before it shipped.
+
+## Version 10.62.0 - 2026-09-22
+
+Premium REST API Client features are now unlocked with DevSnip Pro points. Every premium tool has a price, running it deducts that price from your balance, and when the balance is too low the tool explains what it costs and how to earn more.
+
+### Changed - points are the unlock path
+
+- **All 21 premium REST API Client features are priced in points** and charged per run. Prices reflect the work involved: 8 points for a local check such as assertions or response comparison, 10-20 for tools that make network calls, 25-35 for multi-model comparison, benchmarking, RAG and agent runs.
+- **The price lives on the feature in the registry**, so a cost is defined in exactly one place and the navigation, the tool panel and the access check all read the same number.
+- **The balance is the gate.** A feature is available when the balance covers its price and unavailable when it does not; the denial names the price, the balance and the shortfall.
+- **Points are charged only after the work succeeds**, so a failed request, a bad API key or a network error never costs anything.
+- **The charge is atomic.** If the balance changes between the check and the charge the run is reported as unaffordable rather than being given away.
+- A DevSnip Pro Premium subscription still covers every premium feature and is never charged points.
+
+### Added - user interface
+
+- The points balance sits in the client header and updates the moment a charge lands; selecting it opens the Points Hub.
+- Every premium tool in the navigation shows its price, in the accent colour when affordable and in the warning colour when the balance is short.
+- An affordable tool opens with a bar stating what the run costs and the current balance.
+- A tool that cannot be afforded shows its price, the balance, how many more points are needed, and a **How to earn points** explainer covering the whole economy, instead of a dead end.
+- Each run reports its deduction and the new balance.
+
+### Tests
+
+- New coverage: points unlock premium features, a successful run deducts exactly the price, a failed run costs nothing, spending down the balance closes access again with the correct shortfall, a subscriber is never charged, and every premium feature carries a price so none is unreachable.
+- Markup assertions for the header balance, the price tags and the earn-points explainer.
+
 ## Version 10.61.3 - 2026-09-22
 
 REST API Client accessibility, performance and polish pass. The layout, navigation, collections, history and response panels were already in place; this release fixes what an audit of that UI turned up.

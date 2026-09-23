@@ -107,6 +107,30 @@ suite("REST API Client markup", () => {
     assert.ok(/Configure your request/.test(html), "the empty state should say what to do next");
   });
 
+  test("the points balance is always visible and opens the points hub", () => {
+    const html = renderClient();
+    assert.ok(html.includes('id="pointsBadge"'), "the header needs a points balance");
+    assert.ok(html.includes('id="userPointsBadge"'), "the balance value needs an element to update");
+    assert.ok(/aria-label="Points balance"/.test(html), "the balance needs an accessible name");
+  });
+
+  test("the client can explain how points are earned", () => {
+    const html = renderClient();
+    assert.ok(html.includes("showEarnPoints"), "there must be an earn-points explainer");
+    assert.ok(html.includes("Points are earned by using DevSnip Pro"), "the explainer needs its content");
+    assert.ok(html.includes("cost-tag"), "premium tools must be able to show their price");
+  });
+
+  test("tool action buttons share a styled row", () => {
+    const html = renderClient();
+    const styles = /<style>([\s\S]*?)<\/style>/.exec(html)?.[1] ?? "";
+    // Without a rule the wrapper is an unstyled block and the buttons stack
+    // ragged, each sized to its own label.
+    assert.ok(/\.tool-actions-row\s*\{[^}]*display:\s*flex/.test(styles), "the actions row must lay its buttons out in a flex row");
+    assert.ok(/\.tool-actions-row\s+\.btn\s*\{[^}]*min-width/.test(styles), "buttons in a row need a shared minimum width so they line up");
+    assert.ok(!html.includes("feature-card-actions"), "the old unstyled actions class should be gone");
+  });
+
   test("the WebSocket allowance still tracks entitlement", () => {
     assert.ok(!/connect-src/.test(renderClient(false)), "a free page must not be allowed to open a socket");
     assert.ok(/connect-src ws: wss:/.test(renderClient(true)), "an entitled page needs the allowance");
