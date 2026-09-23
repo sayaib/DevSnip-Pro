@@ -1,6 +1,6 @@
 # DevSnip Pro
 
-A developer toolkit for VS Code: a full REST and AI API client, code snippets, workspace cleanup, security audits, and generators for DevOps, MLOps and observability. 59 commands, all local, no account needed.
+A developer toolkit for VS Code: a full REST and AI API client, code snippets, workspace cleanup, a security scanner, and generators for DevOps, MLOps and observability. 62 commands, all local, no account needed.
 
 ## Getting started
 
@@ -40,8 +40,30 @@ The same client speaks to OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama
 
 - Find and remove `console.log` statements across the workspace
 - Find and remove unused imports in JavaScript, TypeScript, Python and Java
-- Audit for hard-coded secrets, unsafe code and insecure cloud configuration
 - View, edit and manage README files with a live preview
+
+### Check security
+
+**DevSnip Pro: Security Hub** puts four scans behind one panel. Every check is performed for real against the target you choose, and each result carries the evidence it was based on, a severity, and the change that resolves it. Results are graded Pass, Warning or Failed, filterable, and exportable as Markdown or JSON.
+
+**Endpoint scan** sends real requests to a URL you are authorised to test and grades what comes back:
+
+- HTTPS and TLS — certificate trust, hostname match, expiry, protocol version, cipher and key strength, and whether plain HTTP redirects
+- HSTS — presence, `max-age`, `includeSubDomains` and preload eligibility
+- Security headers — `X-Content-Type-Options`, clickjacking protection, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP and version disclosure
+- Content Security Policy — enforcing vs report-only, `unsafe-inline` and `unsafe-eval`, wildcard sources, `object-src`, `base-uri`, `form-action` and reporting
+- CORS — reflected or wildcard origins, credentials, allowed methods and headers, and `Vary: Origin`
+- Cookies — `Secure`, `HttpOnly`, `SameSite`, `__Host-`/`__Secure-` prefixes, domain scope and lifetime
+- Authentication — credentials in a URL, Basic over HTTP, JWT algorithm and expiry, cacheable authenticated responses, and whether the endpoint still answers with the credential stripped
+- API security — Content-Type correctness, TRACE, advertised methods, mixed content, subresource integrity and GraphQL introspection
+- Information exposure — credential formats, stack traces, database errors, directory listings, source maps, internal addresses and debug headers
+- Rate limiting — advertised quota headers, and an optional burst to see whether throttling actually applies
+
+Two extras are opt-in because they send traffic the target did not ask for, though both are read-only: a **reflected-input probe** that checks whether a marker string is encoded on the way out, and requests for **well-known sensitive paths** (`.env`, `.git`, `actuator`, backups), each confirmed by content signature so a catch-all route cannot produce a false positive.
+
+**Workspace audit** applies secret, injection, cryptography and unsafe-configuration rules to the source in the open workspace. **Cloud & container audit** covers Terraform, Kubernetes, Compose, Dockerfiles and GitHub Actions. **Dependency & config check** reads the manifests and reports on lockfiles, unbounded version ranges, abandoned or compromised packages, registry credentials, `.env` hygiene, automated dependency updates and whether CI runs a security scan.
+
+Everything runs locally except the endpoint scan, which only contacts the URL you enter. Matched credential values are masked before they are shown.
 
 ### Generate what you would otherwise write by hand
 
@@ -84,7 +106,9 @@ Install is only reported as successful once `opencode --version` actually runs, 
 | :--- | :--- | :--- |
 | `devsnip.apiTimeout` | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it. |
 | `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true` | Ask before removing `console.log` statements. |
-| `devsnip.securityAudit.maxFiles` | `2000` | How many files each security or cloud audit reads. |
+| `devsnip.securityAudit.maxFiles` | `2000` | How many files each workspace, cloud or dependency security scan reads. |
+| `devsnip.security.endpointTimeout` | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner. |
+| `devsnip.security.activeChecks` | `false` | Pre-enable the endpoint scanner's active checks (reflected-input probe and well-known sensitive paths). |
 
 ## Keyboard shortcuts
 
@@ -119,6 +143,8 @@ Works on Windows, macOS and Linux. Desktop VS Code only — several tools use No
 **On Windows, OpenCode does not start when launched.** PowerShell may show a script security prompt. Answer it in the terminal, use the **Launch in Command Prompt** fallback, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 **A security audit finds nothing in a large repository.** It reads up to `devsnip.securityAudit.maxFiles` files and skips dependency, build and cache folders. Raise the setting for very large repositories.
+
+**The endpoint scan reports that the endpoint could not be reached.** No check is evaluated when no response arrives, so nothing is guessed. Confirm the URL and that the host is reachable from this machine; an endpoint behind a VPN or a corporate proxy has to be scanned from a network that can reach it.
 
 **A request never finishes.** Requests time out after `devsnip.apiTimeout`. Use **Cancel** to stop one that is running.
 

@@ -34,6 +34,7 @@ async function main() {
     require("./feature-services.unit");
     require("./webview-scripts.unit");
     require("./api-client-ui.unit");
+    require("./security.unit");
     /* eslint-enable @typescript-eslint/no-var-requires */
     let passed = 0;
     const failures = [];

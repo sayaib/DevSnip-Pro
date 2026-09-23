@@ -217,12 +217,12 @@ exports.DEVELOPER_FEATURES = [
     {
         id: "security-headers-scan",
         pointCost: 15,
-        name: "Security Header Scan",
+        name: "Endpoint Security Scan",
         category: "software-development",
         group: "api-testing",
         tier: "premium",
         enabled: true,
-        description: "Check a live endpoint for HSTS, CSP, frame and content-type protections and report what is missing.",
+        description: "Run the full endpoint scan against the configured request: TLS and certificate state, HSTS, security headers, CSP, CORS, cookie flags, information exposure and rate limiting, each with a severity and a fix.",
         premiumBenefit: "Also unlockable with DevSnip Pro points."
     },
     {

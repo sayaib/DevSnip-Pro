@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "\u26a1A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.63.2",
+  "version": "10.64.0",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -526,12 +526,24 @@
         "title": "\ud83d\udee1\ufe0f DevSnip Pro: RAG Hallucination Analyzer"
       },
       {
+        "command": "sayaib.hue-console.securityHub",
+        "title": "\ud83d\udee1\ufe0f DevSnip Pro: Security Hub"
+      },
+      {
+        "command": "sayaib.hue-console.endpointSecurityScan",
+        "title": "\ud83d\udd0e DevSnip Pro: Endpoint Security Scan"
+      },
+      {
         "command": "sayaib.hue-console.securityAudit",
-        "title": "\ud83d\udee1\ufe0f DevSnip Pro: Security Audit"
+        "title": "\ud83d\udee1\ufe0f DevSnip Pro: Security Audit (Workspace)"
       },
       {
         "command": "sayaib.hue-console.cloudSecurityAudit",
-        "title": "\u2601\ufe0f DevSnip Pro: Local Cloud Security Audit"
+        "title": "\u2601\ufe0f DevSnip Pro: Cloud & Container Security Audit"
+      },
+      {
+        "command": "sayaib.hue-console.dependencyAudit",
+        "title": "\ud83d\udce6 DevSnip Pro: Dependency & Security Config Check"
       },
       {
         "command": "sayaib.hue-console.devopsGenerator",
@@ -582,7 +594,19 @@
           "default": 2000,
           "minimum": 50,
           "maximum": 20000,
-          "description": "Maximum number of files each security or cloud configuration audit reads."
+          "description": "Maximum number of files each workspace, cloud or dependency security scan reads."
+        },
+        "devsnip.security.endpointTimeout": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 1000,
+          "maximum": 120000,
+          "description": "Default per-request timeout, in milliseconds, for the endpoint security scanner."
+        },
+        "devsnip.security.activeChecks": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pre-enable the endpoint scanner's active checks (reflected-input probe and requests for well-known sensitive paths). They are read-only but generate extra traffic, so they are opt-in by default."
         }
       }
     },

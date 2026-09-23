@@ -11,6 +11,7 @@ import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
 import { registerAiMlExtraTools } from "./commands/aiMlExtraTools";
 import { registerPlatformToolsCommands } from "./commands/platformTools";
+import { registerSecurityToolsCommands } from "./commands/securityTools";
 import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance } from "./commands/milestoneTracker";
 import { registerTrackedCommand, setUsageRecorder } from "./utils/command-registry";
 import { registerReadmeManagerCommand } from "./commands/readmeManager";
@@ -73,6 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
     }],
     ["big data tools", () => registerBigDataToolsCommands(context)],
     ["RAG tools", () => registerRagToolsCommands(context)],
+    ["security tools", () => registerSecurityToolsCommands(context)],
     ["platform tools", () => registerPlatformToolsCommands(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
     ["tool search", () => registerUniversalToolSearch(context)],
@@ -146,8 +148,11 @@ const UNIVERSAL_TOOLS: ToolSearchItem[] = [
   { label: "RAG Eval Calculator", description: "RAG / Evaluation", command: "sayaib.hue-console.ragEvalScores" },
   { label: "Hybrid Search & RRF Simulator", description: "RAG / Retrieval", command: "sayaib.hue-console.hybridSearchRrf" },
   { label: "RAG Hallucination Analyzer", description: "RAG / Evaluation", command: "sayaib.hue-console.ragHallucinationAnalyzer" },
-  { label: "Security Audit", description: "Security / Secrets / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
-  { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
+  { label: "Security Hub", description: "Security / Endpoint / Workspace / Cloud / Dependencies", command: "sayaib.hue-console.securityHub" },
+  { label: "Endpoint Security Scan", description: "Security / Headers / HSTS / CSP / CORS / TLS / Cookies", command: "sayaib.hue-console.endpointSecurityScan" },
+  { label: "Security Audit", description: "Security / Secrets / Injection / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
+  { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / Docker / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
+  { label: "Dependency & Config Check", description: "Security / Lockfiles / Advisories / CI hardening", command: "sayaib.hue-console.dependencyAudit" },
   { label: "DevOps Artifact Generator", description: "DevOps / Docker / CI", command: "sayaib.hue-console.devopsGenerator" },
   { label: "AI/ML DevOps Generator", description: "MLOps / GPU / Model Serving / ML CI", command: "sayaib.hue-console.mlopsGenerator" },
   { label: "Observability Log Analyzer", description: "Observability / Logs / Reliability", command: "sayaib.hue-console.observabilityAnalyze" },
@@ -254,8 +259,11 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
         this.createCommandButton("RAG", "sayaib.hue-console.ragHub", "search"),
       ]),
       new ToolGroup("Security", "shield", "terminal.ansiBrightRed", [
-        this.createCommandButton("Local Security Audit", "sayaib.hue-console.securityAudit", "shield"),
-        this.createCommandButton("Cloud Config Audit", "sayaib.hue-console.cloudSecurityAudit", "cloud"),
+        this.createCommandButton("Security Hub", "sayaib.hue-console.securityHub", "shield"),
+        this.createCommandButton("Endpoint Security Scan", "sayaib.hue-console.endpointSecurityScan", "radio-tower"),
+        this.createCommandButton("Workspace Audit", "sayaib.hue-console.securityAudit", "search"),
+        this.createCommandButton("Cloud & Container Audit", "sayaib.hue-console.cloudSecurityAudit", "cloud"),
+        this.createCommandButton("Dependency & Config Check", "sayaib.hue-console.dependencyAudit", "package"),
       ]),
       new ToolGroup("DevOps & Observability", "pulse", "terminal.ansiBrightCyan", [
         this.createCommandButton("DevOps Generator", "sayaib.hue-console.devopsGenerator", "cloud-upload"),

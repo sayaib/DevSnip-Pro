@@ -31,6 +31,8 @@ import { CODE_LANGUAGES, CodeLanguage, generateClientCode, inspectJwt, requestOA
 import { diffJson, extractJson, readPath, validateSchema } from "../services/json-tools";
 import { AssertionSubject, parseAssertionRules, percentiles, runAssertions } from "../services/assertions";
 import { getUserStats } from "./milestoneTracker";
+import { CATEGORY_LABELS as SECURITY_AREA_LABELS } from "../services/security-analysis";
+import { runEndpointScan } from "../services/security-probe";
 
 /**
  * Bridges the REST API Client webview to the feature services.
@@ -1059,22 +1061,51 @@ async function runPointUnlockedFeature(
   switch (featureId) {
     case "security-headers-scan": {
       if (!url) throw new Error("Configure a request URL first.");
-      const response = await context.sendHttp({ ...request, method: "GET" });
-      const headers = (response?.headers ?? {}) as Record<string, unknown>;
-      const issues: string[] = [];
-      if (!headers["strict-transport-security"]) issues.push("Missing Strict-Transport-Security (HSTS)");
-      if (!headers["content-security-policy"]) issues.push("Missing Content-Security-Policy");
-      if (!headers["x-content-type-options"]) issues.push("Missing X-Content-Type-Options");
-      if (!headers["x-frame-options"] && !String(headers["content-security-policy"] ?? "").includes("frame-ancestors")) {
-        issues.push("No clickjacking protection (X-Frame-Options or CSP frame-ancestors)");
+      // The client shares the Security section's engine rather than keeping a
+      // second, weaker copy of the rules: the same scan, the same verdicts.
+      const headers: Record<string, string> = {};
+      if (request.headers && typeof request.headers === "object") {
+        for (const [name, value] of Object.entries(request.headers as Record<string, unknown>)) {
+          if (typeof value === "string" && value.trim()) headers[name] = value;
+        }
       }
-      if (url.startsWith("http://")) issues.push("The endpoint is served over plain HTTP");
+      const report = await runEndpointScan({
+        url,
+        method: "GET",
+        headers,
+        timeoutMs: 20000
+      });
+      const actionable = report.checks.filter(check => check.status === "fail" || check.status === "warn");
       return {
         url,
-        status: response?.status,
-        headersScanned: Object.keys(headers).length,
-        issues,
-        verdict: issues.length === 0 ? "All checked protections are present" : `${issues.length} issue(s) to review`
+        grade: report.summary.grade,
+        score: report.summary.score,
+        durationMs: report.durationMs,
+        counts: {
+          failed: report.summary.failed,
+          warnings: report.summary.warnings,
+          passed: report.summary.passed,
+          critical: report.summary.critical,
+          high: report.summary.high,
+          medium: report.summary.medium,
+          low: report.summary.low
+        },
+        issues: actionable.map(check => ({
+          status: check.status,
+          severity: check.severity,
+          area: SECURITY_AREA_LABELS[check.category] || check.category,
+          title: check.title,
+          detail: check.detail,
+          evidence: check.evidence,
+          remediation: check.remediation,
+          reference: check.reference
+        })),
+        passed: report.checks.filter(check => check.status === "pass").map(check => check.title),
+        notes: report.notes,
+        verdict: actionable.length === 0
+          ? `Every applicable check passed (grade ${report.summary.grade}).`
+          : `${actionable.length} issue(s) to review - grade ${report.summary.grade}, score ${report.summary.score}/100.`,
+        openFullScan: "Run the Security Hub (DevSnip Pro: Security Hub) for the full report, filters and export."
       };
     }
 

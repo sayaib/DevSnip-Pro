@@ -3677,7 +3677,7 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
                     });
                 },
 
-                'security-headers-scan': function (body) { pointToolForm(body, 'Scan the configured endpoint for security headers.'); },
+                'security-headers-scan': function (body) { pointToolForm(body, 'Run the full endpoint security scan (TLS, HSTS, headers, CSP, CORS, cookies, disclosure) against the configured request.'); },
                 'load-test': function (body) { pointToolForm(body, 'Send a short burst of requests to the configured endpoint.'); },
                 'sdk-export': function (body) { pointToolForm(body, 'Generate a typed client and a Python equivalent for the configured request.'); },
                 'mock-generator': function (body) { pointToolForm(body, 'Generate an Express mock route and a JSON Schema contract.'); }
@@ -3883,8 +3883,92 @@ export function getWebviewContent(history: ApiHistoryItem[], allowWebSockets: bo
             }
 
             /* ---- rendering results ---- */
+            /* Renders the endpoint security report from the shared scan engine. */
+            function securityScanNode(result) {
+                var SEVERITY_COLOR = {
+                    critical: 'var(--danger, #f14c4c)', high: 'var(--danger, #f14c4c)',
+                    medium: 'var(--warning, #cca700)', low: 'var(--muted, #9aa0a6)', none: 'var(--muted, #9aa0a6)'
+                };
+                var wrap = document.createElement('div');
+
+                var head = document.createElement('div');
+                head.className = 'feature-meta';
+                head.style.marginBottom = '10px';
+                head.textContent = 'Grade ' + result.grade + ' \u00b7 score ' + result.score + '/100 \u00b7 ' +
+                    result.counts.failed + ' failed, ' + result.counts.warnings + ' warning, ' +
+                    result.counts.passed + ' passed \u00b7 ' + result.durationMs + 'ms';
+                wrap.appendChild(head);
+
+                var verdict = document.createElement('div');
+                verdict.style.marginBottom = '12px';
+                verdict.textContent = result.verdict;
+                wrap.appendChild(verdict);
+
+                (result.issues || []).forEach(function (issue) {
+                    var row = document.createElement('div');
+                    row.style.borderLeft = '3px solid ' + (SEVERITY_COLOR[issue.severity] || SEVERITY_COLOR.none);
+                    row.style.padding = '6px 0 6px 10px';
+                    row.style.margin = '0 0 10px';
+
+                    var title = document.createElement('div');
+                    title.style.fontWeight = '600';
+                    title.textContent = (issue.status === 'fail' ? 'FAILED' : 'WARNING') +
+                        ' \u00b7 ' + String(issue.severity).toUpperCase() + ' \u00b7 ' + issue.title;
+                    row.appendChild(title);
+
+                    var area = document.createElement('div');
+                    area.className = 'feature-meta';
+                    area.textContent = issue.area;
+                    row.appendChild(area);
+
+                    var detail = document.createElement('div');
+                    detail.style.margin = '4px 0';
+                    detail.textContent = issue.detail;
+                    row.appendChild(detail);
+
+                    if (issue.evidence) {
+                        var evidence = document.createElement('div');
+                        evidence.className = 'feature-meta';
+                        evidence.textContent = issue.evidence;
+                        row.appendChild(evidence);
+                    }
+                    if (issue.remediation) {
+                        var fix = document.createElement('div');
+                        fix.style.marginTop = '4px';
+                        fix.textContent = 'Fix: ' + issue.remediation;
+                        row.appendChild(fix);
+                    }
+                    wrap.appendChild(row);
+                });
+
+                if (result.passed && result.passed.length) {
+                    var passed = document.createElement('div');
+                    passed.className = 'feature-meta';
+                    passed.style.marginTop = '8px';
+                    passed.textContent = 'Passed: ' + result.passed.join(' \u00b7 ');
+                    wrap.appendChild(passed);
+                }
+                if (result.notes && result.notes.length) {
+                    var notes = document.createElement('div');
+                    notes.className = 'feature-meta';
+                    notes.textContent = 'Notes: ' + result.notes.join(' \u00b7 ');
+                    wrap.appendChild(notes);
+                }
+                var more = document.createElement('div');
+                more.className = 'feature-meta';
+                more.style.marginTop = '8px';
+                more.textContent = result.openFullScan || '';
+                wrap.appendChild(more);
+                return wrap;
+            }
+
             function renderFeatureResult(featureId, result) {
                 if (result === null || result === undefined) { featureOutput('Done.', false); return; }
+
+                if (featureId === 'security-headers-scan' && result && result.counts) {
+                    featureOutput(securityScanNode(result), result.counts.failed > 0);
+                    return;
+                }
 
                 if (featureId === 'llm-request' || featureId === 'prompt-test') {
                     window.__lastAiText = result.text || '';

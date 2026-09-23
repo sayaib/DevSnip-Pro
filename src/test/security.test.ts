@@ -28,7 +28,7 @@ suite("Security audit rules", () => {
       return;
     }
     await writeFixture("app.js", [
-      'const awsKey = "AKIAIOSFODNN7EXAMPLE";',
+      'const awsKey = "AKIA4KPQ7RZT2XW9BVLM";',
       'const apiKey = "sk-live-9f8a7b6c5d4e3f2a1b0c";',
       'const db = "postgres://admin:hunter2@db.internal:5432/app";',
       "eval(userInput);",
@@ -79,7 +79,7 @@ suite("Security audit rules", () => {
     const findings = await scanWorkspaceForSecurity();
     const secret = findings.find(finding => finding.rule === "aws-access-key" && finding.file.includes(FIXTURE_DIR));
     assert.ok(secret, "the AWS key finding is missing");
-    assert.ok(!secret.evidence.includes("AKIAIOSFODNN7EXAMPLE"), "the raw credential must never be shown");
+    assert.ok(!secret.evidence.includes("AKIA4KPQ7RZT2XW9BVLM"), "the raw credential must never be shown");
     assert.ok(secret.evidence.includes("•"), "the evidence should be masked");
   });
 

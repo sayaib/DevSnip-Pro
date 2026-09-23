@@ -1,5 +1,51 @@
 # Development Changelog of DevSnip Pro
 
+## Version 10.64.0 - 2026-09-23
+
+The Security section is rebuilt. It was two static file scanners and a five-header check inside the API client; it is now a scanner with one rule engine, one result model and one panel.
+
+### Added - Security Hub
+
+- **`DevSnip Pro: Security Hub`** hosts four scans in one panel: endpoint, workspace, cloud and container, and dependencies and configuration. Each produces the same result shape, so a finding looks the same however it was found: status, severity, affected area, what was observed, and the change that fixes it. Results are filterable by status and full text, and exportable as Markdown or JSON.
+- **`DevSnip Pro: Endpoint Security Scan`** performs real requests against a URL and grades what comes back. It covers HTTPS and TLS (certificate trust, hostname match, expiry, protocol, cipher and key strength, and whether plain HTTP redirects), HSTS, the security header set, Content Security Policy, CORS, cookie flags, authentication and authorization, API security, information exposure, rate limiting and input reflection.
+- **`DevSnip Pro: Dependency & Security Config Check`** reads the workspace manifests and reports on lockfiles, unbounded version ranges, abandoned or compromised packages, registry credentials in `.npmrc`, `.env` hygiene, automated dependency updates, whether CI runs a security scan, and whether workflows narrow their token permissions. It reports passes as well as problems.
+- Two opt-in active probes, both read-only: a **reflected-input probe** that checks whether a marker string is encoded on the way out, and requests for **well-known sensitive paths** (`.env`, `.git`, `actuator`, backups, debug endpoints), each confirmed by a content signature.
+- Two settings: `devsnip.security.endpointTimeout` and `devsnip.security.activeChecks`.
+
+### Changed
+
+- **The API client's Security Header Scan now runs the same engine** instead of its own weaker copy. It previously checked four header names and reported a list of strings; it now returns the full graded report with severities, evidence and remediation, rendered as a report rather than a JSON dump.
+- **The workspace and cloud audits share the engine too.** Both keep their command ids and now open in the Security Hub on the matching tab and start immediately.
+- The Security group in the tool tree lists all five entries instead of two.
+
+### Correctness - fewer false positives
+
+- **An endpoint that was never reached no longer produces findings.** The previous behaviour would have reported every header as missing for a host that did not answer; the scan now says the endpoint was unreachable and grades nothing.
+- **Certificate key strength is judged per key type.** A fixed 2048-bit floor reported every modern ECDSA certificate as weak, since a P-256 key is 256 bits.
+- **Private-address detection uses real octet bounds.** A loose pattern matched SVG path data such as `10.669.606.225` as an internal IP.
+- **Secret keyword rules are filtered by placeholder form, value shape and Shannon entropy.** In source, a credential is only reported when it is a quoted string literal: `password: resolvedPassword`, `apiKey: options.apiKey` and `auth?: { password: string }` are references and declarations, not secrets. Unquoted values are still read in `.env`, `.ini`, YAML and similar files, where that is how a secret is written. On this repository the rule went from 34 findings to 2. The keyword match also recognises prefixed names such as `POSTGRES_PASSWORD`.
+- **Documented vendor example credentials are ignored** in both the file scan and the response scan. `AKIAIOSFODNN7EXAMPLE` appears in AWS's own guides and in every tutorial copied from them; reporting it as a leaked key is a false positive by construction. The audit test fixtures were changed to a non-placeholder key of the same format so they still assert that the rule fires.
+- **`innerHTML` assigned a constant string is no longer an injection finding** - only concatenation or interpolation is.
+- **The SQL rule requires SQL clause shape** (a `FROM`, a `SET`, an `INTO`), so the English word "select" in a UI string no longer looks like a query.
+- **The cookie-flag rule requires cookie or session context**, instead of matching any object literal with a `secure: false` field.
+- **The plain-HTTP rule requires a real host**, so prose ending in `http://` is not reported as an insecure endpoint.
+- **`eval` no longer fires on a method named `eval`** (`model.eval()` in PyTorch was the common case), and the plain-HTTP rule ignores XML namespaces, schema locations, licence URLs and loopback addresses.
+- **A wildcard CORS origin without credentials is no longer reported as exposed write access**, because a cross-origin caller is anonymous in that configuration.
+- A cookie without `Secure` on a loopback address is a low warning rather than a high failure, and a cookie being cleared is not graded on its flags at all.
+- A response over 512 KB no longer aborts the scan: the transfer cap is now separate from the analysis sample, which is what made a large homepage report nothing at all.
+- A rule that throws is contained to its own group; the rest of the report still runs.
+
+### Fixed
+
+- **A command that opened the panel and started a scan in one step did nothing.** The scan request was posted before the webview script had parsed, so it was dropped. The host now queues until the page reports ready.
+- Duplicate check ids are made unique, so filtering and rendering cannot collide.
+- Reverse-tabnabbing and subresource-integrity checks apply to any HTML document, not only ones served over HTTPS.
+- Cookie values are discarded at parse time and never reach a report; matched credentials are masked in every evidence line.
+
+### Tests
+
+- 115 new unit tests covering the parsers, every analyzer, the scoring model, the static rules and the posture checks, including explicit regression tests for each false positive listed above. The suite is 263 tests and runs in a plain Node process.
+
 ## Version 10.63.2 - 2026-09-23
 
 ### Documentation
