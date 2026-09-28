@@ -3,7 +3,7 @@
 A developer toolkit for VS Code: a full REST and AI API client, code snippets, workspace cleanup, a security scanner, and generators for DevOps, MLOps and observability. 62 commands, all local, no account needed.
 
 <p align="center">
-  <img src="Devsnip.png" alt="DevSnip Pro" width="150" />
+  <img src="Devsnip.png" alt="DevSnip Pro" />
 </p>
 
 ## Getting started
