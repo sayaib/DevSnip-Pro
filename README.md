@@ -2,6 +2,10 @@
 
 A developer toolkit for VS Code: a full REST and AI API client, code snippets, workspace cleanup, a security scanner, and generators for DevOps, MLOps and observability. 62 commands, all local, no account needed.
 
+<p align="center">
+  <img src="Devsnip.png" alt="DevSnip Pro" width="150" />
+</p>
+
 ## Getting started
 
 Install the extension, then open any tool one of three ways:
@@ -51,7 +55,7 @@ The same client speaks to OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama
 - **One-click Install missing and Update outdated**, per project or for the whole workspace, with live progress, a cancel button, and a plain-language explanation when something fails (peer conflicts, private registries, PEP 668, proxies and certificates, missing build tools, permissions).
 - **Copy any command.** Every install, update and upgrade command is shown and can be copied, quoted correctly for your platform's shell.
 
-Production stays safe by default. Nothing runs without a confirmation that shows the exact command lines. Bulk updates stay inside the declared ranges and only touch development dependencies unless you tick *Include production dependencies*. Upgrading a production dependency past its range, and any Maven or Gradle version change, is offered as a copyable command, never run automatically. Commands are built by the extension from an allow-list, never passed through a shell, and only run in a trusted workspace.
+Production stays safe by default. Nothing runs without a confirmation that shows the exact command lines. Bulk updates stay inside the declared ranges and only touch development dependencies unless you tick _Include production dependencies_. Upgrading a production dependency past its range, and any Maven or Gradle version change, is offered as a copyable command, never run automatically. Commands are built by the extension from an allow-list, never passed through a shell, and only run in a trusted workspace.
 
 ### Check security
 
@@ -113,13 +117,13 @@ Install is only reported as successful once `opencode --version` actually runs, 
 
 ## Settings
 
-| Setting | Default | What it does |
-| :--- | :--- | :--- |
-| `devsnip.apiTimeout` | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it. |
-| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true` | Ask before removing `console.log` statements. |
-| `devsnip.securityAudit.maxFiles` | `2000` | How many files each workspace, cloud or dependency security scan reads. |
-| `devsnip.security.endpointTimeout` | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner. |
-| `devsnip.security.activeChecks` | `false` | Pre-enable the endpoint scanner's active checks (reflected-input probe and well-known sensitive paths). |
+| Setting                                         | Default | What it does                                                                                            |
+| :---------------------------------------------- | :------ | :------------------------------------------------------------------------------------------------------ |
+| `devsnip.apiTimeout`                            | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it.            |
+| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before removing `console.log` statements.                                                           |
+| `devsnip.securityAudit.maxFiles`                | `2000`  | How many files each workspace, cloud or dependency security scan reads.                                 |
+| `devsnip.security.endpointTimeout`              | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner.                          |
+| `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks (reflected-input probe and well-known sensitive paths). |
 
 ## Keyboard shortcuts
 
@@ -128,8 +132,14 @@ None are set by default, so nothing conflicts with your existing bindings. To ad
 ```json
 [
   { "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" },
-  { "key": "ctrl+shift+s", "command": "sayaib.hue-console.createCustomSnippet" },
-  { "key": "ctrl+shift+l", "command": "sayaib.hue-console.listAndRemoveConsoleLogs" }
+  {
+    "key": "ctrl+shift+s",
+    "command": "sayaib.hue-console.createCustomSnippet"
+  },
+  {
+    "key": "ctrl+shift+l",
+    "command": "sayaib.hue-console.listAndRemoveConsoleLogs"
+  }
 ]
 ```
 

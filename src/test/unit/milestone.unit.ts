@@ -13,8 +13,16 @@ import {
   refundPoints,
   resetUserStats,
   sanitizeStats,
-  setMilestoneContext
+  setMilestoneContext,
+  LEVELS,
+  milestoneProgress,
+  claimDailyLogin,
+  claimDailyBonus,
+  getMilestoneTrackerHtml
 } from "../../commands/milestoneTracker";
+import { buildTrackerView, levelIndexFor, toolNamesFromManifest } from "../../services/milestone-view";
+import * as fs from "fs";
+import * as path from "path";
 import { createExtensionContext } from "./vscode-stub";
 import { suite, test } from "./run-unit-tests";
 
@@ -229,5 +237,179 @@ suite("milestone state", () => {
       assert.ok(milestone.points > 0, `${milestone.id} needs a reward`);
     }
     assert.strictEqual(new Set(MILESTONES.map(m => m.id)).size, MILESTONES.length, "milestone ids must be unique");
+  });
+});
+
+function viewFor(stats: any, extra: Record<string, unknown> = {}) {
+  return buildTrackerView({
+    stats: sanitizeStats(stats),
+    levels: LEVELS,
+    milestones: MILESTONES,
+    progress: milestoneProgress,
+    today: "2026-09-28",
+    dailyCap: DAILY_POINT_CAP,
+    rateLimitAfter: RATE_LIMIT_AFTER,
+    loginPoints: 5,
+    bonusPoints: 10,
+    premium: [{ name: "Cheap tool", pointCost: 8 }, { name: "Mid tool", pointCost: 20 }, { name: "Big tool", pointCost: 35 }],
+    toolNames: { "sayaib.hue-console.jsonFormatter": "JSON/XML Formatter" },
+    ...extra
+  } as any);
+}
+
+suite("milestone lifetime points", () => {
+  test("spending points lowers the balance but never the level", async () => {
+    const context = freshContext();
+    await recordActivity(context, "seed", "Seed", 100, "Core");
+    await recordActivity(context, "seed2", "Seed", 20, "Core");
+    await recordActivity(context, "seed3", "Seed", 0, "Core");
+    const seeded = getUserStats(context);
+    // Push the account past Silver without the daily cap getting in the way.
+    await context.globalState.update("devsnip_user_stats", { ...seeded, totalPoints: 160, lifetimePoints: 160 });
+
+    assert.strictEqual(await redeemPoints(context, 30, "premium tool"), true);
+    const after = getUserStats(context);
+    assert.strictEqual(after.totalPoints, 130);
+    assert.strictEqual(after.lifetimePoints, 160, "spending must not reduce lifetime points");
+    assert.strictEqual(getCurrentLevel(after.lifetimePoints).name, "Silver", "a premium run must not demote the user");
+
+    await refundPoints(context, 30, "premium tool failed");
+    assert.strictEqual(getUserStats(context).lifetimePoints, 160, "a refund returns spent points; it is not new earning");
+  });
+
+  test("every earning path adds to lifetime points", async () => {
+    const context = freshContext();
+    await autoRecordToolUsage("sayaib.hue-console.jsonFormatter");
+    const stats = getUserStats(context);
+    // One tool run (+3) plus the First Tool milestone (+10).
+    assert.strictEqual(stats.totalPoints, 13);
+    assert.strictEqual(stats.lifetimePoints, 13);
+  });
+
+  test("older data without lifetime points is migrated from balance plus spending in the log", () => {
+    const stats = sanitizeStats({
+      totalPoints: 100,
+      activities: [
+        { id: "redeem_1", title: "Redeemed", points: -30, timestamp: 1, category: "Redemption" },
+        { id: "refund_1", title: "Refunded", points: 10, timestamp: 2, category: "Redemption" },
+        { id: "x", title: "Tool", points: 3, timestamp: 3, category: "Core" }
+      ]
+    });
+    assert.strictEqual(stats.lifetimePoints, 120, "100 balance + 30 spent - 10 refunded");
+    assert.strictEqual(sanitizeStats({ totalPoints: 50, lifetimePoints: 20 }).lifetimePoints, 50, "lifetime can never be below the balance");
+    assert.strictEqual(sanitizeStats({ totalPoints: 50, lifetimePoints: "x" }).lifetimePoints, 50);
+  });
+
+  test("the daily login and daily boost are each claimed once per day", async () => {
+    const context = freshContext();
+    assert.strictEqual(await claimDailyLogin(context), true);
+    assert.strictEqual(await claimDailyLogin(context), false);
+    assert.strictEqual(await claimDailyBonus(context), true);
+    assert.strictEqual(await claimDailyBonus(context), false);
+    assert.strictEqual(getUserStats(context).totalPoints, 15);
+  });
+});
+
+suite("milestone tracker view", () => {
+  test("level progress, points to next level and the ring percentage use lifetime points", () => {
+    const view = viewFor({ totalPoints: 40, lifetimePoints: 375 });
+    assert.strictEqual(view.level.name, "Silver");
+    assert.strictEqual(view.nextLevel?.name, "Gold");
+    assert.strictEqual(view.pointsToNext, 225);
+    assert.strictEqual(view.levelPercent, 50, "(375 - 150) / (600 - 150)");
+    assert.strictEqual(view.balance, 40);
+    assert.deepStrictEqual(view.levels.map(l => l.state), ["achieved", "current", "locked", "locked", "locked", "locked", "locked"]);
+  });
+
+  test("the highest level reports 100% and no next level", () => {
+    const view = viewFor({ totalPoints: 30000, lifetimePoints: 30000 });
+    assert.strictEqual(view.nextLevel, null);
+    assert.strictEqual(view.levelPercent, 100);
+    assert.strictEqual(view.pointsToNext, 0);
+    assert.strictEqual(levelIndexFor(30000, LEVELS), LEVELS.length - 1);
+  });
+
+  test("milestones are ordered by closeness, with the closest as the focus and completed ones last", () => {
+    const view = viewFor({
+      counters: { toolRuns: 20, snippetRuns: 1, securityRuns: 4, aiRuns: 0 },
+      completedMilestones: ["first_tool"],
+      streakDays: 2
+    });
+    assert.strictEqual(view.focus?.id, "security_audit", "4 of 5 audits is the closest");
+    assert.strictEqual(view.milestones[0].id, "security_audit");
+    assert.strictEqual(view.milestones[view.milestones.length - 1].id, "first_tool");
+    const explorer = view.milestones.find(m => m.id === "tool_explorer")!;
+    assert.deepStrictEqual([explorer.current, explorer.percent, explorer.remainingLabel], [20, 80, "5 more tool runs"]);
+    assert.strictEqual(view.milestoneSummary.completed, 1);
+    assert.strictEqual(view.streak.next?.remaining, 3);
+    assert.strictEqual(view.streak.next?.title, "Consistent Coder");
+  });
+
+  test("an unfinished milestone never shows 100%", () => {
+    const view = viewFor({ totalPoints: 4999, lifetimePoints: 4999 });
+    const tycoon = view.milestones.find(m => m.id === "points_5000")!;
+    assert.strictEqual(tycoon.percent, 99);
+    assert.strictEqual(tycoon.remainingLabel, "1 more point to earn");
+  });
+
+  test("today's progress, claims and what the balance can buy", () => {
+    const view = viewFor({
+      totalPoints: 25,
+      lifetimePoints: 25,
+      dailyEarnedPoints: 130,
+      lastActiveDate: "2026-09-28",
+      dailyClaims: { "2026-09-28": true }
+    });
+    assert.deepStrictEqual([view.today.earned, view.today.percent, view.today.capReached], [120, 100, true]);
+    assert.strictEqual(view.today.loginClaimed, true);
+    assert.strictEqual(view.today.bonusClaimed, false);
+    assert.deepStrictEqual(view.spend, { affordable: 2, total: 3, cheapest: 8, next: { name: "Big tool", cost: 35, short: 10 } });
+  });
+
+  test("activity entries get readable titles and a kind", () => {
+    const view = viewFor({
+      activities: [
+        { id: "sayaib.hue-console.jsonFormatter", title: "Tool Use: jsonFormatter", points: 3, timestamp: 3, category: "Core" },
+        { id: "sayaib.hue-console.unknownTool", title: "Tool Use: unknownTool", points: 3, timestamp: 2, category: "Core" },
+        { id: "milestone_first_tool", title: "Milestone Unlocked: First Tool Execution (+10 pts)", points: 10, timestamp: 1, category: "Milestone" },
+        { id: "redeem_1", title: "Redeemed Points: Mock server (-12 pts)", points: -12, timestamp: 0, category: "Redemption" }
+      ]
+    });
+    assert.deepStrictEqual(view.activities.map(a => [a.title, a.kind]), [
+      ["JSON/XML Formatter", "tool"],
+      ["unknownTool", "tool"],
+      ["Milestone unlocked: First Tool Execution", "milestone"],
+      ["Redeemed Points: Mock server", "spend"]
+    ]);
+  });
+
+  test("tool names are read from the contributed command titles", () => {
+    const names = toolNamesFromManifest([
+      { command: "sayaib.hue-console.hashGenerator", title: "\ud83d\udd10 DevSnip Pro: Hash Generator" },
+      { command: "sayaib.hue-console.openGUI", title: "\ud83d\udee2 DevSnip Pro: Rest API Client " },
+      { command: 42, title: "broken" }
+    ]);
+    assert.deepStrictEqual(names, { "sayaib.hue-console.hashGenerator": "Hash Generator", "sayaib.hue-console.openGUI": "Rest API Client" });
+    assert.deepStrictEqual(toolNamesFromManifest(undefined), {});
+  });
+
+  test("the level list never claims a tool is locked behind a level", () => {
+    for (const level of LEVELS) {
+      assert.ok(!/unlock|locked|access/i.test(level.reward), `${level.name} reward text must not promise feature access`);
+      assert.ok(!/#/.test(level.rank), `${level.name} rank must not carry a stray rank number`);
+    }
+  });
+
+  test("the page loads its script only from the extension and the script parses", () => {
+    const html = getMilestoneTrackerHtml("vscode-resource:", "vscode-resource:/media/milestone-tracker.js");
+    assert.ok(/script-src vscode-resource:;/.test(html));
+    assert.ok(!/script-src[^;]*unsafe-inline/.test(html));
+    assert.ok(html.includes('<script src="vscode-resource:/media/milestone-tracker.js"></script>'));
+    const script = fs.readFileSync(path.resolve(__dirname, "../../../media/milestone-tracker.js"), "utf8");
+    assert.doesNotThrow(() => new Function(script));
+    assert.ok(!/\.innerHTML\s*=/.test(script), "stored titles must never be written as HTML");
+    for (const id of ["app", "spendBtn", "resetBtn", "celebrate", "celebrateBadge", "celebrateText"]) {
+      assert.ok(html.includes(`id="${id}"`), `the page is missing #${id}, which the script uses`);
+    }
   });
 });

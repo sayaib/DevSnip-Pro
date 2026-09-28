@@ -220,8 +220,10 @@ class MyTreeDataProvider {
             return element.children;
         }
         const stats = (0, milestoneTracker_1.getUserStats)(this.context);
-        const level = (0, milestoneTracker_1.getCurrentLevel)(stats.totalPoints);
+        // The level follows lifetime points so spending never demotes it; the number is the spendable balance.
+        const level = (0, milestoneTracker_1.getCurrentLevel)(stats.lifetimePoints);
         const trackerItem = this.createCommandButton(`${level.badge} ${level.name} (${stats.totalPoints} pts)`, "sayaib.hue-console.milestoneTracker", "trophy", new vscode.ThemeColor("terminal.ansiBrightYellow"));
+        trackerItem.tooltip = `${level.name} level - ${stats.lifetimePoints} points earned in total, ${stats.totalPoints} available to spend`;
         return [
             trackerItem,
             this.createCommandButton("Search tools", "sayaib.hue-console.searchTools", "search", new vscode.ThemeColor("terminal.ansiBrightCyan")),

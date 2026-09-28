@@ -23,18 +23,27 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerMilestoneTrackerCommand = exports.getNextLevel = exports.getCurrentLevel = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.saveUserStats = exports.getPointsBalance = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.onDidChangePoints = exports.MILESTONES = exports.LEVELS = void 0;
+exports.getMilestoneTrackerHtml = exports.registerMilestoneTrackerCommand = exports.buildMilestoneView = exports.claimDailyBonus = exports.claimDailyLogin = exports.getNextLevel = exports.getCurrentLevel = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.saveUserStats = exports.getPointsBalance = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.DAILY_BONUS_POINTS = exports.DAILY_LOGIN_POINTS = exports.onDidChangePoints = exports.MILESTONES = exports.LEVELS = void 0;
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
 const command_registry_1 = require("../utils/command-registry");
+const command_dispatch_1 = require("../utils/command-dispatch");
 const webview_ui_1 = require("../utils/webview-ui");
+const feature_registry_1 = require("../premium/feature-registry");
+const milestone_view_1 = require("../services/milestone-view");
+/**
+ * Levels are recognition only: every DevSnip Pro tool is available at every
+ * level (premium REST client tools are paid for with points, not unlocked by
+ * level), so `reward` describes the recognition, never a feature unlock.
+ */
 exports.LEVELS = [
-    { name: "Bronze", minPoints: 0, color: "#CD7F32", badge: "🥉", rank: "Rank #5 (Novice Developer)", reward: "Basic Snippet Library & Core Tools" },
-    { name: "Silver", minPoints: 150, color: "#C0C0C0", badge: "🥈", rank: "Rank #4 (Skilled Coder)", reward: "Advanced Regex, JSON Formatter & Security Audits" },
-    { name: "Gold", minPoints: 600, color: "#FFD700", badge: "🥇", rank: "Rank #3 (Senior Engineer)", reward: "AI/ML Hub, Prompt Engineer & RAG Tools" },
-    { name: "Platinum", minPoints: 1800, color: "#E5E4E2", badge: "💎", rank: "Rank #2 (Principal Architect)", reward: "Big Data, DevOps Generators & Cloud Audits" },
-    { name: "Diamond", minPoints: 4500, color: "#B9F2FF", badge: "👑", rank: "Rank #1 (Elite Innovator)", reward: "DevSnip Pro Master Status & Unlimited Productivity" },
-    { name: "Master", minPoints: 10000, color: "#9c27b0", badge: "🔮", rank: "Rank #0.5 (Grand Master)", reward: "Exclusive Expert Utilities & AI Prompt Playground" },
-    { name: "Grandmaster", minPoints: 25000, color: "#ff5722", badge: "⚡", rank: "Rank #1 (Global Legend)", reward: "Legendary DevSnip Pro Productivity Icon Status" }
+    { name: "Bronze", minPoints: 0, color: "#CD7F32", badge: "🥉", rank: "Novice Developer", reward: "Bronze badge and title in the Tools view" },
+    { name: "Silver", minPoints: 150, color: "#C0C0C0", badge: "🥈", rank: "Skilled Coder", reward: "Silver badge and title in the Tools view" },
+    { name: "Gold", minPoints: 600, color: "#FFD700", badge: "🥇", rank: "Senior Engineer", reward: "Gold badge and title in the Tools view" },
+    { name: "Platinum", minPoints: 1800, color: "#E5E4E2", badge: "💎", rank: "Principal Architect", reward: "Platinum badge and title in the Tools view" },
+    { name: "Diamond", minPoints: 4500, color: "#B9F2FF", badge: "👑", rank: "Elite Innovator", reward: "Diamond badge and title in the Tools view" },
+    { name: "Master", minPoints: 10000, color: "#9c27b0", badge: "🔮", rank: "Grand Master", reward: "Master badge and title in the Tools view" },
+    { name: "Grandmaster", minPoints: 25000, color: "#ff5722", badge: "⚡", rank: "Global Legend", reward: "Grandmaster badge and title in the Tools view" }
 ];
 exports.MILESTONES = [
     { id: "first_tool", title: "First Tool Execution", description: "Run any DevSnip Pro tool", target: 1, points: 10, category: "Core", icon: "🚀" },
@@ -45,7 +54,7 @@ exports.MILESTONES = [
     { id: "streak_14", title: "Weekly Warrior", description: "Maintain active usage for 14 consecutive days", target: 14, points: 200, category: "Activity", icon: "🌟" },
     { id: "security_audit", title: "Security Sentinel", description: "Run 5 Security or Cloud Audits", target: 5, points: 80, category: "Security", icon: "🛡️" },
     { id: "ai_explorer", title: "AI/ML Enthusiast", description: "Use AI/ML or RAG tools 10 times", target: 10, points: 90, category: "AI", icon: "🤖" },
-    { id: "points_5000", title: "Point Tycoon", description: "Accumulate 5,000 total points", target: 5000, points: 500, category: "Milestone", icon: "💰" }
+    { id: "points_5000", title: "Point Tycoon", description: "Earn 5,000 points in total", target: 5000, points: 500, category: "Milestone", icon: "💰" }
 ];
 let globalContext;
 let refreshCallback;
@@ -69,6 +78,9 @@ exports.RATE_LIMIT_AFTER = RATE_LIMIT_AFTER;
 const DAILY_CLAIM_HISTORY_DAYS = 60;
 const MAX_ACTIVITIES = 100;
 const STATE_KEY = 'devsnip_user_stats';
+/** Points for the automatic once-a-day login bonus and the claimable daily boost. */
+exports.DAILY_LOGIN_POINTS = 5;
+exports.DAILY_BONUS_POINTS = 10;
 function setMilestoneContext(context) {
     globalContext = context;
 }
@@ -94,6 +106,7 @@ function daysBetween(fromIsoDate, toIsoDate) {
 function createDefaultStats() {
     return {
         totalPoints: 0,
+        lifetimePoints: 0,
         dailyPoints: 0,
         lastActiveDate: getTodayString(),
         streakDays: 1,
@@ -165,8 +178,19 @@ function sanitizeStats(raw) {
             securityRuns: activities.filter(a => a.category === 'Security').length,
             aiRuns: activities.filter(a => a.category === 'AI').length
         };
+    const totalPoints = Math.max(0, Math.trunc(toFiniteNumber(source.totalPoints, 0)));
+    // Versions before lifetime tracking only stored the balance. Points spent
+    // since then are recovered from the redemption entries still in the log.
+    const netSpent = -activities
+        .filter(a => a.category === 'Redemption')
+        .reduce((sum, a) => sum + a.points, 0);
+    const storedLifetime = Math.trunc(toFiniteNumber(source.lifetimePoints, NaN));
+    const lifetimePoints = Number.isFinite(storedLifetime)
+        ? Math.max(storedLifetime, totalPoints)
+        : totalPoints + Math.max(0, netSpent);
     return {
-        totalPoints: Math.max(0, Math.trunc(toFiniteNumber(source.totalPoints, 0))),
+        totalPoints,
+        lifetimePoints,
         dailyPoints: Math.max(0, Math.trunc(toFiniteNumber(source.dailyPoints, 0))),
         lastActiveDate,
         streakDays: Math.max(1, Math.trunc(toFiniteNumber(source.streakDays, 1))),
@@ -307,7 +331,7 @@ function milestoneProgress(stats, milestoneId) {
         case 'streak_14': return stats.streakDays;
         case 'security_audit': return stats.counters.securityRuns;
         case 'ai_explorer': return stats.counters.aiRuns;
-        case 'points_5000': return stats.totalPoints;
+        case 'points_5000': return stats.lifetimePoints;
         default: return 0;
     }
 }
@@ -322,6 +346,7 @@ function awardMilestones(stats) {
             continue;
         stats.completedMilestones.push(milestone.id);
         stats.totalPoints += milestone.points;
+        stats.lifetimePoints += milestone.points;
         stats.dailyPoints += milestone.points;
         unlocked.push(milestone.title);
         pushActivity(stats, {
@@ -336,10 +361,11 @@ function awardMilestones(stats) {
 }
 async function recordActivity(context, activityId, title, points, category) {
     const { stats, result } = await mutateStats(context, current => {
-        const before = getCurrentLevelName(current.totalPoints);
+        const before = getCurrentLevelName(current.lifetimePoints);
         const allowance = Math.max(0, DAILY_POINT_CAP - current.dailyEarnedPoints);
         const awarded = Math.min(Math.max(0, Math.trunc(toFiniteNumber(points, 0))), allowance);
         current.totalPoints += awarded;
+        current.lifetimePoints += awarded;
         current.dailyPoints += awarded;
         current.dailyEarnedPoints += awarded;
         current.lastActiveDate = getTodayString();
@@ -351,7 +377,7 @@ async function recordActivity(context, activityId, title, points, category) {
             category
         });
         const newMilestones = awardMilestones(current);
-        return { newMilestones, levelUp: before !== getCurrentLevelName(current.totalPoints) };
+        return { newMilestones, levelUp: before !== getCurrentLevelName(current.lifetimePoints) };
     });
     return { stats, newMilestones: result.newMilestones, levelUp: result.levelUp };
 }
@@ -393,6 +419,7 @@ async function autoRecordToolUsage(command) {
         const allowance = Math.max(0, DAILY_POINT_CAP - stats.dailyEarnedPoints);
         const awarded = Math.min(basePoints, allowance);
         stats.totalPoints += awarded;
+        stats.lifetimePoints += awarded;
         stats.dailyPoints += awarded;
         stats.dailyEarnedPoints += awarded;
         stats.lastActiveDate = getTodayString();
@@ -439,414 +466,346 @@ function getNextLevel(totalPoints) {
     return null;
 }
 exports.getNextLevel = getNextLevel;
+/**
+ * Awards today's login bonus once. Called on activation and whenever the
+ * tracker is shown, so a window left open past midnight still gets the new
+ * day's bonus. The persisted claim key makes repeat calls (reloads, several
+ * windows) harmless.
+ */
+async function claimDailyLogin(context) {
+    const today = getTodayString();
+    const { result } = await mutateStats(context, stats => {
+        if (stats.dailyClaims[today])
+            return false;
+        stats.dailyClaims[today] = true;
+        return true;
+    });
+    if (result)
+        await recordActivity(context, 'daily_login', 'Daily Login Bonus', exports.DAILY_LOGIN_POINTS, 'Activity');
+    return result;
+}
+exports.claimDailyLogin = claimDailyLogin;
+/** Claims the once-a-day activity boost. Returns false if it was already claimed today. */
+async function claimDailyBonus(context) {
+    const key = `${getTodayString()}_bonus`;
+    const { result } = await mutateStats(context, stats => {
+        if (stats.dailyClaims[key])
+            return false;
+        stats.dailyClaims[key] = true;
+        return true;
+    });
+    if (result)
+        await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', exports.DAILY_BONUS_POINTS, 'Activity');
+    return result;
+}
+exports.claimDailyBonus = claimDailyBonus;
+function buildMilestoneView(context) {
+    let toolNames = {};
+    try {
+        toolNames = (0, milestone_view_1.toolNamesFromManifest)(context.extension?.packageJSON?.contributes?.commands);
+    }
+    catch {
+        toolNames = {};
+    }
+    return (0, milestone_view_1.buildTrackerView)({
+        stats: getUserStats(context),
+        levels: exports.LEVELS,
+        milestones: exports.MILESTONES,
+        progress: milestoneProgress,
+        today: getTodayString(),
+        dailyCap: DAILY_POINT_CAP,
+        rateLimitAfter: RATE_LIMIT_AFTER,
+        loginPoints: exports.DAILY_LOGIN_POINTS,
+        bonusPoints: exports.DAILY_BONUS_POINTS,
+        premium: feature_registry_1.DEVELOPER_FEATURES
+            .filter(feature => feature.enabled && feature.tier === 'premium' && (feature.pointCost ?? 0) > 0)
+            .map(feature => ({ name: feature.name, pointCost: feature.pointCost })),
+        toolNames
+    });
+}
+exports.buildMilestoneView = buildMilestoneView;
 function registerMilestoneTrackerCommand(context) {
     setMilestoneContext(context);
-    // Award the once-a-day login bonus, guarded by a persisted claim key so a
-    // reload (or several windows) cannot award it twice.
-    void (async () => {
-        try {
-            const today = getTodayString();
-            const { result } = await mutateStats(context, stats => {
-                if (stats.dailyClaims[today])
-                    return false;
-                stats.dailyClaims[today] = true;
-                return true;
-            });
-            if (result) {
-                await recordActivity(context, 'daily_login', 'Daily Login Bonus', 5, 'Activity');
-            }
-        }
-        catch (error) {
-            console.error('DevSnip Pro: daily login bonus failed.', error);
-        }
-    })();
-    let activePanel;
+    void claimDailyLogin(context).catch(error => console.error('DevSnip Pro: daily login bonus failed.', error));
     const command = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.milestoneTracker', () => {
-        if (activePanel) {
-            activePanel.reveal(vscode.ViewColumn.One);
-            activePanel.webview.html = getMilestoneTrackerHtml(context);
+        const { panel, created } = (0, webview_ui_1.openToolPanel)('milestoneTracker', 'DevSnip Pro - Milestones & Points', {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
+        });
+        if (!created)
             return;
-        }
-        const panel = vscode.window.createWebviewPanel('milestoneTracker', 'DevSnip Pro - Milestone & Points Tracker', vscode.ViewColumn.One, { enableScripts: true });
-        activePanel = panel;
-        panel.webview.html = getMilestoneTrackerHtml(context);
-        const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'milestone-tracker.js')));
+        panel.webview.html = getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri));
+        let ready = false;
+        let pending;
+        const post = (message) => (0, webview_ui_1.safePostMessage)(panel, message);
+        const pushState = () => {
+            if (!ready)
+                return;
             try {
-                switch (message?.command) {
-                    case 'claimBonus': {
-                        const key = `${getTodayString()}_bonus`;
-                        const { result: claimed } = await mutateStats(context, stats => {
-                            if (stats.dailyClaims[key])
-                                return false;
-                            stats.dailyClaims[key] = true;
-                            return true;
-                        });
-                        if (!claimed) {
-                            vscode.window.showWarningMessage('You have already claimed your daily bonus today.');
-                        }
-                        else {
-                            const res = await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', 10, 'Activity');
-                            vscode.window.showInformationMessage(`Claimed +10 daily bonus points. Total: ${res.stats.totalPoints} pts.`);
-                        }
-                        panel.webview.html = getMilestoneTrackerHtml(context);
-                        break;
-                    }
-                    case 'resetData': {
-                        // Webview modals (confirm/alert) are blocked by the VS Code
-                        // webview sandbox, so the confirmation must be a native dialog.
-                        const confirmed = await (0, webview_ui_1.confirmAction)('Reset all DevSnip Pro points, streaks and milestones? This cannot be undone.', 'Reset everything');
-                        if (!confirmed)
-                            break;
-                        await resetUserStats(context);
-                        panel.webview.html = getMilestoneTrackerHtml(context);
-                        vscode.window.showInformationMessage('Milestone and points data reset.');
-                        break;
-                    }
-                    case 'refresh': {
-                        panel.webview.html = getMilestoneTrackerHtml(context);
-                        break;
-                    }
-                }
+                post({ type: 'state', view: buildMilestoneView(context) });
             }
             catch (error) {
-                vscode.window.showErrorMessage(`Milestone tracker action failed: ${error instanceof Error ? error.message : String(error)}`);
+                post({ type: 'error', message: `Could not load your progress: ${error instanceof Error ? error.message : String(error)}` });
             }
-        });
+        };
+        // Tools earn points while the panel is open; coalesce bursts into one update.
+        const scheduleState = () => {
+            if (pending)
+                clearTimeout(pending);
+            pending = setTimeout(() => {
+                pending = undefined;
+                if (panel.visible)
+                    pushState();
+            }, 150);
+        };
+        const subscriptions = [
+            (0, exports.onDidChangePoints)(scheduleState),
+            panel.onDidChangeViewState(event => {
+                if (event.webviewPanel.visible)
+                    scheduleState();
+            }),
+            panel.webview.onDidReceiveMessage(async (message) => {
+                const action = typeof message?.command === 'string' ? message.command : '';
+                try {
+                    switch (action) {
+                        case 'ready':
+                            ready = true;
+                            // A day may have started since activation.
+                            await claimDailyLogin(context);
+                            pushState();
+                            break;
+                        case 'claimBonus': {
+                            const claimed = await claimDailyBonus(context);
+                            pushState();
+                            post({
+                                type: 'result', action,
+                                ok: claimed,
+                                message: claimed ? `+${exports.DAILY_BONUS_POINTS} points added to your balance.` : 'Today\'s bonus is already claimed. Come back tomorrow.'
+                            });
+                            break;
+                        }
+                        case 'resetData': {
+                            // Webview modals are blocked by the sandbox, so confirmation is a native dialog.
+                            const confirmed = await (0, webview_ui_1.confirmAction)('Reset all DevSnip Pro points, streaks and milestones? This cannot be undone.', 'Reset everything');
+                            if (confirmed)
+                                await resetUserStats(context);
+                            pushState();
+                            post({ type: 'result', action, ok: confirmed, message: confirmed ? 'Progress reset.' : 'Nothing was reset.' });
+                            break;
+                        }
+                        case 'openSpend':
+                            await (0, command_dispatch_1.executeQueuedCommand)(`${command_registry_1.COMMAND_PREFIX}premiumStatus`);
+                            break;
+                        case 'openSearch':
+                            await (0, command_dispatch_1.executeQueuedCommand)(`${command_registry_1.COMMAND_PREFIX}searchTools`);
+                            break;
+                        case 'refresh':
+                            pushState();
+                            break;
+                    }
+                }
+                catch (error) {
+                    post({ type: 'result', action, ok: false, message: `That did not work: ${error instanceof Error ? error.message : String(error)}` });
+                }
+            })
+        ];
         panel.onDidDispose(() => {
-            messageSubscription.dispose();
-            if (activePanel === panel)
-                activePanel = undefined;
+            if (pending)
+                clearTimeout(pending);
+            subscriptions.forEach(subscription => subscription.dispose());
         });
     });
     context.subscriptions.push(command);
 }
 exports.registerMilestoneTrackerCommand = registerMilestoneTrackerCommand;
-function getMilestoneTrackerHtml(context) {
-    const stats = getUserStats(context);
-    const currentLevel = getCurrentLevel(stats.totalPoints);
-    const nextLevel = getNextLevel(stats.totalPoints);
-    let progressPercent = 100;
-    let pointsNeeded = 0;
-    if (nextLevel) {
-        const prevMin = currentLevel.minPoints;
-        const nextMin = nextLevel.minPoints;
-        const span = nextMin - prevMin;
-        const currentProgress = stats.totalPoints - prevMin;
-        progressPercent = Math.min(100, Math.max(0, Math.round((currentProgress / span) * 100)));
-        pointsNeeded = nextMin - stats.totalPoints;
-    }
-    const today = getTodayString();
-    const canClaimBonus = !stats.dailyClaims[today + '_bonus'];
-    const milestonesHtml = exports.MILESTONES.map(m => {
-        const completed = stats.completedMilestones.includes(m.id);
-        const currentCount = completed ? m.target : milestoneProgress(stats, m.id);
-        const pct = Math.min(100, Math.round((currentCount / m.target) * 100));
-        return `
-            <div class="milestone-card ${completed ? 'completed' : ''}">
-                <div class="milestone-icon">${(0, webview_ui_1.escapeHtml)(m.icon)}</div>
-                <div class="milestone-info">
-                    <div class="milestone-title">${(0, webview_ui_1.escapeHtml)(m.title)} ${completed ? '✓' : ''}</div>
-                    <div class="milestone-desc">${(0, webview_ui_1.escapeHtml)(m.description)}</div>
-                    <div class="progress-bar-container" style="margin-top: 8px;">
-                        <div class="progress-bar-fill" style="width: ${pct}%;"></div>
-                    </div>
-                    <div style="font-size: 11px; color: var(--fg-1); margin-top: 4px; display: flex; justify-content: space-between;">
-                        <span>Progress: ${Math.min(currentCount, m.target)} / ${m.target}</span>
-                        <span style="font-weight: 700; color: var(--accent);">+${m.points} pts</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-    const activitiesHtml = stats.activities.length === 0 ?
-        '<div style="text-align: center; color: var(--fg-1); padding: 20px;">No activities recorded yet. Start using DevSnip Pro tools to earn points!</div>' :
-        stats.activities.map(a => {
-            const dateStr = new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
-            return `
-                <div class="activity-item">
-                    <div>
-                        <div class="activity-title">${(0, webview_ui_1.escapeHtml)(a.title)}</div>
-                        <div class="activity-time">${(0, webview_ui_1.escapeHtml)(dateStr)} • <span style="color: var(--accent);">${(0, webview_ui_1.escapeHtml)(a.category)}</span></div>
-                    </div>
-                    <div class="activity-points">${a.points >= 0 ? '+' : ''}${a.points} pts</div>
-                </div>
-            `;
-        }).join('');
-    const rewardsHtml = exports.LEVELS.map(lvl => {
-        const unlocked = stats.totalPoints >= lvl.minPoints;
-        return `
-            <div class="reward-card ${unlocked ? 'unlocked' : 'locked'}">
-                <div style="font-size: 28px; margin-bottom: 8px;">${(0, webview_ui_1.escapeHtml)(lvl.badge)}</div>
-                <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${(0, webview_ui_1.escapeHtml)(lvl.name)} Level</div>
-                <div style="font-size: 11px; color: var(--fg-1); margin-bottom: 4px;">${(0, webview_ui_1.escapeHtml)(lvl.rank)}</div>
-                <div style="font-size: 11px; color: var(--fg-1); margin-bottom: 8px;">Requirement: ${lvl.minPoints} pts</div>
-                <div style="font-size: 12px; font-weight: 600; color: ${unlocked ? 'var(--success)' : 'var(--fg-2)'};">
-                    ${unlocked ? '✓ Unlocked: ' + (0, webview_ui_1.escapeHtml)(lvl.reward) : '🔒 Locked: ' + (0, webview_ui_1.escapeHtml)(lvl.reward)}
-                </div>
-            </div>
-        `;
-    }).join('');
-    const nonce = (0, webview_ui_1.getNonce)();
+function getMilestoneTrackerHtml(cspSource, scriptSrc) {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src ${cspSource};">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Milestone Tracker & Points System</title>
+    <title>Milestones &amp; Points</title>
     <style>
-        :root {
-            --bg-0: var(--vscode-editor-background);
-            --bg-1: var(--vscode-sideBar-background);
-            --bg-2: var(--vscode-input-background);
-            --bg-3: var(--vscode-textCodeBlock-background);
-            --fg-0: var(--vscode-editor-foreground);
-            --fg-1: var(--vscode-descriptionForeground);
-            --fg-2: var(--vscode-disabledForeground);
-            --border: var(--vscode-input-border);
-            --border-focus: var(--vscode-focusBorder);
-            --accent: var(--vscode-button-background);
-            --accent-fg: var(--vscode-button-foreground);
-            --success: #4caf50;
-            --success-bg: rgba(76, 175, 80, 0.15);
-            --warning: #ff9800;
-            --radius-md: 8px;
-            --radius-lg: 12px;
-            --shadow: 0 4px 12px rgba(0,0,0,0.3);
-            --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-        }
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: var(--sans); background: var(--bg-0); color: var(--fg-0); padding: 0; }
-        .header {
-            background: var(--bg-1);
-            border-bottom: 1px solid var(--border);
-            padding: 20px 24px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .header h1 { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-        .stats-banner {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;
-            padding: 20px 24px; max-width: 1200px; margin: 0 auto;
-        }
-        .stat-card {
-            background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-md);
-            padding: 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--shadow);
-        }
-        .stat-label { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--fg-1); letter-spacing: 0.5px; }
-        .stat-value { font-size: 22px; font-weight: 800; color: var(--accent); }
-        
-        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px 30px; }
-        .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
-        .tab {
-            padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--fg-1);
-            border-bottom: 2px solid transparent; transition: all 0.2s; text-align: left;
-        }
-        .tab.active { color: var(--fg-0); border-bottom-color: var(--accent); background: var(--bg-1); border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        ${webview_ui_1.UTILITY_CSS}
+        :root { --gold: #e2b33c; --streak: #ff8a3d; --purple: #b180d7; --danger: var(--vscode-errorForeground, #f14c4c); --ring: 132px; }
+        body { overflow-y: auto; }
+        .tool-header { flex-wrap: wrap; row-gap: 8px; }
+        .tool-header .spacer { flex: 1; }
+        .tool-body { max-width: 1160px; display: flex; flex-direction: column; gap: 16px; }
+        .btn:focus-visible, .tab:focus-visible, .chip-btn:focus-visible, .link-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+        .btn[disabled] { opacity: .5; cursor: default; transform: none; }
+        .btn-danger-ghost { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+        .btn-danger-ghost:hover { background: var(--error-bg); }
+        .card { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
+        .card-title { font-size: 11px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .muted { color: var(--fg-1); }
+        .num { font-variant-numeric: tabular-nums; }
 
-        .section-box { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px; }
-        .section-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; text-align: left; }
+        /* Hero */
+        .hero { display: grid; grid-template-columns: minmax(300px, 1.1fr) minmax(0, 1.4fr); gap: 16px; }
+        .level-card { display: flex; gap: 20px; align-items: center; position: relative; overflow: hidden; }
+        .level-card::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 18% 50%, var(--level-glow, transparent), transparent 60%); opacity: .22; pointer-events: none; }
+        .ring { position: relative; width: var(--ring); height: var(--ring); flex: none; }
+        .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .ring-track { stroke: var(--bg-3); }
+        .ring-fill { stroke: color-mix(in srgb, var(--level-color, var(--accent)) 82%, var(--fg-0)); stroke-linecap: round; transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1); }
+        .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+        .ring-badge { font-size: 34px; line-height: 1; }
+        .ring-pct { font-size: 12px; font-weight: 700; color: var(--fg-1); }
+        .level-info { min-width: 0; position: relative; }
+        .level-kicker { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--fg-1); }
+        /* Level colours include near-white Platinum/Diamond, so they are blended with the theme text colour to stay legible in light themes. */
+        .level-name { font-size: 24px; font-weight: 800; line-height: 1.2; color: color-mix(in srgb, var(--level-color, var(--fg-0)) 72%, var(--fg-0)); }
+        .level-title { font-size: 13px; color: var(--fg-1); margin-bottom: 10px; }
+        .level-next { font-size: 13px; line-height: 1.5; }
+        .level-next strong { color: var(--fg-0); }
+        .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .stat { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--fg-1); display: flex; align-items: center; gap: 6px; }
+        .stat-value { font-size: 24px; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .stat-value small { font-size: 13px; font-weight: 600; color: var(--fg-1); }
+        .stat-sub { font-size: 12px; color: var(--fg-1); line-height: 1.45; }
+        .stat .link-btn { align-self: flex-start; margin-top: 2px; }
+        .bar { height: 8px; background: var(--bg-3); border-radius: 999px; overflow: hidden; }
+        .bar.thin { height: 6px; }
+        .bar > span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+        .bar.gold > span { background: linear-gradient(90deg, var(--gold), #f5d27a); }
+        .bar.success > span { background: var(--success); }
+        .bar.streak > span { background: var(--streak); }
+        .link-btn { background: none; border: none; padding: 0; color: var(--vscode-textLink-foreground, #3794ff); font: inherit; font-size: 12px; cursor: pointer; }
+        .link-btn:hover { text-decoration: underline; }
 
-        .progress-bar-container { width: 100%; height: 10px; background: var(--bg-2); border-radius: 5px; overflow: hidden; }
-        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #4caf50); border-radius: 5px; transition: width 0.4s ease; }
+        /* Today */
+        .today { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        .quest { display: flex; gap: 12px; align-items: center; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; min-width: 0; }
+        .quest.done { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+        .quest-icon { font-size: 20px; width: 36px; height: 36px; flex: none; display: grid; place-items: center; background: var(--bg-3); border-radius: 50%; }
+        .quest-body { flex: 1; min-width: 0; }
+        .quest-title { font-size: 13px; font-weight: 700; }
+        .quest-sub { font-size: 12px; color: var(--fg-1); line-height: 1.4; }
+        .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: var(--bg-3); color: var(--fg-1); }
+        .pill.ok { background: var(--success-bg); color: var(--success); }
+        .pill.pts { background: rgba(226,179,60,.16); color: color-mix(in srgb, var(--gold) 68%, var(--fg-0)); }
 
-        .milestones-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-        .milestone-card {
-            background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-md);
-            padding: 16px; display: flex; gap: 14px; align-items: flex-start; transition: transform 0.2s; text-align: left;
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--fg-1); font: inherit; font-size: 13px; font-weight: 600; padding: 10px 14px; cursor: pointer; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+        .tab:hover { color: var(--fg-0); }
+        .tab[aria-selected="true"] { color: var(--fg-0); border-bottom-color: var(--accent); }
+        .tab .count { font-size: 11px; background: var(--bg-3); border-radius: 999px; padding: 1px 7px; color: var(--fg-1); }
+        .panel { padding-top: 16px; }
+        .panel[hidden] { display: none; }
+        .toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+        .chip-btn { background: var(--bg-2); color: var(--fg-1); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .chip-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+
+        /* Milestones */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+        .ms { position: relative; display: flex; gap: 14px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; transition: border-color .2s, box-shadow .2s; }
+        .ms:hover { border-color: color-mix(in srgb, var(--border-focus) 60%, var(--border)); }
+        .ms.completed { border-color: color-mix(in srgb, var(--success) 50%, var(--border)); }
+        .ms.focus { border-color: var(--border-focus); }
+        .ms-icon { font-size: 24px; width: 46px; height: 46px; flex: none; display: grid; place-items: center; background: var(--bg-3); border-radius: 12px; }
+        .ms.completed .ms-icon { background: var(--success-bg); }
+        .ms:not(.completed) .ms-icon { filter: grayscale(.35); }
+        .ms-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+        .ms-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+        .ms-title { font-size: 14px; font-weight: 700; }
+        .ms-desc { font-size: 12px; color: var(--fg-1); line-height: 1.45; }
+        .ms-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--fg-1); }
+        .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--fg-2); }
+
+        /* Levels */
+        .levels { display: flex; flex-direction: column; gap: 0; position: relative; }
+        .lv { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 4px; position: relative; }
+        .lv + .lv { border-top: 1px solid var(--border); }
+        .lv-badge { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; background: var(--bg-3); border: 2px solid transparent; }
+        .lv.achieved .lv-badge { border-color: var(--success); }
+        .lv.current .lv-badge { border-color: var(--lv-color, var(--accent)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--lv-color, var(--accent)) 22%, transparent); }
+        .lv.locked .lv-badge { filter: grayscale(1); opacity: .55; }
+        .lv-name { font-weight: 700; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .lv-sub { font-size: 12px; color: var(--fg-1); }
+        .lv-req { font-size: 12px; font-weight: 700; text-align: right; white-space: nowrap; }
+        .lv.current { background: color-mix(in srgb, var(--lv-color, var(--accent)) 7%, transparent); border-radius: var(--radius-md); }
+        .lv .bar { margin-top: 6px; max-width: 420px; }
+
+        /* Activity */
+        .day { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--fg-2); margin: 14px 0 6px; }
+        .day:first-child { margin-top: 0; }
+        .act { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); }
+        .act-icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--bg-3); font-size: 14px; }
+        .act-title { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .act-meta { font-size: 11.5px; color: var(--fg-1); }
+        .act-pts { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .act-pts.plus { color: var(--success); } .act-pts.minus { color: var(--danger); } .act-pts.zero { color: var(--fg-2); }
+        .more { margin-top: 12px; }
+
+        /* Earn */
+        .rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+        .rule { display: flex; gap: 12px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+        .rule-icon { font-size: 20px; }
+        .rule-title { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+        .rule-text { font-size: 12px; color: var(--fg-1); line-height: 1.45; margin-top: 2px; }
+        .note { font-size: 12.5px; color: var(--fg-1); line-height: 1.55; margin-top: 14px; }
+
+        .empty { text-align: center; color: var(--fg-1); padding: 32px 16px; font-size: 13px; line-height: 1.6; }
+        .skeleton { background: linear-gradient(90deg, var(--bg-2), var(--bg-3), var(--bg-2)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; border-radius: var(--radius-lg); }
+        @keyframes shimmer { to { background-position: -200% 0; } }
+        .error-box { border: 1px solid var(--error); background: var(--error-bg); border-radius: var(--radius-md); padding: 12px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+
+        /* Feedback */
+        .celebrate { position: fixed; left: 50%; top: 18px; transform: translate(-50%, -200%); opacity: 0; visibility: hidden; z-index: 100; background: var(--bg-1); border: 1px solid var(--gold); border-radius: 999px; padding: 10px 18px 10px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.35); font-size: 13px; font-weight: 700; transition: transform .45s cubic-bezier(.2,1.2,.3,1), opacity .3s, visibility .45s; max-width: calc(100vw - 32px); }
+        .celebrate.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
+        .celebrate-badge { font-size: 22px; }
+        .pulse { animation: pulse 1.4s ease-out 2; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 55%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+        .bump { animation: bump .5s ease-out; }
+        @keyframes bump { 40% { transform: scale(1.08); } }
+        .toast.info { background: var(--accent); color: var(--accent-fg); }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
         }
-        .milestone-card.completed { border-color: var(--success); background: var(--success-bg); }
-        .milestone-icon { font-size: 28px; background: var(--bg-1); padding: 8px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; }
-        .milestone-info { flex: 1; text-align: left; }
-        .milestone-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; text-align: left; }
-        .milestone-desc { font-size: 11px; color: var(--fg-1); line-height: 1.4; text-align: left; }
-
-        .activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
-        .activity-item {
-            background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-md);
-            padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; text-align: left;
+        @media (max-width: 900px) {
+            .hero { grid-template-columns: 1fr; }
+            .today { grid-template-columns: 1fr; }
         }
-        .activity-title { font-size: 13px; font-weight: 600; text-align: left; }
-        .activity-time { font-size: 11px; color: var(--fg-1); text-align: left; }
-        .activity-points { font-size: 14px; font-weight: 700; color: var(--success); text-align: left; }
-
-        .rewards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
-        .reward-card {
-            background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-md);
-            padding: 20px; text-align: left; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+        @media (max-width: 520px) {
+            :root { --ring: 104px; }
+            .tool-header { padding: 12px 16px; position: static; }
+            .tool-body { padding: 14px 16px; }
+            .stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .stat { padding: 12px; }
+            .stat-value { font-size: 20px; }
+            .level-card { gap: 14px; }
+            .level-name { font-size: 20px; }
+            .grid { grid-template-columns: 1fr; }
+            .lv { grid-template-columns: 40px minmax(0, 1fr); }
+            .lv-req { grid-column: 2; text-align: left; }
         }
-        .reward-card.unlocked { border-color: var(--success); background: var(--success-bg); }
-
-        .btn {
-            background: var(--accent); color: var(--accent-fg); border: none; padding: 8px 16px;
-            font-size: 12px; font-weight: 600; border-radius: var(--radius-md); cursor: pointer; transition: opacity 0.2s;
-            text-align: left; display: inline-flex; align-items: center; gap: 6px;
-        }
-        .btn:hover { opacity: 0.85; }
-        .btn-secondary { background: var(--bg-2); color: var(--fg-0); border: 1px solid var(--border); text-align: left; }
     </style>
 </head>
 <body>
-    <div class="header" style="text-align: left;">
-        <h1 style="text-align: left;">🏆 DevSnip Pro Milestone & Points Tracker</h1>
-        <button class="btn btn-secondary" id="resetDataBtn">Reset Data</button>
+    <div class="tool-header">
+        <h1>🏆 Milestones &amp; Points</h1>
+        <span class="subtitle">Earn points by using DevSnip Pro, level up, and spend them on premium tools</span>
+        <span class="spacer"></span>
+        <button class="btn btn-secondary btn-sm" id="spendBtn" type="button">Spend points</button>
+        <button class="btn btn-danger-ghost btn-sm" id="resetBtn" type="button">Reset progress</button>
     </div>
-
-    <div class="stats-banner">
-        <div class="stat-card" style="text-align: left;">
-            <span class="stat-label">Current Level & Rank</span>
-            <span class="stat-value" style="color: ${currentLevel.color}; font-size: 18px; text-align: left;">${currentLevel.badge} ${currentLevel.name}</span>
-            <span style="font-size: 11px; color: var(--fg-1); margin-top: 2px; text-align: left;">${currentLevel.rank}</span>
-        </div>
-        <div class="stat-card" style="text-align: left;">
-            <span class="stat-label">Total Points</span>
-            <span class="stat-value" style="text-align: left;">${stats.totalPoints} pts</span>
-            <span style="font-size: 11px; color: var(--fg-1); margin-top: 2px; text-align: left;">Accumulated Score</span>
-        </div>
-        <div class="stat-card" style="text-align: left;">
-            <span class="stat-label">Next Level Target</span>
-            <span class="stat-value" style="color: var(--warning); text-align: left;">${nextLevel ? pointsNeeded + ' pts' : 'Max Level'}</span>
-            <span style="font-size: 11px; color: var(--fg-1); margin-top: 2px; text-align: left;">${nextLevel ? 'To reach ' + nextLevel.name : 'All Tiers Unlocked'}</span>
-        </div>
-        <div class="stat-card" style="text-align: left;">
-            <span class="stat-label">Active Streak</span>
-            <span class="stat-value" style="color: #ff9800; text-align: left;">🔥 ${stats.streakDays} Days</span>
-            <span style="font-size: 11px; color: var(--fg-1); margin-top: 2px; text-align: left;">Daily Usage Tracking</span>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="section-box" style="text-align: left;">
-            <div class="section-title">
-                <span style="text-align: left;">Progress toward ${nextLevel ? nextLevel.name + ' (' + nextLevel.minPoints + ' pts)' : 'Maximum Tier'}</span>
-                <span style="text-align: right;">${nextLevel ? pointsNeeded + ' pts required' : '100% Completed'}</span>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar-fill" style="width: ${progressPercent}%;"></div>
-            </div>
-            <div style="font-size: 11px; color: var(--fg-1); margin-top: 6px; display: flex; justify-content: space-between; text-align: left;">
-                <span>${currentLevel.name} (${currentLevel.minPoints} pts)</span>
-                <span>${progressPercent}% Complete</span>
-                <span>${nextLevel ? nextLevel.name + ' (' + nextLevel.minPoints + ' pts)' : 'Grandmaster (25000+ pts)'}</span>
-            </div>
-        </div>
-
-        <div class="tabs" style="text-align: left;">
-            <div class="tab active" data-tab="overview">Overview & Quests</div>
-            <div class="tab" data-tab="milestones">Milestones (${stats.completedMilestones.length}/${exports.MILESTONES.length})</div>
-            <div class="tab" data-tab="activities">Activity Feed</div>
-            <div class="tab" data-tab="rewards">Tiers & Leaderboard Rank</div>
-        </div>
-
-        <div id="overview" class="tab-content active" style="text-align: left;">
-            <div class="section-box" style="text-align: left;">
-                <div class="section-title" style="text-align: left;"><span>Daily Activity & Quests</span></div>
-                <div style="display: flex; flex-direction: column; gap: 14px; text-align: left;">
-                    <div class="activity-item" style="text-align: left;">
-                        <div style="text-align: left;">
-                            <div class="activity-title" style="text-align: left;">Daily Login Bonus</div>
-                            <div class="activity-time" style="text-align: left;">Awarded automatically upon opening DevSnip Pro today</div>
-                        </div>
-                        <div style="font-weight: 700; color: var(--success); text-align: right;">+5 pts Claimed ✓</div>
-                    </div>
-                    <div class="activity-item" style="text-align: left;">
-                        <div style="text-align: left;">
-                            <div class="activity-title" style="text-align: left;">Daily Activity Boost (+10 pts)</div>
-                            <div class="activity-time" style="text-align: left;">Claim your daily productivity bonus for consistent usage</div>
-                        </div>
-                        <div style="text-align: right;">
-                            ${canClaimBonus ?
-        `<button class="btn" id="claimBonusBtn">Claim Bonus</button>` :
-        `<span style="font-weight: 700; color: var(--success);">Claimed ✓</span>`}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="section-box" style="text-align: left;">
-                <div class="section-title" style="text-align: left;"><span>Balanced Points & Progression System</span></div>
-                <div style="font-size: 13px; color: var(--fg-1); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; line-height: 1.5; text-align: left;">
-                    <div style="text-align: left;">🚀 <b>Core Tools:</b> +3 pts per tool usage (Rate-limited after 5x/day)</div>
-                    <div style="text-align: left;">📝 <b>Custom Snippets:</b> +10 pts per snippet created</div>
-                    <div style="text-align: left;">🛡️ <b>Security Audits:</b> +8 pts per security check</div>
-                    <div style="text-align: left;">🤖 <b>AI/ML & RAG Tools:</b> +5 pts per AI tool run</div>
-                    <div style="text-align: left;">🔥 <b>Consistent Usage:</b> Requires regular daily activity for higher tiers</div>
-                    <div style="text-align: left;">🏆 <b>Milestones:</b> +10 to +500 bonus points</div>
-                </div>
-            </div>
-        </div>
-
-        <div id="milestones" class="tab-content" style="text-align: left;">
-            <div class="section-box" style="text-align: left;">
-                <div class="section-title" style="text-align: left;"><span>Milestones & Achievements</span></div>
-                <div class="milestones-grid">
-                    ${milestonesHtml}
-                </div>
-            </div>
-        </div>
-
-        <div id="activities" class="tab-content" style="text-align: left;">
-            <div class="section-box" style="text-align: left;">
-                <div class="section-title" style="text-align: left;"><span>Recent Activity Log</span></div>
-                <div class="activity-list">
-                    ${activitiesHtml}
-                </div>
-            </div>
-        </div>
-
-        <div id="rewards" class="tab-content" style="text-align: left;">
-            <div class="section-box" style="text-align: left;">
-                <div class="section-title" style="text-align: left;"><span>Tiers, Leaderboard Ranking & Progression</span></div>
-                <div class="rewards-grid">
-                    ${rewardsHtml}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script nonce="${nonce}">
-        const vscode = acquireVsCodeApi();
-
-        document.querySelectorAll('.tab').forEach(function(tab) {
-            tab.addEventListener('click', function(e) {
-                document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-                document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
-                e.currentTarget.classList.add('active');
-                var tabId = e.currentTarget.getAttribute('data-tab');
-                var content = document.getElementById(tabId);
-                if (content) { content.classList.add('active'); }
-            });
-        });
-
-        var claimBtn = document.getElementById('claimBonusBtn');
-        if (claimBtn) {
-            claimBtn.addEventListener('click', function() {
-                vscode.postMessage({ command: 'claimBonus' });
-            });
-        }
-
-        var resetBtn = document.getElementById('resetDataBtn');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', function() {
-                // VS Code webviews are sandboxed without modals, so confirmation
-                // happens in the extension host with a native dialog.
-                vscode.postMessage({ command: 'resetData' });
-            });
-        }
-
-        // Keep the selected tab across re-renders (claim/reset re-render the page).
-        var saved = vscode.getState() || {};
-        if (saved.tab) {
-            var savedTab = document.querySelector('.tab[data-tab="' + saved.tab + '"]');
-            if (savedTab) savedTab.click();
-        }
-        document.querySelectorAll('.tab').forEach(function(tab) {
-            tab.addEventListener('click', function(e) {
-                vscode.setState({ tab: e.currentTarget.getAttribute('data-tab') });
-            });
-        });
-    </script>
+    <main class="tool-body" id="app" aria-busy="true">
+        <div class="hero" aria-hidden="true"><div class="skeleton" style="height:170px"></div><div class="skeleton" style="height:170px"></div></div>
+        <div class="skeleton" style="height:90px" aria-hidden="true"></div>
+        <p class="sr-only" role="status">Loading your progress...</p>
+    </main>
+    <div class="celebrate" id="celebrate" role="status" aria-live="polite"><span class="celebrate-badge" id="celebrateBadge"></span><span id="celebrateText"></span></div>
+    <script src="${scriptSrc}"></script>
 </body>
 </html>`;
 }
+exports.getMilestoneTrackerHtml = getMilestoneTrackerHtml;
 //# sourceMappingURL=milestoneTracker.js.map

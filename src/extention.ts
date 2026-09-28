@@ -221,13 +221,15 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     }
 
     const stats = getUserStats(this.context);
-    const level = getCurrentLevel(stats.totalPoints);
+    // The level follows lifetime points so spending never demotes it; the number is the spendable balance.
+    const level = getCurrentLevel(stats.lifetimePoints);
     const trackerItem = this.createCommandButton(
       `${level.badge} ${level.name} (${stats.totalPoints} pts)`,
       "sayaib.hue-console.milestoneTracker",
       "trophy",
       new vscode.ThemeColor("terminal.ansiBrightYellow")
     );
+    trackerItem.tooltip = `${level.name} level - ${stats.lifetimePoints} points earned in total, ${stats.totalPoints} available to spend`;
 
     return [
       trackerItem,
