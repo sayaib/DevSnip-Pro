@@ -2,17 +2,38 @@
   "version": "0.2.0",
   "configurations": [
     {
+      // F5 default. "noDebug" starts the Extension Development Host without
+      // --inspect-brk-extensions, so it never waits for a debugger to attach and
+      // cannot hit "Extension host did not start in 10 seconds". Use it to run
+      // and try the extension; use "Debug Extension" when you need breakpoints.
       "type": "extensionHost",
       "request": "launch",
       "name": "Run Extension",
-      "preLaunchTask": "npm: compile",
+      "noDebug": true,
+      "preLaunchTask": "npm: compile:dev",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extensions",
+        "--new-window"
+      ]
+    },
+    {
+      // Starts paused and attaches the debugger, so breakpoints in activate()
+      // are hit. If this reports the 10-second timeout, the debugger in the
+      // main window could not connect: quit VS Code (Cmd+Q / Alt+F4) and reopen.
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Debug Extension (breakpoints)",
+      "preLaunchTask": "npm: compile:dev",
       "runtimeExecutable": "${execPath}",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "--disable-extensions",
         "--new-window"
       ],
-      "outFiles": ["${workspaceFolder}/out/**/*.js"]
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "timeout": 30000
     }
   ]
 }

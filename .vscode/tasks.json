@@ -7,6 +7,16 @@
       "label": "npm: compile",
       "problemMatcher": "$tsc",
       "group": "build"
+    },
+    {
+      // Incremental build used before F5: only changed files are recompiled.
+      // `npm run compile` (clean + full build) is still what packaging uses.
+      "type": "npm",
+      "script": "compile:dev",
+      "label": "npm: compile:dev",
+      "problemMatcher": "$tsc",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "silent" }
     }
   ]
 }

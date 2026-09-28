@@ -42,6 +42,17 @@ The same client speaks to OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama
 - Find and remove unused imports in JavaScript, TypeScript, Python and Java
 - View, edit and manage README files with a live preview
 
+### Manage dependencies
+
+**DevSnip Pro: Dependencies & Installation** (in **Developer Utilities** and the Utilities group of the tool tree) finds every project in the workspace and lists each dependency with its declared range, the installed version, the newest version that range allows, and the newest stable release.
+
+- **npm, yarn (1 and 2+), pnpm, pip, Maven and Gradle.** The package manager is detected from `packageManager`, the nearest lockfile, a Maven or Gradle wrapper, or a Python virtual environment (`.venv`, `venv`, or the interpreter selected in VS Code).
+- **Clear status per dependency:** up to date, update available within the range, newer major outside the range, missing, installed at the wrong version, or unknown (with the reason).
+- **One-click Install missing and Update outdated**, per project or for the whole workspace, with live progress, a cancel button, and a plain-language explanation when something fails (peer conflicts, private registries, PEP 668, proxies and certificates, missing build tools, permissions).
+- **Copy any command.** Every install, update and upgrade command is shown and can be copied, quoted correctly for your platform's shell.
+
+Production stays safe by default. Nothing runs without a confirmation that shows the exact command lines. Bulk updates stay inside the declared ranges and only touch development dependencies unless you tick *Include production dependencies*. Upgrading a production dependency past its range, and any Maven or Gradle version change, is offered as a copyable command, never run automatically. Commands are built by the extension from an allow-list, never passed through a shell, and only run in a trusted workspace.
+
 ### Check security
 
 **DevSnip Pro: Security Hub** puts four scans behind one panel. Every check is performed for real against the target you choose, and each result carries the evidence it was based on, a severity, and the change that resolves it. Results are graded Pass, Warning or Failed, filterable, and exportable as Markdown or JSON.

@@ -21,3 +21,4 @@ vsc-extension-quickstart.md
 *.vsix
 *.log
 .gitignore
+.tsbuildinfo

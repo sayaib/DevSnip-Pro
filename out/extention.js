@@ -32,6 +32,7 @@ const listAndRemoveConsoleLogsCommand_1 = require("./commands/listAndRemoveConso
 const removeUnusedImportsCommand_1 = require("./commands/removeUnusedImportsCommand");
 const api_test_1 = require("./commands/api-test");
 const advancedTools_1 = require("./commands/advancedTools");
+const dependencyManager_1 = require("./commands/dependencyManager");
 const aiMlTools_1 = require("./commands/aiMlTools");
 const bigDataTools_1 = require("./commands/bigDataTools");
 const ragTools_1 = require("./commands/ragTools");
@@ -87,6 +88,7 @@ function activate(context) {
         ["REST API client", () => (0, api_test_1.apiTest)(context, { access, collections })],
         ["premium commands", () => (0, premium_commands_1.registerPremiumCommands)(context, access)],
         ["developer utilities", () => (0, advancedTools_1.registerAdvancedToolsCommands)(context)],
+        ["dependencies & installation", () => (0, dependencyManager_1.registerDependencyManagerCommand)(context)],
         ["AI/ML tools", () => {
                 (0, aiMlTools_1.registerAiMlToolsCommands)(context);
                 (0, aiMlExtraTools_1.registerAiMlExtraTools)(context);
@@ -126,6 +128,7 @@ const UNIVERSAL_TOOLS = [
     { label: "Timestamp Converter", description: "Advanced / Dates", command: "sayaib.hue-console.timestampConverter" },
     { label: "JSON to TOON Converter", description: "Advanced / Data", command: "sayaib.hue-console.jsonToToon" },
     { label: "Color Palette", description: "Advanced / Design", command: "sayaib.hue-console.colorPalette" },
+    { label: "Dependencies & Installation", description: "Developer Code / npm / yarn / pnpm / pip / Maven / Gradle", command: "sayaib.hue-console.dependencyManager" },
     { label: "Lorem Ipsum Generator", description: "Advanced / Content", command: "sayaib.hue-console.loremGenerator" },
     { label: "AI/ML & LLM Tools", description: "AI / Hub", command: "sayaib.hue-console.aiMlHub" },
     { label: "Token Counter & Cost Calculator", description: "AI / LLM", command: "sayaib.hue-console.tokenCounter" },
@@ -260,6 +263,7 @@ class MyTreeDataProvider {
             ]),
             new ToolGroup("Utilities", "tools", "terminal.ansiBrightWhite", [
                 this.createCommandButton("Developer Utilities", "sayaib.hue-console.advancedToolsHub", "tools"),
+                this.createCommandButton("Dependencies & Installation", "sayaib.hue-console.dependencyManager", "package"),
             ]),
         ];
     }

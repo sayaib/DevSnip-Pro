@@ -6,6 +6,7 @@ import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemov
 import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImportsCommand";
 import { apiTest } from "./commands/api-test";
 import { registerAdvancedToolsCommands } from "./commands/advancedTools";
+import { registerDependencyManagerCommand } from "./commands/dependencyManager";
 import { registerAiMlToolsCommands } from "./commands/aiMlTools";
 import { registerBigDataToolsCommands } from "./commands/bigDataTools";
 import { registerRagToolsCommands } from "./commands/ragTools";
@@ -68,6 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
     ["REST API client", () => apiTest(context, { access, collections })],
     ["premium commands", () => registerPremiumCommands(context, access)],
     ["developer utilities", () => registerAdvancedToolsCommands(context)],
+    ["dependencies & installation", () => registerDependencyManagerCommand(context)],
     ["AI/ML tools", () => {
       registerAiMlToolsCommands(context);
       registerAiMlExtraTools(context);
@@ -115,6 +117,7 @@ const UNIVERSAL_TOOLS: ToolSearchItem[] = [
   { label: "Timestamp Converter", description: "Advanced / Dates", command: "sayaib.hue-console.timestampConverter" },
   { label: "JSON to TOON Converter", description: "Advanced / Data", command: "sayaib.hue-console.jsonToToon" },
   { label: "Color Palette", description: "Advanced / Design", command: "sayaib.hue-console.colorPalette" },
+  { label: "Dependencies & Installation", description: "Developer Code / npm / yarn / pnpm / pip / Maven / Gradle", command: "sayaib.hue-console.dependencyManager" },
   { label: "Lorem Ipsum Generator", description: "Advanced / Content", command: "sayaib.hue-console.loremGenerator" },
   { label: "AI/ML & LLM Tools", description: "AI / Hub", command: "sayaib.hue-console.aiMlHub" },
   { label: "Token Counter & Cost Calculator", description: "AI / LLM", command: "sayaib.hue-console.tokenCounter" },
@@ -273,6 +276,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
       ]),
       new ToolGroup("Utilities", "tools", "terminal.ansiBrightWhite", [
         this.createCommandButton("Developer Utilities", "sayaib.hue-console.advancedToolsHub", "tools"),
+        this.createCommandButton("Dependencies & Installation", "sayaib.hue-console.dependencyManager", "package"),
       ]),
     ];
   }

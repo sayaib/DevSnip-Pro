@@ -195,6 +195,7 @@ function getAdvancedToolsHubHtml() {
     <script nonce="${nonce}">
         ${(0, webview_ui_2.toastScript)()}
         var tools = [
+            { cmd: 'sayaib.hue-console.dependencyManager', icon: '\\u{1F4E6}', title: 'Dependencies & Installation', desc: 'Detect every npm, yarn, pnpm, pip, Maven and Gradle dependency, compare installed and latest versions, and install or update with one click.', tag: 'Developer Code' },
             { cmd: 'sayaib.hue-console.regexBuilder', icon: '\\u{1F50D}', title: 'Regex Builder & Tester', desc: 'Build, test, and debug regular expressions with real-time match visualization.', tag: 'Pattern' },
             { cmd: 'sayaib.hue-console.jsonFormatter', icon: '\\u{1F4DD}', title: 'JSON/XML Formatter', desc: 'Format, minify, validate, and syntax-highlight JSON and XML documents.', tag: 'Data' },
             { cmd: 'sayaib.hue-console.hashGenerator', icon: '\\u{1F510}', title: 'Hash Generator', desc: 'Generate SHA-1, SHA-256, SHA-384, and SHA-512 cryptographic hashes.', tag: 'Security' },
@@ -207,7 +208,7 @@ function getAdvancedToolsHubHtml() {
         ];
         var grid = document.getElementById('grid');
         var groups = {};
-        var order = ['Data & Text', 'Encoding & Security', 'Dates & Time', 'Design', 'Content'];
+        var order = ['Developer Code', 'Data & Text', 'Encoding & Security', 'Dates & Time', 'Design', 'Content'];
         tools.forEach(function(t) {
             var section = t.tag === 'Pattern' || t.tag === 'Data' ? 'Data & Text' :
                 (t.tag === 'Security' || t.tag === 'Encoding' ? 'Encoding & Security' : (t.tag === 'Time' ? 'Dates & Time' : t.tag));

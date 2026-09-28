@@ -346,6 +346,10 @@
         "title": "\ud83e\uddf0 DevSnip Pro: Advanced Developer Tools Hub"
       },
       {
+        "command": "sayaib.hue-console.dependencyManager",
+        "title": "\ud83d\udce6 DevSnip Pro: Dependencies & Installation"
+      },
+      {
         "command": "sayaib.hue-console.regexBuilder",
         "title": "\ud83d\udd0d DevSnip Pro: Regex Builder & Tester"
       },
@@ -682,6 +686,7 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
     "compile": "npm run clean && tsc -p ./",
+    "compile:dev": "tsc -p ./ --incremental --tsBuildInfoFile .tsbuildinfo",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
     "pretest": "npm run compile && npm run lint",
