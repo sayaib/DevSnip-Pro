@@ -33,6 +33,7 @@ const path = __importStar(require("path"));
 const crypto_1 = require("crypto");
 const axios_1 = __importDefault(require("axios"));
 const client_1 = require("./client");
+const commands_1 = require("../toolkits/commands");
 const COMMAND_PREFIX = "sayaib.hue-console.";
 const ID_KEY = "devsnip.analytics.anonymousId";
 const USED_KEY = "devsnip.analytics.usedFeatures";
@@ -186,8 +187,13 @@ function createPostHogTransport(config, log) {
     };
 }
 exports.createPostHogTransport = createPostHogTransport;
+/** Toolkit commands know their section; "dev" tools report as utilities like the other developer tools. */
+const TOOLKIT_SECTION = new Map(commands_1.TOOLKIT_COMMANDS.map(c => [c.command, c.section === "dev" ? "utilities" : c.section]));
 /** Feature group for a command id, used to compare areas of the extension. */
 function featureCategory(feature) {
+    const toolkit = TOOLKIT_SECTION.get(feature);
+    if (toolkit)
+        return toolkit;
     const name = feature.toLowerCase();
     if (/snippet/.test(name))
         return "snippets";

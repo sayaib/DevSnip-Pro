@@ -319,6 +319,28 @@ The user copied generated content (a command, code...) to the clipboard. The con
 | `feature` | id | Feature the copy came from. |
 | `kind` | id | What was copied, e.g. install_command, update_command. |
 
+### `tool_run_completed`
+
+A toolkit tool produced a result or an error. Inputs and outputs are never sent.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `feature` | id | Command id of the tool, without prefix, e.g. dockerfileHelper. |
+| `section` | enum:dev \| ai \| rag \| data \| devops | Toolkit section. |
+| `outcome` | enum:success \| input_error \| error \| timeout | success: a result; input_error: the tool asked for different input; error: an unexpected failure; timeout: no result within 90 seconds. |
+| `trigger` | enum:run \| live \| preset \| action | run: the Run button or Ctrl/Cmd+Enter; live: automatic re-run while typing (only the first per panel is sent); preset: a preset was applied; action: a tool-specific button such as Detect from workspace. |
+| `duration_ms` | ms | Time the tool took. |
+
+### `tool_output_used`
+
+The user did something with a toolkit tool's output. The output itself is never sent.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `feature` | id | Command id of the tool, without prefix. |
+| `action` | enum:copy \| insert \| open \| save \| write_all | copy: to clipboard; insert: at the editor cursor; open: as a new editor; save: one file to the workspace; write_all: every generated file. |
+| `file_count` | count | Files written (save and write_all only). |
+
 ### `dependency_scan_completed`
 
 The Dependencies & Installation panel finished a scan.

@@ -567,14 +567,20 @@ export function cosineSimilarity(a: number[], b: number[]): number {
  * kept in one table so a price change is a single edit.
  */
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  "gpt-5": { input: 1.25, output: 10 },
+  "gpt-5-mini": { input: 0.25, output: 2 },
+  "gpt-5-nano": { input: 0.05, output: 0.4 },
   "gpt-4o": { input: 2.5, output: 10 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
   "gpt-4.1": { input: 2, output: 8 },
   "gpt-4.1-mini": { input: 0.4, output: 1.6 },
   "o3-mini": { input: 1.1, output: 4.4 },
+  "claude-opus-4-5": { input: 5, output: 25 },
   "claude-opus-4-1": { input: 15, output: 75 },
   "claude-sonnet-4-5": { input: 3, output: 15 },
   "claude-haiku-4-5": { input: 1, output: 5 },
+  "gemini-2.5-pro": { input: 1.25, output: 10 },
+  "gemini-2.5-flash": { input: 0.3, output: 2.5 },
   "gemini-2.0-flash": { input: 0.1, output: 0.4 },
   "gemini-2.0-pro": { input: 1.25, output: 5 },
   "gemini-1.5-pro": { input: 1.25, output: 5 },

@@ -1,6 +1,6 @@
 # DevSnip Pro
 
-A developer toolkit for VS Code: a full REST and AI API client, code snippets, workspace cleanup, a security scanner, and generators for DevOps, MLOps and observability. 62 commands, all local, no account needed.
+A developer toolkit for VS Code: a full REST and AI API client, a security scanner, workspace cleanup, snippets, and 70+ focused tools for everyday development, AI and LLM work, RAG, data and DevOps. Everything runs locally unless a tool says otherwise; no account needed.
 
 <p align="center">
   <img src="Devsnip.png" alt="DevSnip Pro" />
@@ -48,7 +48,7 @@ The same client speaks to OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama
 
 ### Manage dependencies
 
-**DevSnip Pro: Dependencies & Installation** (in **Developer Utilities** and the Utilities group of the tool tree) finds every project in the workspace and lists each dependency with its declared range, the installed version, the newest version that range allows, and the newest stable release.
+**DevSnip Pro: Dependencies & Installation** (in the **Developer Tools** hub and tool-tree group) finds every project in the workspace and lists each dependency with its declared range, the installed version, the newest version that range allows, and the newest stable release.
 
 - **npm, yarn (1 and 2+), pnpm, pip, Maven and Gradle.** The package manager is detected from `packageManager`, the nearest lockfile, a Maven or Gradle wrapper, or a Python virtual environment (`.venv`, `venv`, or the interpreter selected in VS Code).
 - **Clear status per dependency:** up to date, update available within the range, newer major outside the range, missing, installed at the wrong version, or unknown (with the reason).
@@ -80,15 +80,21 @@ Two extras are opt-in because they send traffic the target did not ask for, thou
 
 Everything runs locally except the endpoint scan, which only contacts the URL you enter. Matched credential values are masked before they are shown.
 
-### Generate what you would otherwise write by hand
+### Toolboxes for everyday work
 
-- Dockerfiles, Compose files, Kubernetes manifests, Terraform, GitHub Actions
-- GPU containers, model-serving manifests and ML CI pipelines
-- OpenTelemetry starters and structured log schemas
+Five hubs group the tools by workflow. Each hub has search (press `/`), category filters and pinning; every tool opens in its own panel with presets, live results where it makes sense, and one-click **Copy**, **Insert at cursor**, **Open in editor** and **Save / Write all to workspace** (it always asks before overwriting). Tools that act on the current file also appear in the editor's right-click **DevSnip Pro** menu.
 
-### Everyday utilities
+**Developer Tools** — JSON/XML formatter, regex builder, diff checker (text or JSON), case converter and line tools, Encode / Decode (Base64, URL, HTML entities, hex, Unicode, JSON strings) with auto-detect, JWT decoder with HMAC signature verification, hash generator, UUID v4/v7, ULID, Nano ID and password generator, timestamp converter, cron expression helper with next run times, colour palette, and Dependencies & Installation.
 
-Regex builder, JSON/XML formatter, JSON→TOON converter, hash generator, Base64 and URL encoders, timestamp converter, colour palette with contrast checking, and a Lorem Ipsum generator. Plus calculators for tokens, GPU VRAM, dataset splits, Spark partitions and cluster cost.
+**AI & ML** — prompt builder with saved templates and provider payloads, JSON → TOON (30-60% fewer prompt tokens for lists of records), token and cost estimator, model comparison, LLM client setup (OpenAI, Anthropic, Gemini, Azure, Ollama, OpenAI-compatible), LLM API tester, LLM JSON extractor with repair and schema validation, response formatter, vector similarity, GPU memory and speed estimator, dataset split planner, model metrics, learning-rate schedules, model cards, an experiment log, tested AI/ML code snippets and an AI app starter.
+
+**RAG** — a guided path for newcomers, chunking tester, chunk and index size calculator, embedding model guide, vector store setup (Chroma, Qdrant, pgvector, Pinecone, Weaviate, OpenSearch), retrieval configuration (MMR, thresholds, hybrid, reranking), context window budget, grounded prompt assembler, a runnable pipeline generator with presets for popular stacks, retrieval evaluation (hit rate, MRR, nDCG), answer grounding checker, hybrid search fusion, near-duplicate finder and chunk metadata validator.
+
+**Data** — converter (CSV, TSV, JSON, JSON Lines, YAML, Markdown tables, SQL inserts), JSON to TypeScript / Zod / Pydantic / Java / Go / JSON Schema, mock data, a no-syntax data transformer, SQL formatter and linter, parameterised SQL query helper (CRUD, upsert, pagination), JSON Schema validator, API response inspector, data profiler, JSON Lines inspector, schema viewer and diff, and Spark partition, cluster-cost and Delta Lake log tools.
+
+**DevOps** — Dockerfile generator and linter (detects your stack), Docker Compose generator and validator, Kubernetes manifests, Helm charts and a manifest validator, CI pipelines (GitHub Actions, GitLab CI, Jenkins, security scanning), cloud deploy workflows (GHCR, Docker Hub, AWS ECS, S3 + CloudFront, Azure) using OIDC, `.env` checker that also finds variables your code reads but never declares, YAML/JSON validator and converter, nginx, PM2 and Terraform generators, port / CIDR / URL network tools, log analyzer and formatter, health-check endpoints with matching probes, an observability starter and a model-serving starter.
+
+Generated configuration is checked by the test suite: YAML and JSON are parsed, TypeScript and JavaScript are compiled, Python is byte-compiled, and Compose files are validated with `docker compose config`.
 
 ### Save your own snippets
 
@@ -188,7 +194,7 @@ Works on Windows, macOS and Linux. Desktop VS Code only — several tools use No
 
 ## Privacy
 
-Everything runs locally. DevSnip Pro has no backend, no telemetry and no account. Requests go only to the URLs you enter, and API keys you type are used for that request and are not written to history or to disk. Credential-looking values in a URL are redacted before a request is stored in history.
+Everything runs locally. DevSnip Pro has no backend and no account, and its only telemetry is the anonymous, opt-out usage analytics described above, which never include code, inputs or outputs. Requests go only to the URLs you enter, and API keys you type are used for that request and are not written to history or to disk. Credential-looking values in a URL are redacted before a request is stored in history. Of the toolbox tools, only the LLM API Tester uses the network (marked "Uses network"); a key typed there is used for that request only and never saved.
 
 ## Development
 

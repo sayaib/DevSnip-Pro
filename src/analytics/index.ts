@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import axios from "axios";
 import { AnalyticsClient, CapturedEvent, DeliveryResult, Transport } from "./client";
 import { EventName, EventProperties } from "./events";
+import { TOOLKIT_COMMANDS } from "../toolkits/commands";
 
 /**
  * DevSnip Pro's analytics entry point.
@@ -187,8 +188,13 @@ export function createPostHogTransport(config: AnalyticsConfig, log?: (line: str
   };
 }
 
+/** Toolkit commands know their section; "dev" tools report as utilities like the other developer tools. */
+const TOOLKIT_SECTION = new Map(TOOLKIT_COMMANDS.map(c => [c.command, c.section === "dev" ? "utilities" : c.section]));
+
 /** Feature group for a command id, used to compare areas of the extension. */
 export function featureCategory(feature: string): string {
+  const toolkit = TOOLKIT_SECTION.get(feature);
+  if (toolkit) return toolkit;
   const name = feature.toLowerCase();
   if (/snippet/.test(name)) return "snippets";
   if (/dependencymanager/.test(name)) return "dependencies";

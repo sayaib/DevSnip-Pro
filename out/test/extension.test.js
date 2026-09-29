@@ -27,6 +27,7 @@ const assert = __importStar(require("assert"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const commands_1 = require("../toolkits/commands");
 const EXTENSION_ID = "sayaib.hue-console";
 function readManifest() {
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
@@ -123,47 +124,17 @@ suite("Command execution", () => {
             "sayaib.hue-console.aiMlHub",
             "sayaib.hue-console.bigDataHub",
             "sayaib.hue-console.ragHub",
+            "sayaib.hue-console.devopsGenerator",
             "sayaib.hue-console.openGUI",
             "sayaib.hue-console.jsonFormatter",
             "sayaib.hue-console.regexBuilder",
             "sayaib.hue-console.hashGenerator",
-            "sayaib.hue-console.base64Encoder",
-            "sayaib.hue-console.urlEncoder",
             "sayaib.hue-console.timestampConverter",
-            "sayaib.hue-console.jsonToToon",
             "sayaib.hue-console.colorPalette",
-            "sayaib.hue-console.loremGenerator",
-            "sayaib.hue-console.tokenCounter",
-            "sayaib.hue-console.promptTemplate",
-            "sayaib.hue-console.mlCodeGen",
-            "sayaib.hue-console.llmApiTester",
-            "sayaib.hue-console.datasetSplit",
-            "sayaib.hue-console.gpuVram",
-            "sayaib.hue-console.experimentLogger",
-            "sayaib.hue-console.modelCard",
-            "sayaib.hue-console.jsonlViewer",
-            "sayaib.hue-console.mdTableGen",
-            "sayaib.hue-console.datasetProfiler",
-            "sayaib.hue-console.metricsCalculator",
-            "sayaib.hue-console.promptPlayground",
-            "sayaib.hue-console.lrScheduler",
-            "sayaib.hue-console.inferenceEstimator",
-            "sayaib.hue-console.schemaViewer",
-            "sayaib.hue-console.sparkSqlFormatter",
-            "sayaib.hue-console.dataQualityChecker",
-            "sayaib.hue-console.schemaDiff",
-            "sayaib.hue-console.partitionCalc",
-            "sayaib.hue-console.deltaLakeAnalyzer",
-            "sayaib.hue-console.sparkCostEstimator",
-            "sayaib.hue-console.chunkingTester",
-            "sayaib.hue-console.embeddingCost",
-            "sayaib.hue-console.contextWindow",
-            "sayaib.hue-console.semanticDedup",
-            "sayaib.hue-console.ragEvalScores",
-            "sayaib.hue-console.hybridSearchRrf",
-            "sayaib.hue-console.ragHallucinationAnalyzer",
             "sayaib.hue-console.milestoneTracker",
-            "sayaib.hue-console.showSnippets"
+            "sayaib.hue-console.showSnippets",
+            // Every developer, AI, RAG, data and DevOps tool.
+            ...commands_1.TOOLKIT_COMMANDS.map(c => `sayaib.hue-console.${c.command}`)
         ];
         const failures = [];
         for (const command of webviewCommands) {
@@ -177,7 +148,7 @@ suite("Command execution", () => {
         assert.deepStrictEqual(failures, [], `these tools failed to open:\n${failures.join("\n")}`);
     });
     test("running a tool twice reuses its panel instead of stacking panels", async () => {
-        const label = "Base64 Encoder/Decoder";
+        const label = "Encode / Decode";
         const countTabs = () => vscode.window.tabGroups.all.flatMap(group => group.tabs).filter(tab => tab.label === label).length;
         await vscode.commands.executeCommand("sayaib.hue-console.base64Encoder");
         // Tab bookkeeping is asynchronous, so wait for the first panel to appear.
@@ -198,9 +169,6 @@ suite("Command execution", () => {
         const workspaceCommands = [
             "sayaib.hue-console.securityAudit",
             "sayaib.hue-console.cloudSecurityAudit",
-            "sayaib.hue-console.devopsGenerator",
-            "sayaib.hue-console.mlopsGenerator",
-            "sayaib.hue-console.observabilityStarter",
             "sayaib.hue-console.readmeManager",
             "sayaib.hue-console.removeUnusedImports"
         ];

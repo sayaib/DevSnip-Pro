@@ -7,11 +7,8 @@ import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImpor
 import { apiTest } from "./commands/api-test";
 import { registerAdvancedToolsCommands } from "./commands/advancedTools";
 import { registerDependencyManagerCommand } from "./commands/dependencyManager";
-import { registerAiMlToolsCommands } from "./commands/aiMlTools";
-import { registerBigDataToolsCommands } from "./commands/bigDataTools";
-import { registerRagToolsCommands } from "./commands/ragTools";
-import { registerAiMlExtraTools } from "./commands/aiMlExtraTools";
-import { registerPlatformToolsCommands } from "./commands/platformTools";
+import { registerHubCommands } from "./commands/hubCommands";
+import { registerToolkitCommands } from "./toolkits/runner";
 import { registerSecurityToolsCommands } from "./commands/securityTools";
 import { registerMilestoneTrackerCommand, getUserStats, getCurrentLevel, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance } from "./commands/milestoneTracker";
 import { registerTrackedCommand, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
@@ -75,14 +72,9 @@ export function activate(context: vscode.ExtensionContext) {
     ["premium commands", () => registerPremiumCommands(context, access)],
     ["developer utilities", () => registerAdvancedToolsCommands(context)],
     ["dependencies & installation", () => registerDependencyManagerCommand(context)],
-    ["AI/ML tools", () => {
-      registerAiMlToolsCommands(context);
-      registerAiMlExtraTools(context);
-    }],
-    ["big data tools", () => registerBigDataToolsCommands(context)],
-    ["RAG tools", () => registerRagToolsCommands(context)],
+    ["tool hubs", () => registerHubCommands(context)],
+    ["developer, AI, RAG, data and DevOps tools", () => registerToolkitCommands(context)],
     ["security tools", () => registerSecurityToolsCommands(context)],
-    ["platform tools", () => registerPlatformToolsCommands(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
     ["tool search", () => registerUniversalToolSearch(context)],
   ];
@@ -108,68 +100,44 @@ type ToolSearchItem = {
   command: string;
 };
 
-const UNIVERSAL_TOOLS: ToolSearchItem[] = [
-  { label: "Open REST API Client", description: "Core Workflow", command: "sayaib.hue-console.openGUI" },
-  { label: "Analyze and Remove Console Logs", description: "Core Workflow", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
-  { label: "Remove Unused Imports", description: "Core Workflow", command: "sayaib.hue-console.removeUnusedImports" },
-  { label: "README Viewer & Manager", description: "Core Workflow", command: "sayaib.hue-console.readmeManager" },
-  { label: "OpenCode Integration", description: "Core Workflow", command: "sayaib.hue-console.openCodeIntegration" },
+/** Tools that are not part of the toolkit registry. Toolkit tools are added at search time. */
+const STANDALONE_TOOLS: ToolSearchItem[] = [
+  { label: "REST API Client", description: "Core / HTTP / GraphQL / WebSocket", command: "sayaib.hue-console.openGUI" },
+  { label: "Analyze and Remove Console Logs", description: "Core / Cleanup", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
+  { label: "Remove Unused Imports", description: "Core / Cleanup", command: "sayaib.hue-console.removeUnusedImports" },
+  { label: "README Viewer & Manager", description: "Core / Docs", command: "sayaib.hue-console.readmeManager" },
+  { label: "OpenCode Integration", description: "Core / AI assistant", command: "sayaib.hue-console.openCodeIntegration" },
   { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
   { label: "View Saved Code Snippets", description: "Snippets", command: "sayaib.hue-console.showSnippets" },
-  { label: "Advanced Developer Tools", description: "Advanced Utilities", command: "sayaib.hue-console.advancedToolsHub" },
-  { label: "Regex Builder & Tester", description: "Advanced / Pattern", command: "sayaib.hue-console.regexBuilder" },
-  { label: "JSON/XML Formatter", description: "Advanced / Data", command: "sayaib.hue-console.jsonFormatter" },
-  { label: "Hash Generator", description: "Advanced / Security", command: "sayaib.hue-console.hashGenerator" },
-  { label: "Base64 Encoder/Decoder", description: "Advanced / Encoding", command: "sayaib.hue-console.base64Encoder" },
-  { label: "URL Encoder/Decoder", description: "Advanced / Encoding", command: "sayaib.hue-console.urlEncoder" },
-  { label: "Timestamp Converter", description: "Advanced / Dates", command: "sayaib.hue-console.timestampConverter" },
-  { label: "JSON to TOON Converter", description: "Advanced / Data", command: "sayaib.hue-console.jsonToToon" },
-  { label: "Color Palette", description: "Advanced / Design", command: "sayaib.hue-console.colorPalette" },
-  { label: "Dependencies & Installation", description: "Developer Code / npm / yarn / pnpm / pip / Maven / Gradle", command: "sayaib.hue-console.dependencyManager" },
-  { label: "Lorem Ipsum Generator", description: "Advanced / Content", command: "sayaib.hue-console.loremGenerator" },
-  { label: "AI/ML & LLM Tools", description: "AI / Hub", command: "sayaib.hue-console.aiMlHub" },
-  { label: "Token Counter & Cost Calculator", description: "AI / LLM", command: "sayaib.hue-console.tokenCounter" },
-  { label: "Prompt Template Manager", description: "AI / Prompting", command: "sayaib.hue-console.promptTemplate" },
-  { label: "Prompt Playground", description: "AI / Prompting", command: "sayaib.hue-console.promptPlayground" },
-  { label: "Python ML Code Generator", description: "AI / Model Development", command: "sayaib.hue-console.mlCodeGen" },
-  { label: "LLM API Tester", description: "AI / APIs", command: "sayaib.hue-console.llmApiTester" },
-  { label: "Dataset Split Calculator", description: "AI / Data", command: "sayaib.hue-console.datasetSplit" },
-  { label: "Dataset Profiler", description: "AI / Data", command: "sayaib.hue-console.datasetProfiler" },
-  { label: "JSONL Viewer", description: "AI / Data", command: "sayaib.hue-console.jsonlViewer" },
-  { label: "Model Metrics Calculator", description: "AI / Evaluation", command: "sayaib.hue-console.metricsCalculator" },
-  { label: "GPU VRAM Calculator", description: "AI / Infrastructure", command: "sayaib.hue-console.gpuVram" },
-  { label: "Experiment Logger", description: "AI / MLOps", command: "sayaib.hue-console.experimentLogger" },
-  { label: "Model Card Generator", description: "AI / Documentation", command: "sayaib.hue-console.modelCard" },
-  { label: "Markdown Table Generator", description: "AI / Documentation", command: "sayaib.hue-console.mdTableGen" },
-  { label: "LR Scheduler Visualizer", description: "AI / Training", command: "sayaib.hue-console.lrScheduler" },
-  { label: "LLM Inference & VRAM Estimator", description: "AI / Inference", command: "sayaib.hue-console.inferenceEstimator" },
-  { label: "Big Data Tools", description: "Data Engineering / Hub", command: "sayaib.hue-console.bigDataHub" },
-  { label: "Schema Viewer", description: "Data Engineering / Schema", command: "sayaib.hue-console.schemaViewer" },
-  { label: "Spark SQL Formatter", description: "Data Engineering / Querying", command: "sayaib.hue-console.sparkSqlFormatter" },
-  { label: "Data Quality Checker", description: "Data Engineering / Quality", command: "sayaib.hue-console.dataQualityChecker" },
-  { label: "Schema Diff Tool", description: "Data Engineering / Schema", command: "sayaib.hue-console.schemaDiff" },
-  { label: "Partition Calculator", description: "Data Engineering / Performance", command: "sayaib.hue-console.partitionCalc" },
-  { label: "Delta Lake Log Analyzer", description: "Data Engineering / Lakehouse", command: "sayaib.hue-console.deltaLakeAnalyzer" },
-  { label: "Spark Cluster & Cost Estimator", description: "Data Engineering / Cloud", command: "sayaib.hue-console.sparkCostEstimator" },
-  { label: "RAG Tools", description: "RAG / Hub", command: "sayaib.hue-console.ragHub" },
-  { label: "Chunking Strategy Tester", description: "RAG / Ingestion", command: "sayaib.hue-console.chunkingTester" },
-  { label: "Embedding Cost Calculator", description: "RAG / Infrastructure", command: "sayaib.hue-console.embeddingCost" },
-  { label: "Context Window Calculator", description: "RAG / Retrieval", command: "sayaib.hue-console.contextWindow" },
-  { label: "Semantic Dedup Checker", description: "RAG / Quality", command: "sayaib.hue-console.semanticDedup" },
-  { label: "RAG Eval Calculator", description: "RAG / Evaluation", command: "sayaib.hue-console.ragEvalScores" },
-  { label: "Hybrid Search & RRF Simulator", description: "RAG / Retrieval", command: "sayaib.hue-console.hybridSearchRrf" },
-  { label: "RAG Hallucination Analyzer", description: "RAG / Evaluation", command: "sayaib.hue-console.ragHallucinationAnalyzer" },
+  { label: "Developer Tools", description: "Hub", command: "sayaib.hue-console.advancedToolsHub" },
+  { label: "AI & ML Tools", description: "Hub", command: "sayaib.hue-console.aiMlHub" },
+  { label: "RAG Tools", description: "Hub", command: "sayaib.hue-console.ragHub" },
+  { label: "Data Tools", description: "Hub", command: "sayaib.hue-console.bigDataHub" },
+  { label: "DevOps Tools", description: "Hub", command: "sayaib.hue-console.devopsGenerator" },
+  { label: "Dependencies & Installation", description: "Developer Tools / npm / yarn / pnpm / pip / Maven / Gradle", command: "sayaib.hue-console.dependencyManager" },
+  { label: "Regex Builder & Tester", description: "Developer Tools / Pattern", command: "sayaib.hue-console.regexBuilder" },
+  { label: "JSON/XML Formatter", description: "Developer Tools / Format / Validate", command: "sayaib.hue-console.jsonFormatter" },
+  { label: "Hash Generator", description: "Developer Tools / SHA", command: "sayaib.hue-console.hashGenerator" },
+  { label: "Timestamp Converter", description: "Developer Tools / Epoch / Dates", command: "sayaib.hue-console.timestampConverter" },
+  { label: "Color Palette", description: "Developer Tools / Design / Contrast", command: "sayaib.hue-console.colorPalette" },
   { label: "Security Hub", description: "Security / Endpoint / Workspace / Cloud / Dependencies", command: "sayaib.hue-console.securityHub" },
   { label: "Endpoint Security Scan", description: "Security / Headers / HSTS / CSP / CORS / TLS / Cookies", command: "sayaib.hue-console.endpointSecurityScan" },
   { label: "Security Audit", description: "Security / Secrets / Injection / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
   { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / Docker / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
   { label: "Dependency & Config Check", description: "Security / Lockfiles / Advisories / CI hardening", command: "sayaib.hue-console.dependencyAudit" },
-  { label: "DevOps Artifact Generator", description: "DevOps / Docker / CI", command: "sayaib.hue-console.devopsGenerator" },
-  { label: "AI/ML DevOps Generator", description: "MLOps / GPU / Model Serving / ML CI", command: "sayaib.hue-console.mlopsGenerator" },
-  { label: "Observability Log Analyzer", description: "Observability / Logs / Reliability", command: "sayaib.hue-console.observabilityAnalyze" },
-  { label: "Observability Starter Generator", description: "Observability / OpenTelemetry / Structured Logs", command: "sayaib.hue-console.observabilityStarter" },
-  { label: "Milestone & Points Tracker", description: "Gamification / Progress", command: "sayaib.hue-console.milestoneTracker" },
+  { label: "Milestone & Points Tracker", description: "Progress", command: "sayaib.hue-console.milestoneTracker" },
 ];
+
+/** Every searchable tool: the standalone ones plus the toolkit (title, section, category and keywords). */
+async function searchableTools(): Promise<ToolSearchItem[]> {
+  const { ALL_TOOLS, SECTIONS } = await import("./toolkits/registry");
+  const toolkit = ALL_TOOLS.map(tool => ({
+    label: tool.title,
+    description: `${SECTIONS.find(s => s.id === tool.section)?.title} / ${tool.category} / ${(tool.keywords ?? []).slice(0, 5).join(" / ")}`,
+    command: `sayaib.hue-console.${tool.command}`
+  }));
+  return [...STANDALONE_TOOLS, ...toolkit];
+}
 
 function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
   const searchCommand = registerTrackedCommand("sayaib.hue-console.searchTools", async () => {
@@ -190,7 +158,8 @@ function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
       return;
     }
 
-    const matches = UNIVERSAL_TOOLS.filter(tool => matcher.test(`${tool.label} ${tool.description} ${tool.command}`));
+    const tools = await searchableTools();
+    const matches = tools.filter(tool => matcher.test(`${tool.label} ${tool.description} ${tool.command}`));
     // The query itself is never sent - only its length and how many tools matched.
     track("tool_search_performed", { query_length: pattern.length, match_count: matches.length, invalid_pattern: false });
     if (!matches.length) {
@@ -261,41 +230,62 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   }
 
   private createGroups(): ToolGroup[] {
+    const c = (id: string) => `sayaib.hue-console.${id}`;
     return [
       new ToolGroup("Core", "rocket", "terminal.ansiBrightYellow", [
-        this.createCommandButton("REST API Client", "sayaib.hue-console.openGUI", "cloud"),
-        this.createCommandButton("Clean Console Logs", "sayaib.hue-console.listAndRemoveConsoleLogs", "trash"),
-        this.createCommandButton("Remove Unused Imports", "sayaib.hue-console.removeUnusedImports", "symbol-method"),
-        this.createCommandButton("README Viewer & Manager", "sayaib.hue-console.readmeManager", "book"),
-        this.createCommandButton("OpenCode Integration", "sayaib.hue-console.openCodeIntegration", "terminal"),
+        this.createCommandButton("REST API Client", c("openGUI"), "cloud"),
+        this.createCommandButton("Clean Console Logs", c("listAndRemoveConsoleLogs"), "trash"),
+        this.createCommandButton("Remove Unused Imports", c("removeUnusedImports"), "symbol-method"),
+        this.createCommandButton("README Viewer & Manager", c("readmeManager"), "book"),
+        this.createCommandButton("OpenCode Integration", c("openCodeIntegration"), "terminal"),
       ]),
       new ToolGroup("Snippets", "book", "terminal.ansiBrightMagenta", [
-        this.createCommandButton("Create Snippet", "sayaib.hue-console.createCustomSnippet", "edit"),
-        this.createCommandButton("Saved Snippets", "sayaib.hue-console.showSnippets", "file-code"),
+        this.createCommandButton("Create Snippet", c("createCustomSnippet"), "edit"),
+        this.createCommandButton("Saved Snippets", c("showSnippets"), "file-code"),
+      ]),
+      new ToolGroup("Developer Tools", "tools", "terminal.ansiBrightWhite", [
+        this.createCommandButton("All developer tools", c("advancedToolsHub"), "layout"),
+        this.createCommandButton("JSON/XML Formatter", c("jsonFormatter"), "json"),
+        this.createCommandButton("Encode / Decode", c("base64Encoder"), "symbol-string"),
+        this.createCommandButton("JWT Decoder", c("jwtDecoder"), "key"),
+        this.createCommandButton("Diff Checker", c("textDiff"), "diff"),
+        this.createCommandButton("Dependencies & Installation", c("dependencyManager"), "package"),
       ]),
       new ToolGroup("AI & ML", "hubot", "terminal.ansiBrightCyan", [
-        this.createCommandButton("AI & ML Tools", "sayaib.hue-console.aiMlHub", "robot"),
+        this.createCommandButton("All AI & ML tools", c("aiMlHub"), "layout"),
+        this.createCommandButton("Prompt Builder", c("promptTemplate"), "comment-discussion"),
+        this.createCommandButton("Token & Cost Estimator", c("tokenCounter"), "symbol-numeric"),
+        this.createCommandButton("LLM Client Setup", c("llmClientSetup"), "plug"),
+        this.createCommandButton("LLM JSON Validator", c("llmJsonValidator"), "json"),
       ]),
-      new ToolGroup("Data & RAG", "database", "terminal.ansiBrightGreen", [
-        this.createCommandButton("Big Data", "sayaib.hue-console.bigDataHub", "database"),
-        this.createCommandButton("RAG", "sayaib.hue-console.ragHub", "search"),
+      new ToolGroup("RAG", "search", "terminal.ansiBrightGreen", [
+        this.createCommandButton("All RAG tools", c("ragHub"), "layout"),
+        this.createCommandButton("Chunking Tester", c("chunkingTester"), "list-flat"),
+        this.createCommandButton("RAG Pipeline Generator", c("ragPipeline"), "rocket"),
+        this.createCommandButton("Retrieval Evaluation", c("ragEvalScores"), "checklist"),
+      ]),
+      new ToolGroup("Data", "database", "terminal.ansiBrightGreen", [
+        this.createCommandButton("All data tools", c("bigDataHub"), "layout"),
+        this.createCommandButton("Data Converter", c("dataConverter"), "arrow-swap"),
+        this.createCommandButton("JSON to Types", c("jsonToTypes"), "symbol-class"),
+        this.createCommandButton("SQL Formatter & Linter", c("sparkSqlFormatter"), "database"),
+        this.createCommandButton("Mock Data Generator", c("mockDataGenerator"), "sparkle"),
+      ]),
+      new ToolGroup("DevOps", "server-environment", "terminal.ansiBrightBlue", [
+        this.createCommandButton("All DevOps tools", c("devopsGenerator"), "layout"),
+        this.createCommandButton("Dockerfile", c("dockerfileHelper"), "package"),
+        this.createCommandButton("Docker Compose", c("composeHelper"), "layers"),
+        this.createCommandButton("Kubernetes & Helm", c("kubernetesHelper"), "server"),
+        this.createCommandButton("CI Pipeline", c("ciPipelineGenerator"), "github-action"),
+        this.createCommandButton(".env Checker", c("envChecker"), "key"),
+        this.createCommandButton("Log Analyzer", c("observabilityAnalyze"), "pulse"),
       ]),
       new ToolGroup("Security", "shield", "terminal.ansiBrightRed", [
-        this.createCommandButton("Security Hub", "sayaib.hue-console.securityHub", "shield"),
-        this.createCommandButton("Endpoint Security Scan", "sayaib.hue-console.endpointSecurityScan", "radio-tower"),
-        this.createCommandButton("Workspace Audit", "sayaib.hue-console.securityAudit", "search"),
-        this.createCommandButton("Cloud & Container Audit", "sayaib.hue-console.cloudSecurityAudit", "cloud"),
-        this.createCommandButton("Dependency & Config Check", "sayaib.hue-console.dependencyAudit", "package"),
-      ]),
-      new ToolGroup("DevOps & Observability", "pulse", "terminal.ansiBrightCyan", [
-        this.createCommandButton("DevOps Generator", "sayaib.hue-console.devopsGenerator", "cloud-upload"),
-        this.createCommandButton("MLOps Generator", "sayaib.hue-console.mlopsGenerator", "server-process"),
-        this.createCommandButton("Log Analyzer", "sayaib.hue-console.observabilityAnalyze", "pulse"),
-        this.createCommandButton("Telemetry Starter", "sayaib.hue-console.observabilityStarter", "broadcast"),
-      ]),
-      new ToolGroup("Utilities", "tools", "terminal.ansiBrightWhite", [
-        this.createCommandButton("Developer Utilities", "sayaib.hue-console.advancedToolsHub", "tools"),
-        this.createCommandButton("Dependencies & Installation", "sayaib.hue-console.dependencyManager", "package"),
+        this.createCommandButton("Security Hub", c("securityHub"), "shield"),
+        this.createCommandButton("Endpoint Security Scan", c("endpointSecurityScan"), "radio-tower"),
+        this.createCommandButton("Workspace Audit", c("securityAudit"), "search"),
+        this.createCommandButton("Cloud & Container Audit", c("cloudSecurityAudit"), "cloud"),
+        this.createCommandButton("Dependency & Config Check", c("dependencyAudit"), "package"),
       ]),
     ];
   }

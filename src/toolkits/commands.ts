@@ -1,0 +1,86 @@
+import type { SectionId, Values } from "./types";
+
+/**
+ * Command table for the toolkit, kept separate from the tool definitions so
+ * activation only registers command ids: the definitions and their engines
+ * load when a tool is first opened. A unit test keeps this list in step with
+ * the registry.
+ */
+export interface ToolkitCommand {
+  command: string;
+  tool: string;
+  section: SectionId;
+  title: string;
+  /** Preset values for alias commands (e.g. URL mode of the encoder). */
+  values?: Values;
+}
+
+export const TOOLKIT_COMMANDS: ToolkitCommand[] = [
+  { command: "base64Encoder", tool: "dev.encode", section: "dev", title: "Encode / Decode" },
+  { command: "urlEncoder", tool: "dev.encode", section: "dev", title: "Encode / Decode", values: {"codec":"url-component","direction":"auto"} },
+  { command: "jwtDecoder", tool: "dev.jwt", section: "dev", title: "JWT Decoder" },
+  { command: "idGenerator", tool: "dev.ids", section: "dev", title: "UUID & ID Generator" },
+  { command: "cronHelper", tool: "dev.cron", section: "dev", title: "Cron Expression Helper" },
+  { command: "textDiff", tool: "dev.diff", section: "dev", title: "Diff Checker" },
+  { command: "caseConverter", tool: "dev.text", section: "dev", title: "Case Converter & Text Tools" },
+  { command: "promptTemplate", tool: "ai.prompt-builder", section: "ai", title: "Prompt Builder" },
+  { command: "jsonToToon", tool: "ai.toon", section: "ai", title: "JSON → TOON for Prompts" },
+  { command: "tokenCounter", tool: "ai.token-cost", section: "ai", title: "Token & Cost Estimator" },
+  { command: "modelComparison", tool: "ai.model-compare", section: "ai", title: "Model Comparison" },
+  { command: "llmClientSetup", tool: "ai.llm-config", section: "ai", title: "LLM Client Setup" },
+  { command: "llmApiTester", tool: "ai.llm-tester", section: "ai", title: "LLM API Tester" },
+  { command: "gpuVram", tool: "ai.vram", section: "ai", title: "GPU Memory & Speed Estimator" },
+  { command: "llmJsonValidator", tool: "ai.json-output", section: "ai", title: "LLM JSON Extractor & Validator" },
+  { command: "llmResponseFormatter", tool: "ai.response-formatter", section: "ai", title: "Response Formatter" },
+  { command: "vectorSimilarity", tool: "ai.vector-similarity", section: "ai", title: "Vector Similarity" },
+  { command: "datasetSplit", tool: "ai.dataset-split", section: "ai", title: "Dataset Split Planner" },
+  { command: "metricsCalculator", tool: "ai.metrics", section: "ai", title: "Model Metrics" },
+  { command: "lrScheduler", tool: "ai.lr-schedule", section: "ai", title: "Learning-Rate Schedule" },
+  { command: "modelCard", tool: "ai.model-card", section: "ai", title: "Model Card" },
+  { command: "experimentLogger", tool: "ai.experiment-log", section: "ai", title: "Experiment Log" },
+  { command: "mlCodeGen", tool: "ai.snippets", section: "ai", title: "AI/ML Code Snippets" },
+  { command: "aiAppStarter", tool: "ai.project", section: "ai", title: "AI App Starter" },
+  { command: "chunkingTester", tool: "rag.chunker", section: "rag", title: "Chunking Tester" },
+  { command: "embeddingCost", tool: "rag.ingestion-plan", section: "rag", title: "Chunk & Index Size Calculator" },
+  { command: "embeddingModelGuide", tool: "rag.embedding-models", section: "rag", title: "Embedding Model Guide" },
+  { command: "vectorStoreSetup", tool: "rag.vector-store", section: "rag", title: "Vector Store Setup" },
+  { command: "retrievalConfig", tool: "rag.retrieval", section: "rag", title: "Retrieval Configuration" },
+  { command: "contextWindow", tool: "rag.context-budget", section: "rag", title: "Context Window Budget" },
+  { command: "ragPromptBuilder", tool: "rag.prompt", section: "rag", title: "Grounded Prompt Assembler" },
+  { command: "ragPipeline", tool: "rag.pipeline", section: "rag", title: "RAG Pipeline Generator" },
+  { command: "ragEvalScores", tool: "rag.retrieval-eval", section: "rag", title: "Retrieval Evaluation" },
+  { command: "ragHallucinationAnalyzer", tool: "rag.grounding", section: "rag", title: "Answer Grounding Checker" },
+  { command: "hybridSearchRrf", tool: "rag.rrf", section: "rag", title: "Hybrid Search Fusion (RRF)" },
+  { command: "semanticDedup", tool: "rag.dedup", section: "rag", title: "Near-Duplicate Chunk Finder" },
+  { command: "chunkMetadataValidator", tool: "rag.metadata", section: "rag", title: "Chunk Metadata Validator" },
+  { command: "dataConverter", tool: "data.convert", section: "data", title: "Data Converter" },
+  { command: "jsonToTypes", tool: "data.types", section: "data", title: "JSON to Types" },
+  { command: "mockDataGenerator", tool: "data.mock", section: "data", title: "Mock Data Generator" },
+  { command: "dataTransform", tool: "data.transform", section: "data", title: "Data Transformer" },
+  { command: "sparkSqlFormatter", tool: "data.sql", section: "data", title: "SQL Formatter & Linter" },
+  { command: "sqlQueryHelper", tool: "data.sql-helper", section: "data", title: "SQL Query Helper" },
+  { command: "jsonSchemaValidator", tool: "data.schema-validate", section: "data", title: "JSON Schema Validator" },
+  { command: "apiResponseInspector", tool: "data.api-response", section: "data", title: "API Response Inspector" },
+  { command: "dataQualityChecker", tool: "data.profile", section: "data", title: "Data Profiler & Quality Check" },
+  { command: "jsonlViewer", tool: "data.jsonl", section: "data", title: "JSON Lines Inspector" },
+  { command: "schemaViewer", tool: "data.schema", section: "data", title: "Schema Viewer" },
+  { command: "schemaDiff", tool: "data.schema-diff", section: "data", title: "Schema Diff" },
+  { command: "partitionCalc", tool: "data.partitions", section: "data", title: "Partition & File Size Planner" },
+  { command: "sparkCostEstimator", tool: "data.spark-cluster", section: "data", title: "Spark Cluster & Cost Estimator" },
+  { command: "deltaLakeAnalyzer", tool: "data.delta-log", section: "data", title: "Delta Lake Log Analyzer" },
+  { command: "dockerfileHelper", tool: "devops.dockerfile", section: "devops", title: "Dockerfile Generator & Linter" },
+  { command: "composeHelper", tool: "devops.compose", section: "devops", title: "Docker Compose Generator & Validator" },
+  { command: "kubernetesHelper", tool: "devops.k8s", section: "devops", title: "Kubernetes & Helm Generator / Validator" },
+  { command: "ciPipelineGenerator", tool: "devops.ci", section: "devops", title: "CI Pipeline Generator" },
+  { command: "cloudDeployGenerator", tool: "devops.deploy", section: "devops", title: "Cloud Deploy Workflow" },
+  { command: "envChecker", tool: "devops.env", section: "devops", title: ".env Checker & Generator" },
+  { command: "yamlJsonTool", tool: "devops.yaml", section: "devops", title: "YAML / JSON Validator & Converter" },
+  { command: "nginxConfig", tool: "devops.nginx", section: "devops", title: "Nginx Config Generator" },
+  { command: "pm2Config", tool: "devops.pm2", section: "devops", title: "PM2 Ecosystem Generator" },
+  { command: "terraformGenerator", tool: "devops.terraform", section: "devops", title: "Terraform Starter" },
+  { command: "networkTools", tool: "devops.network", section: "devops", title: "Port & Network Toolkit" },
+  { command: "observabilityAnalyze", tool: "devops.logs", section: "devops", title: "Log Analyzer & Formatter" },
+  { command: "healthCheckGenerator", tool: "devops.health", section: "devops", title: "Health Check Generator" },
+  { command: "observabilityStarter", tool: "devops.observability", section: "devops", title: "Observability Starter" },
+  { command: "mlopsGenerator", tool: "devops.serving", section: "devops", title: "Model Serving Starter" },
+];

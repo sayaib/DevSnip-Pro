@@ -1,8 +1,109 @@
 # Development Changelog of DevSnip Pro
 
-## Unreleased
+## 11.66.1 - Toolboxes rebuilt for everyday work
 
-### Added - Anonymous usage analytics (PostHog)
+Every tool section was reviewed. Low-value tools were removed or merged, rarely-right calculators were replaced by accurate ones, and the most common daily tasks got new tools. All toolbox tools share one panel design and one set of output actions.
+
+### New tools
+
+- **Developer Tools:**
+  - JWT Decoder, with HMAC signature verification.
+  - UUID & ID Generator: v4, v7, ULID, Nano ID and passwords, plus timestamp decoding.
+  - Diff Checker: text, or structural JSON.
+  - Case Converter & Text Tools.
+  - Cron Expression Helper: plain-English explanation and next runs.
+- **AI & ML:**
+  - Model Comparison.
+  - LLM Client Setup: production-ready client code for six providers.
+  - LLM JSON Extractor & Validator: repair plus JSON Schema validation.
+  - Response Formatter.
+  - Vector Similarity.
+  - AI App Starter.
+- **RAG:**
+  - Embedding Model Guide.
+  - Vector Store Setup.
+  - Retrieval Configuration.
+  - Grounded Prompt Assembler.
+  - RAG Pipeline Generator, with presets for popular stacks.
+  - Chunk Metadata Validator.
+  - A guided "Start here" path in the RAG hub.
+- **Data:**
+  - Data Converter: CSV, TSV, JSON, JSON Lines, YAML, Markdown and SQL.
+  - JSON to Types: TypeScript, Zod, Pydantic, dataclasses, Java, Go and JSON Schema.
+  - Mock Data Generator.
+  - Data Transformer.
+  - SQL Query Helper: parameterised CRUD, upsert and pagination per dialect.
+  - JSON Schema Validator.
+  - API Response Inspector.
+- **DevOps (new hub):**
+  - Dockerfile Generator & Linter.
+  - Docker Compose Generator & Validator.
+  - Kubernetes & Helm Generator / Validator.
+  - CI Pipeline Generator.
+  - Cloud Deploy Workflow (OIDC).
+  - `.env` Checker & Generator, which finds variables used in code but never declared.
+  - YAML / JSON Validator & Converter.
+  - Nginx, PM2 and Terraform generators.
+  - Port & Network Toolkit.
+  - Health Check Generator.
+
+### Replaced (same commands, rebuilt tools)
+
+- **Kept command ids:** replaced tools keep their command ids, so keybindings and points history carry over. The replacements, by previous name:
+  - Token Counter → Token & Cost Estimator.
+  - Prompt Template Manager → Prompt Builder.
+  - GPU VRAM Calculator → GPU Memory & Speed Estimator (it also absorbs the Inference Estimator).
+  - Chunking Strategy Tester, Context Window Calculator, RAG Eval Calculator, Hallucination Analyzer, Hybrid Search RRF and Semantic Dedup → accurate, testable versions.
+  - Spark SQL Formatter → SQL Formatter & Linter.
+  - Data Quality Checker → Data Profiler.
+  - JSONL Viewer → JSON Lines Inspector.
+  - Base64 Encoder → Encode / Decode (URL Encoder opens it in URL mode).
+  - Observability Log Analyzer → Log Analyzer & Formatter.
+  - AI/ML DevOps Generator → Model Serving Starter.
+  - Observability Starter → an OpenTelemetry starter with an exporter and trace-aware logs.
+- **JSON → TOON now produces real TOON.** The old output was an outline that dropped TOON's table form and left strings ambiguous. The new encoder uses tables for uniform records and reports token counts before and after.
+- **DevOps Artifact Generator** now opens the DevOps hub instead of a quick pick.
+  - Its generated files no longer use unpinned `latest` images.
+  - It no longer reports success after you declined to overwrite a file.
+
+### Removed
+
+- **Prompt Playground:** use Prompt Builder.
+- **LLM Inference Estimator:** merged into GPU Memory & Speed Estimator.
+- **Dataset Profiler:** use Data Profiler & Quality Check.
+- **Markdown Table Generator:** Data Converter writes Markdown tables.
+- **Lorem Ipsum Generator:** VS Code's built-in Emmet `lorem` abbreviation does this.
+
+### How the tools work
+
+- **Presets:** every tool has presets or sample data, and cheap tools update live as you type.
+- **Right-click entries:** tools that act on the open file appear in the editor's right-click menu, only where relevant (for example, SQL formatting in `.sql` files and the `.env` checker on `.env` files).
+- **Output actions:** Copy, Insert at cursor, Open in editor, Save, and Write all to workspace.
+  - Generated files can only be written inside the workspace.
+  - Existing files are never overwritten without confirmation.
+  - Logs append instead of overwriting.
+- **Startup cost:** the tool definitions load only when a tool, hub or search is first opened, so activation is not slowed down.
+- **Analytics:** two new anonymous events, `tool_run_completed` and `tool_output_used`, carry the tool id, outcome and duration only, never inputs or outputs.
+- **Tests:** a new test suite runs every tool with its defaults, every preset and every option (about 480 runs). Generated JSON and YAML are parsed, TypeScript and JavaScript are compiled, and Python is byte-compiled.
+
+## Redesigned tool hubs
+
+- **One consistent tool grid.** The Developer Tools, AI & ML, RAG, Data and DevOps hubs share a single design:
+  - Every card has a line icon (the same on every OS and theme, instead of emoji), a colour per category, the title, a short description, a tag and an Open cue.
+  - Hover and keyboard focus are clearly visible.
+- **Find tools faster:**
+  - A search box (press `/`) matches titles, descriptions, tags and extra keywords, ranks the best matches first and highlights them. Enter opens the top result.
+  - Category chips show how many tools each category holds.
+  - An empty state offers to clear the search or search every DevSnip Pro tool.
+- **Pin favourites:** the star on a card pins it to the top of its hub. Pins are remembered.
+- **Keyboard and accessibility:**
+  - Cards are real buttons, and arrow keys move between them as laid out on screen.
+  - Result counts are announced to screen readers.
+  - High-contrast themes, narrow panels and reduced motion are supported.
+- **Fixed:** clicking a second card in any hub did nothing, because each click requested the VS Code webview API again, which VS Code refuses after the first time. Tool counts in hub headers were hard-coded and wrong (the AI hub said 15 while listing 12).
+- **Hubs are generated from the tool registry**, so a hub can no longer miss a tool or list one that does not exist.
+
+## 11.65.1 - Anonymous usage analytics (PostHog)
 
 - **What it measures:**
   - Every DevSnip Pro command reports which feature ran, its area, success or error, duration, and whether it was the installation's first use of that feature.

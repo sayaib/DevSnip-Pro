@@ -129,6 +129,25 @@ exports.EVENT_CATALOG = defineCatalog({
             kind: { kind: "id", description: "What was copied, e.g. install_command, update_command." }
         }
     },
+    // Toolkit tools (AI, RAG, Data, DevOps, Developer Tools) --------------------
+    tool_run_completed: {
+        description: "A toolkit tool produced a result or an error. Inputs and outputs are never sent.",
+        properties: {
+            feature: { kind: "id", description: "Command id of the tool, without prefix, e.g. dockerfileHelper." },
+            section: { kind: "enum:dev|ai|rag|data|devops", description: "Toolkit section." },
+            outcome: { kind: "enum:success|input_error|error|timeout", description: "success: a result; input_error: the tool asked for different input; error: an unexpected failure; timeout: no result within 90 seconds." },
+            trigger: { kind: "enum:run|live|preset|action", description: "run: the Run button or Ctrl/Cmd+Enter; live: automatic re-run while typing (only the first per panel is sent); preset: a preset was applied; action: a tool-specific button such as Detect from workspace." },
+            duration_ms: { kind: "ms", description: "Time the tool took." }
+        }
+    },
+    tool_output_used: {
+        description: "The user did something with a toolkit tool's output. The output itself is never sent.",
+        properties: {
+            feature: { kind: "id", description: "Command id of the tool, without prefix." },
+            action: { kind: "enum:copy|insert|open|save|write_all", description: "copy: to clipboard; insert: at the editor cursor; open: as a new editor; save: one file to the workspace; write_all: every generated file." },
+            file_count: { kind: "count", description: "Files written (save and write_all only)." }
+        }
+    },
     // Dependencies & Installation ----------------------------------------------
     dependency_scan_completed: {
         description: "The Dependencies & Installation panel finished a scan.",

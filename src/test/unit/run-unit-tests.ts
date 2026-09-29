@@ -39,6 +39,8 @@ async function main(): Promise<void> {
   require("./security.unit");
   require("./dependencies.unit");
   require("./analytics.unit");
+  require("./tool-hub.unit");
+  require("./toolkit.unit");
   /* eslint-enable @typescript-eslint/no-var-requires */
 
   let passed = 0;
