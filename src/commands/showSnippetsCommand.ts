@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { registerTrackedCommand } from "../utils/command-registry";
+import { track } from "../analytics";
 import { THEME_TOKENS, confirmAction, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
 import { readExistingSnippets, saveSnippets, type SnippetDefinition } from "../utils/snippet-utils";
 
@@ -96,6 +97,7 @@ export function registerShowSnippetsCommand(
 
         delete file.snippets[snippetKey];
         await saveSnippets(path.join(snippetsFolderPath, `custom_${language}.json`), file.snippets);
+        track("snippet_deleted", { language });
         render(`Deleted "${snippetKey}". Reload the window to remove it from IntelliSense.`);
 
         const action = await vscode.window.showInformationMessage(

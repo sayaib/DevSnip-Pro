@@ -32,14 +32,30 @@ const api = {
     },
     workspace: {
         workspaceFolders: undefined,
-        getConfiguration() { return { get: () => undefined }; },
+        configurationValues: {},
+        getConfiguration(section) {
+            return {
+                get: (key, fallback) => {
+                    const value = api.workspace.configurationValues[section ? `${section}.${key}` : key];
+                    return value === undefined ? fallback : value;
+                }
+            };
+        },
+        onDidChangeConfiguration() { return disposable(); },
         asRelativePath(value) { return String(value?.fsPath ?? value); },
         textDocuments: []
     },
     env: {
         clipboard: { writeText: async () => undefined },
-        openExternal: async () => true
+        openExternal: async () => true,
+        isTelemetryEnabled: true,
+        uiKind: 1,
+        language: "en",
+        remoteName: undefined,
+        onDidChangeTelemetryEnabled() { return disposable(); }
     },
+    version: "1.93.0",
+    UIKind: { Desktop: 1, Web: 2 },
     Uri: {
         file(fsPath) { return { fsPath, scheme: "file", toString: () => `file://${fsPath}` }; },
         parse(value) { return { fsPath: value, scheme: "file", toString: () => value }; },

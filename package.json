@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "10.65.1",
+  "version": "11.65.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -607,6 +607,20 @@
           "maximum": 120000,
           "description": "Default per-request timeout, in milliseconds, for the endpoint security scanner."
         },
+        "devsnip.analytics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "tags": [
+            "telemetry",
+            "usage"
+          ],
+          "markdownDescription": "Send anonymous usage analytics (which DevSnip Pro features are used, how often, and session length) to help improve the extension. No code, file names, paths, snippet contents, search queries, URLs or personal data are ever sent. Also respects VS Code's `#telemetry.telemetryLevel#`: nothing is sent unless it is `all`. See the event list in docs/ANALYTICS.md."
+        },
+        "devsnip.analytics.debug": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel."
+        },
         "devsnip.security.activeChecks": {
           "type": "boolean",
           "default": false,
@@ -693,7 +707,7 @@
     "test": "node ./out/test/runTest.js",
     "test:unit": "node ./out/test/unit/run-unit-tests.js",
     "package": "vsce package",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "node scripts/write-analytics-config.js && npm run compile"
   },
   "devDependencies": {
     "@types/glob": "^7.1.3",

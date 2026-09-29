@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { registerTrackedCommand } from "../utils/command-registry";
+import { track } from "../analytics";
 import { confirmAction } from "../utils/webview-ui";
 import {
   getLanguageFromFileName,
@@ -64,7 +65,8 @@ export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
         if (!snippetName) return;
 
         const name = snippetName.trim();
-        if (existingSnippets[name]) {
+        const overwrote = Boolean(existingSnippets[name]);
+        if (overwrote) {
           if (!(await confirmAction(`A ${language} snippet named "${name}" already exists. Overwrite it?`, "Overwrite"))) return;
         }
 
@@ -83,6 +85,7 @@ export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
         };
 
         await saveSnippets(snippetsPath, existingSnippets);
+        track("snippet_created", { language, line_count: existingSnippets[name].body.length, overwrote });
 
         const action = await vscode.window.showInformationMessage(
           `Snippet "${name}" saved for ${language}. VS Code loads contributed snippets at startup, so reload the window to start using it.`,

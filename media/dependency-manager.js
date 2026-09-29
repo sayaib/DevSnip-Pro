@@ -106,8 +106,9 @@
         }, 2800);
     }
 
-    function copy(text) {
-        vscode.postMessage({ type: 'copy', text: text });
+    // `kind` says what was copied (e.g. install_command); only it, never the text, is used for analytics.
+    function copy(text, kind) {
+        vscode.postMessage({ type: 'copy', text: text, kind: kind || 'command' });
     }
 
     function persist() {
@@ -234,7 +235,7 @@
             box.appendChild(h('div', { className: 'cmd' }, [
                 h('span', { className: 'cmd-label', text: command.label }),
                 h('span', { className: 'cmd-line', text: command.line }),
-                button('Copy', 'btn-ghost btn-sm', function () { copy(command.line); }, { 'aria-label': 'Copy: ' + command.line }),
+                button('Copy', 'btn-ghost btn-sm', function () { copy(command.line, command.kind + '_command'); }, { 'aria-label': 'Copy: ' + command.line }),
                 command.runnable ? runButton(dep, command, true) : h('span', { className: 'chip', text: 'copy-only', title: command.note || '' }),
                 command.note ? h('span', { className: 'cmd-note', text: command.note }) : null
             ]));
@@ -243,7 +244,7 @@
             box.appendChild(h('div', { className: 'cmd' }, [
                 h('span', { className: 'cmd-label', text: 'Manual edit' }),
                 h('span', { className: 'cmd-line', text: dep.manual }),
-                button('Copy', 'btn-ghost btn-sm', function () { copy(dep.manual); }),
+                button('Copy', 'btn-ghost btn-sm', function () { copy(dep.manual, 'manual_edit'); }),
                 h('span', { className: 'chip', text: 'copy-only' }),
                 h('span', { className: 'cmd-note', text: 'Gradle has no command that edits a build file, so change the version by hand and run the resolve command.' })
             ]));
@@ -261,7 +262,7 @@
         var actions = h('div', { className: 'row-actions' });
         runnable.forEach(function (command) { actions.appendChild(runButton(dep, command)); });
         if (quick) {
-            actions.appendChild(button('Copy', 'btn-ghost btn-sm', function () { copy(quick.line); }, {
+            actions.appendChild(button('Copy', 'btn-ghost btn-sm', function () { copy(quick.line, quick.kind + '_command'); }, {
                 title: 'Copy: ' + quick.line, 'aria-label': 'Copy ' + quick.label + ' command for ' + dep.name
             }));
         }
@@ -316,9 +317,9 @@
                 vscode.postMessage({ type: 'updateOutdated', projectId: project.id, includeProduction: state.includeProd });
             }, { disabled: state.busy || !state.trusted }) : null,
             project.installLines.length ? button('Copy install', 'btn-ghost btn-sm', function () {
-                copy(project.installLines.join('\n'));
+                copy(project.installLines.join('\n'), 'project_install_command');
             }, { title: project.installLines.join('\n') }) : null,
-            project.updateLine ? button('Copy update', 'btn-ghost btn-sm', function () { copy(project.updateLine); }, { title: project.updateLine }) : null
+            project.updateLine ? button('Copy update', 'btn-ghost btn-sm', function () { copy(project.updateLine, 'project_update_command'); }, { title: project.updateLine }) : null
         ]);
 
         var card = h('section', { className: 'project', 'aria-label': title }, [

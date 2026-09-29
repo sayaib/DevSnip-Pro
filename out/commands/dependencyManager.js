@@ -34,6 +34,7 @@ const path = __importStar(require("path"));
 const child_process_1 = require("child_process");
 const axios_1 = __importDefault(require("axios"));
 const command_registry_1 = require("../utils/command-registry");
+const analytics_1 = require("../analytics");
 const webview_ui_1 = require("../utils/webview-ui");
 const dependency_manager_1 = require("../services/dependency-manager");
 const COMMAND_ID = "sayaib.hue-console.dependencyManager";
@@ -604,6 +605,7 @@ class DependencyPanel {
     }
     async scan(refresh) {
         const token = ++this.scanToken;
+        const scanStarted = Date.now();
         if (refresh)
             registryCache.clear();
         this.post({ type: "scanning", message: "Detecting projects and package managers..." });
@@ -658,6 +660,17 @@ class DependencyPanel {
             if (token !== this.scanToken)
                 return;
             this.publish("done");
+            const deps = states.flatMap(state => state.dependencies);
+            (0, analytics_1.track)("dependency_scan_completed", {
+                project_count: states.length,
+                dependency_count: deps.length,
+                ecosystems: [...new Set(states.map(state => state.project.ecosystem))],
+                managers: [...new Set(states.map(state => state.project.manager))],
+                missing_count: deps.filter(dep => dep.verdict.status === "missing" || dep.verdict.status === "mismatch").length,
+                outdated_count: deps.filter(dep => dep.verdict.status === "outdated").length,
+                major_count: deps.filter(dep => dep.verdict.status === "major").length,
+                duration_ms: Date.now() - scanStarted
+            });
         }
         catch (error) {
             if (token === this.scanToken) {
@@ -735,6 +748,7 @@ class DependencyPanel {
             case "copy":
                 if (typeof message.text === "string" && message.text.length > 0 && message.text.length <= 8000) {
                     await vscode.env.clipboard.writeText(message.text);
+                    (0, analytics_1.track)("content_copied", { feature: "dependencyManager", kind: typeof message.kind === "string" ? message.kind : "command" });
                     this.post({ type: "toast", message: "Copied to the clipboard.", kind: "success" });
                 }
                 return;
@@ -790,6 +804,7 @@ class DependencyPanel {
         const verb = kind === "install" ? "Install" : kind === "update" ? "Update" : "Upgrade";
         const { dependency } = found.dep;
         await this.runJob(`${verb} ${dependency.displayName}`, [{ state: found.state, spec: option.spec, title: option.label }], {
+            action: kind === "install" ? "install" : kind === "update" ? "update" : "upgrade",
             touchesManifest: kind === "upgrade" ? [`${dependency.source} (the ${dependency.scope} dependency ${dependency.displayName})`] : [],
             skipped: []
         });
@@ -840,7 +855,7 @@ class DependencyPanel {
             this.post({ type: "banner", kind: skipped.length ? "error" : "success", message: skipped.length ? `${nothing}\n${skipped.join("\n")}` : nothing });
             return;
         }
-        await this.runJob(action === "install" ? "Install missing dependencies" : "Update outdated dependencies", steps, { touchesManifest: [], skipped });
+        await this.runJob(action === "install" ? "Install missing dependencies" : "Update outdated dependencies", steps, { action: action === "install" ? "install_missing" : "update_outdated", touchesManifest: [], skipped });
     }
     /**
      * The single path every install or update takes. It refuses to run in an
@@ -849,12 +864,21 @@ class DependencyPanel {
      * time with no shell, a timeout, and cancellation.
      */
     async runJob(title, steps, context) {
+        let runStarted = 0;
+        const report = (outcome) => (0, analytics_1.track)("dependency_job_finished", {
+            action: context.action,
+            outcome,
+            ecosystems: [...new Set(steps.map(step => step.state.project.ecosystem))],
+            step_count: steps.length,
+            duration_ms: runStarted ? Date.now() - runStarted : 0
+        });
         if (this.busy) {
             this.post({ type: "toast", message: "Another install is still running.", kind: "error" });
             return;
         }
         if (vscode.workspace.isTrusted === false) {
             this.post({ type: "job", state: "error", title, message: "This workspace is not trusted. Installs run the project's install scripts, so they are only allowed in a trusted workspace (Workspaces: Manage Workspace Trust)." });
+            report("blocked");
             return;
         }
         const lines = [];
@@ -862,14 +886,17 @@ class DependencyPanel {
             const check = (0, dependency_manager_1.validateCommandSpec)(step.spec);
             if (!check.ok) {
                 this.post({ type: "job", state: "error", title, message: `Blocked by a safety check: ${check.reason}` });
+                report("blocked");
                 return;
             }
             if (!step.state.tool.found || !step.state.tool.file) {
                 this.post({ type: "job", state: "error", title, message: `${step.state.project.tool} is not available. ${step.state.tool.hint || (0, dependency_manager_1.toolInstallHint)(step.state.project.tool, this.platform)}` });
+                report("blocked");
                 return;
             }
             if (!workspaceRoots().some(root => (0, dependency_manager_1.isInside)(step.state.project.dir, root))) {
                 this.post({ type: "job", state: "error", title, message: "Blocked by a safety check: the project directory is outside the open workspace." });
+                report("blocked");
                 return;
             }
             lines.push(`In ${step.state.project.dir}:\n${commandLine(step.state, step.spec)}`);
@@ -899,8 +926,10 @@ class DependencyPanel {
         }
         if (!confirmed) {
             this.post({ type: "toast", message: "Cancelled; nothing was run.", kind: "error" });
+            report("declined");
             return;
         }
+        runStarted = Date.now();
         this.busy = true;
         this.cancelRequested = false;
         this.post({ type: "busy", busy: true });
@@ -964,8 +993,10 @@ class DependencyPanel {
         if (failure) {
             const partial = completed ? `\n\n${completed} of ${steps.length} steps finished before the failure.` : "";
             this.post({ type: "job", state: this.cancelRequested ? "cancelled" : "error", title, message: `${failure}${partial}` });
+            report(this.cancelRequested ? "cancelled" : "error");
         }
         else {
+            report("success");
             this.post({ type: "job", state: "success", title, message: `Finished successfully (${steps.length} step${steps.length === 1 ? "" : "s"}). Versions below are rechecked.` });
         }
         this.post({ type: "busy", busy: false });

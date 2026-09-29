@@ -36,6 +36,7 @@ async function main() {
     require("./api-client-ui.unit");
     require("./security.unit");
     require("./dependencies.unit");
+    require("./analytics.unit");
     /* eslint-enable @typescript-eslint/no-var-requires */
     let passed = 0;
     const failures = [];

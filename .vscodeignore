@@ -22,3 +22,6 @@ vsc-extension-quickstart.md
 *.log
 .gitignore
 .tsbuildinfo
+scripts/**
+docs/**
+.env.posthog*

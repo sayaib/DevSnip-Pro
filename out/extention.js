@@ -41,6 +41,7 @@ const platformTools_1 = require("./commands/platformTools");
 const securityTools_1 = require("./commands/securityTools");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
 const command_registry_1 = require("./utils/command-registry");
+const analytics_1 = require("./analytics");
 const readmeManager_1 = require("./commands/readmeManager");
 const openCodeIntegration_1 = require("./commands/openCodeIntegration");
 const command_dispatch_1 = require("./utils/command-dispatch");
@@ -49,6 +50,9 @@ const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
 const premium_commands_1 = require("./premium/premium-commands");
 function activate(context) {
+    const activationStart = Date.now();
+    // Before anything writes state, so an existing user is never reported as a new install.
+    const installSnapshot = (0, analytics_1.snapshotInstall)(context);
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     // The milestone store needs its context before any command can record usage.
     (0, milestoneTracker_1.setMilestoneContext)(context);
@@ -56,6 +60,7 @@ function activate(context) {
     // DevSnip Pro command is registered through. The recorder is installed before
     // any command is registered, so no invocation is missed and none is counted twice.
     (0, command_registry_1.setUsageRecorder)(command => { void (0, milestoneTracker_1.autoRecordToolUsage)(command); });
+    (0, command_registry_1.setCommandObserver)(analytics_1.trackCommand);
     // Premium REST API Client features are unlocked by spending DevSnip Pro
     // points, so the access service is given a ledger over the milestone
     // tracker's balance. There is no licence and no subscription.
@@ -109,6 +114,8 @@ function activate(context) {
             vscode.window.showErrorMessage(`DevSnip Pro could not load its ${name} commands: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
+    // Last, so activation_ms covers the whole activation and nothing waits on it.
+    (0, analytics_1.initAnalytics)(context, activationStart, installSnapshot);
 }
 exports.activate = activate;
 const UNIVERSAL_TOOLS = [
@@ -188,17 +195,25 @@ function registerUniversalToolSearch(context) {
             matcher = new RegExp(pattern || ".*", "i");
         }
         catch (error) {
+            (0, analytics_1.track)("tool_search_performed", { query_length: pattern.length, match_count: 0, invalid_pattern: true });
             vscode.window.showErrorMessage(`Invalid regular expression: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
         const matches = UNIVERSAL_TOOLS.filter(tool => matcher.test(`${tool.label} ${tool.description} ${tool.command}`));
+        // The query itself is never sent - only its length and how many tools matched.
+        (0, analytics_1.track)("tool_search_performed", { query_length: pattern.length, match_count: matches.length, invalid_pattern: false });
         if (!matches.length) {
             vscode.window.showInformationMessage("No DevSnip Pro tools matched that regular expression.");
             return;
         }
         const selected = await vscode.window.showQuickPick(matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })), { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true });
-        if (selected)
+        if (selected) {
+            (0, analytics_1.track)("tool_search_selected", {
+                feature: selected.command.replace("sayaib.hue-console.", ""),
+                rank: matches.findIndex(tool => tool.command === selected.command) + 1
+            });
             await (0, command_dispatch_1.executeQueuedCommand)(selected.command);
+        }
     });
     context.subscriptions.push(searchCommand);
 }
@@ -286,9 +301,11 @@ class ToolGroup extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon(iconId, new vscode.ThemeColor(colorId));
     }
 }
-function deactivate() {
+async function deactivate() {
     // Panels opened through the shared registry are not in context.subscriptions.
     (0, webview_ui_1.disposeAllToolPanels)();
+    // Ends the session and makes one bounded (2s) attempt to send queued events.
+    await (0, analytics_1.shutdownAnalytics)();
 }
 exports.deactivate = deactivate;
 //# sourceMappingURL=extention.js.map

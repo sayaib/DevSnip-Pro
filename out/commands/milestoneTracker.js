@@ -31,6 +31,7 @@ const command_dispatch_1 = require("../utils/command-dispatch");
 const webview_ui_1 = require("../utils/webview-ui");
 const feature_registry_1 = require("../premium/feature-registry");
 const milestone_view_1 = require("../services/milestone-view");
+const analytics_1 = require("../analytics");
 /**
  * Levels are recognition only: every DevSnip Pro tool is available at every
  * level (premium REST client tools are paid for with points, not unlocked by
@@ -270,8 +271,18 @@ exports.saveUserStats = saveUserStats;
 function mutateStats(context, mutate) {
     const next = stateQueue.then(async () => {
         const stats = getUserStats(context);
+        const levelBefore = (0, milestone_view_1.levelIndexFor)(stats.lifetimePoints, exports.LEVELS);
+        const milestonesBefore = new Set(stats.completedMilestones);
         const result = mutate(stats);
         await saveUserStats(context, stats);
+        // Every earning path goes through here, so this is the one place progress events are sent.
+        for (const id of stats.completedMilestones) {
+            if (!milestonesBefore.has(id))
+                (0, analytics_1.track)('milestone_unlocked', { milestone: id });
+        }
+        const levelAfter = (0, milestone_view_1.levelIndexFor)(stats.lifetimePoints, exports.LEVELS);
+        if (levelAfter > levelBefore)
+            (0, analytics_1.track)('level_reached', { level: exports.LEVELS[levelAfter].name, level_index: levelAfter });
         if (refreshCallback)
             refreshCallback();
         pointsChangeEmitter.fire(stats.totalPoints);
@@ -286,6 +297,8 @@ async function redeemPoints(context, cost, reason) {
         if (stats.totalPoints < amount)
             return false;
         stats.totalPoints -= amount;
+        if (amount > 0)
+            (0, analytics_1.track)('points_spent', { amount });
         pushActivity(stats, {
             id: `redeem_${Date.now()}`,
             title: `Redeemed Points: ${reason} (-${amount} pts)`,
@@ -494,8 +507,10 @@ async function claimDailyBonus(context) {
         stats.dailyClaims[key] = true;
         return true;
     });
-    if (result)
+    if (result) {
+        (0, analytics_1.track)('daily_bonus_claimed', {});
         await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', exports.DAILY_BONUS_POINTS, 'Activity');
+    }
     return result;
 }
 exports.claimDailyBonus = claimDailyBonus;

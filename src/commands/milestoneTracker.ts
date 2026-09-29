@@ -4,7 +4,8 @@ import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registr
 import { executeQueuedCommand } from "../utils/command-dispatch";
 import { UTILITY_CSS, confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
 import { DEVELOPER_FEATURES } from "../premium/feature-registry";
-import { TrackerView, buildTrackerView, toolNamesFromManifest } from "../services/milestone-view";
+import { TrackerView, buildTrackerView, levelIndexFor, toolNamesFromManifest } from "../services/milestone-view";
+import { track } from "../analytics";
 
 export interface UserStats {
     /** Spendable balance. Premium tools deduct from it, so it can go down. */
@@ -308,8 +309,16 @@ function mutateStats<T>(
 ): Promise<{ stats: UserStats; result: T }> {
     const next = stateQueue.then(async () => {
         const stats = getUserStats(context);
+        const levelBefore = levelIndexFor(stats.lifetimePoints, LEVELS);
+        const milestonesBefore = new Set(stats.completedMilestones);
         const result = mutate(stats);
         await saveUserStats(context, stats);
+        // Every earning path goes through here, so this is the one place progress events are sent.
+        for (const id of stats.completedMilestones) {
+            if (!milestonesBefore.has(id)) track('milestone_unlocked', { milestone: id });
+        }
+        const levelAfter = levelIndexFor(stats.lifetimePoints, LEVELS);
+        if (levelAfter > levelBefore) track('level_reached', { level: LEVELS[levelAfter].name, level_index: levelAfter });
         if (refreshCallback) refreshCallback();
         pointsChangeEmitter.fire(stats.totalPoints);
         return { stats, result };
@@ -323,6 +332,7 @@ export async function redeemPoints(context: vscode.ExtensionContext, cost: numbe
     const { result } = await mutateStats(context, stats => {
         if (stats.totalPoints < amount) return false;
         stats.totalPoints -= amount;
+        if (amount > 0) track('points_spent', { amount });
         pushActivity(stats, {
             id: `redeem_${Date.now()}`,
             title: `Redeemed Points: ${reason} (-${amount} pts)`,
@@ -537,7 +547,10 @@ export async function claimDailyBonus(context: vscode.ExtensionContext): Promise
         stats.dailyClaims[key] = true;
         return true;
     });
-    if (result) await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', DAILY_BONUS_POINTS, 'Activity');
+    if (result) {
+        track('daily_bonus_claimed', {});
+        await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', DAILY_BONUS_POINTS, 'Activity');
+    }
     return result;
 }
 

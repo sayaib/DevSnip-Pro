@@ -2,3 +2,5 @@ access_token.txt
 /node_modules
 .vscode-test
 .tsbuildinfo
+analytics.config.json
+.env.posthog

@@ -5,6 +5,7 @@ import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
 import axios from "axios";
 import { registerTrackedCommand } from "../utils/command-registry";
+import { track } from "../analytics";
 import { UTILITY_CSS, openToolPanel, safePostMessage } from "../utils/webview-ui";
 import {
   CommandKind, CommandOption, CommandSpec, DeclaredDependency, DependencyVerdict, DetectedProject, Ecosystem,
@@ -655,6 +656,7 @@ class DependencyPanel {
 
   async scan(refresh: boolean): Promise<void> {
     const token = ++this.scanToken;
+    const scanStarted = Date.now();
     if (refresh) registryCache.clear();
     this.post({ type: "scanning", message: "Detecting projects and package managers..." });
     try {
@@ -707,6 +709,17 @@ class DependencyPanel {
       }
       if (token !== this.scanToken) return;
       this.publish("done");
+      const deps = states.flatMap(state => state.dependencies);
+      track("dependency_scan_completed", {
+        project_count: states.length,
+        dependency_count: deps.length,
+        ecosystems: [...new Set(states.map(state => state.project.ecosystem))],
+        managers: [...new Set(states.map(state => state.project.manager))],
+        missing_count: deps.filter(dep => dep.verdict.status === "missing" || dep.verdict.status === "mismatch").length,
+        outdated_count: deps.filter(dep => dep.verdict.status === "outdated").length,
+        major_count: deps.filter(dep => dep.verdict.status === "major").length,
+        duration_ms: Date.now() - scanStarted
+      });
     } catch (error) {
       if (token === this.scanToken) {
         this.post({ type: "error", message: `Dependency scan failed: ${error instanceof Error ? error.message : String(error)}` });
@@ -782,6 +795,7 @@ class DependencyPanel {
       case "copy":
         if (typeof message.text === "string" && message.text.length > 0 && message.text.length <= 8000) {
           await vscode.env.clipboard.writeText(message.text);
+          track("content_copied", { feature: "dependencyManager", kind: typeof message.kind === "string" ? message.kind : "command" });
           this.post({ type: "toast", message: "Copied to the clipboard.", kind: "success" });
         }
         return;
@@ -836,6 +850,7 @@ class DependencyPanel {
     const verb = kind === "install" ? "Install" : kind === "update" ? "Update" : "Upgrade";
     const { dependency } = found.dep;
     await this.runJob(`${verb} ${dependency.displayName}`, [{ state: found.state, spec: option.spec, title: option.label }], {
+      action: kind === "install" ? "install" : kind === "update" ? "update" : "upgrade",
       touchesManifest: kind === "upgrade" ? [`${dependency.source} (the ${dependency.scope} dependency ${dependency.displayName})`] : [],
       skipped: []
     });
@@ -881,7 +896,7 @@ class DependencyPanel {
       this.post({ type: "banner", kind: skipped.length ? "error" : "success", message: skipped.length ? `${nothing}\n${skipped.join("\n")}` : nothing });
       return;
     }
-    await this.runJob(action === "install" ? "Install missing dependencies" : "Update outdated dependencies", steps, { touchesManifest: [], skipped });
+    await this.runJob(action === "install" ? "Install missing dependencies" : "Update outdated dependencies", steps, { action: action === "install" ? "install_missing" : "update_outdated", touchesManifest: [], skipped });
   }
 
   /**
@@ -890,13 +905,26 @@ class DependencyPanel {
    * command lines with the user in a native modal, then runs them one at a
    * time with no shell, a timeout, and cancellation.
    */
-  private async runJob(title: string, steps: JobStep[], context: { touchesManifest: string[]; skipped: string[] }): Promise<void> {
+  private async runJob(
+    title: string,
+    steps: JobStep[],
+    context: { action: "install_missing" | "update_outdated" | "install" | "update" | "upgrade"; touchesManifest: string[]; skipped: string[] }
+  ): Promise<void> {
+    let runStarted = 0;
+    const report = (outcome: "success" | "error" | "cancelled" | "declined" | "blocked") => track("dependency_job_finished", {
+      action: context.action,
+      outcome,
+      ecosystems: [...new Set(steps.map(step => step.state.project.ecosystem))],
+      step_count: steps.length,
+      duration_ms: runStarted ? Date.now() - runStarted : 0
+    });
     if (this.busy) {
       this.post({ type: "toast", message: "Another install is still running.", kind: "error" });
       return;
     }
     if (vscode.workspace.isTrusted === false) {
       this.post({ type: "job", state: "error", title, message: "This workspace is not trusted. Installs run the project's install scripts, so they are only allowed in a trusted workspace (Workspaces: Manage Workspace Trust)." });
+      report("blocked");
       return;
     }
 
@@ -905,14 +933,17 @@ class DependencyPanel {
       const check = validateCommandSpec(step.spec);
       if (!check.ok) {
         this.post({ type: "job", state: "error", title, message: `Blocked by a safety check: ${check.reason}` });
+        report("blocked");
         return;
       }
       if (!step.state.tool.found || !step.state.tool.file) {
         this.post({ type: "job", state: "error", title, message: `${step.state.project.tool} is not available. ${step.state.tool.hint || toolInstallHint(step.state.project.tool, this.platform)}` });
+        report("blocked");
         return;
       }
       if (!workspaceRoots().some(root => isInside(step.state.project.dir, root))) {
         this.post({ type: "job", state: "error", title, message: "Blocked by a safety check: the project directory is outside the open workspace." });
+        report("blocked");
         return;
       }
       lines.push(`In ${step.state.project.dir}:\n${commandLine(step.state, step.spec)}`);
@@ -941,8 +972,10 @@ class DependencyPanel {
     }
     if (!confirmed) {
       this.post({ type: "toast", message: "Cancelled; nothing was run.", kind: "error" });
+      report("declined");
       return;
     }
+    runStarted = Date.now();
 
     this.busy = true;
     this.cancelRequested = false;
@@ -1007,7 +1040,9 @@ class DependencyPanel {
     if (failure) {
       const partial = completed ? `\n\n${completed} of ${steps.length} steps finished before the failure.` : "";
       this.post({ type: "job", state: this.cancelRequested ? "cancelled" : "error", title, message: `${failure}${partial}` });
+      report(this.cancelRequested ? "cancelled" : "error");
     } else {
+      report("success");
       this.post({ type: "job", state: "success", title, message: `Finished successfully (${steps.length} step${steps.length === 1 ? "" : "s"}). Versions below are rechecked.` });
     }
     this.post({ type: "busy", busy: false });

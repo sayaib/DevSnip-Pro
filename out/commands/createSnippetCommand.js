@@ -26,6 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCreateSnippetCommand = void 0;
 const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
+const analytics_1 = require("../analytics");
 const webview_ui_1 = require("../utils/webview-ui");
 const snippet_utils_1 = require("../utils/snippet-utils");
 function registerCreateSnippetCommand(context) {
@@ -77,7 +78,8 @@ function registerCreateSnippetCommand(context) {
             if (!snippetName)
                 return;
             const name = snippetName.trim();
-            if (existingSnippets[name]) {
+            const overwrote = Boolean(existingSnippets[name]);
+            if (overwrote) {
                 if (!(await (0, webview_ui_1.confirmAction)(`A ${language} snippet named "${name}" already exists. Overwrite it?`, "Overwrite")))
                     return;
             }
@@ -95,6 +97,7 @@ function registerCreateSnippetCommand(context) {
                 description: description.trim()
             };
             await (0, snippet_utils_1.saveSnippets)(snippetsPath, existingSnippets);
+            (0, analytics_1.track)("snippet_created", { language, line_count: existingSnippets[name].body.length, overwrote });
             const action = await vscode.window.showInformationMessage(`Snippet "${name}" saved for ${language}. VS Code loads contributed snippets at startup, so reload the window to start using it.`, "Reload Window", "Later");
             if (action === "Reload Window") {
                 await vscode.commands.executeCommand("workbench.action.reloadWindow");

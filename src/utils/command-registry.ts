@@ -5,6 +5,7 @@ export const COMMAND_PREFIX = "sayaib.hue-console.";
 
 const registeredCommands = new Set<string>();
 let usageRecorder: ((commandId: string) => void) | undefined;
+let commandObserver: ((commandId: string, outcome: "success" | "error", durationMs: number) => void) | undefined;
 
 /**
  * Installs the gamification hook. Kept as an injected callback so the command
@@ -12,6 +13,24 @@ let usageRecorder: ((commandId: string) => void) | undefined;
  */
 export function setUsageRecorder(recorder: (commandId: string) => void): void {
   usageRecorder = recorder;
+}
+
+/**
+ * Installs the analytics hook: told how every command ended and how long it
+ * took. Injected (like the usage recorder) so the registry has no dependency
+ * on analytics, and an observer that throws can never break a command.
+ */
+export function setCommandObserver(observer: typeof commandObserver): void {
+  commandObserver = observer;
+}
+
+function notify(commandId: string, outcome: "success" | "error", started: number): void {
+  if (!commandObserver) return;
+  try {
+    commandObserver(commandId, outcome, Date.now() - started);
+  } catch {
+    /* observers must never affect the command */
+  }
 }
 
 /**
@@ -28,7 +47,22 @@ export function registerTrackedCommand(
     if (usageRecorder && commandId !== `${COMMAND_PREFIX}milestoneTracker`) {
       usageRecorder(commandId);
     }
-    return handler(...args);
+    const started = Date.now();
+    let result: unknown;
+    try {
+      result = handler(...args);
+    } catch (error) {
+      notify(commandId, "error", started);
+      throw error;
+    }
+    if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+      return Promise.resolve(result).then(
+        value => { notify(commandId, "success", started); return value; },
+        error => { notify(commandId, "error", started); throw error; }
+      );
+    }
+    notify(commandId, "success", started);
+    return result;
   });
 }
 

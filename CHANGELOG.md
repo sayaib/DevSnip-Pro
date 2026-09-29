@@ -1,5 +1,27 @@
 # Development Changelog of DevSnip Pro
 
+## Unreleased
+
+### Added - Anonymous usage analytics (PostHog)
+
+- **What it measures:**
+  - Every DevSnip Pro command reports which feature ran, its area, success or error, duration, and whether it was the installation's first use of that feature.
+  - Feature events cover snippets created and deleted, tool search (query length and match count only), copies, REST requests saved and deleted, README saves and deletes, Dependencies panel scans and jobs, milestones, levels and points spent.
+  - Sessions record duration and engaged time.
+- **Privacy by construction:**
+  - Every property is validated against a typed event catalog, and there is no free-text property type, so code, paths, queries, URLs and names cannot be sent.
+  - Identity is a random per-install UUID.
+  - Events are anonymous in PostHog (no person profiles, no GeoIP).
+- **Consent:** sent only when VS Code's `telemetry.telemetryLevel` is `all`, `devsnip.analytics.enabled` is on, and the extension is an installed build. `devsnip.analytics.debug` shows every event in an output channel.
+- **Performance:** `track()` only queues. Delivery is batched in the background, with backoff and a bounded queue, and never blocks or breaks a feature.
+- **Key handling:** the PostHog project key is written into the package at build time from `POSTHOG_PROJECT_API_KEY` and never committed. Builds without it have analytics off. Personal keys are refused.
+- **Dashboard:** `scripts/posthog-dashboard.js` creates a 24-insight dashboard covering real-time and DAU/WAU/MAU users, most and least used features, adoption, errors, sessions, engagement, retention and feature-specific activity.
+- **Documentation:** `docs/ANALYTICS.md` documents every event and property, and a unit test keeps it in sync with the catalog.
+- **Install lifecycle:** `extension_activated.install_type` is `new`, `updated` or `returning`, and a new `extension_updated` event carries `previous_version`. Users who had DevSnip Pro before analytics are not counted as new installs.
+- **No lost events at shutdown or after a crash:** undelivered events and the open session are checkpointed to a local file and delivered on the next start. A session left open by a crash is closed with `reason: interrupted`. Every event has a `uuid`, so PostHog de-duplicates resends, and batches include `sent_at` for clock-skew correction.
+- **Test data separation:** every event carries `environment` (`production` for Marketplace builds; `test`, `staging` or `development` otherwise). The dashboard script sets the project's test-account filter and applies it to every insight.
+- **`scripts/verify-analytics.js`** runs a production-like end-to-end test before each release. It checks a fresh install, an update and a restart in an isolated VS Code, then verifies in PostHog that every event arrived, sessions close, identity is anonymous and consistent, and no unexpected data was stored.
+
 ## Version 10.65.0 - 2026-09-28
 
 - **New layout.** A level ring shows progress to the next level, next to four at-a-glance stats: balance (and how many premium tools it covers), points earned in total, streak (and days to the next streak milestone), and today's points against the daily cap. A "Today" strip holds the daily login, the daily boost and the milestone closest to completion. Tabs cover Milestones (filterable, closest-to-done first), Levels, Activity (grouped by day, with readable tool names) and How to earn.

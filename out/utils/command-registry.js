@@ -23,12 +23,13 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.knownCommands = exports.isKnownCommand = exports.registerTrackedCommand = exports.setUsageRecorder = exports.COMMAND_PREFIX = void 0;
+exports.knownCommands = exports.isKnownCommand = exports.registerTrackedCommand = exports.setCommandObserver = exports.setUsageRecorder = exports.COMMAND_PREFIX = void 0;
 const vscode = __importStar(require("vscode"));
 /** Namespace shared by every command this extension contributes. */
 exports.COMMAND_PREFIX = "sayaib.hue-console.";
 const registeredCommands = new Set();
 let usageRecorder;
+let commandObserver;
 /**
  * Installs the gamification hook. Kept as an injected callback so the command
  * registry does not depend on the milestone tracker (and vice versa).
@@ -37,6 +38,25 @@ function setUsageRecorder(recorder) {
     usageRecorder = recorder;
 }
 exports.setUsageRecorder = setUsageRecorder;
+/**
+ * Installs the analytics hook: told how every command ended and how long it
+ * took. Injected (like the usage recorder) so the registry has no dependency
+ * on analytics, and an observer that throws can never break a command.
+ */
+function setCommandObserver(observer) {
+    commandObserver = observer;
+}
+exports.setCommandObserver = setCommandObserver;
+function notify(commandId, outcome, started) {
+    if (!commandObserver)
+        return;
+    try {
+        commandObserver(commandId, outcome, Date.now() - started);
+    }
+    catch {
+        /* observers must never affect the command */
+    }
+}
 /**
  * Registers a DevSnip Pro command and records a single tool-usage event per
  * invocation. Every command must go through here: it is the one place that
@@ -48,7 +68,20 @@ function registerTrackedCommand(commandId, handler) {
         if (usageRecorder && commandId !== `${exports.COMMAND_PREFIX}milestoneTracker`) {
             usageRecorder(commandId);
         }
-        return handler(...args);
+        const started = Date.now();
+        let result;
+        try {
+            result = handler(...args);
+        }
+        catch (error) {
+            notify(commandId, "error", started);
+            throw error;
+        }
+        if (result && typeof result.then === "function") {
+            return Promise.resolve(result).then(value => { notify(commandId, "success", started); return value; }, error => { notify(commandId, "error", started); throw error; });
+        }
+        notify(commandId, "success", started);
+        return result;
     });
 }
 exports.registerTrackedCommand = registerTrackedCommand;

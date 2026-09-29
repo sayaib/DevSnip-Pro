@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { FeatureAccessService } from "../premium/feature-access";
+import { track } from "../analytics";
 
 /**
  * Saved request collections.
@@ -110,12 +111,14 @@ export class CollectionStore {
       ? existing.map(entry => (entry.id === request.id ? request : entry))
       : [...existing, request];
     await this.write(next);
+    track("request_saved", { updated: isUpdate, collection_size: next.length });
     return { saved: request, total: next.length };
   }
 
   async delete(id: string): Promise<number> {
     const next = this.list().filter(request => request.id !== id);
     await this.write(next);
+    track("request_deleted", { collection_size: next.length });
     return next.length;
   }
 

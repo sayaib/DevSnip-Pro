@@ -115,6 +115,17 @@ Free tools include the full REST and GraphQL workflow, response inspection, hist
 
 Install is only reported as successful once `opencode --version` actually runs, so a partial install shows as broken rather than green. Per-OS alternatives are shown in the panel: npm, Homebrew, the install script, and Chocolatey or Scoop on Windows.
 
+## Usage analytics
+
+DevSnip Pro collects **anonymous** usage analytics: which of its features run, how often, whether they succeed, and how long sessions last. This shows which features are valuable and which need work.
+
+- **Never collected:** code, snippet contents, file names or paths, search queries, URLs, package names, error messages, or anything that identifies you. Each installation is represented only by a random ID.
+- **Respects VS Code:** nothing is sent unless `telemetry.telemetryLevel` is `all`.
+- **Off switch:** set `devsnip.analytics.enabled` to `false` to switch off DevSnip Pro's analytics only.
+- **Transparency:** set `devsnip.analytics.debug` to `true` to see every event in the **DevSnip Pro: Analytics** output channel before it is sent.
+
+The complete list of events and properties is in [docs/ANALYTICS.md](docs/ANALYTICS.md).
+
 ## Settings
 
 | Setting                                         | Default | What it does                                                                                            |
@@ -124,6 +135,8 @@ Install is only reported as successful once `opencode --version` actually runs, 
 | `devsnip.securityAudit.maxFiles`                | `2000`  | How many files each workspace, cloud or dependency security scan reads.                                 |
 | `devsnip.security.endpointTimeout`              | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner.                          |
 | `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks (reflected-input probe and well-known sensitive paths). |
+| `devsnip.analytics.enabled` | `true` | Send anonymous usage analytics. See [Usage analytics](#usage-analytics). |
+| `devsnip.analytics.debug` | `false` | Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel. |
 
 ## Keyboard shortcuts
 
