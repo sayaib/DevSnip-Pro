@@ -29,6 +29,7 @@ const path = __importStar(require("path"));
 const vm = __importStar(require("vm"));
 const tool_groups_1 = require("../../sidebar/tool-groups");
 const tools_sidebar_1 = require("../../sidebar/tools-sidebar");
+const vscode_stub_1 = require("./vscode-stub");
 const run_unit_tests_1 = require("./run-unit-tests");
 const ROOT = path.resolve(__dirname, "../../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -39,8 +40,10 @@ function render() {
         cspSource: "vscode-webview://test",
         scriptUri: "vscode-webview://test/media/tools-sidebar.js",
         codiconsUri: "vscode-webview://test/codicon.css",
-        status: { badge: "🥇", level: "Gold", points: 420, lifetimePoints: 1020, nextLevel: "Platinum", toNext: 780, progress: 0.35 },
-        expanded: ["Core", "Not a category"]
+        status: { badge: "🥇", level: "Gold", points: 1427, lifetimePoints: 1427, nextLevel: "Platinum", toNext: 373, progress: 0.69 },
+        expanded: ["Core", "Not a category"],
+        favorites: ["sayaib.hue-console.openGUI", "sayaib.hue-console.notASidebarTool"],
+        usage: { "sayaib.hue-console.jwtDecoder": { count: 3, last: 1000 }, "sayaib.hue-console.unknown": { count: 9, last: 1 } }
     });
 }
 (0, run_unit_tests_1.suite)("tools sidebar", () => {
@@ -58,7 +61,9 @@ function render() {
     });
     (0, run_unit_tests_1.test)("every icon exists in the bundled codicon font", () => {
         const icons = new Set(tool_groups_1.SIDEBAR_GROUPS.flatMap(g => [g.icon, ...g.tools.map(t => t.icon)]));
-        for (const icon of [...icons, "chevron-right", "search", "close", "list-filter"]) {
+        // Icons the page script and markup use for chrome, filters and favorites.
+        const chrome = ["chevron-right", "search", "close", "filter", "info", "check", "list-tree", "star-empty", "star-full", "history", "graph"];
+        for (const icon of [...icons, ...chrome]) {
             assert.ok(codiconCss.includes(`.codicon-${icon}:before`), `codicon "${icon}" is missing, so it would render blank`);
         }
     });
@@ -78,6 +83,9 @@ function render() {
         const data = JSON.parse(json);
         assert.deepStrictEqual(data.expanded, ["Core"], "unknown categories in saved state are dropped");
         assert.strictEqual(data.groups.length, tool_groups_1.SIDEBAR_GROUPS.length);
+        assert.deepStrictEqual(data.favorites, ["sayaib.hue-console.openGUI"], "favorites are limited to sidebar tools");
+        assert.deepStrictEqual(Object.keys(data.usage), ["sayaib.hue-console.jwtDecoder"], "usage is limited to sidebar tools");
+        assert.deepStrictEqual(data.levels.map((l) => l.name).slice(0, 4), ["Bronze", "Silver", "Gold", "Platinum"]);
     });
     (0, run_unit_tests_1.test)("the search box, status area and tree are labelled", () => {
         const html = render();
@@ -89,6 +97,44 @@ function render() {
         const source = fs.readFileSync(path.join(ROOT, "media", "tools-sidebar.js"), "utf8");
         assert.doesNotThrow(() => new vm.Script(source, { filename: "tools-sidebar.js" }));
         assert.strictEqual((source.match(/acquireVsCodeApi\(\)/g) || []).length, 1);
+    });
+    (0, run_unit_tests_1.test)("every tool has a one-line description for its hover card", () => {
+        for (const group of tool_groups_1.SIDEBAR_GROUPS) {
+            for (const tool of group.tools) {
+                assert.ok(tool.description.trim().length >= 20, `${tool.label} needs a description`);
+                assert.ok(tool.description.length <= 110, `${tool.label}: keep the description to one line`);
+            }
+        }
+    });
+    (0, run_unit_tests_1.test)("the search box advertises its shortcut and the filter is a menu", () => {
+        const html = render();
+        assert.ok(/aria-keyshortcuts="Control\+K Meta\+K \/"/.test(html));
+        assert.ok(/id="filterBtn"[^>]*aria-haspopup="menu"/.test(html));
+        assert.ok(/id="meter"[^>]*role="progressbar"/.test(html), "the rank bar must be exposed as a progress bar");
+    });
+});
+(0, run_unit_tests_1.suite)("tools sidebar usage", () => {
+    (0, run_unit_tests_1.test)("cleanUsage keeps only well-formed entries for sidebar tools", () => {
+        assert.deepStrictEqual((0, tools_sidebar_1.cleanUsage)(null), {});
+        assert.deepStrictEqual((0, tools_sidebar_1.cleanUsage)({
+            "sayaib.hue-console.openGUI": { count: 2.7, last: 5 },
+            "sayaib.hue-console.jwtDecoder": { count: 0, last: 5 },
+            "sayaib.hue-console.textDiff": { count: "3", last: 5 },
+            "sayaib.hue-console.unknown": { count: 1, last: 1 }
+        }), { "sayaib.hue-console.openGUI": { count: 2, last: 5 } });
+    });
+    (0, run_unit_tests_1.test)("recordUsage counts sidebar tools from any entry point and ignores everything else", () => {
+        const context = (0, vscode_stub_1.createExtensionContext)();
+        const provider = new tools_sidebar_1.ToolsSidebarProvider(context);
+        provider.recordUsage("sayaib.hue-console.jwtDecoder");
+        provider.recordUsage("sayaib.hue-console.jwtDecoder");
+        provider.recordUsage("sayaib.hue-console.milestoneTracker");
+        provider.recordUsage("sayaib.hue-console.searchTools");
+        provider.recordUsage("workbench.action.files.save");
+        const usage = context.globalState.get("devsnip.sidebar.usage");
+        assert.deepStrictEqual(Object.keys(usage), ["sayaib.hue-console.jwtDecoder"]);
+        assert.strictEqual(usage["sayaib.hue-console.jwtDecoder"].count, 2);
+        assert.ok(usage["sayaib.hue-console.jwtDecoder"].last > 0);
     });
 });
 //# sourceMappingURL=sidebar.unit.js.map

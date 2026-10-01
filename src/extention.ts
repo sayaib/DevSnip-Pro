@@ -34,7 +34,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Tool usage points are awarded by registerTrackedCommand, which every
   // DevSnip Pro command is registered through. The recorder is installed before
   // any command is registered, so no invocation is missed and none is counted twice.
-  setUsageRecorder(command => { void autoRecordToolUsage(command); });
+  // The Tools sidebar is created below; its recently/most used lists come from here too.
+  let toolsSidebar: ToolsSidebarProvider | undefined;
+  setUsageRecorder(command => {
+    void autoRecordToolUsage(command);
+    toolsSidebar?.recordUsage(command);
+  });
   setCommandObserver(trackCommand);
 
   // Premium REST API Client features are unlocked by spending DevSnip Pro
@@ -48,8 +53,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const collections = new CollectionStore(context, access);
 
-  const toolsSidebar = new ToolsSidebarProvider(context);
-  setTreeRefreshCallback(() => toolsSidebar.refresh());
+  toolsSidebar = new ToolsSidebarProvider(context);
+  setTreeRefreshCallback(() => toolsSidebar?.refresh());
   context.subscriptions.push(vscode.window.registerWebviewViewProvider(TOOLS_VIEW_ID, toolsSidebar));
 
   // One failing group must not stop the rest of the extension from loading:

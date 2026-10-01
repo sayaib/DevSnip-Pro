@@ -57,7 +57,12 @@ function activate(context) {
     // Tool usage points are awarded by registerTrackedCommand, which every
     // DevSnip Pro command is registered through. The recorder is installed before
     // any command is registered, so no invocation is missed and none is counted twice.
-    (0, command_registry_1.setUsageRecorder)(command => { void (0, milestoneTracker_1.autoRecordToolUsage)(command); });
+    // The Tools sidebar is created below; its recently/most used lists come from here too.
+    let toolsSidebar;
+    (0, command_registry_1.setUsageRecorder)(command => {
+        void (0, milestoneTracker_1.autoRecordToolUsage)(command);
+        toolsSidebar?.recordUsage(command);
+    });
     (0, command_registry_1.setCommandObserver)(analytics_1.trackCommand);
     // Premium REST API Client features are unlocked by spending DevSnip Pro
     // points, so the access service is given a ledger over the milestone
@@ -68,8 +73,8 @@ function activate(context) {
         refund: (amount, reason) => (0, milestoneTracker_1.refundPoints)(context, amount, reason)
     });
     const collections = new collections_1.CollectionStore(context, access);
-    const toolsSidebar = new tools_sidebar_1.ToolsSidebarProvider(context);
-    (0, milestoneTracker_1.setTreeRefreshCallback)(() => toolsSidebar.refresh());
+    toolsSidebar = new tools_sidebar_1.ToolsSidebarProvider(context);
+    (0, milestoneTracker_1.setTreeRefreshCallback)(() => toolsSidebar?.refresh());
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(tools_sidebar_1.TOOLS_VIEW_ID, toolsSidebar));
     // One failing group must not stop the rest of the extension from loading:
     // a thrown error here would leave every other command unregistered.
