@@ -1,5 +1,34 @@
 # Development Changelog of DevSnip Pro
 
+## 11.69.1 - Tools sidebar: search, filters, favorites and rank card
+
+The Tools sidebar was redesigned again, to read like a polished navigation panel rather than a basic tree. Every tool, category, icon and command is unchanged.
+
+### Added
+
+- **Rank card:**
+  - A compact card showing your rank, your points and how far you are from the next rank, with a progress bar and percentage.
+  - An info popover explains how ranks work and lists every rank's threshold.
+- **Search:**
+  - <kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd> or <kbd>/</kbd> focuses the search box.
+  - Search matches tool descriptions as well as names, and highlights the matches.
+- **Filter menu:** All tools, Favorites, Recently used, Most used, or a single category. When a filter is active, the button shows a dot and a "Show all" bar appears.
+- **Favorites:**
+  - Star a tool on hover, or press <kbd>F</kbd> on a focused tool.
+  - Favorites are pinned at the top of the sidebar.
+- **Recently used and Most used:** tools opened from anywhere (sidebar, hubs or the command palette) are counted.
+- **Hover cards:** each tool shows a one-line description, its category and how often you have used it.
+- **Empty states:** they offer to search every DevSnip Pro tool, clear the search, or show all tools.
+
+### Changed
+
+- **One category open at a time:** opening a category in All tools closes the others. While searching, every category with a match stays open.
+- **Animation:** categories expand and collapse smoothly.
+- **Selection:** the selected tool is marked with a tinted background and an accent icon instead of a side bar. A collapsed category that holds the selected tool shows a small dot.
+- **Security:** the category has its own subtle red tint.
+- **Design system:** a consistent 8px spacing system, corner radii and icon sizes, with layered surfaces taken from the VS Code theme.
+- **Narrow sidebars:** they keep more of each tool's name visible.
+
 ## 11.68.1 - Revamped Tools Sidebar UI/UX
 
 Redesigned the left navigation panel for a cleaner, more compact, and highly scannable VS Code-style experience. Improved category hierarchy, spacing, active/hover states, and icon alignment, while keeping all existing tools and functionality completely intact.

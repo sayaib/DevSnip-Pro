@@ -32,7 +32,8 @@
   const toolIndex = new Map();
   data.groups.forEach(group => group.tools.forEach(tool => toolIndex.set(tool.command, { tool, group })));
 
-  const expanded = new Set(data.expanded);
+  // Only one category is open at a time; older saved state may list several, so keep the most recent.
+  const expanded = new Set(data.expanded.slice(-1));
   let favorites = data.favorites.filter(command => toolIndex.has(command));
   let usage = data.usage || {};
   let status = data.status;
@@ -480,7 +481,22 @@
     if (query.trim()) {
       if (open) searchCollapsed.delete(name); else searchCollapsed.add(name);
     } else if (filter.kind === "all") {
-      if (open) expanded.add(name); else expanded.delete(name);
+      // Accordion: opening a category closes the others. Searches keep every
+      // matching category open so no result is hidden.
+      if (open) {
+        tree.querySelectorAll(".group.open").forEach(other => {
+          if (other === wrap) return;
+          other.classList.remove("open");
+          other.querySelector(".cat").setAttribute("aria-expanded", "false");
+          if (other.querySelector(".children .row.focused")) setFocus(wrap.querySelector(".cat"), true);
+        });
+        expanded.clear();
+        expanded.add(name);
+        // Closing categories above shifts this one up; bring it back into view once they settle.
+        setTimeout(() => wrap.querySelector(".cat").scrollIntoView({ block: "nearest" }), 200);
+      } else {
+        expanded.delete(name);
+      }
       vscode.postMessage({ type: "expanded", groups: Array.from(expanded) });
     }
     if (!open) {
