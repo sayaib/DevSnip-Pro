@@ -1,5 +1,9 @@
 # Development Changelog of DevSnip Pro
 
+## 11.68.1 - Revamped Tools Sidebar UI/UX
+
+Redesigned the left navigation panel for a cleaner, more compact, and highly scannable VS Code-style experience. Improved category hierarchy, spacing, active/hover states, and icon alignment, while keeping all existing tools and functionality completely intact.
+
 ## 11.67.1 - Updated the REST API client UI & UX make easy to use
 
 Enhanced the REST API Client with an improved UI/UX, simplified navigation, clearer request/response sections, better button placement, and an easier workflow for creating, testing, and managing API requests.

@@ -25,3 +25,10 @@ vsc-extension-quickstart.md
 scripts/**
 docs/**
 .env.posthog*
+
+# Only the codicon font and stylesheet are used (by the Tools sidebar)
+node_modules/@vscode/codicons/**
+!node_modules/@vscode/codicons/package.json
+!node_modules/@vscode/codicons/LICENSE*
+!node_modules/@vscode/codicons/dist/codicon.css
+!node_modules/@vscode/codicons/dist/codicon.ttf

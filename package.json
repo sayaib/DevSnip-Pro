@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro",
   "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "11.67.1",
+  "version": "11.68.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -764,6 +764,7 @@
     "views": {
       "myActivityBar": [
         {
+          "type": "webview",
           "id": "myView",
           "name": "Tools"
         }
@@ -883,6 +884,7 @@
     "typescript": "^4.3.2"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.36",
     "axios": "^1.8.3",
     "yaml": "^2.9.1"
   },

@@ -46,6 +46,7 @@ const webview_ui_1 = require("./utils/webview-ui");
 const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
 const premium_commands_1 = require("./premium/premium-commands");
+const tools_sidebar_1 = require("./sidebar/tools-sidebar");
 function activate(context) {
     const activationStart = Date.now();
     // Before anything writes state, so an existing user is never reported as a new install.
@@ -67,13 +68,9 @@ function activate(context) {
         refund: (amount, reason) => (0, milestoneTracker_1.refundPoints)(context, amount, reason)
     });
     const collections = new collections_1.CollectionStore(context, access);
-    const myTreeView = new MyTreeDataProvider(context);
-    (0, milestoneTracker_1.setTreeRefreshCallback)(() => myTreeView.refresh());
-    const treeView = vscode.window.createTreeView("myView", {
-        treeDataProvider: myTreeView,
-        showCollapseAll: false,
-    });
-    context.subscriptions.push(treeView);
+    const toolsSidebar = new tools_sidebar_1.ToolsSidebarProvider(context);
+    (0, milestoneTracker_1.setTreeRefreshCallback)(() => toolsSidebar.refresh());
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider(tools_sidebar_1.TOOLS_VIEW_ID, toolsSidebar));
     // One failing group must not stop the rest of the extension from loading:
     // a thrown error here would leave every other command unregistered.
     const registrations = [
@@ -184,111 +181,6 @@ function registerUniversalToolSearch(context) {
         }
     });
     context.subscriptions.push(searchCommand);
-}
-class MyTreeDataProvider {
-    constructor(context) {
-        this._onDidChangeTreeData = new vscode.EventEmitter();
-        this.onDidChangeTreeData = this._onDidChangeTreeData.event;
-        this.context = context;
-        this.groups = this.createGroups();
-    }
-    refresh() {
-        this._onDidChangeTreeData.fire();
-    }
-    getTreeItem(element) {
-        return element;
-    }
-    getChildren(element) {
-        if (element instanceof ToolGroup) {
-            return element.children;
-        }
-        const stats = (0, milestoneTracker_1.getUserStats)(this.context);
-        // The level follows lifetime points so spending never demotes it; the number is the spendable balance.
-        const level = (0, milestoneTracker_1.getCurrentLevel)(stats.lifetimePoints);
-        const trackerItem = this.createCommandButton(`${level.badge} ${level.name} (${stats.totalPoints} pts)`, "sayaib.hue-console.milestoneTracker", "trophy", new vscode.ThemeColor("terminal.ansiBrightYellow"));
-        trackerItem.tooltip = `${level.name} level - ${stats.lifetimePoints} points earned in total, ${stats.totalPoints} available to spend`;
-        return [
-            trackerItem,
-            this.createCommandButton("Search tools", "sayaib.hue-console.searchTools", "search", new vscode.ThemeColor("terminal.ansiBrightCyan")),
-            ...this.groups,
-        ];
-    }
-    createGroups() {
-        const c = (id) => `sayaib.hue-console.${id}`;
-        return [
-            new ToolGroup("Core", "rocket", "terminal.ansiBrightYellow", [
-                this.createCommandButton("REST API Client", c("openGUI"), "cloud"),
-                this.createCommandButton("Clean Console Logs", c("listAndRemoveConsoleLogs"), "trash"),
-                this.createCommandButton("Remove Unused Imports", c("removeUnusedImports"), "symbol-method"),
-                this.createCommandButton("README Viewer & Manager", c("readmeManager"), "book"),
-                this.createCommandButton("OpenCode Integration", c("openCodeIntegration"), "terminal"),
-            ]),
-            new ToolGroup("Snippets", "book", "terminal.ansiBrightMagenta", [
-                this.createCommandButton("Create Snippet", c("createCustomSnippet"), "edit"),
-                this.createCommandButton("Saved Snippets", c("showSnippets"), "file-code"),
-            ]),
-            new ToolGroup("Developer Tools", "tools", "terminal.ansiBrightWhite", [
-                this.createCommandButton("All developer tools", c("advancedToolsHub"), "layout"),
-                this.createCommandButton("JSON/XML Formatter", c("jsonFormatter"), "json"),
-                this.createCommandButton("Encode / Decode", c("base64Encoder"), "symbol-string"),
-                this.createCommandButton("JWT Decoder", c("jwtDecoder"), "key"),
-                this.createCommandButton("Diff Checker", c("textDiff"), "diff"),
-                this.createCommandButton("Dependencies & Installation", c("dependencyManager"), "package"),
-            ]),
-            new ToolGroup("AI & ML", "hubot", "terminal.ansiBrightCyan", [
-                this.createCommandButton("All AI & ML tools", c("aiMlHub"), "layout"),
-                this.createCommandButton("Prompt Builder", c("promptTemplate"), "comment-discussion"),
-                this.createCommandButton("Token & Cost Estimator", c("tokenCounter"), "symbol-numeric"),
-                this.createCommandButton("LLM Client Setup", c("llmClientSetup"), "plug"),
-                this.createCommandButton("LLM JSON Validator", c("llmJsonValidator"), "json"),
-            ]),
-            new ToolGroup("RAG", "search", "terminal.ansiBrightGreen", [
-                this.createCommandButton("All RAG tools", c("ragHub"), "layout"),
-                this.createCommandButton("Chunking Tester", c("chunkingTester"), "list-flat"),
-                this.createCommandButton("RAG Pipeline Generator", c("ragPipeline"), "rocket"),
-                this.createCommandButton("Retrieval Evaluation", c("ragEvalScores"), "checklist"),
-            ]),
-            new ToolGroup("Data", "database", "terminal.ansiBrightGreen", [
-                this.createCommandButton("All data tools", c("bigDataHub"), "layout"),
-                this.createCommandButton("Data Converter", c("dataConverter"), "arrow-swap"),
-                this.createCommandButton("JSON to Types", c("jsonToTypes"), "symbol-class"),
-                this.createCommandButton("SQL Formatter & Linter", c("sparkSqlFormatter"), "database"),
-                this.createCommandButton("Mock Data Generator", c("mockDataGenerator"), "sparkle"),
-            ]),
-            new ToolGroup("DevOps", "server-environment", "terminal.ansiBrightBlue", [
-                this.createCommandButton("All DevOps tools", c("devopsGenerator"), "layout"),
-                this.createCommandButton("Dockerfile", c("dockerfileHelper"), "package"),
-                this.createCommandButton("Docker Compose", c("composeHelper"), "layers"),
-                this.createCommandButton("Kubernetes & Helm", c("kubernetesHelper"), "server"),
-                this.createCommandButton("CI Pipeline", c("ciPipelineGenerator"), "github-action"),
-                this.createCommandButton(".env Checker", c("envChecker"), "key"),
-                this.createCommandButton("Log Analyzer", c("observabilityAnalyze"), "pulse"),
-            ]),
-            new ToolGroup("Security", "shield", "terminal.ansiBrightRed", [
-                this.createCommandButton("Security Hub", c("securityHub"), "shield"),
-                this.createCommandButton("Endpoint Security Scan", c("endpointSecurityScan"), "radio-tower"),
-                this.createCommandButton("Workspace Audit", c("securityAudit"), "search"),
-                this.createCommandButton("Cloud & Container Audit", c("cloudSecurityAudit"), "cloud"),
-                this.createCommandButton("Dependency & Config Check", c("dependencyAudit"), "package"),
-            ]),
-        ];
-    }
-    createCommandButton(label, command, iconId, color, description) {
-        const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-        item.command = { command, title: label };
-        item.iconPath = color ? new vscode.ThemeIcon(iconId, color) : new vscode.ThemeIcon(iconId);
-        item.description = description;
-        return item;
-    }
-}
-class ToolGroup extends vscode.TreeItem {
-    constructor(groupName, iconId, colorId, children) {
-        super(groupName, vscode.TreeItemCollapsibleState.Collapsed);
-        this.groupName = groupName;
-        this.children = children;
-        this.contextValue = "devsnipToolGroup";
-        this.iconPath = new vscode.ThemeIcon(iconId, new vscode.ThemeColor(colorId));
-    }
 }
 async function deactivate() {
     // Panels opened through the shared registry are not in context.subscriptions.
