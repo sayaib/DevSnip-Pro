@@ -9,6 +9,7 @@ import { registerDependencyManagerCommand } from "./commands/dependencyManager";
 import { registerHubCommands } from "./commands/hubCommands";
 import { registerToolkitCommands } from "./toolkits/runner";
 import { registerSecurityToolsCommands } from "./commands/securityTools";
+import { registerDatabaseClientCommand } from "./database/command";
 import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance } from "./commands/milestoneTracker";
 import { registerTrackedCommand, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
 import { initAnalytics, shutdownAnalytics, snapshotInstall, track, trackCommand } from "./analytics";
@@ -75,6 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
     ["tool hubs", () => registerHubCommands(context)],
     ["toolkit tools", () => registerToolkitCommands(context)],
     ["security tools", () => registerSecurityToolsCommands(context)],
+    ["database client", () => registerDatabaseClientCommand(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
     ["tool search", () => registerUniversalToolSearch(context)],
   ];

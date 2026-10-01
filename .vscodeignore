@@ -32,3 +32,21 @@ node_modules/@vscode/codicons/**
 !node_modules/@vscode/codicons/LICENSE*
 !node_modules/@vscode/codicons/dist/codicon.css
 !node_modules/@vscode/codicons/dist/codicon.ttf
+
+# Database Client drivers: ship only what Node loads at runtime.
+node_modules/**/*.map
+node_modules/**/*.d.ts
+node_modules/**/*.d.mts
+node_modules/**/*.d.cts
+node_modules/@types/**
+node_modules/**/dist/browser/**
+node_modules/**/dist/react-native/**
+node_modules/@azure/msal-browser/**
+node_modules/mongodb/src/**
+node_modules/bson/src/**
+# sql.js: only the Node WebAssembly build is loaded.
+node_modules/sql.js/**
+!node_modules/sql.js/package.json
+!node_modules/sql.js/LICENSE
+!node_modules/sql.js/dist/sql-wasm.js
+!node_modules/sql.js/dist/sql-wasm.wasm

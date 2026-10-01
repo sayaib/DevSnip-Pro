@@ -94,8 +94,9 @@ exports.NAV = [
     },
     {
         id: "database", title: "Database", emoji: "🗄️", codicon: "database", color: "terminal.ansiBrightGreen",
-        description: "SQL formatting and queries, connection strings for every database, and SQL to MongoDB.",
+        description: "Connect to and edit your databases, format SQL, build queries and connection strings, and translate SQL to MongoDB.",
         entries: [
+            e("databaseClient", "Database Client", "database", "Connect with a connection string to browse and edit Postgres, MySQL, SQL Server, SQLite, MongoDB or Redis.", { hubIcon: "database", keywords: ["database", "sql", "postgres", "mysql", "mongodb", "redis", "sqlite", "sql server", "crud", "table", "query", "db client"] }),
             e("sparkSqlFormatter", "SQL Formatter & Linter", "database", "Format SQL for Postgres, MySQL, SQL Server, Spark and Trino, and flag risky patterns.", { tool: "data.sql" }),
             e("sqlQueryHelper", "SQL Query Helper", "list-ordered", "Parameterised SELECT, INSERT, UPDATE, UPSERT, DELETE and pagination queries.", { tool: "data.sql-helper" }),
             e("connectionString", "Database Connection Strings", "plug", "Build or fix Postgres, MySQL, MongoDB and Redis URLs with driver setup.", { tool: "web.db-url" }),

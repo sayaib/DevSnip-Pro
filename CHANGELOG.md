@@ -1,5 +1,60 @@
 # Development Changelog of DevSnip Pro
 
+## 11.71.1 - Database Client: connect, browse and edit your databases
+
+A lightweight database client inside DevSnip Pro. Paste a connection string for PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB or Redis; it is detected and checked, and you can browse the database's structure and read, insert, edit and delete its data from one panel. Open it from **Database → Database Client** in the sidebar, or run **DevSnip Pro: Database Client**.
+
+### Added
+
+- **Connections:**
+  - Save, edit, test, connect, reconnect and remove connections, each with a colour.
+  - Live detection as you type: the database type, host, database, user, whether a password and TLS are set, and warnings such as TLS being off for a remote host.
+  - A status indicator per connection (connecting, connected, failed), with the server version, and **Reconnect** when a connection drops.
+- **Explorer:** databases, schemas, tables, views, collections and Redis databases with row, document and key counts, filterable by name. The database named in the connection string opens automatically.
+- **Data grid:**
+  - Pagination with page sizes up to 500, sorting by any column, and search across all text-like columns.
+  - Filter conditions, plus MongoDB filter documents and Redis key patterns and type filters.
+  - Typed column headers, NULL, JSON, binary and date values shown distinctly, and right-click actions: copy a value, copy a row as JSON, filter by a value, duplicate a row.
+  - Copy a page or the selection as JSON, CSV or INSERT statements, or open it in an editor.
+- **Editing:**
+  - **Insert, edit and delete** rows, documents and keys. The row editor knows each column's type, required fields, NULL and DEFAULT, and only sends the fields you changed.
+  - The MongoDB document editor accepts Extended JSON and shell helpers such as `ObjectId()`, `ISODate()` and `NumberLong()`.
+  - The Redis key editor handles strings, hashes, lists, sets and sorted sets, and keeps or changes a key's TTL.
+- **Structure view:** columns with types, primary keys, auto-increment, defaults and nullability. For MongoDB, the fields found in a sample of documents and how often each appears.
+- **Query console:**
+  - SQL for the relational databases, mongosh-style commands for MongoDB (`find`, `aggregate`, `insertOne`, `updateMany`, `deleteOne`, `countDocuments`, `distinct`, indexes and more), and Redis commands, one per line.
+  - <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection, or everything.
+  - Per-connection query history, and a database and schema picker.
+- **Layout:** tabs for tables and queries that survive switching editors, a resizable sidebar and editor, keyboard navigation, and a layout that adapts to narrow panels.
+
+### Safety
+
+- Connection strings are stored in the OS keychain through VS Code SecretStorage, never in settings, state or logs.
+- The webview never receives a password: an edited connection shows `********`, and saving it back keeps the stored one.
+- Passwords are removed from every error message, and driver errors are turned into plain explanations with a hint, for example "connection refused", "authentication failed", "duplicate key" or "foreign key".
+- Destructive actions need a native confirmation:
+  - deleting rows, documents or keys;
+  - destructive console statements: `DROP`, `TRUNCATE`, `DELETE`, `UPDATE` or `updateMany({})` without a filter, `deleteMany`, `drop()`, `FLUSHDB` and similar.
+- Dropping or emptying a table, a collection or a Redis database also asks you to type its name.
+- **Read-only connections** refuse every write, including from the console. On PostgreSQL and MySQL the database session is read-only as well, so a write hidden in a function call still fails.
+- Every request from the panel is validated again on the extension side:
+  - table and column names must exist in the live schema before they are quoted into SQL;
+  - every value is a bound parameter;
+  - row keys are always recomputed from the table's metadata.
+- Rows are identified by primary key, or by `rowid` (SQLite) or `ctid` (PostgreSQL). Views, and MySQL and SQL Server tables without a primary key, are read-only rather than risk changing the wrong row.
+- Connections and queries time out (10 s to connect, 30 s per query); console results are capped at 1,000 rows, and PostgreSQL streams them through a cursor.
+- The console refuses Redis commands that block or change the connection itself (`SUBSCRIBE`, `MONITOR`, `SELECT`, `BLPOP` …), and the MongoDB console parses commands as data and never evaluates them.
+
+### Under the hood
+
+- Drivers: `pg`, `mysql2`, `mssql`, `mongodb`, `ioredis`. SQLite uses Node's built-in `node:sqlite` when VS Code provides it, and otherwise `sql.js`, which re-reads the file when it changes and writes back atomically.
+- The drivers load on first use, so activation stays as fast as before.
+- The package ships only what Node loads at runtime: no source maps, type declarations or browser builds.
+- Tests:
+  - unit tests for connection-string parsing and masking, SQL generation for every dialect, statement classification, the mongosh parser, Redis command safety and the service's safety rules;
+  - SQLite end-to-end tests on both engines;
+  - opt-in live tests that run full CRUD against real PostgreSQL, MySQL, SQL Server, MongoDB and Redis servers (`DEVSNIP_TEST_*_URL`).
+
 ## 11.70.1 - Web and Mobile toolkits, and every tool in one clear place
 
 This release adds 32 tools for full-stack web and mobile development. It also reorganises all 109 tools into 13 focused sections, and merges the tools that overlapped. Every existing command id still works, so keybindings, favorites and usage history carry over. Everything runs locally; nothing you paste (tokens, keys, certificates, logs) leaves VS Code.

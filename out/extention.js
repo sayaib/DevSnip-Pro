@@ -35,6 +35,7 @@ const dependencyManager_1 = require("./commands/dependencyManager");
 const hubCommands_1 = require("./commands/hubCommands");
 const runner_1 = require("./toolkits/runner");
 const securityTools_1 = require("./commands/securityTools");
+const command_1 = require("./database/command");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
 const command_registry_1 = require("./utils/command-registry");
 const analytics_1 = require("./analytics");
@@ -94,6 +95,7 @@ function activate(context) {
         ["tool hubs", () => (0, hubCommands_1.registerHubCommands)(context)],
         ["toolkit tools", () => (0, runner_1.registerToolkitCommands)(context)],
         ["security tools", () => (0, securityTools_1.registerSecurityToolsCommands)(context)],
+        ["database client", () => (0, command_1.registerDatabaseClientCommand)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],
         ["tool search", () => registerUniversalToolSearch(context)],
     ];

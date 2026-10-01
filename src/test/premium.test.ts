@@ -151,4 +151,15 @@ suite("Points-based premium system in the extension host", () => {
     assert.ok(isOpen(), "the API client panel did not open");
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
   });
+
+  test("the Database Client opens", async () => {
+    await vscode.commands.executeCommand("sayaib.hue-console.databaseClient");
+    const isOpen = () =>
+      vscode.window.tabGroups.all.flatMap(group => group.tabs).some(tab => tab.label === "Database Client");
+    for (let attempt = 0; attempt < 40 && !isOpen(); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.ok(isOpen(), "the Database Client panel did not open");
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+  });
 });

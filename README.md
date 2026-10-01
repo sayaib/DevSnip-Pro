@@ -1,6 +1,6 @@
 # DevSnip Pro
 
-A developer toolkit for VS Code: a full REST and AI API client, a security scanner, workspace cleanup, snippets, and 100+ focused tools for full-stack web and mobile development, AI and LLM work, RAG, data and DevOps. Everything runs locally unless a tool says otherwise; no account needed.
+A developer toolkit for VS Code: a full REST and AI API client, a database client, a security scanner, workspace cleanup, snippets, and 100+ focused tools for full-stack web and mobile development, AI and LLM work, RAG, data and DevOps. Everything runs locally unless a tool says otherwise; no account needed.
 
 <p align="center">
   <img src="Devsnip.jpg" alt="DevSnip Pro" />
@@ -29,6 +29,27 @@ The REST API Client handles the whole request cycle: pick a method, enter a URL,
 - Import and export cURL commands, and generate client code in JavaScript, Python, Go, Java or C#
 - Response viewer with formatting, search, copy and save
 - Automated assertions, request chaining and batch performance testing
+
+### Work with databases
+
+The **Database Client** (`DevSnip Pro: Database Client`, or **Database** in the sidebar) is a lightweight database client inside VS Code. Paste a connection string, and it detects the database, checks it, and shows its databases, schemas, tables, collections or keys.
+
+| Database | Connection string | What you can do |
+| --- | --- | --- |
+| PostgreSQL | `postgresql://user:pass@host:5432/db` | Browse databases, schemas, tables and views; full CRUD; SQL console |
+| MySQL / MariaDB | `mysql://user:pass@host:3306/db` | Browse databases, tables and views; full CRUD; SQL console |
+| SQL Server | `Server=host,1433;Database=db;User Id=…;Password=…` or `sqlserver://…` | Browse databases, schemas, tables and views; full CRUD; T-SQL console |
+| SQLite | `sqlite:///path/to/app.db` (or **Browse…**) | Browse tables and views; full CRUD; SQL console |
+| MongoDB | `mongodb://…` or `mongodb+srv://…` | Browse databases and collections; insert, edit and delete documents; mongosh-style console |
+| Redis | `redis://…` or `rediss://…` | Browse keys by pattern and type; create and edit strings, hashes, lists, sets and sorted sets with TTLs; command console |
+
+- **Data grid:** pagination, sorting by column, search across columns, and filter conditions (`=`, `≠`, `>`, `contains`, `in list`, `is null` and more). MongoDB also takes a filter document such as `{ age: { $gt: 21 } }`; Redis takes a key pattern such as `user:*`.
+- **Editing:** a row editor that knows each column's type, NULL and DEFAULT; a document editor that accepts Extended JSON and shell helpers such as `ObjectId()` and `ISODate()`; a key editor per Redis type. Right-click a cell to copy it, filter by it, or duplicate the row.
+- **Structure:** columns with types, keys, defaults and nullability, or the fields a collection's documents use and how often.
+- **Query console:** run SQL, mongosh-style commands (`db.users.find({ … }).sort({ … }).limit(20)`) or Redis commands. <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection, or everything. Results can be copied as JSON or CSV or opened in an editor, and recent queries are kept per connection.
+- **Saved connections:** save, edit, test, connect, reconnect and remove connections, each with a colour and a live status indicator.
+
+**Safety.** Connection strings are stored in your operating system's keychain through VS Code's SecretStorage. The password is never shown again (it appears as `********` when you edit a connection), and it is removed from every error message. Deleting rows, emptying or dropping a table and destructive console statements (`DROP`, `TRUNCATE`, `DELETE`, `UPDATE` without `WHERE`, `deleteMany`, `FLUSHDB` …) always ask first; dropping or emptying asks you to type the name. A connection marked **read-only** refuses every write, and on PostgreSQL and MySQL the database session itself is read-only too. Rows are identified by their primary key (or by SQLite's `rowid` and PostgreSQL's `ctid`); tables without one, and views, are shown read-only rather than risking the wrong row.
 
 ### Work with AI and LLM APIs
 
@@ -94,7 +115,7 @@ Every toolkit tool opens in its own panel. Panels have presets, live results whe
 | **Code & Productivity** | Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration |
 | **Text & Formatters** | JSON / YAML / XML Formatter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools |
 | **Encoders & Converters** | Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types (TypeScript, Zod, Dart, Kotlin, Swift, Pydantic, Java, Go, JSON Schema), Data Converter |
-| **Database** | SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB |
+| **Database** | Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB |
 | **Testing & Debugging** | Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit |
 | **Git & Version Control** | Git Command Recipes, .gitignore Generator, Semver & App Versions |
 | **DevOps & Cloud** | Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter |
@@ -178,7 +199,7 @@ None are set by default, so nothing conflicts with your existing bindings. To ad
 - **A trusted workspace** for anything that reads your files or runs a command. DevSnip Pro does not run in Restricted Mode.
 - **An open folder** for audits, cleanup tools, the README manager and the generators. They tell you to open one rather than failing quietly.
 - **Node.js and npm** only for the OpenCode integration. Everything else runs without them.
-- **Network access** only for the API clients and the OpenCode install. Every other tool works offline.
+- **Network access** only for the API clients, the Database Client (to reach your database) and the OpenCode install. Every other tool works offline.
 
 Works on Windows, macOS and Linux. Desktop VS Code only — several tools use Node APIs, so it does not run in browser-only environments such as vscode.dev. In a remote or virtual workspace everything works except the OpenCode hub, which needs a local process.
 
@@ -200,11 +221,15 @@ Works on Windows, macOS and Linux. Desktop VS Code only — several tools use No
 
 **Saving a snippet reports it cannot write.** Snippets live in the extension folder, which must be writable. This can fail if the extension was installed somewhere read-only.
 
+**The Database Client cannot connect.** The message says why: connection refused (is the server running on that port?), host not found, authentication failed, or a TLS problem. For a local server with a self-signed certificate add `sslmode=no-verify` (PostgreSQL), `TrustServerCertificate=true` (SQL Server) or `tlsAllowInvalidCertificates=true` (MongoDB). SQL Server needs a SQL login; Windows authentication is not supported.
+
+**A table cannot be edited in the Database Client.** Rows are changed by primary key. Views, and MySQL or SQL Server tables without a primary key, are read-only; use the query console for those.
+
 **Points look wrong.** Progress is stored per machine. Corrupted data is repaired automatically when read, and **Reset Data** in the Milestone Tracker clears it.
 
 ## Privacy
 
-Everything runs locally. DevSnip Pro has no backend and no account, and its only telemetry is the anonymous, opt-out usage analytics described above, which never include code, inputs or outputs. Requests go only to the URLs you enter, and API keys you type are used for that request and are not written to history or to disk. Credential-looking values in a URL are redacted before a request is stored in history. Of the toolbox tools, only the LLM API Tester uses the network (marked "Uses network"); a key typed there is used for that request only and never saved.
+Everything runs locally. DevSnip Pro has no backend and no account, and its only telemetry is the anonymous, opt-out usage analytics described above, which never include code, inputs or outputs. Requests go only to the URLs you enter, and API keys you type are used for that request and are not written to history or to disk. Credential-looking values in a URL are redacted before a request is stored in history. Database connection strings are stored in the OS keychain (VS Code SecretStorage), never in settings or logs, and the Database Client only talks to the database you connect to. Of the toolbox tools, only the LLM API Tester uses the network (marked "Uses network"); a key typed there is used for that request only and never saved.
 
 ## Development
 
@@ -215,6 +240,17 @@ npm run lint         # ESLint over src/
 npm run test:unit    # fast unit suite, plain Node, no VS Code needed
 npm test             # compile, lint, then the VS Code integration suite
 npm run package      # produce the .vsix
+```
+
+The Database Client also has end-to-end tests that run against real servers. They are skipped unless you point them at test databases (they create and remove their own `devsnip_test_*` tables, collections and keys):
+
+```bash
+DEVSNIP_TEST_POSTGRES_URL=postgresql://user:pass@localhost:5432/app \
+DEVSNIP_TEST_MYSQL_URL=mysql://root:pass@127.0.0.1:3306/app \
+DEVSNIP_TEST_SQLSERVER_URL="Server=localhost,1433;Database=app;User Id=sa;Password=...;Encrypt=false" \
+DEVSNIP_TEST_MONGODB_URL=mongodb://127.0.0.1:27017/app \
+DEVSNIP_TEST_REDIS_URL=redis://localhost:6379/15 \
+npm run test:unit
 ```
 
 ## Links and support

@@ -43,6 +43,8 @@ async function main(): Promise<void> {
   require("./toolkit.unit");
   require("./web-mobile.unit");
   require("./sidebar.unit");
+  require("./database.unit");
+  require("./database-live.unit");
   /* eslint-enable @typescript-eslint/no-var-requires */
 
   let passed = 0;
