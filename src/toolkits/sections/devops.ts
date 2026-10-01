@@ -1,19 +1,11 @@
-import { SectionInfo, ToolDefinition, ToolInputError, ToolResult, Values, bool, num, str } from "../types";
-import { DockerOptions, Stack, detectStack, dockerignore, generateDockerfile, lintDockerfile } from "../engines/devops-docker";
+import { ToolSpec, ToolInputError, ToolResult, Values, bool, num, str } from "../types";
+import { DockerOptions, Stack, detectStack, dockerRunToCompose, dockerignore, generateDockerfile, lintDockerfile } from "../engines/devops-docker";
 import { ComposeService, K8sOptions, generateCompose, generateHelmChart, generateK8s, validateCompose, validateK8s } from "../engines/devops-k8s";
 import { CiOptions, DeployTarget, deployWorkflow, githubActionsCi, gitlabCi, jenkinsfile, securityWorkflow } from "../engines/devops-ci";
 import { HealthFramework, TerraformTemplate, generateHealth, generateNginx, generatePm2, generateTerraform } from "../engines/devops-config";
-import { Level, WELL_KNOWN_PORTS, analyzeLogs, checkEnv, cidrContains, cidrInfo, cidrOverlap, convertStructured, envExample, envSchema, formatLogs, parsePorts, parseUrlParts, scanEnvUsage, splitCidr, validateStructured } from "../engines/devops-utils";
+import { Level, WELL_KNOWN_PORTS, analyzeLogs, checkEnv, cidrContains, cidrInfo, cidrOverlap, envExample, envSchema, formatLogs, parsePorts, scanEnvUsage, splitCidr } from "../engines/devops-utils";
 import { modelServingFiles, observabilityFiles } from "../engines/devops-mlops";
 import { code, counts, f, opts, severityMessages, table } from "./helpers";
-
-export const DEVOPS_SECTION: SectionInfo = {
-  id: "devops",
-  title: "DevOps",
-  icon: "container",
-  description: "Containers, Kubernetes, CI/CD, cloud deploys, server config, environment files, networking and logs.",
-  categories: ["Containers & Kubernetes", "CI/CD & cloud", "Configuration", "Troubleshoot", "Observability & MLOps"]
-};
 
 const STACKS = opts(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["java-maven", "Java (Maven)"], ["java-gradle", "Java (Gradle)"], ["static", "Static site (nginx)"]);
 
@@ -21,11 +13,9 @@ const STACKS = opts(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["j
 // Containers & Kubernetes
 // ---------------------------------------------------------------------------
 
-const dockerfile: ToolDefinition = {
+const dockerfile: ToolSpec = {
   id: "devops.dockerfile",
   command: "dockerfileHelper",
-  section: "devops",
-  category: "Containers & Kubernetes",
   title: "Dockerfile Generator & Linter",
   summary: "Generate a small, secure multi-stage Dockerfile for your stack (detected from the workspace), or check an existing Dockerfile for common mistakes.",
   guide: "Generated images build dependencies in a separate stage, run as a non-root user, use exec-form CMD so signals reach your app, and add a health check when you give a path. The linter follows hadolint's most useful rules plus secret and cache checks.",
@@ -88,11 +78,9 @@ const dockerfile: ToolDefinition = {
 const COMPOSE_SERVICES: ComposeService[] = ["postgres", "mysql", "redis", "mongo", "rabbitmq", "nginx", "minio", "mailpit"];
 const SERVICE_LABELS: Record<ComposeService, string> = { postgres: "PostgreSQL", mysql: "MySQL", redis: "Redis", mongo: "MongoDB", rabbitmq: "RabbitMQ", nginx: "Nginx (reverse proxy)", minio: "MinIO (S3 storage)", mailpit: "Mailpit (test email)" };
 
-const compose: ToolDefinition = {
+const compose: ToolSpec = {
   id: "devops.compose",
   command: "composeHelper",
-  section: "devops",
-  category: "Containers & Kubernetes",
   title: "Docker Compose Generator & Validator",
   summary: "A local stack for your app with databases, caches, queues and mail - health checks, volumes and secrets from .env included - or validate an existing compose file.",
   guide: "Data stores are bound to 127.0.0.1 so they are not exposed on your network, and the app waits for them to be healthy before it starts. Secrets are read from .env (the generated .env.example lists them).",
@@ -126,11 +114,9 @@ const compose: ToolDefinition = {
   }
 };
 
-const k8s: ToolDefinition = {
+const k8s: ToolSpec = {
   id: "devops.k8s",
   command: "kubernetesHelper",
-  section: "devops",
-  category: "Containers & Kubernetes",
   title: "Kubernetes & Helm Generator / Validator",
   summary: "Production-ready Deployment, Service, Ingress, HPA and PodDisruptionBudget - or a Helm chart - from a few settings; or validate existing manifests.",
   guide: "Generated workloads have resource requests and limits, startup/liveness/readiness probes, a non-root read-only security context and zero-downtime rolling updates. The validator catches removed API versions, selector mismatches, missing probes and limits, and literal secrets.",
@@ -195,11 +181,9 @@ const k8s: ToolDefinition = {
 // CI/CD & cloud
 // ---------------------------------------------------------------------------
 
-const ci: ToolDefinition = {
+const ci: ToolSpec = {
   id: "devops.ci",
   command: "ciPipelineGenerator",
-  section: "devops",
-  category: "CI/CD & cloud",
   title: "CI Pipeline Generator",
   summary: "Install, lint, test and build pipelines for GitHub Actions, GitLab CI or Jenkins with caching, version matrices and least-privilege permissions; plus a security scanning workflow.",
   keywords: ["ci", "github actions", "workflow", "gitlab ci", "jenkinsfile", "pipeline", "codeql", "matrix", "continuous integration"],
@@ -237,11 +221,9 @@ const ci: ToolDefinition = {
   }
 };
 
-const deploy: ToolDefinition = {
+const deploy: ToolSpec = {
   id: "devops.deploy",
   command: "cloudDeployGenerator",
-  section: "devops",
-  category: "CI/CD & cloud",
   title: "Cloud Deploy Workflow",
   summary: "GitHub Actions workflows that publish images (GHCR, Docker Hub) or deploy to AWS ECS Fargate, S3 + CloudFront, Azure Container Apps or Azure Web App - using OIDC, not stored cloud keys.",
   guide: "Each workflow comes with the one-time setup steps: which roles, secrets and variables to create. OIDC lets GitHub assume a cloud role per run, so no long-lived access keys are stored in the repository.",
@@ -273,11 +255,9 @@ const deploy: ToolDefinition = {
 // Configuration
 // ---------------------------------------------------------------------------
 
-const env: ToolDefinition = {
+const env: ToolSpec = {
   id: "devops.env",
   command: "envChecker",
-  section: "devops",
-  category: "Configuration",
   title: ".env Checker & Generator",
   summary: "Check a .env file for syntax errors, duplicates, placeholders and invalid ports/URLs; compare it with .env.example; find variables your code reads but never declares; and generate .env.example and typed config.",
   guide: "\"Scan workspace\" reads .env, .env.example and your source code (process.env, os.environ, os.Getenv, System.getenv, import.meta.env…). Values never leave your machine, and secret values are blanked in the generated .env.example.",
@@ -330,39 +310,9 @@ const env: ToolDefinition = {
   }
 };
 
-const yamlTool: ToolDefinition = {
-  id: "devops.yaml",
-  command: "yamlJsonTool",
-  section: "devops",
-  category: "Configuration",
-  title: "YAML / JSON Validator & Converter",
-  summary: "Validate YAML or JSON with line numbers, catch YAML's surprises (no → false, 3.10 → 3.1, 22:22 → 1342, tabs, duplicate keys) and convert between the two.",
-  keywords: ["yaml", "yml", "json", "validate", "lint", "convert yaml to json", "json to yaml", "duplicate keys"],
-  icon: "checklist",
-  live: true,
-  fields: [
-    f.code("input", "YAML or JSON", "yaml", { rows: 14, required: true, fromEditor: true, default: "services:\n  web:\n    image: nginx:1.27\n    ports:\n      - 22:22\n    environment:\n      DEBUG: no\n      PYTHON_VERSION: 3.10\n    restart: always\n" }),
-    f.select("convert", "Convert to", opts(["none", "Don't convert"], ["json", "JSON"], ["yaml", "YAML"])),
-    f.select("indent", "Indent", opts(["2", "2 spaces"], ["4", "4 spaces"]))
-  ],
-  run(values) {
-    const input = str(values, "input");
-    const r = validateStructured(input, "auto");
-    const target = str(values, "convert", "none");
-    const hasErrors = r.issues.some(i => i.severity === "error");
-    return {
-      stats: [{ label: "Format", value: r.format.toUpperCase() }, ...(r.format === "yaml" ? [{ label: "Documents", value: String(r.documents) }] : []), ...(counts(r.issues) ?? [])],
-      messages: severityMessages(r.issues, `Valid ${r.format.toUpperCase()}.`),
-      outputs: target !== "none" && !hasErrors ? [code(target.toUpperCase(), target, convertStructured(input, target as "json" | "yaml", Number(str(values, "indent", "2"))))] : []
-    };
-  }
-};
-
-const nginx: ToolDefinition = {
+const nginx: ToolSpec = {
   id: "devops.nginx",
   command: "nginxConfig",
-  section: "devops",
-  category: "Configuration",
   title: "Nginx Config Generator",
   summary: "Reverse proxy, load balancer, SPA or static site configs with HTTPS redirect, HTTP/2, gzip, security headers, rate limiting and WebSocket support.",
   keywords: ["nginx", "reverse proxy", "load balancer", "spa", "https", "ssl", "letsencrypt", "websocket", "server block"],
@@ -389,11 +339,9 @@ const nginx: ToolDefinition = {
   }
 };
 
-const pm2: ToolDefinition = {
+const pm2: ToolSpec = {
   id: "devops.pm2",
   command: "pm2Config",
-  section: "devops",
-  category: "Configuration",
   title: "PM2 Ecosystem Generator",
   summary: "ecosystem.config.js for Node (cluster mode, zero-downtime reload) and Python/other processes, with memory limits, restarts, cron restarts and an optional deploy section.",
   keywords: ["pm2", "ecosystem.config.js", "process manager", "node", "cluster", "zero downtime", "vps"],
@@ -420,11 +368,9 @@ const pm2: ToolDefinition = {
   }
 };
 
-const terraform: ToolDefinition = {
+const terraform: ToolSpec = {
   id: "devops.terraform",
   command: "terraformGenerator",
-  section: "devops",
-  category: "Configuration",
   title: "Terraform Starter",
   summary: "A clean Terraform module (versions, variables with validation, main, outputs, tfvars, .gitignore) for common resources, with optional remote state and locking.",
   keywords: ["terraform", "iac", "infrastructure as code", "aws", "azure", "s3", "ec2", "ecr", "remote state", "opentofu"],
@@ -449,27 +395,23 @@ const terraform: ToolDefinition = {
 // Troubleshoot
 // ---------------------------------------------------------------------------
 
-const network: ToolDefinition = {
+const network: ToolSpec = {
   id: "devops.network",
   command: "networkTools",
-  section: "devops",
-  category: "Troubleshoot",
   title: "Port & Network Toolkit",
-  summary: "Check which local ports are free, look up what a port is usually used for, calculate CIDR ranges and subnets, check overlaps, and break down URLs and connection strings.",
-  keywords: ["port", "port in use", "EADDRINUSE", "cidr", "subnet", "ip range", "vpc", "url parser", "connection string", "localhost"],
+  summary: "Check which local ports are free, look up what a port is usually used for, and calculate CIDR ranges, subnets and overlaps.",
+  keywords: ["port", "port in use", "EADDRINUSE", "cidr", "subnet", "ip range", "vpc", "localhost"],
   icon: "network",
   fields: [
-    f.select("mode", "Tool", opts(["ports", "Are these ports free?"], ["cidr", "CIDR / subnet calculator"], ["url", "URL / connection string breakdown"], ["reference", "Common ports reference"])),
+    f.select("mode", "Tool", opts(["ports", "Are these ports free?"], ["cidr", "CIDR / subnet calculator"], ["reference", "Common ports reference"])),
     f.text("ports", "Ports", { default: "3000, 5432, 6379, 8000-8003", showIf: { field: "mode", equals: ["ports"] } }),
     f.text("cidr", "CIDR", { default: "10.0.0.0/16", showIf: { field: "mode", equals: ["cidr"] } }),
     f.num("subnetPrefix", "Split into /", 20, { min: 0, max: 32, showIf: { field: "mode", equals: ["cidr"] } }),
-    f.text("check", "Contains IP or overlaps CIDR", { width: "narrow", placeholder: "10.0.3.7 or 10.0.128.0/17", showIf: { field: "mode", equals: ["cidr"] } }),
-    f.text("url", "URL", { default: "postgres://app:secret@db.internal:5432/orders?sslmode=require", showIf: { field: "mode", equals: ["url"] } })
+    f.text("check", "Contains IP or overlaps CIDR", { width: "narrow", placeholder: "10.0.3.7 or 10.0.128.0/17", showIf: { field: "mode", equals: ["cidr"] } })
   ],
   async run(values, ctx) {
     const mode = str(values, "mode", "ports");
     if (mode === "reference") return { outputs: [table("Common ports", ["Port", "Usually"], Object.entries(WELL_KNOWN_PORTS).map(([p, n]) => [Number(p), n]))] };
-    if (mode === "url") return { outputs: [table("Parts", ["Part", "Value"], parseUrlParts(str(values, "url")))] };
     if (mode === "cidr") {
       const cidr = str(values, "cidr");
       const info = cidrInfo(cidr);
@@ -502,11 +444,9 @@ const network: ToolDefinition = {
   }
 };
 
-const logs: ToolDefinition = {
+const logs: ToolSpec = {
   id: "devops.logs",
   command: "observabilityAnalyze",
-  section: "devops",
-  category: "Troubleshoot",
   title: "Log Analyzer & Formatter",
   summary: "Make sense of application, JSON (pino, winston, bunyan, structlog) or access logs: level counts, time range, top error patterns, status codes, slow requests - or pretty-print and filter them.",
   guide: "Open a log file and use the editor contents, or paste lines. Similar error messages are grouped by replacing ids, numbers and quoted values, so the top patterns show what actually breaks.",
@@ -547,11 +487,9 @@ const logs: ToolDefinition = {
   }
 };
 
-const health: ToolDefinition = {
+const health: ToolSpec = {
   id: "devops.health",
   command: "healthCheckGenerator",
-  section: "devops",
-  category: "Troubleshoot",
   title: "Health Check Generator",
   summary: "Liveness and readiness endpoints for Express, Fastify, FastAPI, Flask, Spring Boot or Go - with dependency checks and timeouts - plus matching Docker, Compose and Kubernetes probes.",
   guide: "Liveness says the process is alive and must not check dependencies, or one slow database restarts every pod. Readiness checks dependencies and takes the instance out of the load balancer while they are down.",
@@ -577,11 +515,9 @@ const health: ToolDefinition = {
 // Observability & MLOps
 // ---------------------------------------------------------------------------
 
-const observability: ToolDefinition = {
+const observability: ToolSpec = {
   id: "devops.observability",
   command: "observabilityStarter",
-  section: "devops",
-  category: "Observability & MLOps",
   title: "Observability Starter",
   summary: "OpenTelemetry tracing, structured JSON logging with trace ids and redaction, a log schema, and a local Jaeger to see traces - for Node.js or Python.",
   keywords: ["opentelemetry", "otel", "tracing", "structured logging", "pino", "jaeger", "observability"],
@@ -593,11 +529,9 @@ const observability: ToolDefinition = {
   }
 };
 
-const serving: ToolDefinition = {
+const serving: ToolSpec = {
   id: "devops.serving",
   command: "mlopsGenerator",
-  section: "devops",
-  category: "Observability & MLOps",
   title: "Model Serving Starter",
   summary: "Serve an ML model behind FastAPI with health/readiness, a versioned predict schema and structured logs - Dockerfile (CPU or CUDA), Kubernetes with GPU scheduling, CI with a smoke test.",
   keywords: ["mlops", "model serving", "inference api", "fastapi", "gpu", "cuda", "kubernetes gpu"],
@@ -617,10 +551,29 @@ const serving: ToolDefinition = {
   }
 };
 
-export const DEVOPS_TOOLS: ToolDefinition[] = [
-  dockerfile, compose, k8s,
+const dockerRun: ToolSpec = {
+  id: "devops.docker-run",
+  command: "dockerRunToCompose",
+  title: "docker run → Compose",
+  summary: "Convert one or more docker run commands (from READMEs and docs) into a compose.yaml: ports, env, volumes, networks, restart policy, health checks, resources, GPUs and more.",
+  keywords: ["docker run", "docker compose", "composerize", "compose.yaml", "convert docker run", "docker-compose.yml"],
+  icon: "container",
+  live: true,
+  fields: [f.code("commands", "docker run commands", "shell", { rows: 10, required: true, fromEditor: true, default: "docker run -d --name db -p 5432:5432 \\\n  -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=app \\\n  -v pgdata:/var/lib/postgresql/data \\\n  --restart unless-stopped \\\n  --health-cmd \"pg_isready -U postgres\" --health-interval 10s \\\n  postgres:16-alpine\n\ndocker run -d --name cache -p 6379:6379 redis:7-alpine redis-server --appendonly yes" })],
+  run(values) {
+    const r = dockerRunToCompose(str(values, "commands"));
+    return {
+      stats: [{ label: "Services", value: String(r.services.length) }],
+      messages: [...r.notes.map(t => ({ kind: "warning" as const, text: t })), { kind: "info", text: "Start it with docker compose up -d; services reach each other by service name (e.g. postgres://db:5432)." }],
+      outputs: [code("compose.yaml", "yaml", r.yaml, "compose.yaml")]
+    };
+  }
+};
+
+export const DEVOPS_TOOLS: ToolSpec[] = [
+  dockerfile, dockerRun, compose, k8s,
   ci, deploy,
-  env, yamlTool, nginx, pm2, terraform,
+  env, nginx, pm2, terraform,
   network, logs, health,
   observability, serving
 ];

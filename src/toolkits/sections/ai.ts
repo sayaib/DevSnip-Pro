@@ -1,23 +1,16 @@
-import { SectionInfo, ToolContext, ToolDefinition, ToolInputError, ToolResult, bool, fmtNumber, fmtUsd, num, str } from "../types";
+import { ToolContext, ToolSpec, ToolInputError, ToolResult, bool, fmtNumber, fmtUsd, num, str } from "../types";
 import { CHAT_MODEL_CATALOG, PRICES_AS_OF, chatModelOptions, estimateTokens, findChatModel, formatContext } from "../engines/models";
 import { PROMPT_TEMPLATES, PromptFormat, formatPrompt, lintPrompt, parseVariableValues, promptTokens, renderPrompt, templateVariables } from "../engines/prompts";
 import { LLM_PROVIDER_OPTIONS, LlmProvider, generateLlmConfig } from "../engines/llm-config";
 import { formatResponse, repairJson } from "../engines/llm-output";
 import { ARCHITECTURES, GPUS, PRECISION_BYTES, Workload, estimateSpeed, estimateVram, gpusNeeded, suggestions } from "../engines/vram";
-import { Schedule, classificationMetrics, experimentRecord, modelCard, parseClassCounts, regressionMetrics, scheduleCode, scheduleSeries, splitCode, splitDataset } from "../engines/ml-training";
+import { Schedule, classificationMetrics, modelCard, parseClassCounts, regressionMetrics, scheduleCode, scheduleSeries, splitCode, splitDataset } from "../engines/ml-training";
 import { AI_SNIPPETS } from "../engines/ai-snippets";
 import { ToonDelimiter, encodeToon } from "../engines/toon";
 import { scaffoldAiProject } from "../engines/ai-project";
 import { validateSchema } from "../../services/json-tools";
+import { combineTools } from "./combine";
 import { code, f, opts, pct, table, text } from "./helpers";
-
-export const AI_SECTION: SectionInfo = {
-  id: "ai",
-  title: "AI & ML",
-  icon: "hubot",
-  description: "Prompts, model costs, LLM client setup, output handling, GPU sizing and training helpers.",
-  categories: ["Prompts", "Models & cost", "LLM output", "Embeddings", "Training & evaluation", "Code & projects"]
-};
 
 // ---------------------------------------------------------------------------
 // Prompts
@@ -28,11 +21,9 @@ const PROMPT_STORE = "toolkit.promptTemplates";
 
 const savedPrompts = (ctx: ToolContext): SavedPrompt[] => ctx.storage?.get<SavedPrompt[]>(PROMPT_STORE, []) ?? [];
 
-const promptBuilder: ToolDefinition = {
+const promptBuilder: ToolSpec = {
   id: "ai.prompt-builder",
   command: "promptTemplate",
-  section: "ai",
-  category: "Prompts",
   title: "Prompt Builder",
   summary: "Fill a prompt template, check it for common mistakes and export it as an API payload.",
   guide: "Use {{name}} placeholders in the system or user prompt, or {{name|default}} for a default. Fill them in Variables as name: value lines (a value may span several lines) or as a JSON object. Save your own templates to reuse them from the Presets menu.",
@@ -94,11 +85,9 @@ const promptBuilder: ToolDefinition = {
   }
 };
 
-const toon: ToolDefinition = {
+const toon: ToolSpec = {
   id: "ai.toon",
   command: "jsonToToon",
-  section: "ai",
-  category: "Prompts",
   title: "JSON → TOON for Prompts",
   summary: "Shrink JSON you put in prompts: TOON writes arrays of records as a table with the field names once, often saving 30-60% of tokens with no loss of data.",
   guide: "TOON (Token-Oriented Object Notation) keeps JSON's data model: objects become indented key: value lines, arrays state their length (tags[3]: a,b,c), and lists of uniform objects become tables - users[2]{id,name}: followed by one row per record. Models read it reliably; tell them the format in the prompt (\"Data is in TOON format\"). Deeply nested or irregular data saves less.",
@@ -139,11 +128,9 @@ const toon: ToolDefinition = {
 
 const PROVIDER_FILTER = opts(["all", "All providers"], "OpenAI", "Anthropic", "Google", ["Open weights", "Open weights (self-hosted)"]);
 
-const tokenCost: ToolDefinition = {
+const tokenCost: ToolSpec = {
   id: "ai.token-cost",
   command: "tokenCounter",
-  section: "ai",
-  category: "Models & cost",
   title: "Token & Cost Estimator",
   summary: "Estimate tokens for a text and what a request, a day and a month cost on each model.",
   guide: `Token counts are estimated with a BPE-style heuristic (typically within 10-15% of the real tokenizer for English and code). Prices are list prices per million tokens as of ${PRICES_AS_OF}; batch APIs and prompt caching are usually cheaper.`,
@@ -192,11 +179,9 @@ const tokenCost: ToolDefinition = {
   }
 };
 
-const modelCompare: ToolDefinition = {
+const modelCompare: ToolSpec = {
   id: "ai.model-compare",
   command: "modelComparison",
-  section: "ai",
-  category: "Models & cost",
   title: "Model Comparison",
   summary: "Compare context window, output limit and price across current chat models.",
   keywords: ["compare models", "context window", "gpt", "claude", "gemini", "llama", "pricing"],
@@ -222,11 +207,9 @@ const modelCompare: ToolDefinition = {
   }
 };
 
-const llmConfig: ToolDefinition = {
+const llmConfig: ToolSpec = {
   id: "ai.llm-config",
   command: "llmClientSetup",
-  section: "ai",
-  category: "Models & cost",
   title: "LLM Client Setup",
   summary: "Generate a production-ready client for OpenAI, Anthropic, Gemini, Azure, Ollama or any OpenAI-compatible server.",
   guide: "The generated code reads keys from environment variables, sets a timeout and retries, and optionally streams. Copy the .env block into your .env (never commit it).",
@@ -265,11 +248,9 @@ const llmConfig: ToolDefinition = {
 const TESTER_PROVIDERS = opts(["openai", "OpenAI"], ["anthropic", "Anthropic"], ["gemini", "Google Gemini"], ["azure-openai", "Azure OpenAI"], ["ollama", "Ollama (local)"], ["custom", "OpenAI-compatible"]);
 const KEY_ENV: Record<string, string[]> = { openai: ["OPENAI_API_KEY"], anthropic: ["ANTHROPIC_API_KEY"], gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"], "azure-openai": ["AZURE_OPENAI_API_KEY"], custom: ["LLM_API_KEY", "OPENAI_API_KEY"] };
 
-const llmTester: ToolDefinition = {
+const llmTester: ToolSpec = {
   id: "ai.llm-tester",
   command: "llmApiTester",
-  section: "ai",
-  category: "Models & cost",
   title: "LLM API Tester",
   summary: "Send one chat request to a provider and see the answer, latency, token usage and cost.",
   guide: "Leave the API key empty to use the matching environment variable of the VS Code process (OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, AZURE_OPENAI_API_KEY). A key typed here is used for this request only: it is never saved or logged.",
@@ -331,11 +312,9 @@ const llmTester: ToolDefinition = {
   }
 };
 
-const vramTool: ToolDefinition = {
+const vramTool: ToolSpec = {
   id: "ai.vram",
   command: "gpuVram",
-  section: "ai",
-  category: "Models & cost",
   title: "GPU Memory & Speed Estimator",
   summary: "How much VRAM a model needs for inference, LoRA, QLoRA or full fine-tuning, and how fast it will run.",
   guide: "Weights = parameters × bytes per parameter. The KV cache grows with context length × concurrent sequences. Training adds gradients and optimizer state. Speed estimates assume a memory-bandwidth-bound decoder; real throughput depends on the serving stack (vLLM, TGI, llama.cpp).",
@@ -413,11 +392,9 @@ const vramTool: ToolDefinition = {
 // LLM output
 // ---------------------------------------------------------------------------
 
-const jsonValidator: ToolDefinition = {
+const jsonValidator: ToolSpec = {
   id: "ai.json-output",
   command: "llmJsonValidator",
-  section: "ai",
-  category: "LLM output",
   title: "LLM JSON Extractor & Validator",
   summary: "Pull JSON out of a model response, repair common mistakes and validate it against a JSON Schema.",
   guide: "Handles code fences, text around the JSON, single quotes, trailing commas, comments, unquoted keys, Python True/False/None and truncated output. Repairs are listed so you can fix the prompt instead of relying on them.",
@@ -457,11 +434,9 @@ const jsonValidator: ToolDefinition = {
   }
 };
 
-const responseFormatter: ToolDefinition = {
+const responseFormatter: ToolSpec = {
   id: "ai.response-formatter",
   command: "llmResponseFormatter",
-  section: "ai",
-  category: "LLM output",
   title: "Response Formatter",
   summary: "Clean up a model answer: strip reasoning tags, tidy Markdown, pretty-print JSON and extract code blocks.",
   keywords: ["markdown", "format", "clean", "code blocks", "think tags", "plain text"],
@@ -518,11 +493,9 @@ function parseVectors(input: string): number[][] {
   return out;
 }
 
-const vectorMath: ToolDefinition = {
+const vectorMath: ToolSpec = {
   id: "ai.vector-similarity",
   command: "vectorSimilarity",
-  section: "ai",
-  category: "Embeddings",
   title: "Vector Similarity",
   summary: "Cosine similarity, dot product and distance between embedding vectors, plus normalisation.",
   guide: "Paste one vector per line (as [0.1, 0.2, …] or comma-separated; an optional \"label:\" prefix names it) or a JSON array of vectors. For normalised embeddings cosine similarity and dot product are identical.",
@@ -562,11 +535,9 @@ const vectorMath: ToolDefinition = {
 // Training & evaluation
 // ---------------------------------------------------------------------------
 
-const datasetSplit: ToolDefinition = {
+const datasetSplit: ToolSpec = {
   id: "ai.dataset-split",
   command: "datasetSplit",
-  section: "ai",
-  category: "Training & evaluation",
   title: "Dataset Split Planner",
   summary: "Exact train / validation / test counts (optionally per class) and matching scikit-learn code.",
   keywords: ["train test split", "validation", "stratify", "class imbalance", "sklearn"],
@@ -594,11 +565,9 @@ const datasetSplit: ToolDefinition = {
   }
 };
 
-const metricsTool: ToolDefinition = {
+const metricsTool: ToolSpec = {
   id: "ai.metrics",
   command: "metricsCalculator",
-  section: "ai",
-  category: "Training & evaluation",
   title: "Model Metrics",
   summary: "Accuracy, precision, recall and F1 from a confusion matrix, or MAE / RMSE / R² / MAPE for regression.",
   keywords: ["confusion matrix", "f1", "precision", "recall", "rmse", "mae", "r2", "evaluation"],
@@ -629,11 +598,9 @@ const metricsTool: ToolDefinition = {
   }
 };
 
-const lrSchedule: ToolDefinition = {
+const lrSchedule: ToolSpec = {
   id: "ai.lr-schedule",
   command: "lrScheduler",
-  section: "ai",
-  category: "Training & evaluation",
   title: "Learning-Rate Schedule",
   summary: "Plot a learning-rate schedule over training steps and get the matching PyTorch code.",
   keywords: ["learning rate", "scheduler", "warmup", "cosine", "one cycle", "pytorch"],
@@ -671,11 +638,9 @@ const lrSchedule: ToolDefinition = {
   }
 };
 
-const modelCardTool: ToolDefinition = {
+const modelCardTool: ToolSpec = {
   id: "ai.model-card",
   command: "modelCard",
-  section: "ai",
-  category: "Training & evaluation",
   title: "Model Card",
   summary: "Write a Hugging Face-compatible model card (README.md with metadata) for a trained model.",
   keywords: ["model card", "hugging face", "documentation", "readme", "responsible ai"],
@@ -704,45 +669,13 @@ const modelCardTool: ToolDefinition = {
   }
 };
 
-const experimentLog: ToolDefinition = {
-  id: "ai.experiment-log",
-  command: "experimentLogger",
-  section: "ai",
-  category: "Training & evaluation",
-  title: "Experiment Log",
-  summary: "Record a training run (parameters, metrics, notes) as a JSON line you can append to experiments.jsonl.",
-  guide: "Keep experiments.jsonl in the repository: one line per run is easy to diff, grep and load with pandas (pd.read_json(path, lines=True)).",
-  keywords: ["experiment tracking", "mlflow", "runs", "hyperparameters", "jsonl"],
-  icon: "notebook",
-  fields: [
-    f.text("name", "Run name", { width: "narrow", required: true, default: "baseline" }),
-    f.text("model", "Model", { width: "narrow", placeholder: "resnet50" }),
-    f.area("params", "Parameters", { rows: 4, default: "lr: 3e-4\nbatch_size: 32\nepochs: 10" }),
-    f.area("metrics", "Metrics", { rows: 3, default: "val_accuracy: 0.912\nval_loss: 0.27" }),
-    f.text("tags", "Tags", { placeholder: "baseline, augmentation" }),
-    f.area("notes", "Notes", { rows: 2 })
-  ],
-  run(values, ctx) {
-    const record = experimentRecord({ name: str(values, "name"), model: str(values, "model"), params: str(values, "params"), metrics: str(values, "metrics"), notes: str(values, "notes"), tags: str(values, "tags") }, ctx.now?.() ?? new Date());
-    const line = JSON.stringify(record);
-    return {
-      outputs: [
-        { kind: "files", title: "Append to the log", files: [{ path: "experiments/experiments.jsonl", content: line + "\n", language: "json", mode: "append" }] },
-        code("Record", "json", JSON.stringify(record, null, 2))
-      ]
-    };
-  }
-};
-
 // ---------------------------------------------------------------------------
 // Code & projects
 // ---------------------------------------------------------------------------
 
-const snippetsTool: ToolDefinition = {
+const snippetsTool: ToolSpec = {
   id: "ai.snippets",
   command: "mlCodeGen",
-  section: "ai",
-  category: "Code & projects",
   title: "AI/ML Code Snippets",
   summary: "Complete, tested snippets for structured output, tool calling, streaming, embeddings, eval and training.",
   keywords: ["snippet", "example", "tool calling", "function calling", "streaming", "sse", "pytorch", "lora", "sklearn", "zod", "pydantic", "retry"],
@@ -759,11 +692,9 @@ const snippetsTool: ToolDefinition = {
   }
 };
 
-const aiProject: ToolDefinition = {
+const aiProject: ToolSpec = {
   id: "ai.project",
   command: "aiAppStarter",
-  section: "ai",
-  category: "Code & projects",
   title: "AI App Starter",
   summary: "Scaffold a small, production-shaped LLM project: config, client with retries, prompts folder, tests and optional evals and Dockerfile.",
   keywords: ["scaffold", "starter", "project", "template", "boilerplate", "llm app"],
@@ -790,10 +721,40 @@ const aiProject: ToolDefinition = {
   }
 };
 
-export const AI_TOOLS: ToolDefinition[] = [
-  promptBuilder, toon, tokenCost, modelCompare, llmConfig, llmTester, vramTool,
-  jsonValidator, responseFormatter, vectorMath,
-  datasetSplit, metricsTool, lrSchedule, modelCardTool, experimentLog,
+/** Token cost and model comparison answer the same question ("which model, at what price?"), so they share one tool. */
+const modelsAndCost = combineTools({
+  id: "ai.token-cost",
+  command: "tokenCounter",
+  title: "LLM Models, Tokens & Cost",
+  summary: "Estimate tokens and per-request, daily and monthly cost on each model - or compare current chat models' context window, output limit and price.",
+  keywords: ["tokens", "pricing", "cost", "model comparison", "context window"],
+  icon: "coins",
+  modeLabel: "Tool",
+  modes: [
+    { value: "cost", label: "Tokens & cost for my workload", tool: tokenCost },
+    { value: "compare", label: "Compare models (context, limits, price)", tool: modelCompare, aliasCommand: "modelComparison" }
+  ]
+});
+
+/** Both tools take a raw model answer; one cleans it up, the other gets valid JSON out of it. */
+const llmOutput = combineTools({
+  id: "ai.json-output",
+  command: "llmJsonValidator",
+  title: "LLM Output Cleaner & JSON Validator",
+  summary: "Clean up a model answer (reasoning tags, Markdown, code blocks) or pull JSON out of it, repair common mistakes and validate it against a JSON Schema.",
+  keywords: ["llm output", "structured output", "json repair", "markdown", "reasoning tags"],
+  icon: "braces",
+  modeLabel: "Tool",
+  modes: [
+    { value: "json", label: "Extract & validate JSON", tool: jsonValidator },
+    { value: "clean", label: "Clean up a response", tool: responseFormatter, aliasCommand: "llmResponseFormatter" }
+  ]
+});
+
+export const AI_TOOLS: ToolSpec[] = [
+  promptBuilder, toon, modelsAndCost, llmConfig, llmTester, vramTool,
+  llmOutput, vectorMath,
+  datasetSplit, metricsTool, lrSchedule, modelCardTool,
   snippetsTool, aiProject
 ];
 

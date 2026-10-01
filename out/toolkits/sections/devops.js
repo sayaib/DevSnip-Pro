@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEVOPS_TOOLS = exports.DEVOPS_SECTION = void 0;
+exports.DEVOPS_TOOLS = void 0;
 const types_1 = require("../types");
 const devops_docker_1 = require("../engines/devops-docker");
 const devops_k8s_1 = require("../engines/devops-k8s");
@@ -9,13 +9,6 @@ const devops_config_1 = require("../engines/devops-config");
 const devops_utils_1 = require("../engines/devops-utils");
 const devops_mlops_1 = require("../engines/devops-mlops");
 const helpers_1 = require("./helpers");
-exports.DEVOPS_SECTION = {
-    id: "devops",
-    title: "DevOps",
-    icon: "container",
-    description: "Containers, Kubernetes, CI/CD, cloud deploys, server config, environment files, networking and logs.",
-    categories: ["Containers & Kubernetes", "CI/CD & cloud", "Configuration", "Troubleshoot", "Observability & MLOps"]
-};
 const STACKS = (0, helpers_1.opts)(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["java-maven", "Java (Maven)"], ["java-gradle", "Java (Gradle)"], ["static", "Static site (nginx)"]);
 // ---------------------------------------------------------------------------
 // Containers & Kubernetes
@@ -23,8 +16,6 @@ const STACKS = (0, helpers_1.opts)(["node", "Node.js"], ["python", "Python"], ["
 const dockerfile = {
     id: "devops.dockerfile",
     command: "dockerfileHelper",
-    section: "devops",
-    category: "Containers & Kubernetes",
     title: "Dockerfile Generator & Linter",
     summary: "Generate a small, secure multi-stage Dockerfile for your stack (detected from the workspace), or check an existing Dockerfile for common mistakes.",
     guide: "Generated images build dependencies in a separate stage, run as a non-root user, use exec-form CMD so signals reach your app, and add a health check when you give a path. The linter follows hadolint's most useful rules plus secret and cache checks.",
@@ -91,8 +82,6 @@ const SERVICE_LABELS = { postgres: "PostgreSQL", mysql: "MySQL", redis: "Redis",
 const compose = {
     id: "devops.compose",
     command: "composeHelper",
-    section: "devops",
-    category: "Containers & Kubernetes",
     title: "Docker Compose Generator & Validator",
     summary: "A local stack for your app with databases, caches, queues and mail - health checks, volumes and secrets from .env included - or validate an existing compose file.",
     guide: "Data stores are bound to 127.0.0.1 so they are not exposed on your network, and the app waits for them to be healthy before it starts. Secrets are read from .env (the generated .env.example lists them).",
@@ -130,8 +119,6 @@ const compose = {
 const k8s = {
     id: "devops.k8s",
     command: "kubernetesHelper",
-    section: "devops",
-    category: "Containers & Kubernetes",
     title: "Kubernetes & Helm Generator / Validator",
     summary: "Production-ready Deployment, Service, Ingress, HPA and PodDisruptionBudget - or a Helm chart - from a few settings; or validate existing manifests.",
     guide: "Generated workloads have resource requests and limits, startup/liveness/readiness probes, a non-root read-only security context and zero-downtime rolling updates. The validator catches removed API versions, selector mismatches, missing probes and limits, and literal secrets.",
@@ -199,8 +186,6 @@ const k8s = {
 const ci = {
     id: "devops.ci",
     command: "ciPipelineGenerator",
-    section: "devops",
-    category: "CI/CD & cloud",
     title: "CI Pipeline Generator",
     summary: "Install, lint, test and build pipelines for GitHub Actions, GitLab CI or Jenkins with caching, version matrices and least-privilege permissions; plus a security scanning workflow.",
     keywords: ["ci", "github actions", "workflow", "gitlab ci", "jenkinsfile", "pipeline", "codeql", "matrix", "continuous integration"],
@@ -240,8 +225,6 @@ const ci = {
 const deploy = {
     id: "devops.deploy",
     command: "cloudDeployGenerator",
-    section: "devops",
-    category: "CI/CD & cloud",
     title: "Cloud Deploy Workflow",
     summary: "GitHub Actions workflows that publish images (GHCR, Docker Hub) or deploy to AWS ECS Fargate, S3 + CloudFront, Azure Container Apps or Azure Web App - using OIDC, not stored cloud keys.",
     guide: "Each workflow comes with the one-time setup steps: which roles, secrets and variables to create. OIDC lets GitHub assume a cloud role per run, so no long-lived access keys are stored in the repository.",
@@ -274,8 +257,6 @@ const deploy = {
 const env = {
     id: "devops.env",
     command: "envChecker",
-    section: "devops",
-    category: "Configuration",
     title: ".env Checker & Generator",
     summary: "Check a .env file for syntax errors, duplicates, placeholders and invalid ports/URLs; compare it with .env.example; find variables your code reads but never declares; and generate .env.example and typed config.",
     guide: "\"Scan workspace\" reads .env, .env.example and your source code (process.env, os.environ, os.Getenv, System.getenv, import.meta.env…). Values never leave your machine, and secret values are blanked in the generated .env.example.",
@@ -335,38 +316,9 @@ const env = {
         };
     }
 };
-const yamlTool = {
-    id: "devops.yaml",
-    command: "yamlJsonTool",
-    section: "devops",
-    category: "Configuration",
-    title: "YAML / JSON Validator & Converter",
-    summary: "Validate YAML or JSON with line numbers, catch YAML's surprises (no → false, 3.10 → 3.1, 22:22 → 1342, tabs, duplicate keys) and convert between the two.",
-    keywords: ["yaml", "yml", "json", "validate", "lint", "convert yaml to json", "json to yaml", "duplicate keys"],
-    icon: "checklist",
-    live: true,
-    fields: [
-        helpers_1.f.code("input", "YAML or JSON", "yaml", { rows: 14, required: true, fromEditor: true, default: "services:\n  web:\n    image: nginx:1.27\n    ports:\n      - 22:22\n    environment:\n      DEBUG: no\n      PYTHON_VERSION: 3.10\n    restart: always\n" }),
-        helpers_1.f.select("convert", "Convert to", (0, helpers_1.opts)(["none", "Don't convert"], ["json", "JSON"], ["yaml", "YAML"])),
-        helpers_1.f.select("indent", "Indent", (0, helpers_1.opts)(["2", "2 spaces"], ["4", "4 spaces"]))
-    ],
-    run(values) {
-        const input = (0, types_1.str)(values, "input");
-        const r = (0, devops_utils_1.validateStructured)(input, "auto");
-        const target = (0, types_1.str)(values, "convert", "none");
-        const hasErrors = r.issues.some(i => i.severity === "error");
-        return {
-            stats: [{ label: "Format", value: r.format.toUpperCase() }, ...(r.format === "yaml" ? [{ label: "Documents", value: String(r.documents) }] : []), ...((0, helpers_1.counts)(r.issues) ?? [])],
-            messages: (0, helpers_1.severityMessages)(r.issues, `Valid ${r.format.toUpperCase()}.`),
-            outputs: target !== "none" && !hasErrors ? [(0, helpers_1.code)(target.toUpperCase(), target, (0, devops_utils_1.convertStructured)(input, target, Number((0, types_1.str)(values, "indent", "2"))))] : []
-        };
-    }
-};
 const nginx = {
     id: "devops.nginx",
     command: "nginxConfig",
-    section: "devops",
-    category: "Configuration",
     title: "Nginx Config Generator",
     summary: "Reverse proxy, load balancer, SPA or static site configs with HTTPS redirect, HTTP/2, gzip, security headers, rate limiting and WebSocket support.",
     keywords: ["nginx", "reverse proxy", "load balancer", "spa", "https", "ssl", "letsencrypt", "websocket", "server block"],
@@ -395,8 +347,6 @@ const nginx = {
 const pm2 = {
     id: "devops.pm2",
     command: "pm2Config",
-    section: "devops",
-    category: "Configuration",
     title: "PM2 Ecosystem Generator",
     summary: "ecosystem.config.js for Node (cluster mode, zero-downtime reload) and Python/other processes, with memory limits, restarts, cron restarts and an optional deploy section.",
     keywords: ["pm2", "ecosystem.config.js", "process manager", "node", "cluster", "zero downtime", "vps"],
@@ -426,8 +376,6 @@ const pm2 = {
 const terraform = {
     id: "devops.terraform",
     command: "terraformGenerator",
-    section: "devops",
-    category: "Configuration",
     title: "Terraform Starter",
     summary: "A clean Terraform module (versions, variables with validation, main, outputs, tfvars, .gitignore) for common resources, with optional remote state and locking.",
     keywords: ["terraform", "iac", "infrastructure as code", "aws", "azure", "s3", "ec2", "ecr", "remote state", "opentofu"],
@@ -453,26 +401,21 @@ const terraform = {
 const network = {
     id: "devops.network",
     command: "networkTools",
-    section: "devops",
-    category: "Troubleshoot",
     title: "Port & Network Toolkit",
-    summary: "Check which local ports are free, look up what a port is usually used for, calculate CIDR ranges and subnets, check overlaps, and break down URLs and connection strings.",
-    keywords: ["port", "port in use", "EADDRINUSE", "cidr", "subnet", "ip range", "vpc", "url parser", "connection string", "localhost"],
+    summary: "Check which local ports are free, look up what a port is usually used for, and calculate CIDR ranges, subnets and overlaps.",
+    keywords: ["port", "port in use", "EADDRINUSE", "cidr", "subnet", "ip range", "vpc", "localhost"],
     icon: "network",
     fields: [
-        helpers_1.f.select("mode", "Tool", (0, helpers_1.opts)(["ports", "Are these ports free?"], ["cidr", "CIDR / subnet calculator"], ["url", "URL / connection string breakdown"], ["reference", "Common ports reference"])),
+        helpers_1.f.select("mode", "Tool", (0, helpers_1.opts)(["ports", "Are these ports free?"], ["cidr", "CIDR / subnet calculator"], ["reference", "Common ports reference"])),
         helpers_1.f.text("ports", "Ports", { default: "3000, 5432, 6379, 8000-8003", showIf: { field: "mode", equals: ["ports"] } }),
         helpers_1.f.text("cidr", "CIDR", { default: "10.0.0.0/16", showIf: { field: "mode", equals: ["cidr"] } }),
         helpers_1.f.num("subnetPrefix", "Split into /", 20, { min: 0, max: 32, showIf: { field: "mode", equals: ["cidr"] } }),
-        helpers_1.f.text("check", "Contains IP or overlaps CIDR", { width: "narrow", placeholder: "10.0.3.7 or 10.0.128.0/17", showIf: { field: "mode", equals: ["cidr"] } }),
-        helpers_1.f.text("url", "URL", { default: "postgres://app:secret@db.internal:5432/orders?sslmode=require", showIf: { field: "mode", equals: ["url"] } })
+        helpers_1.f.text("check", "Contains IP or overlaps CIDR", { width: "narrow", placeholder: "10.0.3.7 or 10.0.128.0/17", showIf: { field: "mode", equals: ["cidr"] } })
     ],
     async run(values, ctx) {
         const mode = (0, types_1.str)(values, "mode", "ports");
         if (mode === "reference")
             return { outputs: [(0, helpers_1.table)("Common ports", ["Port", "Usually"], Object.entries(devops_utils_1.WELL_KNOWN_PORTS).map(([p, n]) => [Number(p), n]))] };
-        if (mode === "url")
-            return { outputs: [(0, helpers_1.table)("Parts", ["Part", "Value"], (0, devops_utils_1.parseUrlParts)((0, types_1.str)(values, "url")))] };
         if (mode === "cidr") {
             const cidr = (0, types_1.str)(values, "cidr");
             const info = (0, devops_utils_1.cidrInfo)(cidr);
@@ -508,8 +451,6 @@ const network = {
 const logs = {
     id: "devops.logs",
     command: "observabilityAnalyze",
-    section: "devops",
-    category: "Troubleshoot",
     title: "Log Analyzer & Formatter",
     summary: "Make sense of application, JSON (pino, winston, bunyan, structlog) or access logs: level counts, time range, top error patterns, status codes, slow requests - or pretty-print and filter them.",
     guide: "Open a log file and use the editor contents, or paste lines. Similar error messages are grouped by replacing ids, numbers and quoted values, so the top patterns show what actually breaks.",
@@ -553,8 +494,6 @@ const logs = {
 const health = {
     id: "devops.health",
     command: "healthCheckGenerator",
-    section: "devops",
-    category: "Troubleshoot",
     title: "Health Check Generator",
     summary: "Liveness and readiness endpoints for Express, Fastify, FastAPI, Flask, Spring Boot or Go - with dependency checks and timeouts - plus matching Docker, Compose and Kubernetes probes.",
     guide: "Liveness says the process is alive and must not check dependencies, or one slow database restarts every pod. Readiness checks dependencies and takes the instance out of the load balancer while they are down.",
@@ -581,8 +520,6 @@ const health = {
 const observability = {
     id: "devops.observability",
     command: "observabilityStarter",
-    section: "devops",
-    category: "Observability & MLOps",
     title: "Observability Starter",
     summary: "OpenTelemetry tracing, structured JSON logging with trace ids and redaction, a log schema, and a local Jaeger to see traces - for Node.js or Python.",
     keywords: ["opentelemetry", "otel", "tracing", "structured logging", "pino", "jaeger", "observability"],
@@ -596,8 +533,6 @@ const observability = {
 const serving = {
     id: "devops.serving",
     command: "mlopsGenerator",
-    section: "devops",
-    category: "Observability & MLOps",
     title: "Model Serving Starter",
     summary: "Serve an ML model behind FastAPI with health/readiness, a versioned predict schema and structured logs - Dockerfile (CPU or CUDA), Kubernetes with GPU scheduling, CI with a smoke test.",
     keywords: ["mlops", "model serving", "inference api", "fastapi", "gpu", "cuda", "kubernetes gpu"],
@@ -616,10 +551,28 @@ const serving = {
         return { outputs: [{ kind: "files", title: "Files", files }] };
     }
 };
+const dockerRun = {
+    id: "devops.docker-run",
+    command: "dockerRunToCompose",
+    title: "docker run → Compose",
+    summary: "Convert one or more docker run commands (from READMEs and docs) into a compose.yaml: ports, env, volumes, networks, restart policy, health checks, resources, GPUs and more.",
+    keywords: ["docker run", "docker compose", "composerize", "compose.yaml", "convert docker run", "docker-compose.yml"],
+    icon: "container",
+    live: true,
+    fields: [helpers_1.f.code("commands", "docker run commands", "shell", { rows: 10, required: true, fromEditor: true, default: "docker run -d --name db -p 5432:5432 \\\n  -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=app \\\n  -v pgdata:/var/lib/postgresql/data \\\n  --restart unless-stopped \\\n  --health-cmd \"pg_isready -U postgres\" --health-interval 10s \\\n  postgres:16-alpine\n\ndocker run -d --name cache -p 6379:6379 redis:7-alpine redis-server --appendonly yes" })],
+    run(values) {
+        const r = (0, devops_docker_1.dockerRunToCompose)((0, types_1.str)(values, "commands"));
+        return {
+            stats: [{ label: "Services", value: String(r.services.length) }],
+            messages: [...r.notes.map(t => ({ kind: "warning", text: t })), { kind: "info", text: "Start it with docker compose up -d; services reach each other by service name (e.g. postgres://db:5432)." }],
+            outputs: [(0, helpers_1.code)("compose.yaml", "yaml", r.yaml, "compose.yaml")]
+        };
+    }
+};
 exports.DEVOPS_TOOLS = [
-    dockerfile, compose, k8s,
+    dockerfile, dockerRun, compose, k8s,
     ci, deploy,
-    env, yamlTool, nginx, pm2, terraform,
+    env, nginx, pm2, terraform,
     network, logs, health,
     observability, serving
 ];

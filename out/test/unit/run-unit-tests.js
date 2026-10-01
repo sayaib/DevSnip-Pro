@@ -39,6 +39,7 @@ async function main() {
     require("./analytics.unit");
     require("./tool-hub.unit");
     require("./toolkit.unit");
+    require("./web-mobile.unit");
     require("./sidebar.unit");
     /* eslint-enable @typescript-eslint/no-var-requires */
     let passed = 0;

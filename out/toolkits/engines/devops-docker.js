@@ -1,7 +1,12 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.lintDockerfile = exports.dockerignore = exports.generateDockerfile = exports.detectStack = void 0;
+exports.dockerRunToCompose = exports.lintDockerfile = exports.dockerignore = exports.generateDockerfile = exports.detectStack = void 0;
+const yaml_1 = __importDefault(require("yaml"));
 const types_1 = require("../types");
+const web_curl_1 = require("./web-curl");
 /** Reads the workspace to fill in real commands instead of guessing. */
 async function detectStack(ctx) {
     const ws = ctx.workspace;
@@ -335,4 +340,271 @@ function lintDockerfile(text) {
     return findings.sort((a, b) => a.line - b.line);
 }
 exports.lintDockerfile = lintDockerfile;
+/** Converts one or more `docker run` commands into a compose file. */
+function dockerRunToCompose(text) {
+    // "8080:80" must stay a string: YAML 1.1 parsers read some host:container pairs as base-60 numbers.
+    const quoted = (v) => { const scalar = new yaml_1.default.Scalar(v); scalar.type = yaml_1.default.Scalar.QUOTE_DOUBLE; return scalar; };
+    const commands = text.split(/\r?\n(?=\s*(?:sudo\s+)?docker\s+(?:container\s+)?run\b)|\s*(?:&&|;)\s*(?=(?:sudo\s+)?docker\s)/).map(s => s.trim()).filter(Boolean);
+    const services = {};
+    const volumes = {};
+    const networks = {};
+    const notes = [];
+    for (const command of commands) {
+        const tokens = (0, web_curl_1.tokenizeShell)(command);
+        const runAt = tokens.findIndex((t, i) => t === "run" && (tokens[i - 1] === "docker" || (tokens[i - 1] === "container" && tokens[i - 2] === "docker")));
+        if (runAt < 0) {
+            if (command.trim())
+                notes.push(`Skipped (not a docker run command): ${command.slice(0, 60)}`);
+            continue;
+        }
+        const s = {};
+        const list = (key, value) => { s[key] = [...(s[key] ?? []), value]; };
+        let image = "";
+        const args = [];
+        const health = {};
+        const rest = tokens.slice(runAt + 1);
+        for (let i = 0; i < rest.length; i++) {
+            let flag = rest[i];
+            let inline;
+            if (image) {
+                args.push(flag);
+                continue;
+            }
+            if (/^--[\w-]+=/.test(flag)) {
+                inline = flag.slice(flag.indexOf("=") + 1);
+                flag = flag.slice(0, flag.indexOf("="));
+            }
+            else if (/^-[a-zA-Z]{2,}$/.test(flag) && /^-[dit]+$/.test(flag)) {
+                if (flag.includes("i"))
+                    s.stdin_open = true;
+                if (flag.includes("t"))
+                    s.tty = true;
+                continue;
+            }
+            const value = () => inline ?? rest[++i] ?? "";
+            if (!flag.startsWith("-")) {
+                image = flag;
+                continue;
+            }
+            switch (flag) {
+                case "-d":
+                case "--detach": break;
+                case "--rm":
+                    notes.push("--rm has no compose equivalent; use docker compose run --rm for one-off tasks.");
+                    break;
+                case "-i":
+                case "--interactive":
+                    s.stdin_open = true;
+                    break;
+                case "-t":
+                case "--tty":
+                    s.tty = true;
+                    break;
+                case "--name":
+                    s.container_name = value();
+                    break;
+                case "-p":
+                case "--publish":
+                    list("ports", quoted(value()));
+                    break;
+                case "--expose":
+                    list("expose", value());
+                    break;
+                case "-e":
+                case "--env": {
+                    const v = value();
+                    list("environment", v.includes("=") ? v : `${v}=\${${v}}`);
+                    break;
+                }
+                case "--env-file":
+                    list("env_file", value());
+                    break;
+                case "-v":
+                case "--volume": {
+                    const v = value();
+                    const src = v.split(":")[0];
+                    if (src && !/^[./~$]|^[A-Za-z]:\\/.test(src) && v.includes(":"))
+                        volumes[src] = {};
+                    list("volumes", v.replace(/^\$\(pwd\)|^\$PWD|^\$\{PWD\}/, "."));
+                    break;
+                }
+                case "--mount": {
+                    const kv = Object.fromEntries(value().split(",").map(p => { const [k, ...r] = p.split("="); return [k, r.join("=") || "true"]; }));
+                    const type = kv.type ?? "volume";
+                    const source = kv.source ?? kv.src;
+                    if (type === "volume" && source)
+                        volumes[source] = {};
+                    list("volumes", { type, ...(source ? { source: source.replace(/^\$\(pwd\)/, ".") } : {}), target: kv.target ?? kv.destination ?? kv.dst, ...(kv.readonly || kv.ro ? { read_only: true } : {}) });
+                    break;
+                }
+                case "--tmpfs":
+                    list("tmpfs", value());
+                    break;
+                case "--network":
+                case "--net": {
+                    const n = value();
+                    if (!["host", "bridge", "none"].includes(n)) {
+                        networks[n] = {};
+                        list("networks", n);
+                    }
+                    else
+                        s.network_mode = n;
+                    break;
+                }
+                case "--network-alias":
+                    notes.push("Network aliases: add them under networks.<name>.aliases.");
+                    value();
+                    break;
+                case "--restart":
+                    s.restart = value();
+                    break;
+                case "-w":
+                case "--workdir":
+                    s.working_dir = value();
+                    break;
+                case "-u":
+                case "--user":
+                    s.user = value();
+                    break;
+                case "--entrypoint":
+                    s.entrypoint = value();
+                    break;
+                case "-h":
+                case "--hostname":
+                    s.hostname = value();
+                    break;
+                case "-l":
+                case "--label":
+                    list("labels", value());
+                    break;
+                case "-m":
+                case "--memory":
+                    s.mem_limit = value();
+                    break;
+                case "--memory-reservation":
+                    s.mem_reservation = value();
+                    break;
+                case "--cpus":
+                    s.cpus = Number(value()) || value();
+                    break;
+                case "--shm-size":
+                    s.shm_size = value();
+                    break;
+                case "--add-host":
+                    list("extra_hosts", value());
+                    break;
+                case "--cap-add":
+                    list("cap_add", value());
+                    break;
+                case "--cap-drop":
+                    list("cap_drop", value());
+                    break;
+                case "--privileged":
+                    s.privileged = true;
+                    notes.push("privileged: true gives the container full access to the host - avoid it outside local experiments.");
+                    break;
+                case "--read-only":
+                    s.read_only = true;
+                    break;
+                case "--init":
+                    s.init = true;
+                    break;
+                case "--platform":
+                    s.platform = value();
+                    break;
+                case "--pull":
+                    s.pull_policy = value();
+                    break;
+                case "--device":
+                    list("devices", value());
+                    break;
+                case "--dns":
+                    list("dns", value());
+                    break;
+                case "--security-opt":
+                    list("security_opt", value());
+                    break;
+                case "--sysctl": {
+                    const [k, v] = value().split("=");
+                    s.sysctls = { ...(s.sysctls ?? {}), [k]: v };
+                    break;
+                }
+                case "--ulimit": {
+                    const [k, v] = value().split("=");
+                    const [soft, hard] = v.split(":");
+                    s.ulimits = { ...(s.ulimits ?? {}), [k]: hard ? { soft: Number(soft), hard: Number(hard) } : Number(soft) };
+                    break;
+                }
+                case "--log-driver":
+                    s.logging = { ...(s.logging ?? {}), driver: value() };
+                    break;
+                case "--log-opt": {
+                    const [k, v] = value().split("=");
+                    const logging = s.logging ?? {};
+                    s.logging = { ...logging, options: { ...(logging.options ?? {}), [k]: v } };
+                    break;
+                }
+                case "--gpus": {
+                    const g = value();
+                    s.deploy = { resources: { reservations: { devices: [{ driver: "nvidia", count: g === "all" ? "all" : Number(g.replace(/\D/g, "")) || 1, capabilities: ["gpu"] }] } } };
+                    break;
+                }
+                case "--health-cmd":
+                    health.test = ["CMD-SHELL", value()];
+                    break;
+                case "--health-interval":
+                    health.interval = value();
+                    break;
+                case "--health-timeout":
+                    health.timeout = value();
+                    break;
+                case "--health-retries":
+                    health.retries = Number(value());
+                    break;
+                case "--health-start-period":
+                    health.start_period = value();
+                    break;
+                case "--no-healthcheck":
+                    health.disable = true;
+                    break;
+                case "--link":
+                    notes.push(`--link ${value()} is legacy: services on the same compose network reach each other by service name.`);
+                    break;
+                default: {
+                    const next = rest[i + 1];
+                    if (inline === undefined && next && !next.startsWith("-") && rest.slice(i + 2).some(t => !t.startsWith("-")))
+                        i++;
+                    notes.push(`Not converted: ${flag}${inline ? `=${inline}` : ""}.`);
+                }
+            }
+        }
+        if (!image)
+            throw new types_1.ToolInputError("The docker run command has no image.");
+        s.image = image;
+        if (args.length)
+            s.command = args;
+        if (Object.keys(health).length)
+            s.healthcheck = health;
+        let name = String(s.container_name ?? image.split("/").pop().split(":")[0].split("@")[0]).replace(/[^a-z0-9_-]/gi, "-").toLowerCase();
+        while (services[name])
+            name = `${name}-2`;
+        const ordered = { image: s.image };
+        for (const [k, v] of Object.entries(s))
+            if (k !== "image")
+                ordered[k] = v;
+        services[name] = ordered;
+    }
+    if (!Object.keys(services).length)
+        throw new types_1.ToolInputError("Paste one or more docker run commands.");
+    const doc = { services };
+    if (Object.keys(volumes).length)
+        doc.volumes = volumes;
+    if (Object.keys(networks).length)
+        doc.networks = networks;
+    const yaml = yaml_1.default.stringify(doc, { lineWidth: 0, aliasDuplicateObjects: false }).replace(/: \{\}\n/g, ":\n");
+    if (Object.values(services).some(s => s.environment?.some(e => /(PASSWORD|SECRET|TOKEN|KEY)=/.test(e) && !/\$\{/.test(e))))
+        notes.push("Secrets are inline in the environment; move them to an .env file next to compose.yaml and reference them as ${VAR}.");
+    return { yaml, notes: [...new Set(notes)], services: Object.keys(services) };
+}
+exports.dockerRunToCompose = dockerRunToCompose;
 //# sourceMappingURL=devops-docker.js.map

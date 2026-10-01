@@ -9,8 +9,9 @@
  */
 
 import type { HubIcon } from "../utils/tool-hub";
+import type { SectionId } from "./layout";
 
-export type SectionId = "dev" | "ai" | "rag" | "data" | "devops";
+export type { SectionId };
 
 /** `secret` renders as a password box and is never kept in the webview's saved state. */
 export type FieldKind = "text" | "textarea" | "code" | "number" | "select" | "toggle" | "secret";
@@ -106,13 +107,16 @@ export interface ToolAction {
 }
 
 export interface ToolDefinition {
+  /** Stable key. Its prefix names the module that defines the tool; where it is shown comes from layout.ts. */
   id: string;
   /**
    * Command id without the extension prefix. Replacements keep the id of the
    * tool they replace, so keybindings, points history and analytics carry over.
    */
   command: string;
+  /** Stamped by the registry from layout.ts. */
   section: SectionId;
+  /** Sub-group inside the section, stamped from layout.ts (empty for small sections). */
   category: string;
   title: string;
   /** One sentence shown in the list and at the top of the tool. */
@@ -141,16 +145,8 @@ export interface ToolDefinition {
 /** What the webview receives: everything except the function. */
 export type ToolDescriptor = Omit<ToolDefinition, "run" | "dynamicExamples">;
 
-export interface SectionInfo {
-  id: SectionId;
-  title: string;
-  icon: string;
-  description: string;
-  /** Category order in the tool list. */
-  categories: string[];
-  /** Optional guided path through the section's tools (shown on the section home). */
-  journey?: Array<{ tool: string; title: string; text: string }>;
-}
+/** A tool as its module defines it; the registry adds `section` and `category` from layout.ts. */
+export type ToolSpec = Omit<ToolDefinition, "section" | "category">;
 
 export class ToolInputError extends Error {}
 

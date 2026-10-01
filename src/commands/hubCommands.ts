@@ -1,23 +1,19 @@
 import * as vscode from "vscode";
 import { registerTrackedCommand } from "../utils/command-registry";
 import { openToolHub } from "../utils/tool-hub";
+import { HUB_COMMANDS, NAV } from "../toolkits/layout";
 
 /**
- * The tool hubs. Hub definitions are built from the toolkit registry, which is
- * loaded on first open so activation stays light.
+ * "Browse all tools" and the older per-section hub commands, which keep
+ * working (keybindings, muscle memory) and open the hub on their section.
+ * The hub definition is built from the registry on first open, so
+ * activation stays light.
  */
 export function registerHubCommands(context: vscode.ExtensionContext): void {
-  const hubs: Array<[string, "DEVELOPER_TOOLS_HUB" | "AI_ML_HUB" | "RAG_HUB" | "DATA_HUB" | "DEVOPS_HUB"]> = [
-    ["advancedToolsHub", "DEVELOPER_TOOLS_HUB"],
-    ["aiMlHub", "AI_ML_HUB"],
-    ["ragHub", "RAG_HUB"],
-    ["bigDataHub", "DATA_HUB"],
-    ["devopsGenerator", "DEVOPS_HUB"]
-  ];
-  for (const [command, key] of hubs) {
+  for (const [command, section] of Object.entries(HUB_COMMANDS)) {
     context.subscriptions.push(registerTrackedCommand(`sayaib.hue-console.${command}`, async () => {
-      const definitions = await import("./hubs");
-      openToolHub(context, definitions[key]);
+      const { ALL_TOOLS_HUB } = await import("./hubs");
+      openToolHub(context, ALL_TOOLS_HUB, section === "all" ? undefined : NAV.find(s => s.id === section)?.title);
     }));
   }
 }

@@ -9,7 +9,8 @@
 
   const state = {
     query: typeof saved.query === "string" ? saved.query : "",
-    category: data.categories.includes(saved.category) || saved.category === "Pinned" ? saved.category : "All",
+    // A section requested by the command that opened the hub wins over the last saved filter.
+    category: data.initialCategory || (data.categories.includes(saved.category) || saved.category === "Pinned" ? saved.category : "All"),
     pinned: new Set(data.pinned)
   };
 
@@ -204,12 +205,16 @@
     el.status.textContent = filtered ? `${matches.length} tool${matches.length === 1 ? "" : "s"} shown` : "";
   }
 
-  /** The "Start here" path: only on the unfiltered view, so it never hides results. */
+  /** The "Start here" path of the selected section; hidden while searching so it never hides results. */
+  let journeyFor = null;
   function renderJourney() {
     const box = document.getElementById("journey");
-    const show = data.journey.length > 0 && !state.query.trim() && state.category === "All";
+    const steps = (data.journeys || {})[state.category] || [];
+    const show = steps.length > 0 && !state.query.trim();
     box.hidden = !show;
-    if (!show || box.childElementCount) return;
+    if (!show || journeyFor === state.category) return;
+    journeyFor = state.category;
+    box.replaceChildren();
     const head = document.createElement("div");
     head.className = "journey-head";
     const title = document.createElement("h2");
@@ -219,7 +224,7 @@
     head.append(title, text);
     const list = document.createElement("ol");
     list.className = "steps";
-    for (const step of data.journey) {
+    for (const step of steps) {
       const item = document.createElement("li");
       item.className = "step";
       const b = document.createElement("button");
@@ -323,6 +328,17 @@
     el.search.focus();
   });
   document.getElementById("searchAll").addEventListener("click", () => vscode.postMessage({ command: "searchAll" }));
+
+  // The extension asks an open hub to show a section (an older hub command was run again).
+  window.addEventListener("message", event => {
+    const msg = event.data;
+    if (msg && msg.command === "showCategory" && data.categories.includes(msg.category)) {
+      state.category = msg.category;
+      state.query = "";
+      el.search.value = "";
+      update();
+    }
+  });
 
   el.search.value = state.query;
   update();

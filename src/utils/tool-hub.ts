@@ -67,6 +67,7 @@ export const HUB_ICONS = {
   wand: '<path d="M15 4V2M15 10V8M11 6h-2M21 6h-2M17.8 3.2l-1.4 1.4M17.8 8.8l-1.4-1.4M3 21l10-10"/><path d="M12.2 3.2l1.4 1.4"/>',
   checklist: '<path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17M11 6h9M11 12h9M11 18h9"/>',
   filter: '<path d="M3 4h18l-7 8.5V20l-4-2v-5.5z"/>',
+  phone: '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>',
   rocket: '<path d="M5 15c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1z"/><path d="M12 15l-3-3a22 22 0 0 1 2-4A12.9 12.9 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/><path d="M9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.6 4-2c1.1-1.6 0-5 0-5"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
   network: '<rect x="9" y="2" width="6" height="5" rx="1"/><rect x="2" y="17" width="6" height="5" rx="1"/><rect x="16" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M5 17v-2.5A1.5 1.5 0 0 1 6.5 13h11a1.5 1.5 0 0 1 1.5 1.5V17"/>',
@@ -102,8 +103,8 @@ export interface HubConfig {
   tools: HubTool[];
   /** Placeholder for the search box, e.g. "Search AI tools". */
   searchPlaceholder?: string;
-  /** Optional guided path shown above the grid ("Start here"), one step per tool. */
-  journey?: Array<{ command: string; title: string; text: string }>;
+  /** Optional guided paths shown above the grid ("Start here") while a category is selected, one step per tool. */
+  journeys?: Record<string, Array<{ command: string; title: string; text: string }>>;
 }
 
 const PINNED_PREFIX = "devsnip.hub.pinned.";
@@ -119,20 +120,24 @@ export function validateHub(config: HubConfig): string[] {
     commands.add(tool.command);
     if (!tool.description.trim() || !tool.title.trim()) problems.push(`${tool.command}: missing title or description`);
   }
-  for (const step of config.journey ?? []) if (!commands.has(step.command)) problems.push(`journey step "${step.title}" opens a command that is not in the hub`);
+  for (const [category, steps] of Object.entries(config.journeys ?? {})) {
+    if (!config.categories.includes(category)) problems.push(`journey for unknown category "${category}"`);
+    for (const step of steps) if (!commands.has(step.command)) problems.push(`journey step "${step.title}" opens a command that is not in the hub`);
+  }
   for (const category of config.categories) {
     if (!config.tools.some(t => t.category === category)) problems.push(`category "${category}" has no tools`);
   }
   return problems;
 }
 
-export function renderToolHub(config: HubConfig, options: { cspSource: string; scriptUri: string; pinned: string[] }): string {
+export function renderToolHub(config: HubConfig, options: { cspSource: string; scriptUri: string; pinned: string[]; initialCategory?: string }): string {
   const data = {
     viewType: config.viewType,
     categories: config.categories,
     tools: config.tools,
     pinned: options.pinned.filter(c => config.tools.some(t => t.command === c)),
-    journey: config.journey ?? [],
+    journeys: config.journeys ?? {},
+    initialCategory: options.initialCategory && config.categories.includes(options.initialCategory) ? options.initialCategory : undefined,
     icons: HUB_ICONS
   };
   const categoryCount = config.categories.length;
@@ -182,16 +187,21 @@ export function renderToolHub(config: HubConfig, options: { cspSource: string; s
 }
 
 /** Opens (or reveals) a hub panel and wires its messages. */
-export function openToolHub(context: vscode.ExtensionContext, config: HubConfig): void {
+export function openToolHub(context: vscode.ExtensionContext, config: HubConfig, initialCategory?: string): void {
   const mediaRoot = vscode.Uri.file(path.join(context.extensionPath, "media"));
   const { panel, created } = openToolPanel(config.viewType, config.panelTitle, { enableScripts: true, localResourceRoots: [mediaRoot] });
-  if (!created) return;
+  if (!created) {
+    // Already open: switch it to the requested section.
+    if (initialCategory) void panel.webview.postMessage({ command: "showCategory", category: initialCategory });
+    return;
+  }
   const pinnedKey = PINNED_PREFIX + config.viewType;
   const known = new Set(config.tools.map(t => t.command));
   panel.webview.html = renderToolHub(config, {
     cspSource: panel.webview.cspSource,
     scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "tool-hub.js")).toString(),
-    pinned: context.globalState.get<string[]>(pinnedKey, [])
+    pinned: context.globalState.get<string[]>(pinnedKey, []),
+    initialCategory
   });
   const subscription = panel.webview.onDidReceiveMessage(async message => {
     if (message?.command === "openTool" && typeof message.toolCommand === "string" && known.has(message.toolCommand)) {

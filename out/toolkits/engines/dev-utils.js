@@ -162,6 +162,13 @@ function generateIds(kind, count, options) {
             case "hex":
                 id = (0, crypto_1.randomBytes)(Math.ceil(options.length / 2)).toString("hex").slice(0, options.length);
                 break;
+            case "objectid": {
+                // MongoDB ObjectId: 4-byte seconds timestamp, 5 random bytes, 3-byte counter.
+                const time = Buffer.alloc(4);
+                time.writeUInt32BE(Math.floor(Date.now() / 1000));
+                id = Buffer.concat([time, (0, crypto_1.randomBytes)(5), Buffer.from([(i >> 16) & 255, (i >> 8) & 255, i & 255])]).toString("hex");
+                break;
+            }
             case "password": {
                 const sets = ["abcdefghijkmnpqrstuvwxyz", "ABCDEFGHJKLMNPQRSTUVWXYZ", "23456789", ...(options.symbols ? ["!@#$%^&*()-_=+[]{}"] : [])];
                 const all = sets.join("");
@@ -198,6 +205,16 @@ function inspectId(value) {
     if (/^[0-9A-HJKMNP-TV-Z]{26}$/i.test(v)) {
         const ms = [...v.slice(0, 10).toUpperCase()].reduce((acc, ch) => acc * 32 + CROCKFORD.indexOf(ch), 0);
         return [["Type", "ULID"], ["Created", new Date(ms).toISOString()]];
+    }
+    if (/^[0-9a-f]{24}$/i.test(v)) {
+        const seconds = parseInt(v.slice(0, 8), 16);
+        return [["Type", "MongoDB ObjectId"], ["Created", new Date(seconds * 1000).toISOString()], ["Random", v.slice(8, 18)], ["Counter", String(parseInt(v.slice(18), 16))]];
+    }
+    if (/^\d{17,19}$/.test(v)) {
+        // Twitter/X and Discord snowflakes: milliseconds since their epochs in the top 42 bits.
+        const n = BigInt(v);
+        const ms = Number(n >> BigInt(22));
+        return [["Type", "Snowflake ID"], ["Created (X/Twitter epoch)", new Date(ms + 1288834974657).toISOString()], ["Created (Discord epoch)", new Date(ms + 1420070400000).toISOString()]];
     }
     return undefined;
 }

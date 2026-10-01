@@ -41,19 +41,23 @@ function render() {
         scriptUri: "vscode-webview://test/media/tools-sidebar.js",
         codiconsUri: "vscode-webview://test/codicon.css",
         status: { badge: "🥇", level: "Gold", points: 1427, lifetimePoints: 1427, nextLevel: "Platinum", toNext: 373, progress: 0.69 },
-        expanded: ["Core", "Not a category"],
+        expanded: ["Backend & API", "Not a category"],
         favorites: ["sayaib.hue-console.openGUI", "sayaib.hue-console.notASidebarTool"],
         usage: { "sayaib.hue-console.jwtDecoder": { count: 3, last: 1000 }, "sayaib.hue-console.unknown": { count: 9, last: 1 } }
     });
 }
 (0, run_unit_tests_1.suite)("tools sidebar", () => {
     (0, run_unit_tests_1.test)("keeps every category, in order, with its icon and colour", () => {
-        assert.deepStrictEqual(tool_groups_1.SIDEBAR_GROUPS.map(g => g.name), ["Core", "Snippets", "Developer Tools", "AI & ML", "RAG", "Data", "DevOps", "Security"]);
+        assert.deepStrictEqual(tool_groups_1.SIDEBAR_GROUPS.map(g => g.name), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
         for (const group of tool_groups_1.SIDEBAR_GROUPS) {
             assert.ok(group.tools.length > 0, `${group.name} has no tools`);
             assert.ok(/^terminal\.ansiBright[A-Z][a-z]+$/.test(group.color), `${group.name} colour ${group.color}`);
         }
         assert.strictEqual((0, tools_sidebar_1.themeColorVar)("terminal.ansiBrightYellow"), "--vscode-terminal-ansiBrightYellow");
+    });
+    (0, run_unit_tests_1.test)("no tool appears in two groups", () => {
+        const commands = tool_groups_1.SIDEBAR_GROUPS.flatMap(g => g.tools.map(t => t.command));
+        assert.strictEqual(new Set(commands).size, commands.length);
     });
     (0, run_unit_tests_1.test)("every entry runs a contributed command", () => {
         for (const command of (0, tool_groups_1.sidebarCommands)())
@@ -81,7 +85,7 @@ function render() {
         }
         const json = /<script type="application\/json" id="sidebar-data">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
         const data = JSON.parse(json);
-        assert.deepStrictEqual(data.expanded, ["Core"], "unknown categories in saved state are dropped");
+        assert.deepStrictEqual(data.expanded, ["Backend & API"], "unknown categories in saved state are dropped");
         assert.strictEqual(data.groups.length, tool_groups_1.SIDEBAR_GROUPS.length);
         assert.deepStrictEqual(data.favorites, ["sayaib.hue-console.openGUI"], "favorites are limited to sidebar tools");
         assert.deepStrictEqual(Object.keys(data.usage), ["sayaib.hue-console.jwtDecoder"], "usage is limited to sidebar tools");

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.formatLogs = exports.analyzeLogs = exports.normalizeMessage = exports.parseLog = exports.parseUrlParts = exports.parsePorts = exports.cidrOverlap = exports.cidrContains = exports.splitCidr = exports.cidrInfo = exports.WELL_KNOWN_PORTS = exports.convertStructured = exports.validateStructured = exports.detectFormat = exports.envSchema = exports.scanEnvUsage = exports.envExample = exports.checkEnv = exports.parseEnv = exports.isSecretKey = void 0;
+exports.formatLogs = exports.analyzeLogs = exports.normalizeMessage = exports.parseLog = exports.parsePorts = exports.cidrOverlap = exports.cidrContains = exports.splitCidr = exports.cidrInfo = exports.WELL_KNOWN_PORTS = exports.convertStructured = exports.validateStructured = exports.jsonErrorOffset = exports.detectFormat = exports.envSchema = exports.scanEnvUsage = exports.envExample = exports.checkEnv = exports.parseEnv = exports.isSecretKey = void 0;
 const yaml_1 = __importDefault(require("yaml"));
 const types_1 = require("../types");
 const SECRET_KEY = /(SECRET|PASSWORD|PASSWD|TOKEN|API_?KEY|PRIVATE|CREDENTIAL|ACCESS_KEY|CLIENT_SECRET|DSN|WEBHOOK)/i;
@@ -256,10 +256,109 @@ function jsonErrorLine(text, error) {
     const line = /line (\d+)/.exec(error.message)?.[1];
     if (line)
         return Number(line);
-    if (pos)
-        return text.slice(0, Number(pos)).split("\n").length;
-    return undefined;
+    const offset = pos !== undefined ? Number(pos) : jsonErrorOffset(text);
+    return offset === undefined ? undefined : text.slice(0, offset).split("\n").length;
 }
+/**
+ * Where strict JSON parsing fails. V8 omits the position for some errors
+ * (e.g. a trailing comma before "]"), so scan the grammar to find it.
+ */
+function jsonErrorOffset(text) {
+    let i = 0;
+    const ws = () => { while (i < text.length && /[ \t\r\n]/.test(text[i]))
+        i++; };
+    const fail = () => { throw i; };
+    const str = () => {
+        i++;
+        while (i < text.length && text[i] !== '"') {
+            if (text[i] === "\\") {
+                i++;
+                if (text[i] === "u") {
+                    if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 1, i + 5)))
+                        fail();
+                    i += 4;
+                }
+                else if (!'"\\/bfnrt'.includes(text[i] ?? ""))
+                    fail();
+            }
+            else if (text.charCodeAt(i) < 0x20)
+                fail();
+            i++;
+        }
+        if (text[i] !== '"')
+            fail();
+        i++;
+    };
+    const value = () => {
+        ws();
+        const c = text[i];
+        if (c === "{") {
+            i++;
+            ws();
+            if (text[i] === "}") {
+                i++;
+                return;
+            }
+            for (;;) {
+                ws();
+                if (text[i] !== '"')
+                    fail();
+                str();
+                ws();
+                if (text[i] !== ":")
+                    fail();
+                i++;
+                value();
+                ws();
+                if (text[i] === ",") {
+                    i++;
+                    continue;
+                }
+                if (text[i] === "}") {
+                    i++;
+                    return;
+                }
+                fail();
+            }
+        }
+        if (c === "[") {
+            i++;
+            ws();
+            if (text[i] === "]") {
+                i++;
+                return;
+            }
+            for (;;) {
+                value();
+                ws();
+                if (text[i] === ",") {
+                    i++;
+                    continue;
+                }
+                if (text[i] === "]") {
+                    i++;
+                    return;
+                }
+                fail();
+            }
+        }
+        if (c === '"')
+            return str();
+        const m = /^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(text.slice(i));
+        if (!m)
+            fail();
+        i += m[0].length;
+    };
+    try {
+        value();
+        ws();
+        return i < text.length ? i : undefined;
+    }
+    catch (offset) {
+        return typeof offset === "number" ? offset : undefined;
+    }
+}
+exports.jsonErrorOffset = jsonErrorOffset;
 function validateStructured(text, format) {
     if (!text.trim())
         throw new types_1.ToolInputError("Paste some YAML or JSON.");
@@ -457,36 +556,6 @@ function parsePorts(input) {
     return [...out];
 }
 exports.parsePorts = parsePorts;
-function parseUrlParts(input) {
-    let url;
-    try {
-        url = new URL(input.trim());
-    }
-    catch {
-        throw new types_1.ToolInputError("Not a valid absolute URL (include the scheme, e.g. https://).");
-    }
-    const rows = [
-        ["Scheme", url.protocol.replace(":", "")],
-        ["Host", url.hostname],
-        ["Port", url.port || `${defaultPort(url.protocol) ?? ""} (default)`],
-        ["Path", decodeURIComponent(url.pathname)],
-    ];
-    if (url.origin !== "null")
-        rows.push(["Origin", url.origin]);
-    if (url.username)
-        rows.push(["Username", decodeURIComponent(url.username)]);
-    if (url.password)
-        rows.push(["Password", "•••• (present in the URL - avoid committing it)"]);
-    for (const [k, v] of url.searchParams)
-        rows.push([`Query: ${k}`, v]);
-    if (url.hash)
-        rows.push(["Fragment", decodeURIComponent(url.hash.slice(1))]);
-    return rows;
-}
-exports.parseUrlParts = parseUrlParts;
-function defaultPort(protocol) {
-    return { "http:": 80, "https:": 443, "ws:": 80, "wss:": 443, "ftp:": 21, "postgres:": 5432, "postgresql:": 5432, "mysql:": 3306, "redis:": 6379, "rediss:": 6380, "mongodb:": 27017, "amqp:": 5672 }[protocol];
-}
 const LEVEL_ALIASES = {
     fatal: "fatal", critical: "fatal", crit: "fatal", panic: "fatal", emerg: "fatal", alert: "fatal",
     error: "error", err: "error", severe: "error",

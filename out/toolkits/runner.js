@@ -26,6 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isPortFree = exports.createToolContext = exports.safeRelativePath = exports.runTool = exports.openTool = exports.registerToolkitCommands = void 0;
 const vscode = __importStar(require("vscode"));
 const net = __importStar(require("net"));
+const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const types_1 = require("./types");
 const commands_1 = require("./commands");
@@ -54,7 +55,9 @@ function registerToolkitCommands(context) {
             const tool = findTool(entry.tool);
             if (!tool)
                 throw new Error(`Unknown tool ${entry.tool}`);
-            await openTool(context, tool, entry.values ?? initialFromInvocation(tool, arg));
+            // Alias presets (e.g. a mode) and the editor text when run from the context menu both apply.
+            const fromEditor = initialFromInvocation(tool, arg);
+            await openTool(context, tool, entry.values || fromEditor ? { ...(entry.values ?? {}), ...(fromEditor ?? {}) } : undefined);
         }));
     }
 }
@@ -155,6 +158,14 @@ async function openTool(context, tool, initial) {
                 const document = await vscode.workspace.openTextDocument({ content: String(message.text ?? ""), language: editorLanguage(message.language) });
                 await vscode.window.showTextDocument(document, { preview: false, viewColumn: vscode.ViewColumn.Beside });
                 (0, analytics_1.track)("tool_output_used", { feature, action: "open" });
+                return;
+            }
+            case "download": {
+                const saved = await saveAs(String(message.text ?? ""), typeof message.language === "string" ? message.language : undefined, typeof message.fileName === "string" ? message.fileName : "");
+                if (saved) {
+                    (0, webview_ui_1.safePostMessage)(panel, { type: "notice", kind: "success", text: `Saved ${path.basename(saved)}.` });
+                    (0, analytics_1.track)("tool_output_used", { feature, action: "save" });
+                }
                 return;
             }
             case "save":
@@ -299,10 +310,33 @@ exports.isPortFree = isPortFree;
 const LANGUAGE_IDS = {
     dockerfile: "dockerfile", yaml: "yaml", json: "json", jsonl: "jsonl", python: "python", typescript: "typescript", javascript: "javascript",
     shell: "shellscript", sql: "sql", markdown: "markdown", go: "go", java: "java", groovy: "groovy", nginx: "nginx", terraform: "terraform",
-    dotenv: "dotenv", properties: "properties", csv: "csv", tsv: "tsv", diff: "diff", log: "log", ignore: "ignore", helm: "helm", http: "http", text: "plaintext"
+    dotenv: "dotenv", properties: "properties", csv: "csv", tsv: "tsv", diff: "diff", log: "log", ignore: "ignore", helm: "helm", http: "http", text: "plaintext",
+    tsx: "typescriptreact", jsx: "javascriptreact", dart: "dart", kotlin: "kotlin", swift: "swift", xml: "xml", html: "html", css: "css", graphql: "graphql",
+    php: "php", ruby: "ruby", prisma: "prisma"
 };
 function editorLanguage(language) {
     return (typeof language === "string" && LANGUAGE_IDS[language]) || "plaintext";
+}
+const EXTENSIONS = {
+    typescript: "ts", javascript: "js", tsx: "tsx", jsx: "jsx", json: "json", jsonl: "jsonl", yaml: "yaml", python: "py", shell: "sh", sql: "sql",
+    markdown: "md", go: "go", java: "java", kotlin: "kt", swift: "swift", dart: "dart", xml: "xml", html: "html", css: "css", graphql: "graphql",
+    dockerfile: "Dockerfile", nginx: "conf", terraform: "tf", dotenv: "env", properties: "properties", csv: "csv", tsv: "tsv", diff: "diff",
+    http: "http", php: "php", ruby: "rb", groovy: "gradle", prisma: "prisma", ignore: "gitignore", log: "log", text: "txt"
+};
+/** "Save as…": the user picks the location, so any path they choose is allowed. */
+async function saveAs(text, language, suggested) {
+    const ext = (language && EXTENSIONS[language]) || "txt";
+    const base = suggested.split(/[\\/]/).pop().replace(/[^\w.@ -]+/g, " ").replace(/\s+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "output";
+    const name = /\.[A-Za-z0-9]{1,12}$/.test(base) || base === "Dockerfile" ? base : `${base}.${ext}`;
+    const root = workspaceRoot();
+    const target = await vscode.window.showSaveDialog({
+        defaultUri: root ? vscode.Uri.joinPath(root, name) : vscode.Uri.file(path.join(os.homedir(), name)),
+        saveLabel: "Save"
+    });
+    if (!target)
+        return undefined;
+    await vscode.workspace.fs.writeFile(target, Buffer.from(text, "utf8"));
+    return target.fsPath;
 }
 async function insertAtCursor(text, language) {
     const editor = lastEditor && !lastEditor.document.isClosed ? lastEditor : undefined;

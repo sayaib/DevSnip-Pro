@@ -34,6 +34,7 @@ const crypto_1 = require("crypto");
 const axios_1 = __importDefault(require("axios"));
 const client_1 = require("./client");
 const commands_1 = require("../toolkits/commands");
+const layout_1 = require("../toolkits/layout");
 const COMMAND_PREFIX = "sayaib.hue-console.";
 const ID_KEY = "devsnip.analytics.anonymousId";
 const USED_KEY = "devsnip.analytics.usedFeatures";
@@ -187,34 +188,26 @@ function createPostHogTransport(config, log) {
     };
 }
 exports.createPostHogTransport = createPostHogTransport;
-/** Toolkit commands know their section; "dev" tools report as utilities like the other developer tools. */
-const TOOLKIT_SECTION = new Map(commands_1.TOOLKIT_COMMANDS.map(c => [c.command, c.section === "dev" ? "utilities" : c.section]));
-/** Feature group for a command id, used to compare areas of the extension. */
+/** Commands that are aliases of a toolkit tool report under that tool's section. */
+const TOOLKIT_SECTION = new Map(commands_1.TOOLKIT_COMMANDS.map(c => [c.command, c.section]));
+/**
+ * Feature area for a command id, used to compare areas of the extension: the
+ * navigation section the command lives in (layout.ts), so analytics and the
+ * sidebar always agree. Commands that are not tools have their own areas.
+ */
 function featureCategory(feature) {
+    const placed = (0, layout_1.findEntry)(feature);
+    if (placed)
+        return placed.section.id;
     const toolkit = TOOLKIT_SECTION.get(feature);
     if (toolkit)
         return toolkit;
-    const name = feature.toLowerCase();
-    if (/snippet/.test(name))
-        return "snippets";
-    if (/dependencymanager/.test(name))
-        return "dependencies";
-    if (/security|audit|endpoint/.test(name))
+    if (feature in layout_1.HUB_COMMANDS || feature === "searchTools")
+        return "navigation";
+    if (/^(securityHub)$/.test(feature))
         return "security";
-    if (/^rag|chunking|embedding|contextwindow|semanticdedup|hybridsearch|hallucination/.test(name))
-        return "rag";
-    if (/^aiml|^ml|prompt|token|llm|dataset|gpu|experiment|modelcard|jsonl|metrics|lrscheduler|inference|mdtable/.test(name))
-        return "ai";
-    if (/bigdata|schema|spark|dataquality|partition|deltalake/.test(name))
-        return "data";
-    if (/devops|mlops|observability/.test(name))
-        return "devops";
-    if (/milestone|premium|resetfeature/.test(name))
+    if (/milestone|premium|resetFeature/i.test(feature))
         return "progress";
-    if (/opengui/.test(name))
-        return "api";
-    if (/advancedtools|regex|json|hash|base64|color|url|timestamp|lorem|searchtools/.test(name))
-        return "utilities";
     return "core";
 }
 exports.featureCategory = featureCategory;

@@ -1,26 +1,8 @@
-import { SectionInfo, ToolDefinition, ToolInputError, ToolResult, fmtBytes, fmtNumber, fmtUsd, num, str } from "../types";
+import { ToolSpec, ToolInputError, ToolResult, fmtBytes, fmtNumber, fmtUsd, num, str } from "../types";
 import { CHAT_MODEL_CATALOG, EMBEDDING_MODELS, chatModelOptions, embeddingModelOptions, estimateTokens, findChatModel, findEmbeddingModel, formatContext } from "../engines/models";
 import { ChunkStrategy, SizeUnit, checkGrounding, chunkStats, chunkText, chunksToJsonl, contextBudget, evaluateRetrieval, findNearDuplicates, parseEvalCases, parseFieldRules, planIngestion, reciprocalRankFusion, validateChunkRecords } from "../engines/rag";
 import { Framework, PipelineLanguage, RetrievalOptions, VECTOR_DB_OPTIONS, VectorDb, generatePipeline, retrievalAdvice, retrievalCode, supportedDbs, vectorDbCompose, vectorDbEnv, vectorDbPackages, vectorStorePython } from "../engines/rag-codegen";
 import { code, f, opts, pct, table } from "./helpers";
-
-export const RAG_SECTION: SectionInfo = {
-  id: "rag",
-  title: "RAG",
-  icon: "search",
-  description: "Build and debug retrieval-augmented generation: chunking, embeddings, vector stores, retrieval, prompts and evaluation.",
-  categories: ["Ingestion", "Embeddings & storage", "Retrieval & prompts", "Pipelines", "Evaluate & debug"],
-  journey: [
-    { tool: "rag.chunker", title: "1. Chunk your documents", text: "Split text into passages small enough to retrieve precisely, big enough to keep context." },
-    { tool: "rag.ingestion-plan", title: "2. Size the index", text: "How many chunks, what embedding costs and how much storage and RAM you need." },
-    { tool: "rag.embedding-models", title: "3. Pick an embedding model", text: "Dimensions, input limits and price decide cost and quality." },
-    { tool: "rag.vector-store", title: "4. Set up a vector store", text: "Collection settings, a local Docker service and client code." },
-    { tool: "rag.retrieval", title: "5. Configure retrieval", text: "Top-k, MMR, thresholds, hybrid search and reranking." },
-    { tool: "rag.context-budget", title: "6. Fit the context window", text: "How many chunks fit next to the system prompt, history and answer." },
-    { tool: "rag.pipeline", title: "7. Generate the pipeline", text: "Runnable ingest + ask code for your stack." },
-    { tool: "rag.retrieval-eval", title: "8. Measure quality", text: "Hit rate, MRR and nDCG on real questions; then check answers are grounded." }
-  ]
-};
 
 const SAMPLE_DOC = `# Installing Acme CLI
 
@@ -52,11 +34,9 @@ function splitPassages(raw: string): Array<{ text: string; source?: string }> {
   return raw.split(/^\s*---\s*$/m).map(p => ({ text: p.trim() })).filter(p => p.text);
 }
 
-const chunker: ToolDefinition = {
+const chunker: ToolSpec = {
   id: "rag.chunker",
   command: "chunkingTester",
-  section: "rag",
-  category: "Ingestion",
   title: "Chunking Tester",
   summary: "Split a document with different strategies and see chunk sizes, overlap and problems before you embed anything.",
   guide: "Recursive splitting (paragraphs, then lines, then sentences) is a good default. Markdown splitting keeps sections together and records the heading trail as metadata. 200-500 tokens with 10-20% overlap suits most question answering; smaller chunks are more precise, bigger ones carry more context.",
@@ -104,11 +84,9 @@ const chunker: ToolDefinition = {
   }
 };
 
-const ingestionPlan: ToolDefinition = {
+const ingestionPlan: ToolSpec = {
   id: "rag.ingestion-plan",
   command: "embeddingCost",
-  section: "rag",
-  category: "Ingestion",
   title: "Chunk & Index Size Calculator",
   summary: "From corpus size and chunk settings: number of chunks, embedding cost, monthly cost, vector storage and index RAM.",
   keywords: ["embedding cost", "chunk size", "overlap", "storage", "hnsw", "ram", "index size"],
@@ -160,11 +138,9 @@ const ingestionPlan: ToolDefinition = {
   }
 };
 
-const embeddingModels: ToolDefinition = {
+const embeddingModels: ToolSpec = {
   id: "rag.embedding-models",
   command: "embeddingModelGuide",
-  section: "rag",
-  category: "Embeddings & storage",
   title: "Embedding Model Guide",
   summary: "Compare embedding models by dimensions, input limit and price, and get the settings your vector store needs.",
   guide: "The vector store's dimension and distance metric must match the embedding model, and queries must be embedded with the same model as documents. Changing the model means re-embedding everything.",
@@ -191,11 +167,9 @@ const embeddingModels: ToolDefinition = {
   }
 };
 
-const vectorStore: ToolDefinition = {
+const vectorStore: ToolSpec = {
   id: "rag.vector-store",
   command: "vectorStoreSetup",
-  section: "rag",
-  category: "Embeddings & storage",
   title: "Vector Store Setup",
   summary: "Collection settings, a local Docker service, environment variables and Python client code for Chroma, Qdrant, pgvector, Pinecone, Weaviate or OpenSearch.",
   keywords: ["vector database", "qdrant", "chroma", "pgvector", "pinecone", "weaviate", "opensearch", "hnsw", "collection", "index"],
@@ -237,11 +211,9 @@ const vectorStore: ToolDefinition = {
   }
 };
 
-const retrieval: ToolDefinition = {
+const retrieval: ToolSpec = {
   id: "rag.retrieval",
   command: "retrievalConfig",
-  section: "rag",
-  category: "Retrieval & prompts",
   title: "Retrieval Configuration",
   summary: "Pick a search mode (similarity, MMR, threshold, hybrid) and reranking, and get LangChain or LlamaIndex code with tuning advice.",
   keywords: ["retriever", "top k", "mmr", "hybrid search", "bm25", "rerank", "cohere rerank", "cross encoder", "similarity threshold"],
@@ -276,11 +248,9 @@ const retrieval: ToolDefinition = {
   }
 };
 
-const contextBudgetTool: ToolDefinition = {
+const contextBudgetTool: ToolSpec = {
   id: "rag.context-budget",
   command: "contextWindow",
-  section: "rag",
-  category: "Retrieval & prompts",
   title: "Context Window Budget",
   summary: "How many retrieved chunks fit in the model's context next to the system prompt, chat history, question and answer.",
   keywords: ["context window", "token budget", "top k", "max tokens", "prompt size"],
@@ -328,11 +298,9 @@ const contextBudgetTool: ToolDefinition = {
   }
 };
 
-const groundedPrompt: ToolDefinition = {
+const groundedPrompt: ToolSpec = {
   id: "rag.prompt",
   command: "ragPromptBuilder",
-  section: "rag",
-  category: "Retrieval & prompts",
   title: "Grounded Prompt Assembler",
   summary: "Turn a question and retrieved passages into a numbered, citation-ready RAG prompt, with token counts.",
   guide: "Separate passages with a line containing only --- (or paste JSONL chunks with a \"text\" field). Numbered passages let the model cite [1], [2]… and let you check the answer with the grounding checker.",
@@ -378,11 +346,9 @@ const PIPELINE_PRESETS = [
   { label: "TypeScript + Qdrant", values: { language: "typescript", framework: "plain", db: "qdrant", provider: "openai", chatModel: "gpt-4.1-mini", embeddingModel: "text-embedding-3-small", dimensions: 1536 } }
 ];
 
-const pipeline: ToolDefinition = {
+const pipeline: ToolSpec = {
   id: "rag.pipeline",
   command: "ragPipeline",
-  section: "rag",
-  category: "Pipelines",
   title: "RAG Pipeline Generator",
   summary: "A runnable ingest + ask project for your stack: chunking, embeddings, vector store, grounded answers with citations.",
   guide: "Start from a preset under Presets. \"Local & free\" needs only Docker and Ollama. Run ingest once to index a folder of .md/.txt files, then ask questions. The embedding model and vector dimensions must match.",
@@ -434,11 +400,9 @@ const pipeline: ToolDefinition = {
 // Evaluate & debug
 // ---------------------------------------------------------------------------
 
-const retrievalEval: ToolDefinition = {
+const retrievalEval: ToolSpec = {
   id: "rag.retrieval-eval",
   command: "ragEvalScores",
-  section: "rag",
-  category: "Evaluate & debug",
   title: "Retrieval Evaluation",
   summary: "Hit rate, precision, recall, MRR and nDCG@k from your retriever's ranked results for labelled questions.",
   guide: "One line per question: query | relevant ids | retrieved ids in rank order, or JSONL {\"query\", \"relevant\": [...], \"retrieved\": [...]}. 20-50 real questions are enough to compare chunk sizes, models and rerankers.",
@@ -469,11 +433,9 @@ const retrievalEval: ToolDefinition = {
   }
 };
 
-const grounding: ToolDefinition = {
+const grounding: ToolSpec = {
   id: "rag.grounding",
   command: "ragHallucinationAnalyzer",
-  section: "rag",
-  category: "Evaluate & debug",
   title: "Answer Grounding Checker",
   summary: "Flag sentences in an answer that the retrieved context does not support, including numbers that appear nowhere in the context.",
   guide: "A fast lexical check (no model call): it finds likely hallucinations for review, not proof. Numbers and names missing from the context are the strongest signal.",
@@ -500,11 +462,9 @@ const grounding: ToolDefinition = {
   }
 };
 
-const hybrid: ToolDefinition = {
+const hybrid: ToolSpec = {
   id: "rag.rrf",
   command: "hybridSearchRrf",
-  section: "rag",
-  category: "Evaluate & debug",
   title: "Hybrid Search Fusion (RRF)",
   summary: "Merge ranked lists from keyword and vector search with weighted Reciprocal Rank Fusion and see the final order.",
   keywords: ["hybrid search", "rrf", "reciprocal rank fusion", "bm25", "fusion", "ranking"],
@@ -530,11 +490,9 @@ const hybrid: ToolDefinition = {
   }
 };
 
-const dedup: ToolDefinition = {
+const dedup: ToolSpec = {
   id: "rag.dedup",
   command: "semanticDedup",
-  section: "rag",
-  category: "Evaluate & debug",
   title: "Near-Duplicate Chunk Finder",
   summary: "Find near-duplicate passages (boilerplate, repeated footers, copied pages) that waste index space and crowd out results.",
   keywords: ["dedup", "duplicate", "similarity", "shingles", "jaccard", "boilerplate"],
@@ -563,11 +521,9 @@ const dedup: ToolDefinition = {
   }
 };
 
-const metadataValidator: ToolDefinition = {
+const metadataValidator: ToolSpec = {
   id: "rag.metadata",
   command: "chunkMetadataValidator",
-  section: "rag",
-  category: "Evaluate & debug",
   title: "Chunk Metadata Validator",
   summary: "Check a chunks JSONL file before ingesting: text present, ids unique, chunks under the embedding limit, required metadata fields and types.",
   keywords: ["metadata", "jsonl", "validate", "ingestion", "schema", "filters"],
@@ -589,7 +545,7 @@ const metadataValidator: ToolDefinition = {
   }
 };
 
-export const RAG_TOOLS: ToolDefinition[] = [
+export const RAG_TOOLS: ToolSpec[] = [
   chunker, ingestionPlan, embeddingModels, vectorStore, retrieval, contextBudgetTool, groundedPrompt, pipeline,
   retrievalEval, grounding, hybrid, dedup, metadataValidator
 ];

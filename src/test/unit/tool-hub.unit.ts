@@ -5,6 +5,7 @@ import * as vm from "vm";
 import { HUB_ICONS, renderToolHub, validateHub } from "../../utils/tool-hub";
 import { ALL_HUBS } from "../../commands/hubs";
 import { TOOLKIT_COMMANDS } from "../../toolkits/commands";
+import { HUB_COMMANDS, NAV } from "../../toolkits/layout";
 import { suite, test } from "./run-unit-tests";
 
 const ROOT = path.resolve(__dirname, "../../..");
@@ -30,9 +31,25 @@ suite("tool hubs", () => {
     }
   });
 
-  test("the RAG hub offers a guided path for newcomers", () => {
-    const rag = ALL_HUBS.find(h => h.viewType === "ragHub")!;
-    assert.ok((rag.journey ?? []).length >= 5);
+  test("the Data & RAG section keeps its guided path for newcomers", () => {
+    const journeys = ALL_HUBS[0].journeys ?? {};
+    assert.ok((journeys["Data & RAG"] ?? []).length >= 5);
+  });
+
+  test("the hub lists every navigation entry exactly once, in layout order", () => {
+    const commands = ALL_HUBS[0].tools.map(t => t.command);
+    assert.strictEqual(new Set(commands).size, commands.length);
+    assert.deepStrictEqual(commands, NAV.flatMap(s => s.entries.map(e => `sayaib.hue-console.${e.command}`)));
+    assert.deepStrictEqual(ALL_HUBS[0].categories, NAV.map(s => s.title));
+  });
+
+  test("older hub commands open the hub on an existing section", () => {
+    for (const [command, section] of Object.entries(HUB_COMMANDS)) {
+      assert.ok(contributed.has(`sayaib.hue-console.${command}`), command);
+      assert.ok(section === "all" || NAV.some(s => s.id === section), command);
+    }
+    const html = renderToolHub(ALL_HUBS[0], { cspSource: "x", scriptUri: "x", pinned: [], initialCategory: "AI & ML" });
+    assert.strictEqual(JSON.parse(/id="hub-data">([\s\S]*?)<\/script>/.exec(html)![1]).initialCategory, "AI & ML");
   });
 
   test("rendered page loads its script from the webview only and embeds data safely", () => {

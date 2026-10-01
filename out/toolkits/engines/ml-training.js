@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.experimentRecord = exports.modelCard = exports.regressionMetrics = exports.classificationMetrics = exports.parseNumbers = exports.scheduleCode = exports.scheduleSeries = exports.lrAt = exports.splitCode = exports.splitDataset = exports.parseClassCounts = exports.allocate = void 0;
+exports.modelCard = exports.regressionMetrics = exports.classificationMetrics = exports.parseNumbers = exports.scheduleCode = exports.scheduleSeries = exports.lrAt = exports.splitCode = exports.splitDataset = exports.parseClassCounts = exports.allocate = void 0;
 const types_1 = require("../types");
 // ---------------------------------------------------------------------------
 // Dataset split
@@ -253,29 +253,4 @@ ${c.author || "Your name / team"}
 `;
 }
 exports.modelCard = modelCard;
-function experimentRecord(input, now) {
-    const parsePairs = (text) => {
-        const out = {};
-        for (const entry of text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)) {
-            const match = /^([^:=]+)[:=]\s*(.*)$/.exec(entry);
-            if (!match)
-                throw new types_1.ToolInputError(`Could not read "${entry}". Use key: value, e.g. lr: 3e-4`);
-            const raw = match[2].trim();
-            const number = Number(raw);
-            out[match[1].trim()] = raw === "true" ? true : raw === "false" ? false : raw !== "" && Number.isFinite(number) ? number : raw;
-        }
-        return out;
-    };
-    return {
-        id: `${now.toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")}-${(input.name || "run").replace(/[^\w-]+/g, "-").toLowerCase()}`,
-        timestamp: now.toISOString(),
-        name: input.name,
-        model: input.model || undefined,
-        params: parsePairs(input.params),
-        metrics: parsePairs(input.metrics),
-        tags: input.tags.split(",").map(t => t.trim()).filter(Boolean),
-        notes: input.notes || undefined
-    };
-}
-exports.experimentRecord = experimentRecord;
 //# sourceMappingURL=ml-training.js.map

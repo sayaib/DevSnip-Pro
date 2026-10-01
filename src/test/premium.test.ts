@@ -144,7 +144,7 @@ suite("Points-based premium system in the extension host", () => {
   test("the REST API Client opens and its free workflow is intact", async () => {
     await vscode.commands.executeCommand("sayaib.hue-console.openGUI");
     const isOpen = () =>
-      vscode.window.tabGroups.all.flatMap(group => group.tabs).some(tab => tab.label === "API Tester Pro");
+      vscode.window.tabGroups.all.flatMap(group => group.tabs).some(tab => tab.label === "REST API Client");
     for (let attempt = 0; attempt < 40 && !isOpen(); attempt++) {
       await new Promise(resolve => setTimeout(resolve, 50));
     }

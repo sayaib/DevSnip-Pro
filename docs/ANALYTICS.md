@@ -239,7 +239,7 @@ A DevSnip Pro command ran, from any surface (palette, tool tree, hub card, conte
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `feature` | id | Command id without the extension prefix, e.g. jsonFormatter. |
-| `category` | id | Feature group: core, snippets, api, ai, rag, data, security, devops, utilities, dependencies, progress, premium. |
+| `category` | id | Feature area: the navigation section (api, frontend, mobile, code, text, convert, database, testing, git, devops, security, ai, data), or navigation, progress, core. |
 | `outcome` | enum:success \| error | Whether the command handler completed without throwing. |
 | `duration_ms` | ms | Time the command handler took (opening a panel, running a scan...). |
 | `first_use` | bool | First time this installation used this feature. |
@@ -326,7 +326,7 @@ A toolkit tool produced a result or an error. Inputs and outputs are never sent.
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `feature` | id | Command id of the tool, without prefix, e.g. dockerfileHelper. |
-| `section` | enum:dev \| ai \| rag \| data \| devops | Toolkit section. |
+| `section` | enum:api \| frontend \| mobile \| code \| text \| convert \| database \| testing \| git \| devops \| security \| ai \| data | Navigation section of the tool (layout.ts). |
 | `outcome` | enum:success \| input_error \| error \| timeout | success: a result; input_error: the tool asked for different input; error: an unexpected failure; timeout: no result within 90 seconds. |
 | `trigger` | enum:run \| live \| preset \| action | run: the Run button or Ctrl/Cmd+Enter; live: automatic re-run while typing (only the first per panel is sent); preset: a preset was applied; action: a tool-specific button such as Detect from workspace. |
 | `duration_ms` | ms | Time the tool took. |

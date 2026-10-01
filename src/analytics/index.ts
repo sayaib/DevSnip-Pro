@@ -6,6 +6,7 @@ import axios from "axios";
 import { AnalyticsClient, CapturedEvent, DeliveryResult, Transport } from "./client";
 import { EventName, EventProperties } from "./events";
 import { TOOLKIT_COMMANDS } from "../toolkits/commands";
+import { HUB_COMMANDS, findEntry } from "../toolkits/layout";
 
 /**
  * DevSnip Pro's analytics entry point.
@@ -188,24 +189,22 @@ export function createPostHogTransport(config: AnalyticsConfig, log?: (line: str
   };
 }
 
-/** Toolkit commands know their section; "dev" tools report as utilities like the other developer tools. */
-const TOOLKIT_SECTION = new Map(TOOLKIT_COMMANDS.map(c => [c.command, c.section === "dev" ? "utilities" : c.section]));
+/** Commands that are aliases of a toolkit tool report under that tool's section. */
+const TOOLKIT_SECTION = new Map(TOOLKIT_COMMANDS.map(c => [c.command, c.section]));
 
-/** Feature group for a command id, used to compare areas of the extension. */
+/**
+ * Feature area for a command id, used to compare areas of the extension: the
+ * navigation section the command lives in (layout.ts), so analytics and the
+ * sidebar always agree. Commands that are not tools have their own areas.
+ */
 export function featureCategory(feature: string): string {
+  const placed = findEntry(feature);
+  if (placed) return placed.section.id;
   const toolkit = TOOLKIT_SECTION.get(feature);
   if (toolkit) return toolkit;
-  const name = feature.toLowerCase();
-  if (/snippet/.test(name)) return "snippets";
-  if (/dependencymanager/.test(name)) return "dependencies";
-  if (/security|audit|endpoint/.test(name)) return "security";
-  if (/^rag|chunking|embedding|contextwindow|semanticdedup|hybridsearch|hallucination/.test(name)) return "rag";
-  if (/^aiml|^ml|prompt|token|llm|dataset|gpu|experiment|modelcard|jsonl|metrics|lrscheduler|inference|mdtable/.test(name)) return "ai";
-  if (/bigdata|schema|spark|dataquality|partition|deltalake/.test(name)) return "data";
-  if (/devops|mlops|observability/.test(name)) return "devops";
-  if (/milestone|premium|resetfeature/.test(name)) return "progress";
-  if (/opengui/.test(name)) return "api";
-  if (/advancedtools|regex|json|hash|base64|color|url|timestamp|lorem|searchtools/.test(name)) return "utilities";
+  if (feature in HUB_COMMANDS || feature === "searchTools") return "navigation";
+  if (/^(securityHub)$/.test(feature)) return "security";
+  if (/milestone|premium|resetFeature/i.test(feature)) return "progress";
   return "core";
 }
 

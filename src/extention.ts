@@ -5,7 +5,6 @@ import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
 import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
 import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImportsCommand";
 import { apiTest } from "./commands/api-test";
-import { registerAdvancedToolsCommands } from "./commands/advancedTools";
 import { registerDependencyManagerCommand } from "./commands/dependencyManager";
 import { registerHubCommands } from "./commands/hubCommands";
 import { registerToolkitCommands } from "./toolkits/runner";
@@ -72,10 +71,9 @@ export function activate(context: vscode.ExtensionContext) {
     ["OpenCode integration", () => registerOpenCodeIntegrationCommand(context)],
     ["REST API client", () => apiTest(context, { access, collections })],
     ["premium commands", () => registerPremiumCommands(context, access)],
-    ["developer utilities", () => registerAdvancedToolsCommands(context)],
     ["dependencies & installation", () => registerDependencyManagerCommand(context)],
     ["tool hubs", () => registerHubCommands(context)],
-    ["developer, AI, RAG, data and DevOps tools", () => registerToolkitCommands(context)],
+    ["toolkit tools", () => registerToolkitCommands(context)],
     ["security tools", () => registerSecurityToolsCommands(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
     ["tool search", () => registerUniversalToolSearch(context)],
@@ -102,43 +100,25 @@ type ToolSearchItem = {
   command: string;
 };
 
-/** Tools that are not part of the toolkit registry. Toolkit tools are added at search time. */
-const STANDALONE_TOOLS: ToolSearchItem[] = [
-  { label: "REST API Client", description: "Core / HTTP / GraphQL / WebSocket", command: "sayaib.hue-console.openGUI" },
-  { label: "Analyze and Remove Console Logs", description: "Core / Cleanup", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
-  { label: "Remove Unused Imports", description: "Core / Cleanup", command: "sayaib.hue-console.removeUnusedImports" },
-  { label: "README Viewer & Manager", description: "Core / Docs", command: "sayaib.hue-console.readmeManager" },
-  { label: "OpenCode Integration", description: "Core / AI assistant", command: "sayaib.hue-console.openCodeIntegration" },
-  { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
-  { label: "View Saved Code Snippets", description: "Snippets", command: "sayaib.hue-console.showSnippets" },
-  { label: "Developer Tools", description: "Hub", command: "sayaib.hue-console.advancedToolsHub" },
-  { label: "AI & ML Tools", description: "Hub", command: "sayaib.hue-console.aiMlHub" },
-  { label: "RAG Tools", description: "Hub", command: "sayaib.hue-console.ragHub" },
-  { label: "Data Tools", description: "Hub", command: "sayaib.hue-console.bigDataHub" },
-  { label: "DevOps Tools", description: "Hub", command: "sayaib.hue-console.devopsGenerator" },
-  { label: "Dependencies & Installation", description: "Developer Tools / npm / yarn / pnpm / pip / Maven / Gradle", command: "sayaib.hue-console.dependencyManager" },
-  { label: "Regex Builder & Tester", description: "Developer Tools / Pattern", command: "sayaib.hue-console.regexBuilder" },
-  { label: "JSON/XML Formatter", description: "Developer Tools / Format / Validate", command: "sayaib.hue-console.jsonFormatter" },
-  { label: "Hash Generator", description: "Developer Tools / SHA", command: "sayaib.hue-console.hashGenerator" },
-  { label: "Timestamp Converter", description: "Developer Tools / Epoch / Dates", command: "sayaib.hue-console.timestampConverter" },
-  { label: "Color Palette", description: "Developer Tools / Design / Contrast", command: "sayaib.hue-console.colorPalette" },
-  { label: "Security Hub", description: "Security / Endpoint / Workspace / Cloud / Dependencies", command: "sayaib.hue-console.securityHub" },
-  { label: "Endpoint Security Scan", description: "Security / Headers / HSTS / CSP / CORS / TLS / Cookies", command: "sayaib.hue-console.endpointSecurityScan" },
-  { label: "Security Audit", description: "Security / Secrets / Injection / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
-  { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / Docker / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
-  { label: "Dependency & Config Check", description: "Security / Lockfiles / Advisories / CI hardening", command: "sayaib.hue-console.dependencyAudit" },
-  { label: "Milestone & Points Tracker", description: "Progress", command: "sayaib.hue-console.milestoneTracker" },
-];
-
-/** Every searchable tool: the standalone ones plus the toolkit (title, section, category and keywords). */
+/** Every tool in the navigation, in section order: section, sub-group and keywords make it findable. */
 async function searchableTools(): Promise<ToolSearchItem[]> {
-  const { ALL_TOOLS, SECTIONS } = await import("./toolkits/registry");
-  const toolkit = ALL_TOOLS.map(tool => ({
-    label: tool.title,
-    description: `${SECTIONS.find(s => s.id === tool.section)?.title} / ${tool.category} / ${(tool.keywords ?? []).slice(0, 5).join(" / ")}`,
-    command: `sayaib.hue-console.${tool.command}`
+  const { NAV, COMMAND_PREFIX } = await import("./toolkits/layout");
+  const { findTool } = await import("./toolkits/registry");
+  const tools = NAV.flatMap(section => section.entries.map(entry => {
+    const tool = entry.tool ? findTool(entry.tool) : undefined;
+    const keywords = (tool?.keywords ?? entry.keywords ?? []).slice(0, 5);
+    return {
+      label: tool?.title ?? entry.label,
+      description: [section.title, entry.category, ...keywords].filter(Boolean).join(" / "),
+      command: COMMAND_PREFIX + entry.command
+    };
   }));
-  return [...STANDALONE_TOOLS, ...toolkit];
+  return [
+    ...tools,
+    { label: "Browse All Tools", description: "All sections, with search and pinning", command: `${COMMAND_PREFIX}advancedToolsHub` },
+    { label: "Security Hub", description: "Security & Auth / every security scan in one panel", command: `${COMMAND_PREFIX}securityHub` },
+    { label: "Milestone & Points Tracker", description: "Progress", command: `${COMMAND_PREFIX}milestoneTracker` }
+  ];
 }
 
 function registerUniversalToolSearch(context: vscode.ExtensionContext): void {

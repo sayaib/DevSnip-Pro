@@ -85,24 +85,36 @@ suite("toolkit registry", () => {
 
   test("replaced tools keep their command ids", () => {
     const ids = new Set(TOOLKIT_COMMANDS.map(c => c.command));
-    for (const id of ["tokenCounter", "promptTemplate", "llmApiTester", "gpuVram", "chunkingTester", "contextWindow", "ragEvalScores", "sparkSqlFormatter", "schemaViewer", "jsonlViewer", "base64Encoder", "urlEncoder", "jsonToToon", "observabilityAnalyze", "mlopsGenerator"]) {
+    for (const id of ["jsonFormatter", "yamlJsonTool", "colorPalette", "modelComparison", "llmResponseFormatter", "schemaDiff", "hashGenerator", "timestampConverter", "regexBuilder", "tokenCounter", "promptTemplate", "llmApiTester", "gpuVram", "chunkingTester", "contextWindow", "ragEvalScores", "sparkSqlFormatter", "schemaViewer", "jsonlViewer", "base64Encoder", "urlEncoder", "jsonToToon", "observabilityAnalyze", "mlopsGenerator"]) {
       assert.ok(ids.has(id), `${id} no longer opens a tool`);
     }
   });
 
-  test("every section has tools in each category and a description", () => {
+  test("every section has tools and a description, and every tool lives in exactly one section", () => {
     for (const s of SECTIONS) {
-      assert.ok(s.description.length > 20);
-      assert.ok(ALL_TOOLS.some(t => t.section === s.id));
+      assert.ok(s.description.length > 20, s.id);
+      assert.ok(s.entries.length > 0, s.id);
     }
+    const homes = new Map<string, string[]>();
+    for (const s of SECTIONS) for (const e of s.entries) homes.set(e.command, [...(homes.get(e.command) ?? []), s.title]);
+    for (const [command, sections] of homes) assert.strictEqual(sections.length, 1, `${command} is in ${sections.join(" and ")}`);
+    for (const t of ALL_TOOLS) assert.ok(homes.has(t.command), `${t.id} has no home`);
+  });
+
+  test("sections are ordered with the daily tools first", () => {
+    assert.deepStrictEqual(SECTIONS.map(s => s.title), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
+    assert.strictEqual(SECTIONS[0].entries[0].command, "openGUI");
   });
 
   test("analytics files toolkit tools under their section", () => {
     assert.strictEqual(featureCategory("dockerfileHelper"), "devops");
-    assert.strictEqual(featureCategory("jwtDecoder"), "utilities");
-    assert.strictEqual(featureCategory("dataConverter"), "data");
-    assert.strictEqual(featureCategory("ragPipeline"), "rag");
+    assert.strictEqual(featureCategory("jwtDecoder"), "security");
+    assert.strictEqual(featureCategory("dataConverter"), "convert");
+    assert.strictEqual(featureCategory("ragPipeline"), "data");
     assert.strictEqual(featureCategory("llmClientSetup"), "ai");
+    // Aliases report under their tool's section.
+    assert.strictEqual(featureCategory("modelComparison"), "ai");
+    assert.strictEqual(featureCategory("yamlJsonTool"), "text");
   });
 });
 
@@ -137,9 +149,12 @@ suite("toolkit tools", () => {
           for (const doc of YAML.parseAllDocuments(b.content)) assert.deepStrictEqual(doc.errors.map(e => e.message), [], where);
           checked++;
         }
-        if (b.language === "typescript" || b.language === "javascript") {
-          const out = ts.transpileModule(b.content, { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022 } });
-          assert.deepStrictEqual((out.diagnostics ?? []).map(d => ts.flattenDiagnosticMessageText(d.messageText, "\n")), [], where);
+        if (b.language === "typescript" || b.language === "javascript" || b.language === "tsx" || b.language === "jsx") {
+          const jsx = b.language === "tsx" || b.language === "jsx";
+          // Bare JSX fragments (HTML → JSX without a component) are expressions, so wrap them to parse.
+          const source = jsx && /^\s*</.test(b.content) ? `const view = (\n${b.content}\n);\nexport default view;\n` : b.content;
+          const out = ts.transpileModule(source, { fileName: jsx ? "file.tsx" : "file.ts", reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022, ...(jsx ? { jsx: ts.JsxEmit.Preserve } : {}), experimentalDecorators: true } });
+          assert.deepStrictEqual((out.diagnostics ?? []).map(d => ts.flattenDiagnosticMessageText(d.messageText, "\n")), [], `${where}\n${source.slice(0, 400)}`);
           checked++;
         }
       }

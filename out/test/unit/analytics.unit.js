@@ -31,6 +31,7 @@ const events_1 = require("../../analytics/events");
 const analytics_1 = require("../../analytics");
 const command_registry_1 = require("../../utils/command-registry");
 const vscode_stub_1 = require("./vscode-stub");
+const layout_1 = require("../../toolkits/layout");
 const run_unit_tests_1 = require("./run-unit-tests");
 const MIN = 60000;
 const KEY = "phc_abcdefghijklmnopqrstuvwxyz0123456789";
@@ -316,20 +317,21 @@ const names = (events) => events.map(event => event.event);
         (0, analytics_1.trackCommand)("sayaib.hue-console.createCustomSnippet", "success", 5);
         const used = client.pending().filter(event => event.event === "feature_used").map(event => event.properties);
         assert.deepStrictEqual(used.map(p => [p.feature, p.category, p.outcome, p.first_use]), [
-            ["jsonFormatter", "utilities", "success", false],
-            ["createCustomSnippet", "snippets", "error", true],
-            ["createCustomSnippet", "snippets", "success", false]
+            ["jsonFormatter", "text", "success", false],
+            ["createCustomSnippet", "code", "error", true],
+            ["createCustomSnippet", "code", "success", false]
         ]);
         (0, analytics_1.setAnalyticsClientForTests)(undefined);
         client.setEnabled(false);
     });
     (0, run_unit_tests_1.test)("every contributed command maps to a feature area", () => {
         const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../package.json"), "utf8"));
-        const categories = new Set(["core", "snippets", "api", "ai", "rag", "data", "security", "devops", "utilities", "dependencies", "progress"]);
+        const categories = new Set([...layout_1.NAV.map(s => s.id), "navigation", "progress", "core"]);
         const expect = {
-            openGUI: "api", tokenCounter: "ai", ragHub: "rag", chunkingTester: "rag", securityAudit: "security", schemaViewer: "data",
-            devopsGenerator: "devops", observabilityAnalyze: "devops", dependencyManager: "dependencies", milestoneTracker: "progress",
-            regexBuilder: "utilities", showSnippets: "snippets", readmeManager: "core", listAndRemoveConsoleLogs: "core"
+            openGUI: "api", tokenCounter: "ai", ragHub: "navigation", chunkingTester: "data", securityAudit: "security", securityHub: "security", schemaViewer: "data",
+            devopsGenerator: "navigation", observabilityAnalyze: "testing", dependencyManager: "code", milestoneTracker: "progress", searchTools: "navigation",
+            regexBuilder: "text", curlConverter: "api", deepLinkHelper: "mobile", showSnippets: "code", readmeManager: "code", listAndRemoveConsoleLogs: "code",
+            jwtDecoder: "security", sparkSqlFormatter: "database", gitRecipes: "git", colorPalette: "frontend"
         };
         for (const entry of manifest.contributes.commands) {
             const feature = entry.command.replace("sayaib.hue-console.", "");

@@ -177,7 +177,9 @@
     const labelRow = h("div", { class: "label-row" },
       h("label", { class: "lbl", for: id }, f.label, f.required ? h("span", { class: "req", "aria-hidden": "true", text: "*" }) : null),
       f.fromEditor ? button("Use editor", "editor", () => vscode.postMessage({ type: "readEditor", field: f.id }), "ghost", `Fill ${f.label} from the active editor (selection, or the whole file)`) : null);
-    return h("div", { class: "field" + (f.width === "narrow" ? " narrow" : "") }, labelRow, control, f.help ? h("div", { class: "help", text: f.help }) : null);
+    // A narrow select with long option labels would truncate them; give it two columns.
+    const longOptions = f.kind === "select" && (f.options || []).some(o => o.label.length > 24);
+    return h("div", { class: "field" + (f.width === "narrow" ? " narrow" : "") + (longOptions ? " span2" : "") }, labelRow, control, f.help ? h("div", { class: "help", text: f.help }) : null);
   }
 
   function presetsSelect() {
@@ -290,28 +292,29 @@
     return text.length > MAX_SHOWN ? h("div", { class: "truncated", text: `Showing the first ${MAX_SHOWN.toLocaleString()} of ${text.length.toLocaleString()} characters. Copy, Open or Save use everything.` }) : null;
   }
 
-  function codeActions(content, language, fileName) {
+  function codeActions(content, language, fileName, title) {
     return [
       button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: content }), "ghost"),
       button("Insert", "insert", () => vscode.postMessage({ type: "insert", text: content, language }), "ghost", "Insert at the cursor in your editor"),
       button("Open", "open", () => vscode.postMessage({ type: "open", text: content, language }), "ghost", "Open in a new editor tab"),
-      fileName ? button("Save", "save", () => vscode.postMessage({ type: "save", files: [{ path: fileName, content, language }] }), "ghost", `Save as ${fileName} in the workspace`) : null
+      fileName ? button("Save", "save", () => vscode.postMessage({ type: "save", files: [{ path: fileName, content, language }] }), "ghost", `Save as ${fileName} in the workspace`) : null,
+      button("", "download", () => vscode.postMessage({ type: "download", text: content, language, fileName: fileName || title || "" }), "ghost", "Save as… (choose where to save the file)")
     ];
   }
 
   function renderOutput(o) {
     if (o.kind === "code") {
-      return h("section", { class: "panel out" }, outHead(o.title, o.fileName && o.fileName !== o.title ? o.fileName : null, codeActions(o.content, o.language, o.fileName)), h("pre", { class: "code", tabindex: "0", text: shown(o.content) }), truncatedNote(o.content));
+      return h("section", { class: "panel out" }, outHead(o.title, o.fileName && o.fileName !== o.title ? o.fileName : null, codeActions(o.content, o.language, o.fileName, o.title)), h("pre", { class: "code", tabindex: "0", text: shown(o.content) }), truncatedNote(o.content));
     }
     if (o.kind === "text") {
-      return h("section", { class: "panel out" }, outHead(o.title, null, [button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: o.content }), "ghost")]), h("div", { class: "textout", text: shown(o.content) }), truncatedNote(o.content));
+      return h("section", { class: "panel out" }, outHead(o.title, null, [button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: o.content }), "ghost"), button("", "download", () => vscode.postMessage({ type: "download", text: o.content, language: "text", fileName: o.title }), "ghost", "Save as…")]), h("div", { class: "textout", text: shown(o.content) }), truncatedNote(o.content));
     }
     if (o.kind === "table") {
       const csv = [o.columns, ...o.rows].map(r => r.map(c => { const s = String(c); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(",")).join("\n");
       const md = [`| ${o.columns.join(" | ")} |`, `| ${o.columns.map(() => "---").join(" | ")} |`, ...o.rows.map(r => `| ${r.map(c => String(c).replace(/\|/g, "\\|").replace(/\n/g, " ")).join(" | ")} |`)].join("\n");
       const body = o.rows.slice(0, 2000).map(r => h("tr", null, r.map(c => h("td", { class: typeof c === "number" ? "num" : "", text: typeof c === "number" ? c.toLocaleString(undefined, { maximumFractionDigits: 6 }) : String(c) }))));
       return h("section", { class: "panel out" },
-        outHead(o.title, `${o.rows.length} row${o.rows.length === 1 ? "" : "s"}`, [button("CSV", "copy", () => vscode.postMessage({ type: "copy", text: csv }), "ghost", "Copy as CSV"), button("Markdown", "copy", () => vscode.postMessage({ type: "copy", text: md }), "ghost", "Copy as a Markdown table")]),
+        outHead(o.title, `${o.rows.length} row${o.rows.length === 1 ? "" : "s"}`, [button("CSV", "copy", () => vscode.postMessage({ type: "copy", text: csv }), "ghost", "Copy as CSV"), button("Markdown", "copy", () => vscode.postMessage({ type: "copy", text: md }), "ghost", "Copy as a Markdown table"), button("", "download", () => vscode.postMessage({ type: "download", text: csv, language: "csv", fileName: `${o.title}.csv` }), "ghost", "Save as CSV…")]),
         h("div", { class: "tablewrap" }, h("table", null, h("thead", null, h("tr", null, o.columns.map(c => h("th", { scope: "col", text: c })))), h("tbody", null, body))),
         o.rows.length > 2000 ? h("div", { class: "truncated", text: `Showing 2,000 of ${o.rows.length.toLocaleString()} rows; copy to get all of them.` }) : null);
     }

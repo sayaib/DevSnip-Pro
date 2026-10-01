@@ -1,5 +1,97 @@
 # Development Changelog of DevSnip Pro
 
+## 11.70.1 - Web and Mobile toolkits, and every tool in one clear place
+
+This release adds 32 tools for full-stack web and mobile development. It also reorganises all 109 tools into 13 focused sections, and merges the tools that overlapped. Every existing command id still works, so keybindings, favorites and usage history carry over. Everything runs locally; nothing you paste (tokens, keys, certificates, logs) leaves VS Code.
+
+### New navigation
+
+- **13 sections, most-used first:**
+  - Backend & API
+  - Web & Frontend
+  - Mobile Development
+  - Code & Productivity
+  - Text & Formatters
+  - Encoders & Converters
+  - Database
+  - Testing & Debugging
+  - Git & Version Control
+  - DevOps & Cloud
+  - Security & Auth
+  - AI & ML
+  - Data & RAG
+- **One home per tool:** every tool appears in exactly one section, ordered by how often developers use it.
+- **Browse All Tools:** one searchable hub with a filter per section replaces the seven separate hubs. The old hub commands open it on their section, and the RAG guided path is kept.
+- **One source:** the sidebar, hub, tool search and command palette titles all come from one layout, so they always agree. Palette titles use one emoji per section.
+
+### Added
+
+- **Backend & API:**
+  - cURL Converter, with 13 targets including Dart, Kotlin/OkHttp and Swift.
+  - URL & Query String Tool.
+  - CORS Builder & Debugger: config, a browser-accurate header check, and explanations for console errors.
+  - OpenAPI / Swagger Toolkit: lint, TypeScript types, a typed fetch client, cURL examples, and a spec from sample JSON.
+  - GraphQL Formatter & Types.
+  - API Resource Scaffolder: Express, NestJS, Next.js or Fastify, on Prisma, Mongoose or an in-memory store.
+- **Web & Frontend:**
+  - React / Next.js / React Native Generator.
+  - HTML → JSX.
+  - CSS Units & Fluid Type.
+  - SEO & Social Meta Tags.
+  - Cache-Control Builder.
+- **Mobile Development:**
+  - adb & simctl Commands.
+  - Deep Links & Universal Links.
+  - App Permissions.
+  - Local API Access from Devices.
+  - Environments & Build Flavors.
+  - Signing, Keystores & Fingerprints.
+  - SDK & Build Compatibility.
+  - Mobile CI Workflow, with Play and TestFlight upload.
+  - dp / px / pt Converter & Asset Sizes.
+- **Database:** Database Connection Strings (they fix password encoding) and SQL → MongoDB.
+- **Testing & Debugging:** Build Error Explainer, covering more than 50 Gradle, Xcode, CocoaPods, Metro, Flutter, npm and Next.js errors.
+- **Git & Version Control:**
+  - Git Command Recipes with Conventional Commit messages.
+  - .gitignore Generator, which detects your stack.
+  - Semver & App Version Calculator.
+- **Security & Auth:**
+  - OAuth 2.0 & PKCE Helper.
+  - CSP & Security Headers.
+  - Cookie Inspector & Builder.
+  - Certificate & SSL Pinning Inspector.
+  - Hash, HMAC & Webhook Signatures (GitHub, Stripe, Shopify, Slack).
+- **Text & Formatters:** Regex Tester & Library, with tested patterns and code for 9 languages.
+- **Encoders & Converters:** Timestamp Converter, with time zones and date math.
+- **DevOps & Cloud:** docker run → Compose.
+- **Improved existing tools:**
+  - JSON to Types now generates Dart, Kotlin and Swift models.
+  - The JWT tool verifies RS/PS/ES/EdDSA tokens with a PEM key, certificate or JWK, and signs test tokens.
+  - The ID generator creates MongoDB ObjectIds and decodes ObjectId and snowflake timestamps.
+- **Every tool:** a Save as… button on code, text and table outputs.
+
+### Merged
+
+- **JSON/XML Formatter + YAML / JSON Validator** → **JSON / YAML / XML Formatter**. It formats, minifies, validates and converts all three, and reports the exact line of every JSON error.
+- **Color Palette + Color Converter** → **Color Converter & Palette**, covering CSS, Tailwind, Android, Compose, Flutter and SwiftUI, with WCAG contrast and a 50-950 shade palette.
+- **Token & Cost Estimator + Model Comparison** → **LLM Models, Tokens & Cost**.
+- **LLM JSON Extractor + Response Formatter** → **LLM Output Cleaner & JSON Validator**.
+- **Schema Viewer + Schema Diff** → **Schema Viewer & Diff**.
+- **Standalone panels:** Regex Builder, Hash Generator and Timestamp Converter were rebuilt as full tools under their old commands.
+- **Security Hub shortcuts:** they were five sidebar entries for one panel; the sidebar now lists the four scans.
+
+### Removed
+
+- **Experiment Log:** it only formatted one JSON line; use MLflow, Weights & Biases or a plain `experiments.jsonl`.
+- **URL mode of the Port & Network Toolkit:** replaced by the URL & Query String Tool and Database Connection Strings.
+
+### Fixed
+
+- **Regex tester:** flags without `g` (for example `i`) threw an error and showed no matches.
+- **Timestamp converter:** the date picker showed UTC time as if it were local time.
+- **Narrow drop-downs:** long option labels were cut off.
+- **Editor context menu:** a command opened from the right-click menu now also receives the selected text.
+
 ## 11.69.1 - Tools sidebar: search, filters, favorites and rank card
 
 The Tools sidebar was redesigned again, to read like a polished navigation panel rather than a basic tree. Every tool, category, icon and command is unchanged.

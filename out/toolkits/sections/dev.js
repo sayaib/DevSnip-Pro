@@ -23,25 +23,17 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEV_TOOLS = exports.DEV_SECTION = void 0;
-const crypto_1 = require("crypto");
+exports.DEV_TOOLS = void 0;
 const types_1 = require("../types");
 const dev_utils_1 = require("../engines/dev-utils");
 const data_inspect_1 = require("../engines/data-inspect");
+const web_auth_1 = require("../engines/web-auth");
+const dev_regex_1 = require("../engines/dev-regex");
 const helpers_1 = require("./helpers");
-exports.DEV_SECTION = {
-    id: "dev",
-    title: "Developer Tools",
-    icon: "terminal",
-    description: "Everyday utilities: encoding, tokens, IDs, diffs, text and schedules.",
-    categories: ["Encode & inspect", "Generate", "Compare & transform"]
-};
 const CODECS = (0, helpers_1.opts)(["base64", "Base64"], ["base64url", "Base64URL"], ["url-component", "URL component (query values)"], ["url", "Full URL"], ["html", "HTML entities"], ["hex", "Hex (UTF-8 bytes)"], ["unicode", "Unicode escapes (\\uXXXX)"], ["json-string", "JSON string literal"]);
 const encodeTool = {
     id: "dev.encode",
     command: "base64Encoder",
-    section: "dev",
-    category: "Encode & inspect",
     title: "Encode / Decode",
     summary: "Base64, Base64URL, URL, HTML entities, hex, Unicode escapes and JSON strings, in both directions with auto-detect.",
     keywords: ["base64", "url encode", "percent encoding", "html entities", "escape", "unescape", "hex"],
@@ -93,26 +85,57 @@ const encodeTool = {
         };
     }
 };
-function b64urlDecode(segment) {
-    return Buffer.from(segment.replace(/-/g, "+").replace(/_/g, "/"), "base64");
-}
+const SAMPLE_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
 const jwtTool = {
     id: "dev.jwt",
     command: "jwtDecoder",
-    section: "dev",
-    category: "Encode & inspect",
-    title: "JWT Decoder",
-    summary: "Decode a JSON Web Token locally: header, claims with readable dates, expiry and security warnings; optionally verify an HMAC signature.",
-    guide: "Decoding happens on your machine; the token is never sent anywhere. Only HS256/HS384/HS512 signatures can be verified here (they need the shared secret). RS/ES/PS tokens need the issuer's public key.",
-    keywords: ["jwt", "json web token", "bearer", "claims", "exp", "oauth", "id token", "decode token"],
+    title: "JWT Decoder & Signer",
+    summary: "Decode a JSON Web Token locally (claims with readable dates, expiry, security warnings), verify its signature with a secret, PEM public key or JWK - or sign test tokens with HS/RS/PS/ES/EdDSA.",
+    guide: "Everything happens on your machine; tokens and keys are never sent anywhere. HS* tokens verify with the shared secret; RS/PS/ES/EdDSA tokens verify with the issuer's public key (PEM, certificate or a JWK from its jwks.json). Signing is for local testing - never paste production private keys into tools.",
+    keywords: ["jwt", "json web token", "bearer", "claims", "exp", "oauth", "id token", "decode token", "sign jwt", "verify jwt", "jwks", "rs256", "hs256"],
     icon: "key",
     live: true,
-    examples: [{ label: "Sample HS256 token (secret: your-256-bit-secret)", values: { token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", secret: "your-256-bit-secret" } }],
+    examples: [
+        { label: "Sample HS256 token (secret: your-256-bit-secret)", values: { mode: "decode", token: SAMPLE_JWT, secret: "your-256-bit-secret" } },
+        { label: "Sign a test token (HS256)", values: { mode: "sign", alg: "HS256", payload: '{\n  "sub": "user_123",\n  "role": "admin",\n  "aud": "https://api.example.com"\n}', expiresIn: 60, secret: "dev-secret-at-least-32-bytes-long!!" } }
+    ],
     fields: [
-        helpers_1.f.area("token", "Token", { rows: 5, required: true, fromEditor: true, placeholder: "eyJhbGciOi... (a leading \"Bearer \" is fine)" }),
-        helpers_1.f.secret("secret", "HMAC secret (optional)", { placeholder: "Verify HS256/HS384/HS512 signature" })
+        helpers_1.f.select("mode", "Mode", (0, helpers_1.opts)(["decode", "Decode & verify"], ["sign", "Sign a test token"])),
+        helpers_1.f.area("token", "Token", { rows: 5, required: true, fromEditor: true, placeholder: "eyJhbGciOi... (a leading \"Bearer \" is fine)", showIf: { field: "mode", equals: ["decode"] } }),
+        helpers_1.f.select("alg", "Algorithm", web_auth_1.JWT_ALGS.map(a => ({ value: a, label: a })), { showIf: { field: "mode", equals: ["sign"] } }),
+        helpers_1.f.code("payload", "Payload (JSON)", "json", { rows: 7, default: '{\n  "sub": "user_123",\n  "name": "Ada Lovelace",\n  "role": "admin"\n}', showIf: { field: "mode", equals: ["sign"] } }),
+        helpers_1.f.num("expiresIn", "Expires in (minutes, 0 = never)", 60, { min: 0, max: 5256000, showIf: { field: "mode", equals: ["sign"] } }),
+        helpers_1.f.toggle("iat", "Add iat (issued at)", true, { showIf: { field: "mode", equals: ["sign"] } }),
+        helpers_1.f.text("kid", "Key id (kid, optional)", { width: "narrow", showIf: { field: "mode", equals: ["sign"] } }),
+        helpers_1.f.secret("secret", "Secret, PEM key or JWK", { placeholder: "HS*: shared secret · RS/ES/PS: public key to verify, private key to sign" })
     ],
     async run(values, ctx) {
+        const now = (ctx.now?.() ?? new Date()).getTime();
+        if ((0, types_1.str)(values, "mode", "decode") === "sign") {
+            let payload;
+            try {
+                payload = JSON.parse((0, types_1.str)(values, "payload") || "{}");
+            }
+            catch (e) {
+                throw new types_1.ToolInputError(`The payload is not valid JSON: ${e.message}`);
+            }
+            if (!payload || typeof payload !== "object" || Array.isArray(payload))
+                throw new types_1.ToolInputError("The payload must be a JSON object.");
+            const seconds = Math.floor(now / 1000);
+            if ((0, types_1.bool)(values, "iat", true) && payload.iat === undefined)
+                payload.iat = seconds;
+            const minutes = (0, types_1.num)(values, "expiresIn", 60, { min: 0, integer: true, label: "Expires in" });
+            if (minutes > 0 && payload.exp === undefined)
+                payload.exp = seconds + minutes * 60;
+            const alg = (0, types_1.str)(values, "alg", "HS256");
+            const header = { alg, typ: "JWT", ...((0, types_1.str)(values, "kid").trim() ? { kid: (0, types_1.str)(values, "kid").trim() } : {}) };
+            const token = (0, web_auth_1.signJwt)(header, payload, (0, types_1.str)(values, "secret"));
+            return {
+                stats: [{ label: "Algorithm", value: alg }, { label: "Expires", value: payload.exp ? new Date(Number(payload.exp) * 1000).toISOString() : "never", tone: payload.exp ? "good" : "warn" }, { label: "Length", value: `${token.length} chars` }],
+                messages: [{ kind: "info", text: "Test tokens only. Real tokens should come from your auth server with short expiry, audience (aud) and issuer (iss) claims." }],
+                outputs: [(0, helpers_1.code)("Token", "text", token), (0, helpers_1.code)("Header", "json", JSON.stringify(header, null, 2)), (0, helpers_1.code)("Payload", "json", JSON.stringify(payload, null, 2)), (0, helpers_1.code)("Use it", "shell", `curl -H "Authorization: Bearer ${token}" https://api.example.com/me`)]
+            };
+        }
         const token = (0, types_1.str)(values, "token").trim().replace(/^Bearer\s+/i, "");
         if (!token)
             throw new types_1.ToolInputError("Paste a JWT.");
@@ -120,10 +143,9 @@ const jwtTool = {
         const r = inspectJwt(token);
         if (!r.valid || !r.header || !r.payload)
             throw new types_1.ToolInputError(r.error ?? "This is not a valid JWT.");
-        const now = (ctx.now?.() ?? new Date()).getTime();
         const claims = Object.entries(r.payload).map(([k, v]) => {
             const isTime = ["exp", "iat", "nbf", "auth_time", "updated_at"].includes(k) && typeof v === "number";
-            const detail = isTime ? `${new Date(v * 1000).toISOString()} (${relative(v * 1000 - now)})` : "";
+            const detail = isTime ? `${new Date(v * 1000).toISOString()} (${relative(v * 1000 - now)})` : CLAIM_MEANINGS[k] ?? "";
             return [k, typeof v === "object" ? JSON.stringify(v) : String(v), detail];
         });
         const stats = [
@@ -132,24 +154,25 @@ const jwtTool = {
         ];
         const messages = r.warnings.map(w => ({ kind: "warning", text: w }));
         const secret = (0, types_1.str)(values, "secret");
-        const alg = String(r.header.alg ?? "");
         if (secret) {
-            const parts = token.split(".");
-            const hash = { HS256: "sha256", HS384: "sha384", HS512: "sha512" }[alg];
-            if (!hash)
-                messages.push({ kind: "info", text: `${alg} signatures need a public key, not a shared secret; they cannot be verified here.` });
-            else if (parts.length < 3 || !parts[2])
-                messages.push({ kind: "error", text: "The token has no signature part." });
-            else {
-                const expected = (0, crypto_1.createHmac)(hash, secret).update(`${parts[0]}.${parts[1]}`).digest();
-                const actual = b64urlDecode(parts[2]);
-                const ok = actual.length === expected.length && (0, crypto_1.timingSafeEqual)(actual, expected);
-                stats.push({ label: "Signature", value: ok ? "valid" : "INVALID", tone: ok ? "good" : "bad" });
-                messages.unshift(ok ? { kind: "success", text: "The signature matches this secret." } : { kind: "error", text: "The signature does not match this secret: the token was altered or signed with a different key." });
+            try {
+                const v = (0, web_auth_1.verifyJwtSignature)(token, secret);
+                if (v.note)
+                    messages.unshift({ kind: v.ok ? "info" : "warning", text: v.note });
+                else {
+                    stats.push({ label: "Signature", value: v.ok ? "valid" : "INVALID", tone: v.ok ? "good" : "bad" });
+                    messages.unshift(v.ok ? { kind: "success", text: `The signature matches this ${(0, web_auth_1.isKeyMaterial)(secret) ? "key" : "secret"}.` } : { kind: "error", text: `The signature does not match this ${(0, web_auth_1.isKeyMaterial)(secret) ? "key" : "secret"}: the token was altered or signed with a different key.` });
+                }
+            }
+            catch (error) {
+                if (error instanceof types_1.ToolInputError)
+                    messages.unshift({ kind: "error", text: error.message });
+                else
+                    throw error;
             }
         }
         else {
-            messages.push({ kind: "info", text: "The signature was not verified. Decoding a token does not prove it is genuine." });
+            messages.push({ kind: "info", text: "The signature was not verified. Decoding a token does not prove it is genuine - add the secret or public key." });
         }
         return {
             stats,
@@ -162,6 +185,7 @@ const jwtTool = {
         };
     }
 };
+const CLAIM_MEANINGS = { iss: "Issuer", sub: "Subject (user id)", aud: "Audience - the API this token is for", jti: "Token id (for revocation / replay checks)", azp: "Authorized party (client id)", scope: "Granted scopes", scp: "Granted scopes", roles: "Roles", email: "Email", email_verified: "Email verified by the issuer", sid: "Session id", nonce: "Must match the nonce sent in the auth request", at_hash: "Access token hash (OIDC)", tid: "Tenant id (Entra ID)", client_id: "Client id" };
 function relative(ms) {
     const abs = Math.abs(ms);
     const unit = abs >= 86400000 ? [86400000, "day"] : abs >= 3600000 ? [3600000, "hour"] : abs >= 60000 ? [60000, "minute"] : [1000, "second"];
@@ -171,20 +195,18 @@ function relative(ms) {
 const idTool = {
     id: "dev.ids",
     command: "idGenerator",
-    section: "dev",
-    category: "Generate",
     title: "UUID & ID Generator",
-    summary: "Generate UUID v4/v7, ULID, Nano ID, random hex or strong passwords in bulk; paste an ID to see when it was created.",
+    summary: "Generate UUID v4/v7, ULID, Nano ID, MongoDB ObjectId, random hex or strong passwords in bulk; paste an ID to see when it was created.",
     guide: "UUID v7 and ULID start with a timestamp, so they sort by creation time and index well as database keys. Everything is generated locally with a cryptographic random source.",
-    keywords: ["uuid", "guid", "ulid", "nanoid", "random", "password", "token", "secret"],
+    keywords: ["uuid", "guid", "ulid", "nanoid", "objectid", "mongodb id", "snowflake", "random", "password", "token", "secret"],
     icon: "fingerprint",
     fields: [
-        helpers_1.f.select("kind", "Type", (0, helpers_1.opts)(["uuid4", "UUID v4 (random)"], ["uuid7", "UUID v7 (time-ordered)"], ["ulid", "ULID"], ["nanoid", "Nano ID"], ["hex", "Random hex"], ["password", "Password"])),
+        helpers_1.f.select("kind", "Type", (0, helpers_1.opts)(["uuid4", "UUID v4 (random)"], ["uuid7", "UUID v7 (time-ordered)"], ["ulid", "ULID"], ["nanoid", "Nano ID"], ["objectid", "MongoDB ObjectId"], ["hex", "Random hex"], ["password", "Password"])),
         helpers_1.f.num("count", "How many", 5, { min: 1, max: 1000 }),
         helpers_1.f.num("length", "Length", 21, { min: 4, max: 256, showIf: { field: "kind", equals: ["nanoid", "hex", "password"] } }),
-        helpers_1.f.toggle("uppercase", "Uppercase", false, { showIf: { field: "kind", equals: ["uuid4", "uuid7", "ulid", "hex"] } }),
+        helpers_1.f.toggle("uppercase", "Uppercase", false, { showIf: { field: "kind", equals: ["uuid4", "uuid7", "ulid", "objectid", "hex"] } }),
         helpers_1.f.toggle("symbols", "Include symbols", true, { showIf: { field: "kind", equals: ["password"] } }),
-        helpers_1.f.text("inspect", "Inspect an ID (optional)", { placeholder: "Paste a UUID or ULID to decode its timestamp" })
+        helpers_1.f.text("inspect", "Inspect an ID (optional)", { placeholder: "Paste a UUID, ULID, ObjectId or snowflake to decode its timestamp" })
     ],
     run(values) {
         const inspect = (0, types_1.str)(values, "inspect").trim();
@@ -195,7 +217,7 @@ const idTool = {
             if (rows)
                 outputs.push((0, helpers_1.table)("Inspected ID", ["Field", "Value"], rows));
             else
-                messages.push({ kind: "warning", text: "That is not a UUID or ULID." });
+                messages.push({ kind: "warning", text: "That is not a UUID, ULID, MongoDB ObjectId or snowflake ID." });
         }
         const kind = (0, types_1.str)(values, "kind", "uuid4");
         const ids = (0, dev_utils_1.generateIds)(kind, (0, types_1.num)(values, "count", 5, { min: 1, max: 1000, integer: true, label: "How many" }), {
@@ -212,8 +234,6 @@ const idTool = {
 const diffTool = {
     id: "dev.diff",
     command: "textDiff",
-    section: "dev",
-    category: "Compare & transform",
     title: "Diff Checker",
     summary: "Compare two texts line by line, or two JSON documents structurally (ignoring key order and formatting).",
     keywords: ["diff", "compare", "difference", "json diff", "text compare", "changes"],
@@ -262,8 +282,6 @@ const LINE_OPS = (0, helpers_1.opts)(["none", "No line operation"], ["sort-natur
 const textTool = {
     id: "dev.text",
     command: "caseConverter",
-    section: "dev",
-    category: "Compare & transform",
     title: "Case Converter & Text Tools",
     summary: "Convert between camelCase, snake_case, kebab-case and more; slugify; sort, dedupe and clean lines; count words and bytes.",
     keywords: ["case", "camel", "snake", "kebab", "pascal", "slug", "sort lines", "unique lines", "word count", "character count"],
@@ -295,8 +313,6 @@ const textTool = {
 const cronTool = {
     id: "dev.cron",
     command: "cronHelper",
-    section: "dev",
-    category: "Generate",
     title: "Cron Expression Helper",
     summary: "Explain a cron schedule in plain English and list its next run times, with notes for crontab, GitHub Actions and Kubernetes.",
     guide: "Five fields: minute (0-59), hour (0-23), day of month (1-31), month (1-12 or JAN-DEC), day of week (0-6 or SUN-SAT). * means every value, */n every n-th, a-b a range, a,b a list. When both day fields are set, a day matches either one.",
@@ -343,5 +359,222 @@ const cronTool = {
         };
     }
 };
-exports.DEV_TOOLS = [encodeTool, jwtTool, idTool, cronTool, diffTool, textTool];
+const hashTool = {
+    id: "dev.hash",
+    command: "hashGenerator",
+    title: "Hash, HMAC & Webhook Signatures",
+    summary: "MD5, SHA-1, SHA-2 and SHA-3 hashes in hex and Base64; HMAC with any secret; and verify webhook signatures from GitHub, Stripe, Shopify, Slack or any HMAC-SHA256 sender.",
+    guide: "Webhook signatures are computed over the exact raw request body. If yours never matches, the framework probably parsed and re-serialised the JSON (express.json(), NestJS body parser) - verify against the raw bytes. MD5 and SHA-1 are fine for checksums, never for passwords or signatures.",
+    keywords: ["hash", "sha256", "sha1", "md5", "sha512", "sha3", "checksum", "hmac", "webhook", "signature", "x-hub-signature", "stripe-signature", "shopify hmac", "slack signature"],
+    icon: "hash",
+    live: true,
+    fields: [
+        helpers_1.f.select("mode", "Tool", (0, helpers_1.opts)(["hash", "Hash"], ["hmac", "HMAC"], ["webhook", "Verify a webhook signature"])),
+        helpers_1.f.area("input", "Input", { rows: 5, required: true, fromEditor: true, default: "Hello, DevSnip Pro!", showIf: { field: "mode", equals: ["hash", "hmac"] } }),
+        helpers_1.f.select("encoding", "Input is", (0, helpers_1.opts)(["utf8", "Text (UTF-8)"], ["hex", "Hex bytes"], ["base64", "Base64 bytes"]), { showIf: { field: "mode", equals: ["hash", "hmac"] } }),
+        helpers_1.f.select("algorithm", "HMAC algorithm", (0, helpers_1.opts)(["sha256", "SHA-256"], ["sha1", "SHA-1"], ["sha384", "SHA-384"], ["sha512", "SHA-512"], ["md5", "MD5"]), { showIf: { field: "mode", equals: ["hmac"] } }),
+        helpers_1.f.select("provider", "Sender", (0, helpers_1.opts)(["github", "GitHub (X-Hub-Signature-256)"], ["stripe", "Stripe (Stripe-Signature)"], ["shopify", "Shopify (X-Shopify-Hmac-Sha256)"], ["slack", "Slack (X-Slack-Signature)"], ["generic-hex", "Generic HMAC-SHA256, hex"], ["generic-base64", "Generic HMAC-SHA256, Base64"]), { showIf: { field: "mode", equals: ["webhook"] } }),
+        helpers_1.f.code("payload", "Raw request body", "json", { rows: 6, default: '{"action":"opened","number":42}', showIf: { field: "mode", equals: ["webhook"] } }),
+        helpers_1.f.text("signature", "Signature header value", { default: "sha256=5f1d1b8ab0d2b4b8c1f2c4e3a8b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9", showIf: { field: "mode", equals: ["webhook"] } }),
+        helpers_1.f.text("timestamp", "Timestamp header (Slack / Stripe)", { width: "narrow", showIf: { field: "provider", equals: ["slack", "stripe"] } }),
+        helpers_1.f.secret("secret", "Secret", { showIf: { field: "mode", equals: ["hmac", "webhook"] } })
+    ],
+    run(values, ctx) {
+        const mode = (0, types_1.str)(values, "mode", "hash");
+        if (mode === "webhook") {
+            const secret = (0, types_1.str)(values, "secret");
+            if (!secret)
+                throw new types_1.ToolInputError("Enter the webhook signing secret.");
+            const provider = (0, types_1.str)(values, "provider", "github");
+            const r = (0, web_auth_1.verifyWebhook)({ provider, payload: (0, types_1.str)(values, "payload"), secret, signature: (0, types_1.str)(values, "signature"), timestamp: (0, types_1.str)(values, "timestamp"), now: ctx.now?.() ?? new Date() });
+            const messages = r.notes.map(t => ({ kind: "warning", text: t }));
+            if (r.match === true)
+                messages.unshift({ kind: "success", text: "The signature is valid for this body and secret." });
+            if (r.match === false)
+                messages.unshift({ kind: "error", text: "The signature does NOT match. Check that you use the raw body (no re-serialised JSON, same whitespace and line endings) and the right secret for this endpoint." });
+            if (/\n\s{2,}"/.test((0, types_1.str)(values, "payload")))
+                messages.push({ kind: "info", text: "The body looks pretty-printed. Senders sign the compact body exactly as sent; copy it from the raw request log." });
+            return {
+                stats: [{ label: "Result", value: r.match === undefined ? "no signature given" : r.match ? "valid" : "INVALID", tone: r.match === undefined ? "neutral" : r.match ? "good" : "bad" }, { label: "Header", value: r.header }],
+                messages,
+                outputs: [(0, helpers_1.code)("Expected signature", "text", r.expected), (0, helpers_1.table)("How it is computed", ["Step", "Value"], [["Algorithm", "HMAC-SHA256"], ["Signed content", r.signedContent], ["Encoding", provider === "shopify" || provider === "generic-base64" ? "Base64" : "hex"]]), (0, helpers_1.code)("Express handler", "typescript", (0, web_auth_1.webhookHandler)(provider))]
+            };
+        }
+        const input = (0, types_1.str)(values, "input");
+        if (!input)
+            throw new types_1.ToolInputError("Enter some input.");
+        const encoding = (0, types_1.str)(values, "encoding", "utf8");
+        if (mode === "hmac") {
+            const secret = (0, types_1.str)(values, "secret");
+            if (!secret)
+                throw new types_1.ToolInputError("Enter the HMAC secret.");
+            const algorithm = (0, types_1.str)(values, "algorithm", "sha256");
+            const mac = (0, web_auth_1.hmac)(input, secret, algorithm, encoding);
+            return { outputs: [(0, helpers_1.table)(`HMAC-${algorithm.toUpperCase()}`, ["Encoding", "Value"], [["hex", mac.toString("hex")], ["Base64", mac.toString("base64")], ["Base64URL", mac.toString("base64url")]]), (0, helpers_1.code)("Node.js", "javascript", `import crypto from "node:crypto";\n\nconst mac = crypto.createHmac(${JSON.stringify(algorithm)}, process.env.SECRET).update(body).digest("hex");\n// Compare with crypto.timingSafeEqual, never ===\n`)] };
+        }
+        const algs = (0, web_auth_1.availableHashes)();
+        const rows = algs.map(a => { const d = (0, web_auth_1.digest)(input, a, encoding); return [a.toUpperCase(), d.toString("hex"), d.toString("base64")]; });
+        return {
+            stats: [{ label: "Input", value: `${(0, web_auth_1.toBytes)(input, encoding).length} bytes` }, { label: "Algorithms", value: String(rows.length) }],
+            messages: [{ kind: "info", text: "Passwords need a slow, salted hash (bcrypt, scrypt, Argon2id) - not any of these." }],
+            outputs: [(0, helpers_1.table)("Hashes", ["Algorithm", "Hex", "Base64"], rows), (0, helpers_1.code)("Verify a downloaded file", "shell", "shasum -a 256 file.zip          # macOS / Linux\ncertutil -hashfile file.zip SHA256   # Windows")]
+        };
+    }
+};
+const TZ_DEFAULT = "UTC, America/New_York, Europe/London, Asia/Kolkata, Asia/Tokyo";
+function parseInstant(input, now) {
+    const t = input.trim();
+    if (!t || /^now$/i.test(t))
+        return { date: now, detected: "now" };
+    if (/^-?\d+(\.\d+)?$/.test(t)) {
+        const n = Number(t);
+        const digits = t.replace(/^-/, "").split(".")[0].length;
+        if (digits <= 11)
+            return { date: new Date(n * 1000), detected: "Unix seconds" };
+        if (digits <= 14)
+            return { date: new Date(n), detected: "Unix milliseconds" };
+        if (digits <= 17)
+            return { date: new Date(n / 1000), detected: "Unix microseconds" };
+        return { date: new Date(n / 1000000), detected: "Unix nanoseconds" };
+    }
+    const m = /^\/Date\((\d+)\)\/$/.exec(t);
+    if (m)
+        return { date: new Date(Number(m[1])), detected: ".NET JSON date" };
+    const parsed = Date.parse(/^\d{4}-\d{2}-\d{2} \d/.test(t) ? t.replace(" ", "T") : t);
+    if (!Number.isNaN(parsed))
+        return { date: new Date(parsed), detected: /Z|[+-]\d{2}:?\d{2}$|GMT|UTC/i.test(t) ? "date with time zone" : /^\d{4}-\d{2}-\d{2}$/.test(t) ? "date (UTC midnight)" : "date (this machine's time zone)" };
+    throw new types_1.ToolInputError(`Cannot read "${t}". Use a Unix timestamp (s, ms, µs, ns), an ISO 8601 date, an HTTP date or "now".`);
+}
+function applyOffset(date, offset) {
+    const t = offset.trim();
+    if (!t)
+        return date;
+    let ms = date.getTime();
+    const re = /([+-])?\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w|mo|y)\b/gi;
+    let m;
+    let any = false;
+    let sign = 1;
+    while ((m = re.exec(t))) {
+        any = true;
+        if (m[1])
+            sign = m[1] === "-" ? -1 : 1;
+        const n = Number(m[2]) * sign;
+        const unit = m[3].toLowerCase();
+        if (unit === "mo" || unit === "y") {
+            const d = new Date(ms);
+            d.setUTCMonth(d.getUTCMonth() + (unit === "y" ? n * 12 : n));
+            ms = d.getTime();
+        }
+        else
+            ms += n * { ms: 1, s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000 }[unit];
+    }
+    if (!any)
+        throw new types_1.ToolInputError("Offsets look like +1h 30m, -7d, +2w or +1mo.");
+    return new Date(ms);
+}
+const timestampTool = {
+    id: "dev.timestamp",
+    command: "timestampConverter",
+    title: "Timestamp Converter",
+    summary: "Convert Unix timestamps (seconds, ms, µs, ns - detected automatically) and dates in any format to ISO 8601, HTTP and SQL formats, several time zones and a relative time; add offsets like +7d; copy code for each language.",
+    keywords: ["timestamp", "unix time", "epoch", "epoch converter", "iso 8601", "date", "time zone", "utc", "milliseconds", "date math"],
+    icon: "clock",
+    live: true,
+    fields: [
+        helpers_1.f.text("input", "Timestamp or date", { default: "now", placeholder: "1767225600, 1767225600000, 2026-01-01T00:00:00Z, now" }),
+        helpers_1.f.text("offset", "Add / subtract (optional)", { width: "narrow", placeholder: "+1h 30m, -7d, +1mo" }),
+        helpers_1.f.text("zones", "Time zones", { width: "wide", default: TZ_DEFAULT })
+    ],
+    examples: [
+        { label: "Unix seconds", values: { input: "1767225600" } },
+        { label: "Milliseconds (JavaScript Date.now())", values: { input: "1767225600123" } },
+        { label: "Token expiry: now + 15 minutes", values: { input: "now", offset: "+15m" } },
+        { label: "HTTP date", values: { input: "Wed, 21 Oct 2026 07:28:00 GMT" } }
+    ],
+    run(values, ctx) {
+        const now = ctx.now?.() ?? new Date();
+        const { date: base, detected } = parseInstant((0, types_1.str)(values, "input", "now"), now);
+        const date = applyOffset(base, (0, types_1.str)(values, "offset"));
+        if (Number.isNaN(date.getTime()))
+            throw new types_1.ToolInputError("That date is out of range.");
+        const ms = date.getTime();
+        const zones = (0, types_1.str)(values, "zones", TZ_DEFAULT).split(/[,\n]+/).map(z => z.trim()).filter(Boolean);
+        const zoneRows = zones.map(zone => {
+            try {
+                const fmt = new Intl.DateTimeFormat("en-GB", { timeZone: zone, weekday: "short", year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZoneName: "short" });
+                return [zone, fmt.format(date)];
+            }
+            catch {
+                return [zone, "unknown time zone (use IANA names like Europe/Berlin)"];
+            }
+        });
+        const diff = ms - now.getTime();
+        const sec = Math.floor(ms / 1000);
+        return {
+            stats: [{ label: "Detected", value: detected }, { label: "Relative", value: Math.abs(diff) < 1000 ? "now" : relative(diff) }, { label: "Day of week", value: date.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }) + " (UTC)" }],
+            messages: sec > 2147483647 ? [{ kind: "warning", text: "Beyond 2038-01-19: overflows signed 32-bit Unix time (old MySQL TIMESTAMP columns, some C libraries)." }] : [],
+            outputs: [
+                (0, helpers_1.table)("Formats", ["Format", "Value"], [["Unix seconds", String(sec)], ["Unix milliseconds", String(ms)], ["ISO 8601 (UTC)", date.toISOString()], ["RFC 7231 / HTTP date", date.toUTCString()], ["SQL DATETIME (UTC)", date.toISOString().replace("T", " ").slice(0, 19)], ["This machine", date.toString()], ["Week number (ISO)", String(isoWeek(date))]]),
+                (0, helpers_1.table)("Time zones", ["Zone", "Local time"], zoneRows),
+                (0, helpers_1.code)("Code", "text", `JavaScript   new Date(${ms})                         // ms!  Date.now() / 1000 for seconds\nPython       datetime.fromtimestamp(${sec}, tz=timezone.utc)\nDart         DateTime.fromMillisecondsSinceEpoch(${ms}, isUtc: true)\nKotlin       Instant.ofEpochSecond(${sec}L)\nSwift        Date(timeIntervalSince1970: ${sec})\nGo           time.Unix(${sec}, 0).UTC()\nPostgreSQL   SELECT to_timestamp(${sec});\nMySQL        SELECT FROM_UNIXTIME(${sec});\nShell        date -u -r ${sec}   # macOS   ·   date -u -d @${sec}   # Linux`)
+            ]
+        };
+    }
+};
+function isoWeek(d) {
+    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const day = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    return Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+const REGEX_LANGS = (0, helpers_1.opts)(["javascript", "JavaScript / TypeScript"], ["python", "Python"], ["dart", "Dart / Flutter"], ["kotlin", "Kotlin / Android"], ["swift", "Swift / iOS"], ["java", "Java"], ["go", "Go"], ["php", "PHP"], ["csharp", "C#"]);
+const regexTool = {
+    id: "dev.regex-library",
+    command: "regexLibrary",
+    title: "Regex Tester, Library & Code",
+    summary: "Test any regular expression with matches and capture groups, or start from tested patterns (email, URL, UUID, semver, phone, dates, passwords…) - and copy ready-to-paste code for JavaScript, Python, Dart, Kotlin, Swift, Java, Go, PHP and C#.",
+    guide: "Each language escapes and flags regexes differently; the generated code uses raw strings where the language has them so the pattern is copied verbatim. Go's RE2 engine has no lookarounds or backreferences - you get a warning when a pattern uses them.",
+    keywords: ["regex", "regular expression", "email regex", "url regex", "uuid regex", "phone regex", "password regex", "pattern", "validation", "regexp"],
+    icon: "regex",
+    live: true,
+    aliases: [{ command: "regexBuilder", values: { preset: "custom", perLine: false } }],
+    fields: [
+        helpers_1.f.select("preset", "Pattern", [{ value: "custom", label: "Custom pattern" }, ...dev_regex_1.REGEX_LIBRARY.map(r => ({ value: r.id, label: r.label }))], { default: "email", width: "wide" }),
+        helpers_1.f.text("pattern", "Pattern", { default: "^(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})$", showIf: { field: "preset", equals: ["custom"] } }),
+        helpers_1.f.text("flags", "Flags", { width: "narrow", default: "", placeholder: "g i m s u", showIf: { field: "preset", equals: ["custom"] } }),
+        helpers_1.f.area("samples", "Test input (one per line)", { rows: 5, fromEditor: true, placeholder: "Leave empty to use the pattern's examples" }),
+        helpers_1.f.toggle("perLine", "Test each line separately", true),
+        helpers_1.f.select("language", "Code for", REGEX_LANGS)
+    ],
+    run(values) {
+        const preset = dev_regex_1.REGEX_LIBRARY.find(r => r.id === (0, types_1.str)(values, "preset", "email"));
+        const pattern = preset ? preset.pattern : (0, types_1.str)(values, "pattern");
+        const flags = preset ? preset.flags : (0, types_1.str)(values, "flags").replace(/\s/g, "");
+        const re = (0, dev_regex_1.validateRegex)(pattern, flags);
+        const samples = (0, types_1.str)(values, "samples") || preset?.samples || "";
+        const perLine = (0, types_1.bool)(values, "perLine", true);
+        const rows = samples ? (0, dev_regex_1.testRegex)(re, samples, perLine) : [];
+        const lang = (0, types_1.str)(values, "language", "javascript");
+        const generated = (0, dev_regex_1.regexCode)(pattern, flags, lang);
+        const messages = [];
+        if (preset?.note)
+            messages.push({ kind: "info", text: preset.note });
+        if (generated.note)
+            messages.push({ kind: "warning", text: generated.note });
+        if (/(\([^)]*[+*][^)]*\))[+*]/.test(pattern))
+            messages.push({ kind: "warning", text: "Nested quantifiers like (a+)+ can backtrack catastrophically (ReDoS) on crafted input. Keep user-supplied input short or rewrite the pattern." });
+        const matched = perLine ? rows.filter(r => r[2] === "✓").length : rows.length;
+        return {
+            stats: [{ label: "Pattern", value: `/${pattern.length > 40 ? pattern.slice(0, 40) + "…" : pattern}/${flags}` }, { label: perLine ? "Lines matching" : "Matches", value: perLine ? `${matched} of ${rows.length}` : String(matched), tone: matched ? "good" : "warn" }],
+            messages,
+            outputs: [
+                ...(rows.length ? [perLine ? (0, helpers_1.table)("Results", ["Line", "Input", "Match", "Groups"], rows) : (0, helpers_1.table)("Matches", ["#", "Match", "Index", "Groups"], rows)] : []),
+                (0, helpers_1.code)(REGEX_LANGS.find(o => o.value === lang)?.label ?? lang, lang === "csharp" ? "text" : lang, generated.code),
+                (0, helpers_1.code)("Pattern", "text", pattern)
+            ]
+        };
+    }
+};
+exports.DEV_TOOLS = [encodeTool, jwtTool, hashTool, idTool, timestampTool, cronTool, regexTool, diffTool, textTool];
 //# sourceMappingURL=dev.js.map

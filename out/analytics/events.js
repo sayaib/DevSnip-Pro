@@ -61,7 +61,7 @@ exports.EVENT_CATALOG = defineCatalog({
         description: "A DevSnip Pro command ran, from any surface (palette, tool tree, hub card, context menu, keybinding).",
         properties: {
             feature: { kind: "id", description: "Command id without the extension prefix, e.g. jsonFormatter." },
-            category: { kind: "id", description: "Feature group: core, snippets, api, ai, rag, data, security, devops, utilities, dependencies, progress, premium." },
+            category: { kind: "id", description: "Feature area: the navigation section (api, frontend, mobile, code, text, convert, database, testing, git, devops, security, ai, data), or navigation, progress, core." },
             outcome: { kind: "enum:success|error", description: "Whether the command handler completed without throwing." },
             duration_ms: { kind: "ms", description: "Time the command handler took (opening a panel, running a scan...)." },
             first_use: { kind: "bool", description: "First time this installation used this feature." }
@@ -129,12 +129,12 @@ exports.EVENT_CATALOG = defineCatalog({
             kind: { kind: "id", description: "What was copied, e.g. install_command, update_command." }
         }
     },
-    // Toolkit tools (AI, RAG, Data, DevOps, Developer Tools) --------------------
+    // Toolkit tools --------------------
     tool_run_completed: {
         description: "A toolkit tool produced a result or an error. Inputs and outputs are never sent.",
         properties: {
             feature: { kind: "id", description: "Command id of the tool, without prefix, e.g. dockerfileHelper." },
-            section: { kind: "enum:dev|ai|rag|data|devops", description: "Toolkit section." },
+            section: { kind: "enum:api|frontend|mobile|code|text|convert|database|testing|git|devops|security|ai|data", description: "Navigation section of the tool (layout.ts)." },
             outcome: { kind: "enum:success|input_error|error|timeout", description: "success: a result; input_error: the tool asked for different input; error: an unexpected failure; timeout: no result within 90 seconds." },
             trigger: { kind: "enum:run|live|preset|action", description: "run: the Run button or Ctrl/Cmd+Enter; live: automatic re-run while typing (only the first per panel is sent); preset: a preset was applied; action: a tool-specific button such as Detect from workspace." },
             duration_ms: { kind: "ms", description: "Time the tool took." }

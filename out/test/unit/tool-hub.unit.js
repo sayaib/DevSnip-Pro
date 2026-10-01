@@ -30,6 +30,7 @@ const vm = __importStar(require("vm"));
 const tool_hub_1 = require("../../utils/tool-hub");
 const hubs_1 = require("../../commands/hubs");
 const commands_1 = require("../../toolkits/commands");
+const layout_1 = require("../../toolkits/layout");
 const run_unit_tests_1 = require("./run-unit-tests");
 const ROOT = path.resolve(__dirname, "../../..");
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
@@ -52,9 +53,23 @@ const contributed = new Set(manifest.contributes.commands.map((c) => c.command))
             assert.ok(hubCommands.has(`sayaib.hue-console.${entry.command}`), `${entry.command} is not reachable from a hub`);
         }
     });
-    (0, run_unit_tests_1.test)("the RAG hub offers a guided path for newcomers", () => {
-        const rag = hubs_1.ALL_HUBS.find(h => h.viewType === "ragHub");
-        assert.ok((rag.journey ?? []).length >= 5);
+    (0, run_unit_tests_1.test)("the Data & RAG section keeps its guided path for newcomers", () => {
+        const journeys = hubs_1.ALL_HUBS[0].journeys ?? {};
+        assert.ok((journeys["Data & RAG"] ?? []).length >= 5);
+    });
+    (0, run_unit_tests_1.test)("the hub lists every navigation entry exactly once, in layout order", () => {
+        const commands = hubs_1.ALL_HUBS[0].tools.map(t => t.command);
+        assert.strictEqual(new Set(commands).size, commands.length);
+        assert.deepStrictEqual(commands, layout_1.NAV.flatMap(s => s.entries.map(e => `sayaib.hue-console.${e.command}`)));
+        assert.deepStrictEqual(hubs_1.ALL_HUBS[0].categories, layout_1.NAV.map(s => s.title));
+    });
+    (0, run_unit_tests_1.test)("older hub commands open the hub on an existing section", () => {
+        for (const [command, section] of Object.entries(layout_1.HUB_COMMANDS)) {
+            assert.ok(contributed.has(`sayaib.hue-console.${command}`), command);
+            assert.ok(section === "all" || layout_1.NAV.some(s => s.id === section), command);
+        }
+        const html = (0, tool_hub_1.renderToolHub)(hubs_1.ALL_HUBS[0], { cspSource: "x", scriptUri: "x", pinned: [], initialCategory: "AI & ML" });
+        assert.strictEqual(JSON.parse(/id="hub-data">([\s\S]*?)<\/script>/.exec(html)[1]).initialCategory, "AI & ML");
     });
     (0, run_unit_tests_1.test)("rendered page loads its script from the webview only and embeds data safely", () => {
         const hub = { ...hubs_1.ALL_HUBS[0], heading: "Tools </script><b>" };

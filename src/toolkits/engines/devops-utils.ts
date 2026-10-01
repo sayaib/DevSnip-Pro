@@ -237,8 +237,63 @@ function jsonErrorLine(text: string, error: Error): number | undefined {
   const pos = /position (\d+)/.exec(error.message)?.[1];
   const line = /line (\d+)/.exec(error.message)?.[1];
   if (line) return Number(line);
-  if (pos) return text.slice(0, Number(pos)).split("\n").length;
-  return undefined;
+  const offset = pos !== undefined ? Number(pos) : jsonErrorOffset(text);
+  return offset === undefined ? undefined : text.slice(0, offset).split("\n").length;
+}
+
+/**
+ * Where strict JSON parsing fails. V8 omits the position for some errors
+ * (e.g. a trailing comma before "]"), so scan the grammar to find it.
+ */
+export function jsonErrorOffset(text: string): number | undefined {
+  let i = 0;
+  const ws = () => { while (i < text.length && /[ \t\r\n]/.test(text[i])) i++; };
+  const fail = (): never => { throw i; };
+  const str = () => {
+    i++;
+    while (i < text.length && text[i] !== '"') {
+      if (text[i] === "\\") { i++; if (text[i] === "u") { if (!/^[0-9a-fA-F]{4}$/.test(text.slice(i + 1, i + 5))) fail(); i += 4; } else if (!'"\\/bfnrt'.includes(text[i] ?? "")) fail(); }
+      else if (text.charCodeAt(i) < 0x20) fail();
+      i++;
+    }
+    if (text[i] !== '"') fail();
+    i++;
+  };
+  const value = (): void => {
+    ws();
+    const c = text[i];
+    if (c === "{") {
+      i++; ws();
+      if (text[i] === "}") { i++; return; }
+      for (;;) {
+        ws(); if (text[i] !== '"') fail(); str(); ws();
+        if (text[i] !== ":") fail(); i++; value(); ws();
+        if (text[i] === ",") { i++; continue; }
+        if (text[i] === "}") { i++; return; }
+        fail();
+      }
+    }
+    if (c === "[") {
+      i++; ws();
+      if (text[i] === "]") { i++; return; }
+      for (;;) {
+        value(); ws();
+        if (text[i] === ",") { i++; continue; }
+        if (text[i] === "]") { i++; return; }
+        fail();
+      }
+    }
+    if (c === '"') return str();
+    const m = /^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(text.slice(i));
+    if (!m) fail();
+    i += m![0].length;
+  };
+  try {
+    value(); ws();
+    return i < text.length ? i : undefined;
+  } catch (offset) {
+    return typeof offset === "number" ? offset : undefined;
+  }
 }
 
 export function validateStructured(text: string, format: "auto" | "json" | "yaml"): { format: "json" | "yaml"; value: unknown; issues: StructuredIssue[]; documents: number } {
@@ -410,27 +465,6 @@ export function parsePorts(input: string): number[] {
   }
   for (const p of out) if (p < 1 || p > 65535) throw new ToolInputError(`Port ${p} is outside 1-65535.`);
   return [...out];
-}
-
-export function parseUrlParts(input: string): Array<[string, string]> {
-  let url: URL;
-  try { url = new URL(input.trim()); } catch { throw new ToolInputError("Not a valid absolute URL (include the scheme, e.g. https://)."); }
-  const rows: Array<[string, string]> = [
-    ["Scheme", url.protocol.replace(":", "")],
-    ["Host", url.hostname],
-    ["Port", url.port || `${defaultPort(url.protocol) ?? ""} (default)`],
-    ["Path", decodeURIComponent(url.pathname)],
-  ];
-  if (url.origin !== "null") rows.push(["Origin", url.origin]);
-  if (url.username) rows.push(["Username", decodeURIComponent(url.username)]);
-  if (url.password) rows.push(["Password", "•••• (present in the URL - avoid committing it)"]);
-  for (const [k, v] of url.searchParams) rows.push([`Query: ${k}`, v]);
-  if (url.hash) rows.push(["Fragment", decodeURIComponent(url.hash.slice(1))]);
-  return rows;
-}
-
-function defaultPort(protocol: string): number | undefined {
-  return ({ "http:": 80, "https:": 443, "ws:": 80, "wss:": 443, "ftp:": 21, "postgres:": 5432, "postgresql:": 5432, "mysql:": 3306, "redis:": 6379, "rediss:": 6380, "mongodb:": 27017, "amqp:": 5672 } as Record<string, number>)[protocol];
 }
 
 // ---------------------------------------------------------------------------

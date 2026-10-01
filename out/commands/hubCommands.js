@@ -26,22 +26,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerHubCommands = void 0;
 const command_registry_1 = require("../utils/command-registry");
 const tool_hub_1 = require("../utils/tool-hub");
+const layout_1 = require("../toolkits/layout");
 /**
- * The tool hubs. Hub definitions are built from the toolkit registry, which is
- * loaded on first open so activation stays light.
+ * "Browse all tools" and the older per-section hub commands, which keep
+ * working (keybindings, muscle memory) and open the hub on their section.
+ * The hub definition is built from the registry on first open, so
+ * activation stays light.
  */
 function registerHubCommands(context) {
-    const hubs = [
-        ["advancedToolsHub", "DEVELOPER_TOOLS_HUB"],
-        ["aiMlHub", "AI_ML_HUB"],
-        ["ragHub", "RAG_HUB"],
-        ["bigDataHub", "DATA_HUB"],
-        ["devopsGenerator", "DEVOPS_HUB"]
-    ];
-    for (const [command, key] of hubs) {
+    for (const [command, section] of Object.entries(layout_1.HUB_COMMANDS)) {
         context.subscriptions.push((0, command_registry_1.registerTrackedCommand)(`sayaib.hue-console.${command}`, async () => {
-            const definitions = await Promise.resolve().then(() => __importStar(require("./hubs")));
-            (0, tool_hub_1.openToolHub)(context, definitions[key]);
+            const { ALL_TOOLS_HUB } = await Promise.resolve().then(() => __importStar(require("./hubs")));
+            (0, tool_hub_1.openToolHub)(context, ALL_TOOLS_HUB, section === "all" ? undefined : layout_1.NAV.find(s => s.id === section)?.title);
         }));
     }
 }

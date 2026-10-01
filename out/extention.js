@@ -31,7 +31,6 @@ const showSnippetsCommand_1 = require("./commands/showSnippetsCommand");
 const listAndRemoveConsoleLogsCommand_1 = require("./commands/listAndRemoveConsoleLogsCommand");
 const removeUnusedImportsCommand_1 = require("./commands/removeUnusedImportsCommand");
 const api_test_1 = require("./commands/api-test");
-const advancedTools_1 = require("./commands/advancedTools");
 const dependencyManager_1 = require("./commands/dependencyManager");
 const hubCommands_1 = require("./commands/hubCommands");
 const runner_1 = require("./toolkits/runner");
@@ -91,10 +90,9 @@ function activate(context) {
         ["OpenCode integration", () => (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context)],
         ["REST API client", () => (0, api_test_1.apiTest)(context, { access, collections })],
         ["premium commands", () => (0, premium_commands_1.registerPremiumCommands)(context, access)],
-        ["developer utilities", () => (0, advancedTools_1.registerAdvancedToolsCommands)(context)],
         ["dependencies & installation", () => (0, dependencyManager_1.registerDependencyManagerCommand)(context)],
         ["tool hubs", () => (0, hubCommands_1.registerHubCommands)(context)],
-        ["developer, AI, RAG, data and DevOps tools", () => (0, runner_1.registerToolkitCommands)(context)],
+        ["toolkit tools", () => (0, runner_1.registerToolkitCommands)(context)],
         ["security tools", () => (0, securityTools_1.registerSecurityToolsCommands)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],
         ["tool search", () => registerUniversalToolSearch(context)],
@@ -112,42 +110,25 @@ function activate(context) {
     (0, analytics_1.initAnalytics)(context, activationStart, installSnapshot);
 }
 exports.activate = activate;
-/** Tools that are not part of the toolkit registry. Toolkit tools are added at search time. */
-const STANDALONE_TOOLS = [
-    { label: "REST API Client", description: "Core / HTTP / GraphQL / WebSocket", command: "sayaib.hue-console.openGUI" },
-    { label: "Analyze and Remove Console Logs", description: "Core / Cleanup", command: "sayaib.hue-console.listAndRemoveConsoleLogs" },
-    { label: "Remove Unused Imports", description: "Core / Cleanup", command: "sayaib.hue-console.removeUnusedImports" },
-    { label: "README Viewer & Manager", description: "Core / Docs", command: "sayaib.hue-console.readmeManager" },
-    { label: "OpenCode Integration", description: "Core / AI assistant", command: "sayaib.hue-console.openCodeIntegration" },
-    { label: "Create Custom Code Snippet", description: "Snippets", command: "sayaib.hue-console.createCustomSnippet" },
-    { label: "View Saved Code Snippets", description: "Snippets", command: "sayaib.hue-console.showSnippets" },
-    { label: "Developer Tools", description: "Hub", command: "sayaib.hue-console.advancedToolsHub" },
-    { label: "AI & ML Tools", description: "Hub", command: "sayaib.hue-console.aiMlHub" },
-    { label: "RAG Tools", description: "Hub", command: "sayaib.hue-console.ragHub" },
-    { label: "Data Tools", description: "Hub", command: "sayaib.hue-console.bigDataHub" },
-    { label: "DevOps Tools", description: "Hub", command: "sayaib.hue-console.devopsGenerator" },
-    { label: "Dependencies & Installation", description: "Developer Tools / npm / yarn / pnpm / pip / Maven / Gradle", command: "sayaib.hue-console.dependencyManager" },
-    { label: "Regex Builder & Tester", description: "Developer Tools / Pattern", command: "sayaib.hue-console.regexBuilder" },
-    { label: "JSON/XML Formatter", description: "Developer Tools / Format / Validate", command: "sayaib.hue-console.jsonFormatter" },
-    { label: "Hash Generator", description: "Developer Tools / SHA", command: "sayaib.hue-console.hashGenerator" },
-    { label: "Timestamp Converter", description: "Developer Tools / Epoch / Dates", command: "sayaib.hue-console.timestampConverter" },
-    { label: "Color Palette", description: "Developer Tools / Design / Contrast", command: "sayaib.hue-console.colorPalette" },
-    { label: "Security Hub", description: "Security / Endpoint / Workspace / Cloud / Dependencies", command: "sayaib.hue-console.securityHub" },
-    { label: "Endpoint Security Scan", description: "Security / Headers / HSTS / CSP / CORS / TLS / Cookies", command: "sayaib.hue-console.endpointSecurityScan" },
-    { label: "Security Audit", description: "Security / Secrets / Injection / Unsafe Code", command: "sayaib.hue-console.securityAudit" },
-    { label: "Cloud Security Audit", description: "Security / Terraform / Kubernetes / Docker / IAM", command: "sayaib.hue-console.cloudSecurityAudit" },
-    { label: "Dependency & Config Check", description: "Security / Lockfiles / Advisories / CI hardening", command: "sayaib.hue-console.dependencyAudit" },
-    { label: "Milestone & Points Tracker", description: "Progress", command: "sayaib.hue-console.milestoneTracker" },
-];
-/** Every searchable tool: the standalone ones plus the toolkit (title, section, category and keywords). */
+/** Every tool in the navigation, in section order: section, sub-group and keywords make it findable. */
 async function searchableTools() {
-    const { ALL_TOOLS, SECTIONS } = await Promise.resolve().then(() => __importStar(require("./toolkits/registry")));
-    const toolkit = ALL_TOOLS.map(tool => ({
-        label: tool.title,
-        description: `${SECTIONS.find(s => s.id === tool.section)?.title} / ${tool.category} / ${(tool.keywords ?? []).slice(0, 5).join(" / ")}`,
-        command: `sayaib.hue-console.${tool.command}`
+    const { NAV, COMMAND_PREFIX } = await Promise.resolve().then(() => __importStar(require("./toolkits/layout")));
+    const { findTool } = await Promise.resolve().then(() => __importStar(require("./toolkits/registry")));
+    const tools = NAV.flatMap(section => section.entries.map(entry => {
+        const tool = entry.tool ? findTool(entry.tool) : undefined;
+        const keywords = (tool?.keywords ?? entry.keywords ?? []).slice(0, 5);
+        return {
+            label: tool?.title ?? entry.label,
+            description: [section.title, entry.category, ...keywords].filter(Boolean).join(" / "),
+            command: COMMAND_PREFIX + entry.command
+        };
     }));
-    return [...STANDALONE_TOOLS, ...toolkit];
+    return [
+        ...tools,
+        { label: "Browse All Tools", description: "All sections, with search and pinning", command: `${COMMAND_PREFIX}advancedToolsHub` },
+        { label: "Security Hub", description: "Security & Auth / every security scan in one panel", command: `${COMMAND_PREFIX}securityHub` },
+        { label: "Milestone & Points Tracker", description: "Progress", command: `${COMMAND_PREFIX}milestoneTracker` }
+    ];
 }
 function registerUniversalToolSearch(context) {
     const searchCommand = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.searchTools", async () => {

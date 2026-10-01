@@ -375,3 +375,150 @@ export function toJsonSchema(root: Shape, title: string): Record<string, unknown
   };
   return { $schema: "https://json-schema.org/draft/2020-12/schema", title, ...schema(root) };
 }
+
+// ---------------------------------------------------------------------------
+// Mobile: Dart (Flutter), Kotlin (Android) and Swift (iOS)
+// ---------------------------------------------------------------------------
+
+/** The non-null option of a nullable union, or the shape itself. */
+function nonNull(s: Shape): Shape {
+  if (s.kind !== "union") return s;
+  const rest = s.options.filter(o => o.kind !== "null");
+  return rest.length === 1 ? rest[0] : s;
+}
+
+const isDateTime = (s: Shape) => s.kind === "string" && s.formats.size === 1 && s.formats.has("date-time");
+
+const DART_RESERVED = new Set("abstract as assert async await break case catch class const continue covariant default deferred do dynamic else enum export extends extension external factory false final finally for Function get hide if implements import in interface is late library mixin new null on operator part required rethrow return set show static super switch sync this throw true try typedef var void while with yield".split(" "));
+
+export function toDart(root: Shape, rootName: string, style: "manual" | "json_serializable"): string {
+  if (root.kind !== "object") throw new ToolInputError("Dart classes need a JSON object (or an array of objects).");
+  const { objects, nameOf } = collectObjects(root, rootName);
+  const type = (s: Shape): string => {
+    const t = nonNull(s);
+    switch (t.kind) {
+      case "string": return isDateTime(t) ? "DateTime" : "String";
+      case "integer": return "int";
+      case "number": return "double";
+      case "boolean": return "bool";
+      case "array": return `List<${type(t.item)}>`;
+      case "object": return nameOf.get(t)!;
+      default: return "dynamic";
+    }
+  };
+  const fromJson = (s: Shape, v: string, nullable: boolean): string => {
+    const t = nonNull(s);
+    const q = nullable ? "?" : "";
+    switch (t.kind) {
+      case "string": return isDateTime(t) ? (nullable ? `${v} == null ? null : DateTime.parse(${v} as String)` : `DateTime.parse(${v} as String)`) : `${v} as String${q}`;
+      case "integer": return `(${v} as num${q})${q}.toInt()`;
+      case "number": return `(${v} as num${q})${q}.toDouble()`;
+      case "boolean": return `${v} as bool${q}`;
+      case "array": return `(${v} as List<dynamic>${q})${q}.map((e) => ${fromJson(t.item, "e", false)}).toList()`;
+      case "object": return nullable ? `${v} == null ? null : ${nameOf.get(t)}.fromJson(${v} as Map<String, dynamic>)` : `${nameOf.get(t)}.fromJson(${v} as Map<String, dynamic>)`;
+      default: return v;
+    }
+  };
+  const toJson = (s: Shape, v: string, nullable: boolean): string => {
+    const t = nonNull(s);
+    const q = nullable ? "?" : "";
+    if (isDateTime(t)) return `${v}${q}.toIso8601String()`;
+    if (t.kind === "object") return `${v}${q}.toJson()`;
+    if (t.kind === "array" && (nonNull(t.item).kind === "object" || isDateTime(nonNull(t.item)))) return `${v}${q}.map((e) => ${toJson(t.item, "e", false)}).toList()`;
+    return v;
+  };
+  const fieldName = (key: string) => { const n = camel(key); return DART_RESERVED.has(n) ? `${n}Value` : n; };
+  const classes = objects.map(({ name, shape }) => {
+    const fields = [...shape.fields].map(([key, f]) => {
+      const nullable = optional(shape, key) || nullable_(f.shape);
+      return { key, name: fieldName(key), type: type(f.shape) + (nullable && type(f.shape) !== "dynamic" ? "?" : ""), nullable, shape: f.shape };
+    });
+    const ctor = `  const ${name}({\n${fields.map(f => `    ${f.nullable ? "" : "required "}this.${f.name},`).join("\n")}\n  });`;
+    const decl = fields.map(f => `${style === "json_serializable" && f.name !== f.key ? `  @JsonKey(name: '${f.key}')\n` : ""}  final ${f.type} ${f.name};`).join("\n");
+    if (style === "json_serializable") {
+      return `@JsonSerializable(explicitToJson: true)\nclass ${name} {\n${ctor}\n\n${decl}\n\n  factory ${name}.fromJson(Map<String, dynamic> json) => _$${name}FromJson(json);\n\n  Map<String, dynamic> toJson() => _$${name}ToJson(this);\n}`;
+    }
+    const from = fields.map(f => `        ${f.name}: ${fromJson(f.shape, `json['${f.key}']`, f.nullable)},`).join("\n");
+    const to = fields.map(f => `        '${f.key}': ${toJson(f.shape, f.name, f.nullable)},`).join("\n");
+    const copyWith = `  ${name} copyWith({\n${fields.map(f => `    ${f.type.endsWith("?") || f.type === "dynamic" ? f.type : `${f.type}?`} ${f.name},`).join("\n")}\n  }) =>\n      ${name}(\n${fields.map(f => `        ${f.name}: ${f.name} ?? this.${f.name},`).join("\n")}\n      );`;
+    return `class ${name} {\n${ctor}\n\n${decl}\n\n  factory ${name}.fromJson(Map<String, dynamic> json) => ${name}(\n${from}\n      );\n\n  Map<String, dynamic> toJson() => {\n${to}\n      };\n\n${copyWith}\n}`;
+  });
+  const file = snake(rootName);
+  const head = style === "json_serializable" ? `import 'package:json_annotation/json_annotation.dart';\n\npart '${file}.g.dart';\n\n// Generate the part file: dart run build_runner build --delete-conflicting-outputs\n\n` : "";
+  return `${head}${classes.join("\n\n")}\n`;
+}
+
+function nullable_(s: Shape): boolean {
+  return s.kind === "null" || (s.kind === "union" && s.options.some(o => o.kind === "null"));
+}
+
+const KOTLIN_RESERVED = new Set("as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while".split(" "));
+
+export function toKotlin(root: Shape, rootName: string, style: "kotlinx" | "moshi" | "gson", packageName: string): string {
+  if (root.kind !== "object") throw new ToolInputError("Kotlin data classes need a JSON object (or an array of objects).");
+  const { objects, nameOf } = collectObjects(root, rootName);
+  const type = (s: Shape): string => {
+    const t = nonNull(s);
+    switch (t.kind) {
+      case "string": return "String";
+      case "integer": return "Long";
+      case "number": return "Double";
+      case "boolean": return "Boolean";
+      case "array": return `List<${type(t.item)}>`;
+      case "object": return nameOf.get(t)!;
+      default: return style === "kotlinx" ? "JsonElement" : "Any";
+    }
+  };
+  let usesJsonElement = false;
+  const classes = [...objects].map(({ name, shape }) => {
+    const props = [...shape.fields].map(([key, f]) => {
+      let n = camel(key);
+      if (KOTLIN_RESERVED.has(n)) n = `\`${n}\``;
+      const nullable = optional(shape, key) || nullable_(f.shape) || ["null", "unknown"].includes(nonNull(f.shape).kind);
+      const t = type(f.shape);
+      if (t.includes("JsonElement")) usesJsonElement = true;
+      const ann = n.replace(/`/g, "") !== key ? (style === "kotlinx" ? `@SerialName("${key}") ` : style === "moshi" ? `@Json(name = "${key}") ` : `@SerializedName("${key}") `) : "";
+      const note = isDateTime(nonNull(f.shape)) ? " // ISO-8601; parse with Instant.parse()" : "";
+      return `    ${ann}val ${n}: ${t}${nullable ? "? = null" : ""},${note}`;
+    });
+    const annotation = style === "kotlinx" ? "@Serializable\n" : style === "moshi" ? "@JsonClass(generateAdapter = true)\n" : "";
+    return `${annotation}data class ${name}(\n${props.join("\n")}\n)`;
+  });
+  const imports = style === "kotlinx" ? ["kotlinx.serialization.SerialName", "kotlinx.serialization.Serializable", ...(usesJsonElement ? ["kotlinx.serialization.json.JsonElement"] : [])] : style === "moshi" ? ["com.squareup.moshi.Json", "com.squareup.moshi.JsonClass"] : ["com.google.gson.annotations.SerializedName"];
+  const usage = style === "kotlinx" ? `\n// val json = Json { ignoreUnknownKeys = true }\n// val ${camel(rootName)} = json.decodeFromString<${pascal(rootName)}>(body)\n` : style === "moshi" ? `\n// val adapter = moshi.adapter(${pascal(rootName)}::class.java)\n` : `\n// Gson ignores Kotlin nullability and default values; prefer kotlinx.serialization or Moshi for new code.\n// val ${camel(rootName)} = Gson().fromJson(body, ${pascal(rootName)}::class.java)\n`;
+  return `${packageName.trim() ? `package ${packageName.trim()}\n\n` : ""}${imports.map(i => `import ${i}`).join("\n")}\n${usage}\n${classes.join("\n\n")}\n`;
+}
+
+const SWIFT_RESERVED = new Set("associatedtype class deinit enum extension fileprivate func import init inout internal let open operator private protocol public rethrows static struct subscript typealias var break case continue default defer do else fallthrough for guard if in repeat return switch where while as Any catch false is nil super self Self throw throws true try".split(" "));
+
+export function toSwift(root: Shape, rootName: string, mutable: boolean): string {
+  if (root.kind !== "object") throw new ToolInputError("Swift structs need a JSON object (or an array of objects).");
+  const { objects, nameOf } = collectObjects(root, rootName);
+  let usesDate = false;
+  let usesAny = false;
+  const type = (s: Shape): string => {
+    const t = nonNull(s);
+    switch (t.kind) {
+      case "string": if (isDateTime(t)) { usesDate = true; return "Date"; } return t.formats.size === 1 && t.formats.has("uri") ? "URL" : t.formats.size === 1 && t.formats.has("uuid") ? "UUID" : "String";
+      case "integer": return "Int";
+      case "number": return "Double";
+      case "boolean": return "Bool";
+      case "array": return `[${type(t.item)}]`;
+      case "object": return nameOf.get(t)!;
+      default: usesAny = true; return "JSONValue";
+    }
+  };
+  const structs = objects.map(({ name, shape }) => {
+    const props = [...shape.fields].map(([key, f]) => {
+      const n = camel(key);
+      const nullable = optional(shape, key) || nullable_(f.shape) || ["null", "unknown"].includes(nonNull(f.shape).kind);
+      return { key, name: SWIFT_RESERVED.has(n) ? `\`${n}\`` : n, plain: n, type: type(f.shape) + (nullable ? "?" : "") };
+    });
+    const needsKeys = props.some(p => p.plain !== p.key);
+    const keys = needsKeys ? `\n\n    enum CodingKeys: String, CodingKey {\n${props.map(p => `        case ${p.name}${p.plain !== p.key ? ` = "${p.key}"` : ""}`).join("\n")}\n    }` : "";
+    return `struct ${name}: Codable, Hashable {\n${props.map(p => `    ${mutable ? "var" : "let"} ${p.name}: ${p.type}`).join("\n")}${keys}\n}`;
+  });
+  const helper = usesAny ? `\n\n/// Any JSON value, for fields whose type varies or is unknown.\nenum JSONValue: Codable, Hashable {\n    case string(String), number(Double), bool(Bool), object([String: JSONValue]), array([JSONValue]), null\n\n    init(from decoder: Decoder) throws {\n        let c = try decoder.singleValueContainer()\n        if c.decodeNil() { self = .null }\n        else if let v = try? c.decode(Bool.self) { self = .bool(v) }\n        else if let v = try? c.decode(Double.self) { self = .number(v) }\n        else if let v = try? c.decode(String.self) { self = .string(v) }\n        else if let v = try? c.decode([JSONValue].self) { self = .array(v) }\n        else { self = .object(try c.decode([String: JSONValue].self)) }\n    }\n\n    func encode(to encoder: Encoder) throws {\n        var c = encoder.singleValueContainer()\n        switch self {\n        case .string(let v): try c.encode(v)\n        case .number(let v): try c.encode(v)\n        case .bool(let v): try c.encode(v)\n        case .object(let v): try c.encode(v)\n        case .array(let v): try c.encode(v)\n        case .null: try c.encodeNil()\n        }\n    }\n}` : "";
+  const usage = `\n\n// let decoder = JSONDecoder()${usesDate ? "\n// decoder.dateDecodingStrategy = .iso8601  // fractional seconds need a custom ISO8601DateFormatter" : ""}\n// let value = try decoder.decode(${pascal(rootName)}.self, from: data)`;
+  return `import Foundation\n\n${structs.join("\n\n")}${helper}${usage}\n`;
+}

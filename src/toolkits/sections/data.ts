@@ -1,21 +1,14 @@
 import YAML from "yaml";
-import { SectionInfo, ToolDefinition, ToolInputError, ToolResult, bool, fmtBytes, fmtNumber, fmtUsd, num, str } from "../types";
+import { ToolSpec, ToolInputError, ToolResult, bool, fmtBytes, fmtNumber, fmtUsd, num, str } from "../types";
 import { Row, collectColumns, csvToRows, flatten, markdownTable, parseJsonl, parseRecords, rowsToCsv, transformRows } from "../engines/data-convert";
-import { recordShape, toGo, toJava, toJsonSchema, toPython, toTypeScript } from "../engines/data-types";
+import { recordShape, snake, toDart, toGo, toJava, toJsonSchema, toKotlin, toPython, toSwift, toTypeScript } from "../engines/data-types";
 import { Dialect, ParamStyle, columnsFromCreateTable, formatSql, lintSql, queryHelper, sqlFromRows } from "../engines/sql";
-import { MOCK_TYPES, generateMock, inspectApiResponse, mockSpecFromExample, parseMockSpec, profileRows } from "../engines/data-inspect";
+import { MOCK_TYPES, generateMock, mockSpecFromExample, parseMockSpec, profileRows } from "../engines/data-inspect";
 import { analyzeDeltaLog, diffSchemas, normalizeSchema, partitionCode, planPartitions, schemaTree, sizeCluster } from "../engines/bigdata";
 import { describeJsonError } from "../engines/llm-output";
 import { validateSchema } from "../../services/json-tools";
+import { combineTools } from "./combine";
 import { code, f, opts, severityMessages, table } from "./helpers";
-
-export const DATA_SECTION: SectionInfo = {
-  id: "data",
-  title: "Data",
-  icon: "database",
-  description: "Convert, type, query, generate, validate and profile data - from a JSON payload to a Spark cluster.",
-  categories: ["Convert & model", "SQL", "Validate & inspect", "Big data"]
-};
 
 const DIALECTS = opts(["postgres", "PostgreSQL"], ["mysql", "MySQL / MariaDB"], ["sqlite", "SQLite"], ["sqlserver", "SQL Server"], ["spark", "Spark SQL / Databricks"]);
 
@@ -49,11 +42,9 @@ function readRows(text: string, format: string, header = true, inferTypes = true
 // Convert & model
 // ---------------------------------------------------------------------------
 
-const convert: ToolDefinition = {
+const convert: ToolSpec = {
   id: "data.convert",
   command: "dataConverter",
-  section: "data",
-  category: "Convert & model",
   title: "Data Converter",
   summary: "Convert between CSV/TSV, JSON, JSON Lines, YAML, Markdown tables and SQL INSERT statements.",
   guide: "The input format is detected automatically. Nested objects are flattened to dotted columns when writing CSV or tables (address.city), and CSV numbers and booleans are typed when writing JSON.",
@@ -93,27 +84,33 @@ const convert: ToolDefinition = {
   }
 };
 
-const types: ToolDefinition = {
+const types: ToolSpec = {
   id: "data.types",
   command: "jsonToTypes",
-  section: "data",
-  category: "Convert & model",
   title: "JSON to Types",
-  summary: "Generate TypeScript interfaces or Zod schemas, Pydantic models, dataclasses, Java records, Go structs or a JSON Schema from sample JSON.",
+  summary: "Generate TypeScript interfaces or Zod schemas, Dart/Flutter models, Kotlin data classes, Swift Codable structs, Pydantic models, Java records, Go structs or a JSON Schema from sample JSON.",
   guide: "Paste one example object or an array of examples: fields missing from some examples become optional, and mixed types become unions. Formats such as email, UUID and date-time are recognised.",
-  keywords: ["json to typescript", "interface", "zod", "pydantic", "dataclass", "java record", "pojo", "go struct", "json schema", "quicktype"],
+  keywords: ["json to typescript", "interface", "zod", "json to dart", "flutter model", "json_serializable", "json to kotlin", "data class", "json to swift", "codable", "pydantic", "dataclass", "java record", "pojo", "go struct", "json schema", "quicktype"],
   icon: "braces",
   live: true,
   fields: [
     f.code("json", "Sample JSON", "json", { rows: 12, required: true, fromEditor: true, default: '{\n  "id": 42,\n  "email": "ada@example.com",\n  "name": "Ada",\n  "createdAt": "2025-01-15T09:30:00Z",\n  "roles": ["admin", "editor"],\n  "address": { "city": "London", "postcode": "NW1" },\n  "lastLogin": null\n}' }),
-    f.select("target", "Generate", opts(["ts-interface", "TypeScript interfaces"], ["ts-type", "TypeScript types"], ["zod", "Zod schema"], ["pydantic", "Python: Pydantic"], ["dataclass", "Python: dataclasses"], ["typeddict", "Python: TypedDict"], ["java-record", "Java records"], ["java-pojo", "Java classes (POJO)"], ["go", "Go structs"], ["json-schema", "JSON Schema"])),
+    f.select("target", "Generate", opts(["ts-interface", "TypeScript interfaces"], ["ts-type", "TypeScript types"], ["zod", "Zod schema"], ["pydantic", "Python: Pydantic"], ["dataclass", "Python: dataclasses"], ["typeddict", "Python: TypedDict"], ["java-record", "Java records"], ["java-pojo", "Java classes (POJO)"], ["go", "Go structs"], ["dart", "Dart / Flutter (fromJson, toJson, copyWith)"], ["dart-json-serializable", "Dart / Flutter (json_serializable)"], ["kotlin", "Kotlin data classes (kotlinx.serialization)"], ["kotlin-moshi", "Kotlin data classes (Moshi)"], ["kotlin-gson", "Kotlin data classes (Gson)"], ["swift", "Swift Codable structs"], ["json-schema", "JSON Schema"])),
     f.text("rootName", "Root type name", { width: "narrow", default: "User" }),
-    f.text("packageName", "Java package", { width: "narrow", default: "com.example.model", showIf: { field: "target", equals: ["java-record", "java-pojo"] } })
+    f.text("packageName", "Package", { width: "narrow", default: "com.example.model", showIf: { field: "target", equals: ["java-record", "java-pojo", "kotlin", "kotlin-moshi", "kotlin-gson"] } }),
+    f.toggle("mutable", "Mutable properties (var)", false, { showIf: { field: "target", equals: ["swift"] } })
   ],
   run(values) {
     const root = recordShape(parseJson(str(values, "json"), "The sample"));
     const name = str(values, "rootName").trim() || "Root";
     const target = str(values, "target", "ts-interface");
+    if (target.startsWith("dart") || target.startsWith("kotlin") || target === "swift") {
+      const mobile = target === "dart" ? ["dart", `lib/models/${snake(name)}.dart`, toDart(root, name, "manual")]
+        : target === "dart-json-serializable" ? ["dart", `lib/models/${snake(name)}.dart`, toDart(root, name, "json_serializable")]
+          : target === "swift" ? ["swift", `${name}.swift`, toSwift(root, name, bool(values, "mutable"))]
+            : ["kotlin", `${name}.kt`, toKotlin(root, name, target === "kotlin-moshi" ? "moshi" : target === "kotlin-gson" ? "gson" : "kotlinx", str(values, "packageName", "com.example.model"))];
+      return { outputs: [code("Generated", mobile[0], mobile[2], mobile[1])] };
+    }
     const [language, ext, content] =
       target === "ts-interface" ? ["typescript", "ts", toTypeScript(root, name, "interface")]
         : target === "ts-type" ? ["typescript", "ts", toTypeScript(root, name, "type")]
@@ -127,11 +124,9 @@ const types: ToolDefinition = {
   }
 };
 
-const schemaValidator: ToolDefinition = {
+const schemaValidator: ToolSpec = {
   id: "data.schema-validate",
   command: "jsonSchemaValidator",
-  section: "data",
-  category: "Validate & inspect",
   title: "JSON Schema Validator",
   summary: "Validate JSON against a JSON Schema and see every violation with its path - or infer a schema from the JSON when you have none.",
   keywords: ["json schema", "validate", "ajv", "contract", "api payload", "infer schema"],
@@ -155,11 +150,9 @@ const schemaValidator: ToolDefinition = {
   }
 };
 
-const mock: ToolDefinition = {
+const mock: ToolSpec = {
   id: "data.mock",
   command: "mockDataGenerator",
-  section: "data",
-  category: "Convert & model",
   title: "Mock Data Generator",
   summary: "Realistic fake records from a field list or an example object, as JSON, JSON Lines, CSV or SQL inserts. Same seed, same data.",
   guide: `One field per line as name: type or name: type(args). Types: ${MOCK_TYPES.map(t => t.type).join(", ")}. Example: age: int(18, 90), plan: enum(free|pro|team). Or paste an example JSON object and the types are guessed from names and values.`,
@@ -196,11 +189,9 @@ const mock: ToolDefinition = {
   }
 };
 
-const transform: ToolDefinition = {
+const transform: ToolSpec = {
   id: "data.transform",
   command: "dataTransform",
-  section: "data",
-  category: "Convert & model",
   title: "Data Transformer",
   summary: "Filter, pick, rename, sort, deduplicate and flatten records from JSON, JSON Lines or CSV - a quick jq-like pipeline without the syntax.",
   guide: "Filter: field op value, joined with and / or. Operators: = != > >= < <= contains startswith endswith exists. Example: status = \"active\" and seats >= 10. Nested fields use dots: address.city = London.",
@@ -237,11 +228,9 @@ const transform: ToolDefinition = {
 // SQL
 // ---------------------------------------------------------------------------
 
-const sqlFormatter: ToolDefinition = {
+const sqlFormatter: ToolSpec = {
   id: "data.sql",
   command: "sparkSqlFormatter",
-  section: "data",
-  category: "SQL",
   title: "SQL Formatter & Linter",
   summary: "Format SQL for Postgres, MySQL, SQL Server, Spark and Trino, and flag risky patterns: SELECT *, UPDATE without WHERE, NOT IN with NULLs, implicit joins and more.",
   keywords: ["sql", "format", "beautify", "prettify", "lint", "spark sql", "presto", "trino", "query"],
@@ -266,11 +255,9 @@ const sqlFormatter: ToolDefinition = {
   }
 };
 
-const sqlHelper: ToolDefinition = {
+const sqlHelper: ToolSpec = {
   id: "data.sql-helper",
   command: "sqlQueryHelper",
-  section: "data",
-  category: "SQL",
   title: "SQL Query Helper",
   summary: "Parameterised SELECT, INSERT, UPDATE, UPSERT, DELETE and pagination queries for a table, in your database's dialect and placeholder style.",
   guide: "Paste a CREATE TABLE statement, or type the table and columns. Queries use driver placeholders ($1, ?, @p1, :name) - never concatenate user input into SQL.",
@@ -306,40 +293,9 @@ const sqlHelper: ToolDefinition = {
 // Validate & inspect
 // ---------------------------------------------------------------------------
 
-const apiResponse: ToolDefinition = {
-  id: "data.api-response",
-  command: "apiResponseInspector",
-  section: "data",
-  category: "Validate & inspect",
-  title: "API Response Inspector",
-  summary: "Paste a raw HTTP response (or just the body): pretty-printed body, headers, status meaning, pagination, caching and error hints, and a field list.",
-  keywords: ["http response", "headers", "status code", "rest", "curl -i", "pagination", "cache-control"],
-  icon: "api",
-  live: true,
-  fields: [f.code("raw", "Response", "http", { rows: 12, required: true, fromEditor: true, default: 'HTTP/1.1 429 Too Many Requests\nContent-Type: application/json\nRetry-After: 30\nX-RateLimit-Remaining: 0\n\n{"error": {"code": "rate_limited", "message": "Slow down"}, "requestId": "req_123"}' })],
-  run(values) {
-    const r = inspectApiResponse(str(values, "raw"));
-    return {
-      stats: [
-        ...(r.status ? [{ label: "Status", value: `${r.status}${r.statusText ? " " + r.statusText : ""}`, tone: (r.status < 300 ? "good" : r.status < 400 ? "neutral" : "bad") as "good" | "neutral" | "bad" }] : []),
-        { label: "Body", value: `${r.isJson ? "JSON" : "text"} · ${fmtBytes(r.bytes)}` },
-        { label: "Headers", value: String(r.headers.length) }
-      ],
-      messages: r.insights.map(t => ({ kind: "info" as const, text: t })),
-      outputs: [
-        code("Body", r.isJson ? "json" : "text", r.isJson ? JSON.stringify(r.body, null, 2) : r.bodyText),
-        ...(r.headers.length ? [table("Headers", ["Header", "Value"], r.headers)] : []),
-        ...(r.fields.length ? [table("Fields", ["Path", "Type", "Example"], r.fields.map(x => [x.path, x.type, x.example]))] : [])
-      ]
-    };
-  }
-};
-
-const profiler: ToolDefinition = {
+const profiler: ToolSpec = {
   id: "data.profile",
   command: "dataQualityChecker",
-  section: "data",
-  category: "Validate & inspect",
   title: "Data Profiler & Quality Check",
   summary: "Profile CSV, JSON or JSON Lines: type, missing values, distinct counts, ranges and outliers per column, plus duplicate rows and quality warnings.",
   keywords: ["profile", "data quality", "missing values", "nulls", "duplicates", "outliers", "eda", "csv"],
@@ -366,11 +322,9 @@ const profiler: ToolDefinition = {
   }
 };
 
-const jsonl: ToolDefinition = {
+const jsonl: ToolSpec = {
   id: "data.jsonl",
   command: "jsonlViewer",
-  section: "data",
-  category: "Validate & inspect",
   title: "JSON Lines Inspector",
   summary: "Validate a JSONL file line by line (fine-tuning data, logs, exports), see its fields and preview records as a table.",
   keywords: ["jsonl", "ndjson", "json lines", "fine-tuning", "training data", "validate"],
@@ -405,11 +359,9 @@ const jsonl: ToolDefinition = {
 // Big data
 // ---------------------------------------------------------------------------
 
-const schemaViewer: ToolDefinition = {
+const schemaViewer: ToolSpec = {
   id: "data.schema",
   command: "schemaViewer",
-  section: "data",
-  category: "Big data",
   title: "Schema Viewer",
   summary: "Read a JSON Schema, Avro schema, Spark StructType or a sample JSON document as a field tree with types and nullability.",
   keywords: ["schema", "avro", "parquet", "spark", "structtype", "json schema", "fields"],
@@ -425,11 +377,9 @@ const schemaViewer: ToolDefinition = {
   }
 };
 
-const schemaDiffTool: ToolDefinition = {
+const schemaDiffTool: ToolSpec = {
   id: "data.schema-diff",
   command: "schemaDiff",
-  section: "data",
-  category: "Big data",
   title: "Schema Diff",
   summary: "Compare two schemas (JSON Schema, Avro, Spark or sample JSON) and flag breaking changes: removed fields, narrowed types, new required fields.",
   keywords: ["schema evolution", "breaking change", "compatibility", "avro", "migration"],
@@ -450,11 +400,9 @@ const schemaDiffTool: ToolDefinition = {
   }
 };
 
-const partitions: ToolDefinition = {
+const partitions: ToolSpec = {
   id: "data.partitions",
   command: "partitionCalc",
-  section: "data",
-  category: "Big data",
   title: "Partition & File Size Planner",
   summary: "Size table partitions and output files for Parquet/Delta, get a shuffle partition count, and PySpark code that writes well-sized files.",
   keywords: ["partition", "spark", "shuffle partitions", "small files", "parquet", "delta", "repartition"],
@@ -491,11 +439,9 @@ const partitions: ToolDefinition = {
   }
 };
 
-const cluster: ToolDefinition = {
+const cluster: ToolSpec = {
   id: "data.spark-cluster",
   command: "sparkCostEstimator",
-  section: "data",
-  category: "Big data",
   title: "Spark Cluster & Cost Estimator",
   summary: "Workers, executor layout (cores and memory per executor) and daily and monthly cost for a Spark job.",
   keywords: ["spark", "cluster", "executors", "databricks", "emr", "dataproc", "cost", "sizing"],
@@ -535,11 +481,9 @@ const cluster: ToolDefinition = {
   }
 };
 
-const deltaLog: ToolDefinition = {
+const deltaLog: ToolSpec = {
   id: "data.delta-log",
   command: "deltaLakeAnalyzer",
-  section: "data",
-  category: "Big data",
   title: "Delta Lake Log Analyzer",
   summary: "Paste _delta_log commit files to see operations, files added and removed, small-file ratio, schema changes and OPTIMIZE / VACUUM advice.",
   keywords: ["delta lake", "_delta_log", "optimize", "vacuum", "small files", "databricks", "lakehouse"],
@@ -564,9 +508,24 @@ const deltaLog: ToolDefinition = {
   }
 };
 
-export const DATA_TOOLS: ToolDefinition[] = [
+/** Viewing a schema and diffing two of them read the same formats; one tool with two modes. */
+const schemas = combineTools({
+  id: "data.schema",
+  command: "schemaViewer",
+  title: "Schema Viewer & Diff",
+  summary: "Read a JSON Schema, Avro schema, Spark StructType or sample JSON as a field tree - or compare two and flag breaking changes (removed fields, narrowed types, new required fields).",
+  keywords: ["schema", "avro", "spark schema", "breaking changes", "schema evolution"],
+  icon: "tree",
+  modeLabel: "Tool",
+  modes: [
+    { value: "view", label: "View a schema", tool: schemaViewer },
+    { value: "diff", label: "Compare two schemas", tool: schemaDiffTool, aliasCommand: "schemaDiff" }
+  ]
+});
+
+export const DATA_TOOLS: ToolSpec[] = [
   convert, types, mock, transform,
   sqlFormatter, sqlHelper,
-  schemaValidator, apiResponse, profiler, jsonl,
-  schemaViewer, schemaDiffTool, partitions, cluster, deltaLog
+  schemaValidator, profiler, jsonl,
+  schemas, partitions, cluster, deltaLog
 ];

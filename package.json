@@ -1,8 +1,8 @@
 {
   "name": "hue-console",
   "displayName": "DevSnip Pro",
-  "description": "⚡A full-stack, AI/ML, security, DevOps, MLOps, and observability toolkit for VS Code.",
-  "version": "11.69.1",
+  "description": "⚡A full-stack web and mobile (React, Next.js, Node, React Native, Flutter, Android, iOS), AI/ML, security, DevOps and observability toolkit for VS Code.",
+  "version": "11.70.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -158,7 +158,21 @@
     "Node.js middleware functions",
     "Django models and views",
     "Flask routing and templates",
-    "PHP OOP principles"
+    "PHP OOP principles",
+    "react-native",
+    "nextjs",
+    "nodejs",
+    "android",
+    "ios",
+    "mobile",
+    "curl",
+    "openapi",
+    "graphql",
+    "jwt",
+    "oauth",
+    "cors",
+    "deep-links",
+    "regex"
   ],
   "contributes": {
     "languages": [],
@@ -326,40 +340,156 @@
     ],
     "commands": [
       {
-        "command": "sayaib.hue-console.showSnippets",
-        "title": " 🚀 DevSnip Pro: Show Custom Snippets"
+        "command": "sayaib.hue-console.advancedToolsHub",
+        "title": "🧭 DevSnip Pro: Browse All Tools"
       },
       {
-        "command": "sayaib.hue-console.createCustomSnippet",
-        "title": "🚀 DevSnip Pro: Create Your Own Perfect Code Snippet"
+        "command": "sayaib.hue-console.webDevHub",
+        "title": "🧭 DevSnip Pro: Browse Web & Frontend Tools"
       },
       {
-        "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-        "title": "🛠️ DevSnip Pro: List and Remove Console Logs"
+        "command": "sayaib.hue-console.mobileDevHub",
+        "title": "🧭 DevSnip Pro: Browse Mobile Development Tools"
+      },
+      {
+        "command": "sayaib.hue-console.aiMlHub",
+        "title": "🧭 DevSnip Pro: Browse AI & ML Tools"
+      },
+      {
+        "command": "sayaib.hue-console.ragHub",
+        "title": "🧭 DevSnip Pro: Browse Data & RAG Tools"
+      },
+      {
+        "command": "sayaib.hue-console.bigDataHub",
+        "title": "🧭 DevSnip Pro: Browse Data & RAG Tools"
+      },
+      {
+        "command": "sayaib.hue-console.devopsGenerator",
+        "title": "🧭 DevSnip Pro: Browse DevOps & Cloud Tools"
+      },
+      {
+        "command": "sayaib.hue-console.searchTools",
+        "title": "🔎 DevSnip Pro: Search All Tools (Regex)"
       },
       {
         "command": "sayaib.hue-console.openGUI",
-        "title": "🛢 DevSnip Pro: Rest API Client "
+        "title": "🔌 DevSnip Pro: REST API Client"
       },
       {
-        "command": "sayaib.hue-console.advancedToolsHub",
-        "title": "🧰 DevSnip Pro: Developer Tools Hub"
+        "command": "sayaib.hue-console.curlConverter",
+        "title": "🔌 DevSnip Pro: cURL Converter"
       },
       {
-        "command": "sayaib.hue-console.dependencyManager",
-        "title": "📦 DevSnip Pro: Dependencies & Installation"
+        "command": "sayaib.hue-console.apiResponseInspector",
+        "title": "🔌 DevSnip Pro: API Response Inspector"
       },
       {
-        "command": "sayaib.hue-console.regexBuilder",
-        "title": "🔍 DevSnip Pro: Regex Builder & Tester"
+        "command": "sayaib.hue-console.urlTools",
+        "title": "🔌 DevSnip Pro: URL & Query String Tool"
+      },
+      {
+        "command": "sayaib.hue-console.corsHelper",
+        "title": "🔌 DevSnip Pro: CORS Builder & Debugger"
+      },
+      {
+        "command": "sayaib.hue-console.openApiTools",
+        "title": "🔌 DevSnip Pro: OpenAPI / Swagger Toolkit"
+      },
+      {
+        "command": "sayaib.hue-console.graphqlTools",
+        "title": "🔌 DevSnip Pro: GraphQL Formatter & Types"
+      },
+      {
+        "command": "sayaib.hue-console.apiScaffolder",
+        "title": "🔌 DevSnip Pro: API Resource Scaffolder"
+      },
+      {
+        "command": "sayaib.hue-console.reactGenerator",
+        "title": "🎨 DevSnip Pro: React / Next.js Generator"
+      },
+      {
+        "command": "sayaib.hue-console.htmlToJsx",
+        "title": "🎨 DevSnip Pro: HTML → JSX Converter"
+      },
+      {
+        "command": "sayaib.hue-console.cssUnits",
+        "title": "🎨 DevSnip Pro: CSS Units & Fluid Type"
+      },
+      {
+        "command": "sayaib.hue-console.colorConverter",
+        "title": "🎨 DevSnip Pro: Color Converter & Palette"
+      },
+      {
+        "command": "sayaib.hue-console.colorPalette",
+        "title": "🎨 DevSnip Pro: Color Palette"
+      },
+      {
+        "command": "sayaib.hue-console.metaTagsGenerator",
+        "title": "🎨 DevSnip Pro: SEO & Social Meta Tags"
+      },
+      {
+        "command": "sayaib.hue-console.cacheControl",
+        "title": "🎨 DevSnip Pro: Cache-Control Builder"
+      },
+      {
+        "command": "sayaib.hue-console.deviceCommands",
+        "title": "📱 DevSnip Pro: adb & simctl Command Builder"
+      },
+      {
+        "command": "sayaib.hue-console.deepLinkHelper",
+        "title": "📱 DevSnip Pro: Deep Links & Universal Links"
+      },
+      {
+        "command": "sayaib.hue-console.appPermissions",
+        "title": "📱 DevSnip Pro: App Permissions Generator"
+      },
+      {
+        "command": "sayaib.hue-console.mobileLocalApi",
+        "title": "📱 DevSnip Pro: Local API Access from Devices"
+      },
+      {
+        "command": "sayaib.hue-console.appEnvironments",
+        "title": "📱 DevSnip Pro: Environments & Build Flavors"
+      },
+      {
+        "command": "sayaib.hue-console.appSigning",
+        "title": "📱 DevSnip Pro: Signing, Keystores & Fingerprints"
+      },
+      {
+        "command": "sayaib.hue-console.sdkVersions",
+        "title": "📱 DevSnip Pro: SDK & Build Compatibility"
+      },
+      {
+        "command": "sayaib.hue-console.mobileCiGenerator",
+        "title": "📱 DevSnip Pro: Mobile CI Workflow"
+      },
+      {
+        "command": "sayaib.hue-console.densityConverter",
+        "title": "📱 DevSnip Pro: dp / px / pt Converter & Asset Sizes"
+      },
+      {
+        "command": "sayaib.hue-console.showSnippets",
+        "title": "⚡ DevSnip Pro: Saved Snippets"
+      },
+      {
+        "command": "sayaib.hue-console.createCustomSnippet",
+        "title": "⚡ DevSnip Pro: Create Snippet"
+      },
+      {
+        "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
+        "title": "⚡ DevSnip Pro: Clean Console Logs"
       },
       {
         "command": "sayaib.hue-console.removeUnusedImports",
-        "title": "🧹 DevSnip Pro: Remove Unused Imports"
+        "title": "⚡ DevSnip Pro: Remove Unused Imports"
+      },
+      {
+        "command": "sayaib.hue-console.dependencyManager",
+        "title": "⚡ DevSnip Pro: Dependencies & Installation"
       },
       {
         "command": "sayaib.hue-console.readmeManager",
-        "title": "📝 DevSnip Pro: README Viewer & CRUD Manager"
+        "title": "⚡ DevSnip Pro: README Viewer & Manager"
       },
       {
         "command": "sayaib.hue-console.openCodeIntegration",
@@ -367,147 +497,247 @@
       },
       {
         "command": "sayaib.hue-console.jsonFormatter",
-        "title": "📝 DevSnip Pro: JSON/XML Formatter"
+        "title": "📝 DevSnip Pro: JSON / YAML / XML Formatter"
       },
       {
-        "command": "sayaib.hue-console.hashGenerator",
-        "title": "🔐 DevSnip Pro: Hash Generator"
-      },
-      {
-        "command": "sayaib.hue-console.colorPalette",
-        "title": "🎨 DevSnip Pro: Color Palette Manager"
-      },
-      {
-        "command": "sayaib.hue-console.timestampConverter",
-        "title": "⏰ DevSnip Pro: Timestamp Converter"
-      },
-      {
-        "command": "sayaib.hue-console.aiMlHub",
-        "title": "🤖 DevSnip Pro: AI & ML Tools Hub"
-      },
-      {
-        "command": "sayaib.hue-console.searchTools",
-        "title": "🔎 DevSnip Pro: Search All Tools (Regex)"
-      },
-      {
-        "command": "sayaib.hue-console.bigDataHub",
-        "title": "🗄️ DevSnip Pro: Data Tools Hub"
-      },
-      {
-        "command": "sayaib.hue-console.ragHub",
-        "title": "🧬 DevSnip Pro: RAG Tools Hub"
-      },
-      {
-        "command": "sayaib.hue-console.securityHub",
-        "title": "🛡️ DevSnip Pro: Security Hub"
-      },
-      {
-        "command": "sayaib.hue-console.endpointSecurityScan",
-        "title": "🔎 DevSnip Pro: Endpoint Security Scan"
-      },
-      {
-        "command": "sayaib.hue-console.securityAudit",
-        "title": "🛡️ DevSnip Pro: Security Audit (Workspace)"
-      },
-      {
-        "command": "sayaib.hue-console.cloudSecurityAudit",
-        "title": "☁️ DevSnip Pro: Cloud & Container Security Audit"
-      },
-      {
-        "command": "sayaib.hue-console.dependencyAudit",
-        "title": "📦 DevSnip Pro: Dependency & Security Config Check"
-      },
-      {
-        "command": "sayaib.hue-console.devopsGenerator",
-        "title": "🐳 DevSnip Pro: DevOps Tools Hub"
-      },
-      {
-        "command": "sayaib.hue-console.milestoneTracker",
-        "title": "🏆 DevSnip Pro: Milestone & Points Tracker"
-      },
-      {
-        "command": "sayaib.hue-console.premiumStatus",
-        "title": "⭐ DevSnip Pro: Points & Premium Features"
-      },
-      {
-        "command": "sayaib.hue-console.resetFeatureUsage",
-        "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)"
-      },
-      {
-        "command": "sayaib.hue-console.base64Encoder",
-        "title": "🧰 DevSnip Pro: Encode / Decode"
-      },
-      {
-        "command": "sayaib.hue-console.urlEncoder",
-        "title": "🧰 DevSnip Pro: URL Encoder/Decoder"
-      },
-      {
-        "command": "sayaib.hue-console.jwtDecoder",
-        "title": "🧰 DevSnip Pro: JWT Decoder"
-      },
-      {
-        "command": "sayaib.hue-console.idGenerator",
-        "title": "🧰 DevSnip Pro: UUID & ID Generator"
-      },
-      {
-        "command": "sayaib.hue-console.cronHelper",
-        "title": "🧰 DevSnip Pro: Cron Expression Helper"
+        "command": "sayaib.hue-console.yamlJsonTool",
+        "title": "📝 DevSnip Pro: YAML / JSON Validator"
       },
       {
         "command": "sayaib.hue-console.textDiff",
-        "title": "🧰 DevSnip Pro: Diff Checker"
+        "title": "📝 DevSnip Pro: Diff Checker"
+      },
+      {
+        "command": "sayaib.hue-console.regexLibrary",
+        "title": "📝 DevSnip Pro: Regex Tester, Library & Code"
+      },
+      {
+        "command": "sayaib.hue-console.regexBuilder",
+        "title": "📝 DevSnip Pro: Regex Tester"
       },
       {
         "command": "sayaib.hue-console.caseConverter",
-        "title": "🧰 DevSnip Pro: Case Converter & Text Tools"
+        "title": "📝 DevSnip Pro: Case Converter & Text Tools"
+      },
+      {
+        "command": "sayaib.hue-console.base64Encoder",
+        "title": "🔄 DevSnip Pro: Encode / Decode"
+      },
+      {
+        "command": "sayaib.hue-console.urlEncoder",
+        "title": "🔄 DevSnip Pro: URL Encoder/Decoder"
+      },
+      {
+        "command": "sayaib.hue-console.timestampConverter",
+        "title": "🔄 DevSnip Pro: Timestamp Converter"
+      },
+      {
+        "command": "sayaib.hue-console.idGenerator",
+        "title": "🔄 DevSnip Pro: UUID & ID Generator"
+      },
+      {
+        "command": "sayaib.hue-console.jsonToTypes",
+        "title": "🔄 DevSnip Pro: JSON to Types"
+      },
+      {
+        "command": "sayaib.hue-console.dataConverter",
+        "title": "🔄 DevSnip Pro: Data Converter"
+      },
+      {
+        "command": "sayaib.hue-console.sparkSqlFormatter",
+        "title": "🗄️ DevSnip Pro: SQL Formatter & Linter"
+      },
+      {
+        "command": "sayaib.hue-console.sqlQueryHelper",
+        "title": "🗄️ DevSnip Pro: SQL Query Helper"
+      },
+      {
+        "command": "sayaib.hue-console.connectionString",
+        "title": "🗄️ DevSnip Pro: Database Connection Strings"
+      },
+      {
+        "command": "sayaib.hue-console.sqlToMongo",
+        "title": "🗄️ DevSnip Pro: SQL → MongoDB Query"
+      },
+      {
+        "command": "sayaib.hue-console.buildErrorExplainer",
+        "title": "🐞 DevSnip Pro: Build Error Explainer"
+      },
+      {
+        "command": "sayaib.hue-console.observabilityAnalyze",
+        "title": "🐞 DevSnip Pro: Log Analyzer & Formatter"
+      },
+      {
+        "command": "sayaib.hue-console.mockDataGenerator",
+        "title": "🐞 DevSnip Pro: Mock Data Generator"
+      },
+      {
+        "command": "sayaib.hue-console.jsonSchemaValidator",
+        "title": "🐞 DevSnip Pro: JSON Schema Validator"
+      },
+      {
+        "command": "sayaib.hue-console.networkTools",
+        "title": "🐞 DevSnip Pro: Port & Network Toolkit"
+      },
+      {
+        "command": "sayaib.hue-console.gitRecipes",
+        "title": "🌿 DevSnip Pro: Git Command Recipes"
+      },
+      {
+        "command": "sayaib.hue-console.gitignoreGenerator",
+        "title": "🌿 DevSnip Pro: .gitignore Generator"
+      },
+      {
+        "command": "sayaib.hue-console.semverCalculator",
+        "title": "🌿 DevSnip Pro: Semver & App Version Calculator"
+      },
+      {
+        "command": "sayaib.hue-console.dockerfileHelper",
+        "title": "🐳 DevSnip Pro: Dockerfile Generator & Linter"
+      },
+      {
+        "command": "sayaib.hue-console.composeHelper",
+        "title": "🐳 DevSnip Pro: Docker Compose Generator & Validator"
+      },
+      {
+        "command": "sayaib.hue-console.dockerRunToCompose",
+        "title": "🐳 DevSnip Pro: docker run → Compose"
+      },
+      {
+        "command": "sayaib.hue-console.ciPipelineGenerator",
+        "title": "🐳 DevSnip Pro: CI Pipeline Generator"
+      },
+      {
+        "command": "sayaib.hue-console.envChecker",
+        "title": "🐳 DevSnip Pro: .env Checker & Generator"
+      },
+      {
+        "command": "sayaib.hue-console.kubernetesHelper",
+        "title": "🐳 DevSnip Pro: Kubernetes & Helm Generator / Validator"
+      },
+      {
+        "command": "sayaib.hue-console.cloudDeployGenerator",
+        "title": "🐳 DevSnip Pro: Cloud Deploy Workflow"
+      },
+      {
+        "command": "sayaib.hue-console.cronHelper",
+        "title": "🐳 DevSnip Pro: Cron Expression Helper"
+      },
+      {
+        "command": "sayaib.hue-console.nginxConfig",
+        "title": "🐳 DevSnip Pro: Nginx Config Generator"
+      },
+      {
+        "command": "sayaib.hue-console.healthCheckGenerator",
+        "title": "🐳 DevSnip Pro: Health Check Generator"
+      },
+      {
+        "command": "sayaib.hue-console.terraformGenerator",
+        "title": "🐳 DevSnip Pro: Terraform Starter"
+      },
+      {
+        "command": "sayaib.hue-console.pm2Config",
+        "title": "🐳 DevSnip Pro: PM2 Ecosystem Generator"
+      },
+      {
+        "command": "sayaib.hue-console.observabilityStarter",
+        "title": "🐳 DevSnip Pro: Observability Starter"
+      },
+      {
+        "command": "sayaib.hue-console.jwtDecoder",
+        "title": "🛡️ DevSnip Pro: JWT Decoder & Signer"
+      },
+      {
+        "command": "sayaib.hue-console.securityAudit",
+        "title": "🛡️ DevSnip Pro: Workspace Security Audit"
+      },
+      {
+        "command": "sayaib.hue-console.hashGenerator",
+        "title": "🛡️ DevSnip Pro: Hash, HMAC & Webhook Signatures"
+      },
+      {
+        "command": "sayaib.hue-console.oauthPkce",
+        "title": "🛡️ DevSnip Pro: OAuth 2.0 & PKCE Helper"
+      },
+      {
+        "command": "sayaib.hue-console.securityHeaders",
+        "title": "🛡️ DevSnip Pro: CSP & Security Headers"
+      },
+      {
+        "command": "sayaib.hue-console.endpointSecurityScan",
+        "title": "🛡️ DevSnip Pro: Endpoint Security Scan"
+      },
+      {
+        "command": "sayaib.hue-console.cookieInspector",
+        "title": "🛡️ DevSnip Pro: Cookie Inspector & Builder"
+      },
+      {
+        "command": "sayaib.hue-console.dependencyAudit",
+        "title": "🛡️ DevSnip Pro: Dependency & Config Check"
+      },
+      {
+        "command": "sayaib.hue-console.certInspector",
+        "title": "🛡️ DevSnip Pro: Certificate & SSL Pinning Inspector"
+      },
+      {
+        "command": "sayaib.hue-console.cloudSecurityAudit",
+        "title": "🛡️ DevSnip Pro: Cloud & Container Audit"
       },
       {
         "command": "sayaib.hue-console.promptTemplate",
         "title": "🤖 DevSnip Pro: Prompt Builder"
       },
       {
-        "command": "sayaib.hue-console.jsonToToon",
-        "title": "🤖 DevSnip Pro: JSON → TOON for Prompts"
-      },
-      {
         "command": "sayaib.hue-console.tokenCounter",
-        "title": "🤖 DevSnip Pro: Token & Cost Estimator"
+        "title": "🤖 DevSnip Pro: LLM Models, Tokens & Cost"
       },
       {
         "command": "sayaib.hue-console.modelComparison",
-        "title": "🤖 DevSnip Pro: Model Comparison"
+        "title": "🤖 DevSnip Pro: LLM Model Comparison"
       },
       {
         "command": "sayaib.hue-console.llmClientSetup",
         "title": "🤖 DevSnip Pro: LLM Client Setup"
       },
       {
+        "command": "sayaib.hue-console.llmJsonValidator",
+        "title": "🤖 DevSnip Pro: LLM Output Cleaner & JSON Validator"
+      },
+      {
+        "command": "sayaib.hue-console.llmResponseFormatter",
+        "title": "🤖 DevSnip Pro: LLM Response Formatter"
+      },
+      {
         "command": "sayaib.hue-console.llmApiTester",
         "title": "🤖 DevSnip Pro: LLM API Tester"
+      },
+      {
+        "command": "sayaib.hue-console.jsonToToon",
+        "title": "🤖 DevSnip Pro: JSON → TOON for Prompts"
+      },
+      {
+        "command": "sayaib.hue-console.aiAppStarter",
+        "title": "🤖 DevSnip Pro: AI App Starter"
+      },
+      {
+        "command": "sayaib.hue-console.mlCodeGen",
+        "title": "🤖 DevSnip Pro: AI/ML Code Snippets"
       },
       {
         "command": "sayaib.hue-console.gpuVram",
         "title": "🤖 DevSnip Pro: GPU Memory & Speed Estimator"
       },
       {
-        "command": "sayaib.hue-console.llmJsonValidator",
-        "title": "🤖 DevSnip Pro: LLM JSON Extractor & Validator"
-      },
-      {
-        "command": "sayaib.hue-console.llmResponseFormatter",
-        "title": "🤖 DevSnip Pro: Response Formatter"
-      },
-      {
-        "command": "sayaib.hue-console.vectorSimilarity",
-        "title": "🤖 DevSnip Pro: Vector Similarity"
-      },
-      {
-        "command": "sayaib.hue-console.datasetSplit",
-        "title": "🤖 DevSnip Pro: Dataset Split Planner"
+        "command": "sayaib.hue-console.mlopsGenerator",
+        "title": "🤖 DevSnip Pro: Model Serving Starter"
       },
       {
         "command": "sayaib.hue-console.metricsCalculator",
         "title": "🤖 DevSnip Pro: Model Metrics"
+      },
+      {
+        "command": "sayaib.hue-console.datasetSplit",
+        "title": "🤖 DevSnip Pro: Dataset Split Planner"
       },
       {
         "command": "sayaib.hue-console.lrScheduler",
@@ -518,32 +748,20 @@
         "title": "🤖 DevSnip Pro: Model Card"
       },
       {
-        "command": "sayaib.hue-console.experimentLogger",
-        "title": "🤖 DevSnip Pro: Experiment Log"
-      },
-      {
-        "command": "sayaib.hue-console.mlCodeGen",
-        "title": "🤖 DevSnip Pro: AI/ML Code Snippets"
-      },
-      {
-        "command": "sayaib.hue-console.aiAppStarter",
-        "title": "🤖 DevSnip Pro: AI App Starter"
-      },
-      {
         "command": "sayaib.hue-console.chunkingTester",
         "title": "🧬 DevSnip Pro: Chunking Tester"
       },
       {
-        "command": "sayaib.hue-console.embeddingCost",
-        "title": "🧬 DevSnip Pro: Chunk & Index Size Calculator"
-      },
-      {
-        "command": "sayaib.hue-console.embeddingModelGuide",
-        "title": "🧬 DevSnip Pro: Embedding Model Guide"
+        "command": "sayaib.hue-console.ragPipeline",
+        "title": "🧬 DevSnip Pro: RAG Pipeline Generator"
       },
       {
         "command": "sayaib.hue-console.vectorStoreSetup",
         "title": "🧬 DevSnip Pro: Vector Store Setup"
+      },
+      {
+        "command": "sayaib.hue-console.embeddingModelGuide",
+        "title": "🧬 DevSnip Pro: Embedding Model Guide"
       },
       {
         "command": "sayaib.hue-console.retrievalConfig",
@@ -558,8 +776,8 @@
         "title": "🧬 DevSnip Pro: Grounded Prompt Assembler"
       },
       {
-        "command": "sayaib.hue-console.ragPipeline",
-        "title": "🧬 DevSnip Pro: RAG Pipeline Generator"
+        "command": "sayaib.hue-console.embeddingCost",
+        "title": "🧬 DevSnip Pro: Chunk & Index Size Calculator"
       },
       {
         "command": "sayaib.hue-console.ragEvalScores",
@@ -570,136 +788,68 @@
         "title": "🧬 DevSnip Pro: Answer Grounding Checker"
       },
       {
-        "command": "sayaib.hue-console.hybridSearchRrf",
-        "title": "🧬 DevSnip Pro: Hybrid Search Fusion (RRF)"
+        "command": "sayaib.hue-console.vectorSimilarity",
+        "title": "🧬 DevSnip Pro: Vector Similarity"
       },
       {
         "command": "sayaib.hue-console.semanticDedup",
         "title": "🧬 DevSnip Pro: Near-Duplicate Chunk Finder"
       },
       {
+        "command": "sayaib.hue-console.hybridSearchRrf",
+        "title": "🧬 DevSnip Pro: Hybrid Search Fusion (RRF)"
+      },
+      {
         "command": "sayaib.hue-console.chunkMetadataValidator",
         "title": "🧬 DevSnip Pro: Chunk Metadata Validator"
       },
       {
-        "command": "sayaib.hue-console.dataConverter",
-        "title": "🗄️ DevSnip Pro: Data Converter"
-      },
-      {
-        "command": "sayaib.hue-console.jsonToTypes",
-        "title": "🗄️ DevSnip Pro: JSON to Types"
-      },
-      {
-        "command": "sayaib.hue-console.mockDataGenerator",
-        "title": "🗄️ DevSnip Pro: Mock Data Generator"
-      },
-      {
         "command": "sayaib.hue-console.dataTransform",
-        "title": "🗄️ DevSnip Pro: Data Transformer"
-      },
-      {
-        "command": "sayaib.hue-console.sparkSqlFormatter",
-        "title": "🗄️ DevSnip Pro: SQL Formatter & Linter"
-      },
-      {
-        "command": "sayaib.hue-console.sqlQueryHelper",
-        "title": "🗄️ DevSnip Pro: SQL Query Helper"
-      },
-      {
-        "command": "sayaib.hue-console.jsonSchemaValidator",
-        "title": "🗄️ DevSnip Pro: JSON Schema Validator"
-      },
-      {
-        "command": "sayaib.hue-console.apiResponseInspector",
-        "title": "🗄️ DevSnip Pro: API Response Inspector"
+        "title": "🧬 DevSnip Pro: Data Transformer"
       },
       {
         "command": "sayaib.hue-console.dataQualityChecker",
-        "title": "🗄️ DevSnip Pro: Data Profiler & Quality Check"
+        "title": "🧬 DevSnip Pro: Data Profiler & Quality Check"
       },
       {
         "command": "sayaib.hue-console.jsonlViewer",
-        "title": "🗄️ DevSnip Pro: JSON Lines Inspector"
+        "title": "🧬 DevSnip Pro: JSON Lines Inspector"
       },
       {
         "command": "sayaib.hue-console.schemaViewer",
-        "title": "🗄️ DevSnip Pro: Schema Viewer"
+        "title": "🧬 DevSnip Pro: Schema Viewer & Diff"
       },
       {
         "command": "sayaib.hue-console.schemaDiff",
-        "title": "🗄️ DevSnip Pro: Schema Diff"
+        "title": "🧬 DevSnip Pro: Schema Diff"
       },
       {
         "command": "sayaib.hue-console.partitionCalc",
-        "title": "🗄️ DevSnip Pro: Partition & File Size Planner"
+        "title": "🧬 DevSnip Pro: Partition & File Size Planner"
       },
       {
         "command": "sayaib.hue-console.sparkCostEstimator",
-        "title": "🗄️ DevSnip Pro: Spark Cluster & Cost Estimator"
+        "title": "🧬 DevSnip Pro: Spark Cluster & Cost Estimator"
       },
       {
         "command": "sayaib.hue-console.deltaLakeAnalyzer",
-        "title": "🗄️ DevSnip Pro: Delta Lake Log Analyzer"
+        "title": "🧬 DevSnip Pro: Delta Lake Log Analyzer"
       },
       {
-        "command": "sayaib.hue-console.dockerfileHelper",
-        "title": "🐳 DevSnip Pro: Dockerfile Generator & Linter"
+        "command": "sayaib.hue-console.securityHub",
+        "title": "🛡️ DevSnip Pro: Security Hub"
       },
       {
-        "command": "sayaib.hue-console.composeHelper",
-        "title": "🐳 DevSnip Pro: Docker Compose Generator & Validator"
+        "command": "sayaib.hue-console.milestoneTracker",
+        "title": "🏆 DevSnip Pro: Milestone & Points Tracker"
       },
       {
-        "command": "sayaib.hue-console.kubernetesHelper",
-        "title": "🐳 DevSnip Pro: Kubernetes & Helm Generator / Validator"
+        "command": "sayaib.hue-console.premiumStatus",
+        "title": "⭐ DevSnip Pro: Points & Premium Features"
       },
       {
-        "command": "sayaib.hue-console.ciPipelineGenerator",
-        "title": "🐳 DevSnip Pro: CI Pipeline Generator"
-      },
-      {
-        "command": "sayaib.hue-console.cloudDeployGenerator",
-        "title": "🐳 DevSnip Pro: Cloud Deploy Workflow"
-      },
-      {
-        "command": "sayaib.hue-console.envChecker",
-        "title": "🐳 DevSnip Pro: .env Checker & Generator"
-      },
-      {
-        "command": "sayaib.hue-console.yamlJsonTool",
-        "title": "🐳 DevSnip Pro: YAML / JSON Validator & Converter"
-      },
-      {
-        "command": "sayaib.hue-console.nginxConfig",
-        "title": "🐳 DevSnip Pro: Nginx Config Generator"
-      },
-      {
-        "command": "sayaib.hue-console.pm2Config",
-        "title": "🐳 DevSnip Pro: PM2 Ecosystem Generator"
-      },
-      {
-        "command": "sayaib.hue-console.terraformGenerator",
-        "title": "🐳 DevSnip Pro: Terraform Starter"
-      },
-      {
-        "command": "sayaib.hue-console.networkTools",
-        "title": "🐳 DevSnip Pro: Port & Network Toolkit"
-      },
-      {
-        "command": "sayaib.hue-console.observabilityAnalyze",
-        "title": "🐳 DevSnip Pro: Log Analyzer & Formatter"
-      },
-      {
-        "command": "sayaib.hue-console.healthCheckGenerator",
-        "title": "🐳 DevSnip Pro: Health Check Generator"
-      },
-      {
-        "command": "sayaib.hue-console.observabilityStarter",
-        "title": "🐳 DevSnip Pro: Observability Starter"
-      },
-      {
-        "command": "sayaib.hue-console.mlopsGenerator",
-        "title": "🐳 DevSnip Pro: Model Serving Starter"
+        "command": "sayaib.hue-console.resetFeatureUsage",
+        "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)"
       }
     ],
     "configuration": {
@@ -841,6 +991,21 @@
           "when": "resourceFilename =~ /^\\.env/"
         },
         {
+          "command": "sayaib.hue-console.curlConverter",
+          "group": "2_tools@12",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "sayaib.hue-console.htmlToJsx",
+          "group": "2_tools@13",
+          "when": "editorHasSelection && editorLangId =~ /^(html|javascriptreact|typescriptreact|vue|svg|xml)$/"
+        },
+        {
+          "command": "sayaib.hue-console.buildErrorExplainer",
+          "group": "2_tools@14",
+          "when": "editorLangId =~ /^(log|plaintext|Log)$/"
+        },
+        {
           "command": "sayaib.hue-console.searchTools",
           "group": "3_search@1"
         }
@@ -849,6 +1014,38 @@
         {
           "command": "sayaib.hue-console.resetFeatureUsage",
           "when": "isDevelopment"
+        },
+        {
+          "command": "sayaib.hue-console.webDevHub",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.mobileDevHub",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.aiMlHub",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.ragHub",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.bigDataHub",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.devopsGenerator",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.colorPalette",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.regexBuilder",
+          "when": "false"
         }
       ]
     }

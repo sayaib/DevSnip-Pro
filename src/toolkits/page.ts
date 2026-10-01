@@ -44,6 +44,7 @@ const UI_ICONS = {
   insert: '<path d="M12 5v10M8 11l4 4 4-4M5 19h14"/>',
   open: '<path d="M14 3h7v7M10 14L21 3M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
   editor: '<path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5"/><path d="M4 13l3 3-3 3M9 19h3"/>',
   reset: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
@@ -106,6 +107,7 @@ details.guide p { margin: 0; padding: 0 12px 12px 32px; color: var(--text); whit
 .group-heading[hidden] { display: none; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; grid-column: 1 / -1; }
 .field.narrow { grid-column: auto; }
+.field.narrow.span2 { grid-column: span 2; }
 .field[hidden] { display: none; }
 .label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 label.lbl { font-size: 12px; font-weight: 600; color: var(--text); }
