@@ -23,6 +23,14 @@ export interface SavedRequest {
   bodyType?: string;
   authType?: string;
   /**
+   * Auth settings that are safe to keep: names, locations, and secrets only
+   * when they are a {{variable}} reference. Typed secrets are never stored.
+   */
+  auth?: Record<string, string>;
+  /** "graphql" for GraphQL requests; REST when absent. */
+  requestType?: string;
+  graphql?: { query: string; variables: string; operationName: string };
+  /**
    * Values extracted from this request's response into variables for later
    * steps: variable name -> JSON path.
    */
@@ -48,6 +56,30 @@ function sanitiseRecord(value: unknown): Record<string, string> {
   return out;
 }
 
+const VARIABLE_REFERENCE = /^\{\{\w+\}\}$/;
+
+function sanitiseAuth(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const source = value as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const key of ["keyName", "username"]) {
+    if (typeof source[key] === "string" && source[key]) out[key] = (source[key] as string).slice(0, 200);
+  }
+  if (source.keyLocation === "header" || source.keyLocation === "query") out.keyLocation = source.keyLocation;
+  for (const key of ["token", "password", "keyValue"]) {
+    const entry = source[key];
+    if (typeof entry === "string" && VARIABLE_REFERENCE.test(entry.trim())) out[key] = entry.trim();
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function sanitiseGraphql(value: unknown): SavedRequest["graphql"] {
+  if (!value || typeof value !== "object") return undefined;
+  const source = value as Record<string, unknown>;
+  const text = (entry: unknown) => (typeof entry === "string" ? entry.slice(0, 200000) : "");
+  return { query: text(source.query), variables: text(source.variables), operationName: text(source.operationName).slice(0, 200) };
+}
+
 /** Rebuilds a request from untrusted input (webview message or imported file). */
 export function sanitiseRequest(value: unknown): SavedRequest | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -67,6 +99,9 @@ export function sanitiseRequest(value: unknown): SavedRequest | undefined {
     body: typeof source.body === "string" ? source.body.slice(0, 200000) : undefined,
     bodyType: typeof source.bodyType === "string" ? source.bodyType : undefined,
     authType: typeof source.authType === "string" ? source.authType : undefined,
+    auth: sanitiseAuth(source.auth),
+    requestType: source.requestType === "graphql" ? "graphql" : undefined,
+    graphql: source.requestType === "graphql" ? sanitiseGraphql(source.graphql) : undefined,
     extract: sanitiseRecord(source.extract),
     updatedAt: Number.isFinite(Number(source.updatedAt)) ? Number(source.updatedAt) : Date.now()
   };

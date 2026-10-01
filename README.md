@@ -3,7 +3,7 @@
 A developer toolkit for VS Code: a full REST and AI API client, a security scanner, workspace cleanup, snippets, and 70+ focused tools for everyday development, AI and LLM work, RAG, data and DevOps. Everything runs locally unless a tool says otherwise; no account needed.
 
 <p align="center">
-  <img src="Devsnip.png" alt="DevSnip Pro" />
+  <img src="Devsnip.jpg" alt="DevSnip Pro" />
 </p>
 
 ## Getting started
@@ -141,8 +141,8 @@ The complete list of events and properties is in [docs/ANALYTICS.md](docs/ANALYT
 | `devsnip.securityAudit.maxFiles`                | `2000`  | How many files each workspace, cloud or dependency security scan reads.                                 |
 | `devsnip.security.endpointTimeout`              | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner.                          |
 | `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks (reflected-input probe and well-known sensitive paths). |
-| `devsnip.analytics.enabled` | `true` | Send anonymous usage analytics. See [Usage analytics](#usage-analytics). |
-| `devsnip.analytics.debug` | `false` | Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel. |
+| `devsnip.analytics.enabled`                     | `true`  | Send anonymous usage analytics. See [Usage analytics](#usage-analytics).                                |
+| `devsnip.analytics.debug`                       | `false` | Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel.           |
 
 ## Keyboard shortcuts
 

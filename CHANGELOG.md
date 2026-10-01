@@ -1,5 +1,9 @@
 # Development Changelog of DevSnip Pro
 
+## 11.67.1 - Updated the REST API client UI & UX make easy to use
+
+Enhanced the REST API Client with an improved UI/UX, simplified navigation, clearer request/response sections, better button placement, and an easier workflow for creating, testing, and managing API requests.
+
 ## 11.66.1 - Toolboxes rebuilt for everyday work
 
 Every tool section was reviewed. Low-value tools were removed or merged, rarely-right calculators were replaced by accurate ones, and the most common daily tasks got new tools. All toolbox tools share one panel design and one set of output actions.

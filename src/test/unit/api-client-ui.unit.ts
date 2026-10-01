@@ -135,4 +135,59 @@ suite("REST API Client markup", () => {
     assert.ok(!/connect-src/.test(renderClient(false)), "a free page must not be allowed to open a socket");
     assert.ok(/connect-src ws: wss:/.test(renderClient(true)), "an entitled page needs the allowance");
   });
+
+  test("the request builder offers tabs, saving and keyboard shortcuts", () => {
+    const html = renderClient();
+    for (const id of ["reqTabs", "newTabBtn", "reqName", "saveRequestBtn", "moreMenu", "curlModal", "shortcutsModal", "splitter"]) {
+      assert.ok(html.includes(`id="${id}"`), `the ${id} control is missing`);
+    }
+    assert.ok(/role="menu"/.test(html) && /role="menuitem"/.test(html), "the actions menu needs menu semantics");
+    assert.ok(/id="splitter"[^>]*role="separator"/.test(html), "the pane splitter must be a focusable separator");
+  });
+
+  test("every role=tab in the static markup sits inside a labelled tab list", () => {
+    const html = renderClient();
+    const lists = elementsWith(html, /<div[^>]*role="tablist"[^>]*>/g);
+    assert.ok(lists.some(list => /id="reqTabs"/.test(list)), "open requests are a tab list");
+  });
+});
+
+/**
+ * The JSON viewer once dropped every quote and colon, so a response read as
+ * `name Leanne` instead of `"name": "Leanne"`. These run the page's own
+ * functions against real payloads.
+ */
+suite("REST API Client response rendering", () => {
+  function pageFunction<T>(name: string, until: string, deps: string[] = []): T {
+    const html = renderClient();
+    const script = /<script nonce="[^"]+">([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
+    const slice = (start: string, end: string) => {
+      const from = script.indexOf(start);
+      const to = script.indexOf(end, from + start.length);
+      assert.ok(from >= 0 && to > from, `could not find ${start} in the page script`);
+      return script.slice(from, to);
+    };
+    const source = deps.map(dep => slice(`function ${dep}(`, "\n}\n") + "\n}\n").join("") + slice(`function ${name}(`, until);
+    return new Function(`${source}; return ${name};`)() as T;
+  }
+
+  test("highlighted JSON keeps quotes, colons and punctuation", () => {
+    const highlightJson = pageFunction<(json: string) => string>("highlightJson", "function highlightMarkup(", ["escapeHtml"]);
+    const json = JSON.stringify({ name: "Ada \"Countess\"", n: -1.5e3, ok: true, none: null, list: [1, "two"] }, null, 2);
+    const html = highlightJson(json);
+    const text = html.replace(/<[^>]+>/g, "").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+    assert.strictEqual(text, json, "the visible text must be exactly the JSON");
+    assert.ok(html.includes('<span class="json-key">&quot;name&quot;</span>'));
+    assert.ok(html.includes('<span class="json-number">-1500</span>'));
+    assert.ok(html.includes('<span class="json-boolean">true</span>'));
+    assert.ok(html.includes('<span class="json-null">null</span>'));
+  });
+
+  test("a JSON syntax error is located by line and column", () => {
+    const locate = pageFunction<(text: string) => number>("jsonErrorOffset", "/* Turns a JSON.parse error");
+    const text = '{\n  "a": 1,\n  "b": }';
+    assert.strictEqual(locate(text), text.indexOf("}"));
+    assert.strictEqual(locate('{"a": [1, 2]}'), -1);
+    assert.strictEqual(locate('{"a": 1,}'), 8, "a trailing comma is reported where the next key was expected");
+  });
 });

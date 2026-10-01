@@ -27,6 +27,7 @@ const assert = __importStar(require("assert"));
 const child_process_1 = require("child_process");
 const os = __importStar(require("os"));
 const api_test_1 = require("../../commands/api-test");
+const collections_1 = require("../../services/collections");
 const vscode_stub_1 = require("./vscode-stub");
 const run_unit_tests_1 = require("./run-unit-tests");
 function tester() {
@@ -208,6 +209,92 @@ function tester() {
         client.clearCookies();
         assert.deepStrictEqual(client.getHistory(), []);
         assert.deepStrictEqual(client.getCookies(), {});
+    });
+});
+(0, run_unit_tests_1.suite)("REST client errors and environments", () => {
+    (0, run_unit_tests_1.test)("names an undefined base-URL variable instead of a generic format error", async () => {
+        const client = tester();
+        assert.throws(() => client.generateCurlCommand({ method: "GET", url: "{{baseUrl}}/users" }), /\{\{baseUrl\}\} is used but no environment is selected/);
+        await client.saveEnvironment({ name: "dev", variables: {} });
+        await client.setActiveEnvironment(0);
+        assert.throws(() => client.generateCurlCommand({ method: "GET", url: "{{baseUrl}}/users" }), /\{\{baseUrl\}\} is not defined in the active environment "dev"/);
+    });
+    (0, run_unit_tests_1.test)("transport errors are explained with a fix and where to make it", () => {
+        const dns = (0, api_test_1.describeRequestError)({ message: "getaddrinfo ENOTFOUND api.nope.test", code: "ENOTFOUND" });
+        assert.strictEqual(dns.title, "Could not find the server");
+        assert.strictEqual(dns.action, "url");
+        const refused = (0, api_test_1.describeRequestError)({ message: "connect ECONNREFUSED 127.0.0.1:3000", code: "ECONNREFUSED" });
+        assert.strictEqual(refused.title, "Connection refused");
+        const timeout = (0, api_test_1.describeRequestError)({ message: "timeout of 5000ms exceeded", code: "ECONNABORTED" }, 5000);
+        assert.strictEqual(timeout.title, "The request timed out after 5 s");
+        assert.strictEqual(timeout.action, "settings");
+        const cert = (0, api_test_1.describeRequestError)({ message: "self-signed certificate", code: "DEPTH_ZERO_SELF_SIGNED_CERT" });
+        assert.strictEqual(cert.action, "settings");
+        assert.strictEqual((0, api_test_1.describeRequestError)({ message: "Invalid JSON in request body" }).action, "body");
+        assert.strictEqual((0, api_test_1.describeRequestError)({ message: "Invalid URL format: {{x}} is not defined in the active environment \"dev\"" }).action, "env");
+        assert.ok((0, api_test_1.describeRequestError)(undefined).hint.length > 0, "an unknown failure still gets a hint");
+    });
+    (0, run_unit_tests_1.test)("renaming an environment keeps its place, so it stays active", async () => {
+        const client = tester();
+        await client.saveEnvironment({ name: "dev", variables: { a: "1" } });
+        await client.saveEnvironment({ name: "prod", variables: {} });
+        await client.setActiveEnvironment(0);
+        await client.saveEnvironment({ name: "development", variables: { a: "2" } }, "dev");
+        assert.deepStrictEqual(client.getEnvironments().map(e => e.name), ["development", "prod"]);
+        assert.strictEqual(client.getActiveEnvironmentIndex(), 0);
+        assert.strictEqual(client.resolveVariables("{{a}}"), "2");
+        await assert.rejects(() => client.saveEnvironment({ name: "  ", variables: {} }), /needs a name/);
+    });
+});
+(0, run_unit_tests_1.suite)("REST client history snapshots", () => {
+    // Private, but it decides what is written to disk, so it is pinned here.
+    const snapshot = (request) => api_test_1.ApiTester.historySnapshot({ method: "GET", url: "https://example.com/", ...request });
+    (0, run_unit_tests_1.test)("literal credentials are dropped, variable references are kept", () => {
+        const snap = snapshot({
+            headers: {
+                Accept: "application/json",
+                Authorization: "Bearer real-secret-token",
+                "X-Api-Key": "{{apiKey}}",
+                Cookie: "sid=abc"
+            }
+        });
+        assert.deepStrictEqual(snap.headers, { Accept: "application/json", "X-Api-Key": "{{apiKey}}" });
+        assert.strictEqual(snapshot({ headers: { Authorization: "Bearer {{token}}" } }).headers.Authorization, "Bearer {{token}}");
+    });
+    (0, run_unit_tests_1.test)("a templated URL keeps its variables but not a literal secret", () => {
+        const snap = snapshot({ url: "{{baseUrl}}/items?api_key=hunter2&token={{token}}&page=2" });
+        assert.strictEqual(snap.url, "{{baseUrl}}/items?api_key=[redacted]&token={{token}}&page=2");
+        assert.strictEqual(snapshot({ url: "https://example.com/x" }).url, undefined, "plain URLs are already stored redacted");
+    });
+    (0, run_unit_tests_1.test)("large bodies are not kept, and exports leave the snapshot out", () => {
+        assert.strictEqual(snapshot({ data: "x".repeat(20001) }).data, undefined);
+        assert.strictEqual(snapshot({ data: "{\"a\":1}" }).data, "{\"a\":1}");
+        const client = tester();
+        client.history = [{ id: "1", url: "https://e.com/", method: "GET", timestamp: 0, request: { data: "secret body" } }];
+        assert.ok(!client.exportHistory("json").includes("secret body"));
+        assert.strictEqual(client.getAllHistory().length, 1);
+    });
+});
+(0, run_unit_tests_1.suite)("saved requests", () => {
+    (0, run_unit_tests_1.test)("auth keeps names and variable references, never typed secrets", () => {
+        const saved = (0, collections_1.sanitiseRequest)({
+            name: "Login",
+            url: "https://example.com/login",
+            authType: "Bearer",
+            auth: { token: "real-token", password: "{{password}}", keyValue: " {{apiKey}} ", keyName: "X-Key", keyLocation: "query", username: "ada" }
+        });
+        assert.deepStrictEqual(saved?.auth, { keyName: "X-Key", username: "ada", keyLocation: "query", password: "{{password}}", keyValue: "{{apiKey}}" });
+    });
+    (0, run_unit_tests_1.test)("GraphQL requests keep their query; REST requests carry no GraphQL fields", () => {
+        const gql = (0, collections_1.sanitiseRequest)({
+            name: "Users", url: "https://example.com/graphql", requestType: "graphql",
+            graphql: { query: "{ users { id } }", variables: "{}", operationName: "Users" }
+        });
+        assert.strictEqual(gql?.requestType, "graphql");
+        assert.strictEqual(gql?.graphql?.query, "{ users { id } }");
+        const rest = (0, collections_1.sanitiseRequest)({ name: "Users", url: "https://example.com/users", graphql: { query: "ignored" } });
+        assert.strictEqual(rest?.requestType, undefined);
+        assert.strictEqual(rest?.graphql, undefined);
     });
 });
 //# sourceMappingURL=api-client.unit.js.map

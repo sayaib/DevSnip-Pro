@@ -13,6 +13,32 @@ function sanitiseRecord(value) {
     }
     return out;
 }
+const VARIABLE_REFERENCE = /^\{\{\w+\}\}$/;
+function sanitiseAuth(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const source = value;
+    const out = {};
+    for (const key of ["keyName", "username"]) {
+        if (typeof source[key] === "string" && source[key])
+            out[key] = source[key].slice(0, 200);
+    }
+    if (source.keyLocation === "header" || source.keyLocation === "query")
+        out.keyLocation = source.keyLocation;
+    for (const key of ["token", "password", "keyValue"]) {
+        const entry = source[key];
+        if (typeof entry === "string" && VARIABLE_REFERENCE.test(entry.trim()))
+            out[key] = entry.trim();
+    }
+    return Object.keys(out).length ? out : undefined;
+}
+function sanitiseGraphql(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const source = value;
+    const text = (entry) => (typeof entry === "string" ? entry.slice(0, 200000) : "");
+    return { query: text(source.query), variables: text(source.variables), operationName: text(source.operationName).slice(0, 200) };
+}
 /** Rebuilds a request from untrusted input (webview message or imported file). */
 function sanitiseRequest(value) {
     if (!value || typeof value !== "object")
@@ -33,6 +59,9 @@ function sanitiseRequest(value) {
         body: typeof source.body === "string" ? source.body.slice(0, 200000) : undefined,
         bodyType: typeof source.bodyType === "string" ? source.bodyType : undefined,
         authType: typeof source.authType === "string" ? source.authType : undefined,
+        auth: sanitiseAuth(source.auth),
+        requestType: source.requestType === "graphql" ? "graphql" : undefined,
+        graphql: source.requestType === "graphql" ? sanitiseGraphql(source.graphql) : undefined,
         extract: sanitiseRecord(source.extract),
         updatedAt: Number.isFinite(Number(source.updatedAt)) ? Number(source.updatedAt) : Date.now()
     };
