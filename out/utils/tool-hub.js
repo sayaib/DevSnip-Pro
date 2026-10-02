@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const webview_ui_1 = require("./webview-ui");
 const command_dispatch_1 = require("./command-dispatch");
+const service_1 = require("../theme/service");
 /**
  * The tool grid shared by every hub (Developer Tools, AI/ML, RAG, Big Data).
  *
@@ -197,12 +198,12 @@ function openToolHub(context, config, initialCategory) {
     }
     const pinnedKey = PINNED_PREFIX + config.viewType;
     const known = new Set(config.tools.map(t => t.command));
-    panel.webview.html = renderToolHub(config, {
+    (0, service_1.setWebviewHtml)(panel.webview, renderToolHub(config, {
         cspSource: panel.webview.cspSource,
         scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "tool-hub.js")).toString(),
         pinned: context.globalState.get(pinnedKey, []),
         initialCategory
-    });
+    }));
     const subscription = panel.webview.onDidReceiveMessage(async (message) => {
         if (message?.command === "openTool" && typeof message.toolCommand === "string" && known.has(message.toolCommand)) {
             // executeQueuedCommand also checks the id against this extension's commands.

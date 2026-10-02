@@ -29,6 +29,7 @@ const command_registry_1 = require("../utils/command-registry");
 const webview_ui_1 = require("../utils/webview-ui");
 const fs = __importStar(require("fs/promises"));
 const path = __importStar(require("path"));
+const service_1 = require("../theme/service");
 const SEARCH_PATTERN = "**/*.{ts,tsx,js,jsx,php,html}";
 const EXCLUDE_PATTERN = "{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/coverage/**,**/temp/**,**/.next/**}";
 function registerListAndRemoveConsoleLogsCommand(context) {
@@ -42,17 +43,17 @@ function registerListAndRemoveConsoleLogsCommand(context) {
             return;
         const iconPath = path.resolve(context.extensionPath, "logo.png");
         panel.iconPath = vscode.Uri.file(iconPath);
-        panel.webview.html = generateWebviewContentConsoleLoading("Searching for console logs. Please wait...");
+        (0, service_1.setWebviewHtml)(panel.webview, generateWebviewContentConsoleLoading("Searching for console logs. Please wait..."));
         const allConsoleLogs = [];
         const files = await vscode.workspace.findFiles(new vscode.RelativePattern(vscode.workspace.workspaceFolders[0], SEARCH_PATTERN), EXCLUDE_PATTERN);
         const scanResults = await Promise.all(files.map((file) => scanFile(file)));
         allConsoleLogs.push(...scanResults.flat());
         if (allConsoleLogs.length === 0) {
-            panel.webview.html = generateWebviewContentConsoleLoading("No `console.log` statements found.");
+            (0, service_1.setWebviewHtml)(panel.webview, generateWebviewContentConsoleLoading("No `console.log` statements found."));
             vscode.window.showInformationMessage("No console.log statements found.");
             return;
         }
-        panel.webview.html = generateWebviewContentConsole(allConsoleLogs);
+        (0, service_1.setWebviewHtml)(panel.webview, generateWebviewContentConsole(allConsoleLogs));
         let currentConsoleLogs = allConsoleLogs;
         let actionInProgress = false;
         const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {
@@ -102,9 +103,9 @@ exports.registerListAndRemoveConsoleLogsCommand = registerListAndRemoveConsoleLo
  */
 async function refreshPanel(panel) {
     const logs = await fetchConsoleLogs();
-    panel.webview.html = logs.length
+    (0, service_1.setWebviewHtml)(panel.webview, logs.length
         ? generateWebviewContentConsole(logs)
-        : generateWebviewContentConsoleLoading("No console.log statements found.");
+        : generateWebviewContentConsoleLoading("No console.log statements found."));
     return logs;
 }
 /**
@@ -177,9 +178,9 @@ async function removeSelectedLogs(selectedLogs, panel) {
     }
     vscode.window.showInformationMessage(`Removed ${selectedLogs.length} console.log statements.`);
     const updatedConsoleLogs = await fetchConsoleLogs();
-    panel.webview.html = updatedConsoleLogs.length
+    (0, service_1.setWebviewHtml)(panel.webview, updatedConsoleLogs.length
         ? generateWebviewContentConsole(updatedConsoleLogs)
-        : generateWebviewContentConsoleLoading("All console.log statements are gone.");
+        : generateWebviewContentConsoleLoading("All console.log statements are gone."));
     return updatedConsoleLogs;
 }
 async function fetchConsoleLogs() {

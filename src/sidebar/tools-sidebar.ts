@@ -4,6 +4,10 @@ import { embedJson, escapeHtml, getNonce } from "../utils/webview-ui";
 import { executeQueuedCommand } from "../utils/command-dispatch";
 import { LEVELS, getCurrentLevel, getNextLevel, getUserStats } from "../commands/milestoneTracker";
 import { MILESTONE_COMMAND, SEARCH_COMMAND, SIDEBAR_GROUPS, sidebarCommands } from "./tool-groups";
+import { currentThemeId, setTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
+import { dismissGuide, dismissWhatsNew, GuideStep, guideSteps, guideVisible, onDidChangeActivation, whatsNew } from "../onboarding/activation";
+import { track } from "../analytics";
+import { isKnownCommand } from "../utils/command-registry";
 
 /**
  * The Tools view in the DevSnip Pro activity bar.
@@ -71,6 +75,12 @@ export function cleanUsage(value: unknown): ToolUsage {
   return out;
 }
 
+/** What the sidebar's onboarding cards show; null hides a card. */
+export interface SidebarOnboarding {
+  guide: GuideStep[] | null;
+  whatsNew: { version: string; items: Array<{ title: string; command?: string }> } | null;
+}
+
 export function renderToolsSidebar(options: {
   cspSource: string;
   scriptUri: string;
@@ -79,6 +89,8 @@ export function renderToolsSidebar(options: {
   expanded: string[];
   favorites?: string[];
   usage?: ToolUsage;
+  theme?: { current: string; choices: ThemeChoice[] };
+  onboarding?: SidebarOnboarding;
 }): string {
   const nonce = getNonce();
   const known = sidebarCommands();
@@ -89,7 +101,9 @@ export function renderToolsSidebar(options: {
     expanded: options.expanded.filter(name => SIDEBAR_GROUPS.some(group => group.name === name)),
     favorites: (options.favorites ?? []).filter(command => known.has(command)),
     usage: cleanUsage(options.usage),
-    milestoneCommand: MILESTONE_COMMAND
+    milestoneCommand: MILESTONE_COMMAND,
+    theme: options.theme ?? { current: "system", choices: [] },
+    onboarding: options.onboarding ?? { guide: null, whatsNew: null }
   };
   return `<!DOCTYPE html>
 <html lang="en">
@@ -102,13 +116,26 @@ export function renderToolsSidebar(options: {
 <title>Tools</title>
 </head>
 <body>
+<div class="appearance" id="appearance">
+  <button type="button" class="theme-btn" id="themeBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="themePanel" title="Change how DevSnip Pro looks">
+    <span class="codicon codicon-symbol-color theme-icon" aria-hidden="true"></span>
+    <span class="theme-label">Theme</span>
+    <span class="theme-name" id="themeName"></span>
+    <span class="theme-dots" id="themeDots" aria-hidden="true"></span>
+    <span class="codicon codicon-chevron-down theme-chev" aria-hidden="true"></span>
+  </button>
+  <div class="theme-panel" id="themePanel" role="listbox" aria-label="DevSnip Pro theme" hidden></div>
+</div>
+
+<div id="onboarding"></div>
+
 <section class="rank" id="rank" aria-label="Your rank">
-  <button type="button" class="rank-open" id="status" title="Open the Milestone &amp; Points Tracker">
+  <button type="button" class="rank-open" id="status" aria-label="Your rank. Open Milestones &amp; rewards" title="Open Milestones &amp; rewards: see milestones, rewards and how to earn points">
     <span class="medal" id="statusBadge" aria-hidden="true"></span>
     <span class="rank-body">
       <span class="rank-line">
         <span class="rank-name" id="statusLevel"></span>
-        <span class="rank-points" id="statusPoints"></span>
+        <span class="rank-points"><span class="gain" id="statusGain" aria-hidden="true"></span><span id="statusPoints"></span></span>
       </span>
       <span class="meter" id="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progress to the next rank"><span class="meter-fill" id="statusFill"></span></span>
       <span class="rank-line rank-sub">
@@ -117,7 +144,11 @@ export function renderToolsSidebar(options: {
       </span>
     </span>
   </button>
-  <button type="button" class="rank-info icon-btn" id="rankInfo" aria-label="How ranks work" aria-controls="rankTip" aria-expanded="false"><span class="codicon codicon-info" aria-hidden="true"></span></button>
+  <div class="rank-foot">
+    <button type="button" class="rank-info" id="rankInfo" aria-controls="rankTip" aria-expanded="false"><span class="codicon codicon-info" aria-hidden="true"></span><span class="rank-foot-label">How ranks work</span></button>
+    <!-- A labelled copy of the card's own action for the mouse; keyboard and screen readers use the card. -->
+    <button type="button" class="rank-cta" id="rankCta" tabindex="-1" aria-hidden="true"><span>Milestones<span class="rank-foot-label"> &amp; rewards</span></span><span class="codicon codicon-arrow-right" aria-hidden="true"></span></button>
+  </div>
   <div class="popover" id="rankTip" role="tooltip" hidden></div>
 </section>
 
@@ -176,6 +207,40 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     return this.context.globalState.get<string[]>(FAVORITES_KEY, []).filter(command => this.known.has(command));
   }
 
+  private get version(): string {
+    return String(this.context.extension?.packageJSON?.version ?? "0.0.0");
+  }
+
+  private onboarding(): SidebarOnboarding {
+    return { guide: guideVisible() ? guideSteps() : null, whatsNew: whatsNew(this.version) };
+  }
+
+  /** Handles the onboarding cards' messages. Commands are checked against this extension's own. */
+  private async onOnboardingMessage(message: { type?: unknown; command?: unknown; step?: unknown }): Promise<boolean> {
+    switch (message?.type) {
+      case "guideStep":
+        if (!isKnownCommand(message.command)) return true;
+        track("onboarding_action", { action: "step_opened", step: typeof message.step === "string" && /^[a-z_]{1,40}$/.test(message.step) ? message.step : undefined });
+        await executeQueuedCommand(message.command);
+        return true;
+      case "dismissGuide":
+        await dismissGuide();
+        return true;
+      case "openWalkthrough":
+        await executeQueuedCommand("sayaib.hue-console.getStarted");
+        return true;
+      case "whatsNewOpen":
+        await dismissWhatsNew(this.version, true);
+        await executeQueuedCommand(isKnownCommand(message.command) ? message.command : "sayaib.hue-console.whatsNew");
+        return true;
+      case "dismissWhatsNew":
+        await dismissWhatsNew(this.version, false);
+        return true;
+      default:
+        return false;
+    }
+  }
+
   /** Pushes the latest points and level to the page. */
   refresh(): void {
     this.post({ type: "status", status: sidebarStatus(this.context) });
@@ -199,18 +264,27 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     const mediaRoot = vscode.Uri.file(path.join(this.context.extensionPath, "media"));
     const codiconsRoot = vscode.Uri.file(path.join(this.context.extensionPath, "node_modules", "@vscode", "codicons", "dist"));
     view.webview.options = { enableScripts: true, localResourceRoots: [mediaRoot, codiconsRoot] };
-    view.webview.html = renderToolsSidebar({
+    setWebviewHtml(view.webview, renderToolsSidebar({
       cspSource: view.webview.cspSource,
       scriptUri: view.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "tools-sidebar.js")).toString(),
       codiconsUri: view.webview.asWebviewUri(vscode.Uri.joinPath(codiconsRoot, "codicon.css")).toString(),
       status: sidebarStatus(this.context),
       expanded: this.context.globalState.get<string[]>(EXPANDED_KEY, []),
       favorites: this.favorites,
+      theme: { current: currentThemeId(), choices: themeChoices() },
+      onboarding: this.onboarding(),
       usage: this.usage
-    });
+    }), "sidebar");
 
     const groupNames = new Set(SIDEBAR_GROUPS.map(group => group.name));
+    const themeIds = new Set(themeChoices().map(choice => choice.id));
+    const activationSubscription = onDidChangeActivation(() => this.post({ type: "onboarding", onboarding: this.onboarding() }));
     const subscription = view.webview.onDidReceiveMessage(async message => {
+      if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
+        await setTheme(message.id);
+        return;
+      }
+      if (await this.onOnboardingMessage(message)) return;
       if (message?.type === "run" && typeof message.command === "string" && this.known.has(message.command)) {
         // executeQueuedCommand also checks the id against this extension's commands.
         void executeQueuedCommand(message.command);
@@ -229,6 +303,7 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     view.onDidChangeVisibility(() => { if (view.visible) this.refresh(); });
     view.onDidDispose(() => {
       subscription.dispose();
+      activationSubscription.dispose();
       if (this.view === view) this.view = undefined;
     });
   }
@@ -293,7 +368,8 @@ button { font: inherit; color: inherit; }
   transition: background-color .1s ease, color .1s ease;
 }
 .icon-btn:hover { background: var(--vscode-toolbar-hoverBackground, var(--hover)); color: var(--fg); }
-.icon-btn:focus-visible, .link:focus-visible, .rank-open:focus-visible, .btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.icon-btn:focus-visible, .link:focus-visible, .btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.rank-open:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
 .link { padding: 0; border: 0; background: none; cursor: pointer; color: var(--accent-fg); font-size: 12px; }
 .link:hover { text-decoration: underline; }
 .btn {
@@ -304,6 +380,100 @@ button { font: inherit; color: inherit; }
 }
 .btn:hover { background: var(--vscode-button-secondaryHoverBackground, var(--hover)); }
 
+/* ------------------------------------------------------------- appearance */
+.appearance { position: relative; margin: var(--s2) var(--s2) 0; }
+.theme-btn {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  height: 30px; padding: 0 var(--s2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--fg); cursor: pointer; text-align: left;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.theme-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.theme-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.theme-btn[aria-expanded="true"] { border-color: var(--accent); }
+.theme-icon { color: var(--accent-fg); font-size: 14px !important; }
+.theme-label { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.theme-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.theme-dots { flex: none; display: inline-flex; padding-left: 3px; }
+.theme-dots i { width: 10px; height: 10px; margin-left: -3px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--surface); }
+.theme-dots i.system { background: linear-gradient(135deg, #1f1f1f 50%, #f3f3f3 50%); }
+.theme-chev { flex: none; color: var(--muted); font-size: 14px !important; transition: transform .15s ease; }
+.theme-btn[aria-expanded="true"] .theme-chev { transform: rotate(180deg); }
+/* Narrow sidebars: the theme name matters more than the label. */
+@media (max-width: 240px) { .theme-label { display: none; } }
+@media (max-width: 170px) { .theme-dots { display: none; } }
+.theme-panel {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 45;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 4px;
+  max-height: min(70vh, 460px); overflow-y: auto; padding: 6px;
+  background: var(--vscode-menu-background, var(--surface-2));
+  color: var(--vscode-menu-foreground, var(--fg));
+  border: 1px solid var(--vscode-menu-border, var(--border-strong));
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px var(--shadow);
+  animation: pop .12s var(--ease);
+}
+.theme-head { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); padding: 2px 4px 4px; }
+.theme-head b { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.theme-head .link { font-size: 11px; }
+.theme-opt {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  padding: 5px; border: 1px solid transparent; border-radius: var(--radius);
+  background: transparent; color: inherit; cursor: pointer; text-align: left;
+}
+.theme-opt:hover { background: var(--hover); }
+.theme-opt:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.theme-opt[aria-selected="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tp { position: relative; display: flex; height: 42px; border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .28); }
+.tp-side { width: 24%; display: flex; flex-direction: column; gap: 3px; padding: 6px 3px; }
+.tp-side i { height: 3px; border-radius: 2px; opacity: .55; }
+.tp-main { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 6px; }
+.tp-line { height: 4px; border-radius: 2px; }
+.tp-row { display: flex; gap: 4px; margin-top: auto; }
+.tp-btn { width: 42%; height: 8px; border-radius: 2px; }
+.tp-chip { width: 16%; height: 8px; border-radius: 2px; }
+.tp.system { background: linear-gradient(135deg, #1f1f1f 50%, #f3f3f3 50%); align-items: center; justify-content: center; }
+.tp.system .codicon { font-size: 18px !important; color: #8a8a8a; }
+.theme-opt .opt-name { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 11.5px; line-height: 1.2; }
+.theme-opt .opt-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.theme-opt .opt-name .codicon { flex: none; font-size: 13px !important; color: var(--accent-fg); visibility: hidden; }
+.theme-opt[aria-selected="true"] .opt-name .codicon { visibility: visible; }
+.theme-opt[aria-selected="true"] .opt-name span { font-weight: 600; }
+
+/* ------------------------------------------------------------- onboarding cards */
+.ob { margin: var(--s2) var(--s2) 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.ob.news { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.ob-head { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 var(--s2); }
+.ob-head .ob-icon { color: var(--accent-fg); font-size: 14px !important; }
+.ob-title { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-count { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ob-count-short { display: none; }
+.ob-head .icon-btn { width: 22px; height: 22px; }
+.ob-head .icon-btn .codicon { font-size: 14px !important; }
+.ob-toggle .codicon { transition: transform .15s ease; }
+.ob.collapsed .ob-toggle .codicon { transform: rotate(-90deg); }
+.ob-progress { height: 3px; margin: 0 var(--s2) 4px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 10%, transparent); overflow: hidden; }
+.ob-progress span { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s var(--ease); }
+.ob.collapsed .ob-body { display: none; }
+.ob-body { padding: 0 4px 6px; }
+.ob-step {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 26px; padding: 3px 6px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--fg); cursor: pointer; text-align: left; font-size: 12px;
+}
+.ob-step:hover, .ob-step:focus-visible { outline: none; background: var(--hover); }
+.ob-step .ob-check { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; }
+.ob-step.done { color: var(--muted); }
+.ob-step.done .ob-check { border-color: var(--vscode-testing-iconPassed, #73c991); background: var(--vscode-testing-iconPassed, #73c991); }
+.ob-step.done .ob-check::after { content: ""; width: 6px; height: 3px; margin-top: -2px; border: solid var(--bg); border-width: 0 0 1.5px 1.5px; transform: rotate(-45deg); }
+.ob-step .ob-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-step .ob-go { flex: none; font-size: 13px !important; color: var(--muted); opacity: 0; transition: opacity .12s ease, transform .12s ease; }
+.ob-step:hover .ob-go, .ob-step:focus-visible .ob-go { opacity: 1; transform: translateX(1px); }
+.ob-step.done .ob-go { display: none; }
+.ob-foot { padding: 2px 10px 4px; }
+.ob-foot .link { font-size: 11.5px; }
+.ob-item .ob-dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-fg); }
+
 /* ------------------------------------------------------------- rank card */
 .rank {
   position: relative;
@@ -312,13 +482,39 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+.rank { transition: border-color .12s ease, background-color .12s ease; }
 .rank-open {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: var(--s2) 30px var(--s2) var(--s2);
-  border: 0; border-radius: var(--radius); background: transparent; cursor: pointer; text-align: left;
+  padding: var(--s2);
+  border: 0; border-radius: var(--radius) var(--radius) 0 0; background: transparent; cursor: pointer; text-align: left;
   transition: background-color .12s ease;
 }
-.rank-open:hover { background: var(--surface-2); }
+/* The card and its "Milestones & rewards" action light up together, so it reads as one clickable target. */
+.rank:has(.rank-open:hover), .rank:has(.rank-cta:hover) { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.rank-open:hover, .rank:has(.rank-cta:hover) .rank-open { background: var(--surface-2); }
+.rank-open:active, .rank:has(.rank-cta:active) .rank-open { background: color-mix(in srgb, var(--fg) 12%, var(--bg)); }
+.rank-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s1);
+  padding: 2px var(--s1); border-top: 1px solid var(--border);
+}
+.rank-info, .rank-cta {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer;
+  font-size: 11.5px; color: var(--muted); white-space: nowrap;
+  transition: background-color .12s ease, color .12s ease;
+}
+.rank-info .codicon, .rank-cta .codicon { font-size: 13px !important; }
+.rank-info:hover, .rank-info[aria-expanded="true"] { color: var(--fg); background: var(--surface-2); }
+.rank-cta { color: var(--accent-fg); font-weight: 600; }
+.rank-cta .codicon { transition: transform .15s var(--ease); }
+.rank:has(.rank-open:hover) .rank-cta, .rank-cta:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rank:has(.rank-open:hover) .rank-cta .codicon, .rank-cta:hover .codicon { transform: translateX(2px); }
+.rank-info:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+/* Points just earned float up beside the total. */
+.gain { display: inline-block; margin-right: 5px; padding: 0 4px; border-radius: 6px; font-size: 10.5px; color: var(--bg); background: var(--gold); opacity: 0; transform: translateY(3px); }
+.gain.show { animation: gain 1.6s var(--ease) forwards; }
+@keyframes gain { 15% { opacity: 1; transform: none; } 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-3px); } }
+.rank-sub .close-call { color: var(--gold); font-weight: 600; }
 .medal {
   flex: none; display: grid; place-items: center;
   width: 30px; height: 30px; border-radius: 50%;
@@ -339,9 +535,6 @@ button { font: inherit; color: inherit; }
   background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 70%, transparent), var(--gold));
   transition: width .8s var(--ease);
 }
-.rank-info { position: absolute; top: 5px; right: 5px; width: 20px; height: 20px; }
-.rank-info .codicon { font-size: 14px !important; }
-.rank-info[aria-expanded="true"] { color: var(--fg); background: var(--surface-2); }
 
 /* Popovers (rank explainer) and hover cards share one surface. */
 .popover, .hovercard {
@@ -556,7 +749,8 @@ button { font: inherit; color: inherit; }
   :root { --inset: 4px; --twistie: 14px; }
   .row { gap: 6px; }
   .tool { padding-left: calc(var(--cat-icon-x) + var(--icon) - 2px); }
-  .rank-pct, .kbd { display: none; }
+  .rank-pct, .kbd, .rank-foot-label, .ob-count-full { display: none; }
+  .ob-count-short { display: inline; }
   .row .meta { display: none; }
 }
 @media (max-width: 190px) {

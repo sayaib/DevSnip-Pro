@@ -42,6 +42,8 @@ function remainingLabel(milestone, remaining) {
         return `${plural(remaining, "more audit")}`;
     if (milestone.id === "ai_explorer")
         return `${plural(remaining, "more AI tool run")}`;
+    if (milestone.id === "feature_explorer")
+        return `${plural(remaining, "more feature")} to try`;
     return `${plural(remaining, "more tool run")}`;
 }
 function activityKind(entry) {

@@ -8,6 +8,8 @@ import { renderToolPage } from "./page";
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 import { confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
 import { track } from "../analytics";
+import { setWebviewHtml } from "../theme/service";
+import { noteToolRun } from "../onboarding/activation";
 
 /**
  * Hosts the toolkit tools: one command and one panel per tool. The webview
@@ -65,7 +67,7 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
   const ctx = createToolContext(context);
   const { SECTIONS } = await import("./registry");
   const section = SECTIONS.find(s => s.id === tool.section)!;
-  panel.webview.html = renderToolPage({
+  setWebviewHtml(panel.webview, renderToolPage({
     cspSource: panel.webview.cspSource,
     scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "toolkit.js")).toString(),
     tool: describe(tool),
@@ -73,7 +75,7 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
     examples: await allExamples(tool, ctx),
     initial: initial ?? {},
     platform: process.platform
-  });
+  }));
 
   let liveTracked = false;
   let latestRequest = 0;
@@ -97,6 +99,7 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
           if (trigger === "live") liveTracked = true;
           track("tool_run_completed", { feature, section: tool.section, outcome: outcome.outcome, trigger, duration_ms: durationMs });
         }
+        noteToolRun(tool.section, outcome.outcome);
         return;
       }
       case "readEditor": {

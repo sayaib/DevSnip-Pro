@@ -149,11 +149,12 @@ It exits non-zero if any check fails, and writes `results.json` to a temporary f
 
 ## The dashboard
 
-`scripts/posthog-dashboard.js` creates a **DevSnip Pro - Usage** dashboard with 24 insights:
+`scripts/posthog-dashboard.js` creates a **DevSnip Pro - Usage** dashboard with 27 insights:
 
 - **Active users:** users active right now (last 5 minutes) and in the last hour; DAU / WAU / MAU; active users by hour; DAU/MAU stickiness; new installs versus activations; active users by extension version; platform split.
 - **Feature usage:** most used features by runs and by unique users; a table of every feature with runs, users, runs per user, error rate and average duration; the 15 least used features; usage by feature area over time; first-time adoption per feature; command errors by feature.
 - **Sessions and engagement:** sessions per day; average session length and engaged time; median and p90 distribution; weekly retention (activated, then used a feature).
+- **Activation and onboarding:** how many installations reach each first (API request, AI tool, security scan, database connection, snippet, OpenCode) and how many days after install; Get started and What's new card actions.
 - **Feature-specific:** snippets, search, copy, save and delete over time; snippets by language; how well tool search works (searches, empty results, tools opened); dependency jobs by outcome; milestones, levels and points spent.
 
 ```bash
@@ -163,6 +164,31 @@ node scripts/posthog-dashboard.js
 It reads `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` and `POSTHOG_APP_HOST` from `.env.posthog` (or the environment). The personal key is used only on your machine. Running the script again adds any missing insights and skips existing ones. `--dry-run` prints every insight definition without contacting PostHog.
 
 Features that never appear in the feature usage table were **not used at all** in the period. Compare the table with the command list in `package.json` to find them.
+
+## Measuring growth honestly
+
+Each question below has one source of truth. Numbers are never mixed across sources, and nothing is done to inflate any of them: no automated or scripted installs, no review requests in exchange for points, no prompts designed to generate activity. Points reward real tool use and are capped per day for the same reason.
+
+| Question | Source | Where to look | Notes |
+| :--- | :--- | :--- | :--- |
+| How many people installed it? | Visual Studio Marketplace | Publisher portal → DevSnip Pro → **Acquisition** (page views, installs, uninstalls) | Installs count downloads, not use. Updates are not installs. |
+| How many installs actually started? | `extension_activated` with `install_type = new` | Dashboard: *Installs, updates and activations* | Only installs whose users allow telemetry are counted, so this is always lower than Marketplace installs. Compare trends, not absolute numbers. |
+| How many are active? | Any event, distinct installations | *Active users - DAU / WAU / MAU*, *Stickiness - DAU / MAU* | An installation is a random ID per machine, not a person. |
+| Do new users reach value? | `activation_milestone` | *Activation: first use of core features* | Each first fires once, on a real result: a request returned, a scan finished, a connection succeeded. Opening a panel does not count. |
+| Which features are used? | `feature_used`, `tool_run_completed` | *Most used features*, *Least used features*, *Feature adoption - first uses* | `first_use` separates trying a feature from returning to it. |
+| Do people come back? | `extension_activated` then `feature_used` | *Weekly retention*; `session_started` with `reason = resumed` | Retention is measured as using a feature, not just opening VS Code. |
+| Does onboarding help? | `onboarding_action` | *Onboarding cards* | Compare activation rates for weeks before and after an onboarding change. |
+| Who finds the GitHub repository? | GitHub | Repository → **Insights → Traffic** (views, unique visitors, referrers, popular content) | GitHub keeps 14 days; export it regularly if you need history. |
+| Who reads the documentation? | The documentation site's own analytics | Page views and referrers per guide in `docs/guides/` | Not collected by the extension. |
+| Do readers become users? | Marketplace acquisition referrers | Publisher portal → Acquisition, by referring source | Link to the Marketplace from guides with UTM parameters, e.g. `https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console&utm_source=github&utm_medium=readme`. The Marketplace reports the referrer; nothing about the reader is collected by DevSnip Pro. |
+
+**Reading the numbers.** Marketplace installs, activations and active users measure different things and will never match. Track the ratios over time:
+
+- **Activation rate:** installations with `first_tool` ÷ new installs.
+- **Feature activation:** for example installations with `first_api_request` ÷ new installs.
+- **Week-4 retention.**
+
+If a change raises installs but not activation or retention, it attracted the wrong audience or set the wrong expectation.
 
 ## Adding an event
 
@@ -398,3 +424,21 @@ Points were spent on a premium REST client tool.
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `amount` | count | Points spent. |
+
+### `activation_milestone`
+
+A core first-time action happened. Sent once per installation per milestone, to learn which first steps lead to lasting use.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `milestone` | enum:first_launch \| first_tool \| first_api_request \| first_snippet \| first_ai_tool \| first_security_scan \| first_database_connection \| first_opencode | Which first: a request actually sent, a scan completed, a database connected - not just a panel opened. |
+| `days_since_install` | count | Whole days between the first launch and this milestone. |
+
+### `onboarding_action`
+
+The user interacted with the in-product onboarding (the sidebar Getting started card, the walkthrough or What's new).
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `action` | enum:step_opened \| guide_dismissed \| walkthrough_opened \| whats_new_opened \| whats_new_dismissed | What was done. |
+| `step` | id | For step_opened: the checklist step, e.g. first_api_request. |

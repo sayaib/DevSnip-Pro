@@ -37,6 +37,8 @@ const milestoneTracker_1 = require("./milestoneTracker");
 const webview_ui_1 = require("../utils/webview-ui");
 const api_client_features_1 = require("./api-client-features");
 const api_client_webview_1 = require("./api-client-webview");
+const service_1 = require("../theme/service");
+const activation_1 = require("../onboarding/activation");
 const SENSITIVE_NAME = /(auth|token|secret|password|passwd|pwd|key|cookie|session|signature|credential)/i;
 const VARIABLE_ONLY = /^(Bearer\s+|Basic\s+)?\{\{\w+\}\}$/i;
 const HISTORY_BODY_LIMIT = 20000;
@@ -823,7 +825,7 @@ function apiTest(context, services) {
         activePanel = panel;
         const iconPath = path.resolve(context.extensionPath, "logo.png");
         panel.iconPath = vscode.Uri.file(iconPath);
-        panel.webview.html = getWebviewContent(apiTester.getHistory(), services.access.check("websocket-client").allowed);
+        (0, service_1.setWebviewHtml)(panel.webview, getWebviewContent(apiTester.getHistory(), services.access.check("websocket-client").allowed));
         const post = (message) => (0, webview_ui_1.safePostMessage)(panel, message);
         // Everything the Free/Premium feature system needs. `sendHttp` reuses the
         // client's own sender so batch runs and chains share history and cookies.
@@ -843,7 +845,7 @@ function apiTest(context, services) {
                 // The WebSocket allowance is baked into the document's CSP, so the
                 // page has to be rebuilt when affordability crosses that threshold.
                 webSocketsAllowed = nowAllowed;
-                panel.webview.html = getWebviewContent(apiTester.getHistory(), nowAllowed);
+                (0, service_1.setWebviewHtml)(panel.webview, getWebviewContent(apiTester.getHistory(), nowAllowed));
                 return;
             }
             post({ command: "featureCatalog", ...(0, api_client_features_1.buildCatalog)(featureContext) });
@@ -866,6 +868,7 @@ function apiTest(context, services) {
                             command: "apiResponse",
                             ...result
                         });
+                        void (0, activation_1.reach)("first_api_request");
                     }
                     catch (error) {
                         // A cancelled request is reported by the cancelRequest handler

@@ -1,5 +1,89 @@
 # Development Changelog of DevSnip Pro
 
+## 11.73.1 - Getting started, What's new and a faster startup
+
+Easier first steps for new users, a short summary of what changed for everyone who updates, and an extension that starts noticeably faster.
+
+### Added
+
+- **Get started card** at the top of the Tools sidebar, with five first steps:
+  - send an API request;
+  - try an AI tool;
+  - run a security scan;
+  - connect a database;
+  - pick a theme.
+  - Each step ticks itself off only when you actually do it: a request that returns, a scan that finishes, a connection that succeeds. Opening a panel does not count.
+  - The card shows "2 of 5" (or "2/5" in narrow sidebars), can be collapsed, and hides itself when every step is done or when you dismiss it.
+  - Existing users do not see it; it is for new installs.
+- **Get started walkthrough** in VS Code's Welcome page, also available as **DevSnip Pro: Get Started**. It has seven short steps: tools, API client, AI, security, database, themes and points.
+- **What's new card** after an update. It lists the highlights since the version you updated from, links straight to each feature, and appears once. **DevSnip Pro: What's New** opens the full release notes any time.
+- **Feature Explorer milestone (+60 points):** try five of the following: an API request, an AI tool, a security scan, a database connection, a snippet and OpenCode.
+- Two anonymous analytics events, both documented in [docs/ANALYTICS.md](docs/ANALYTICS.md):
+  - `activation_milestone` records the first time each core feature is used;
+  - `onboarding_action` records use of the guide, walkthrough and What's new card.
+  - Like every other event, they contain no code, inputs, URLs or personal data, and follow VS Code's telemetry setting.
+
+### Improved
+
+- **Faster startup:** the REST API Client, security analysers and dependency manager now load the first time you use them, not when VS Code starts. In our measurements activation went from about 105 ms to about 14 ms. Every command works exactly as before.
+- **Marketplace listing and README:** a clearer name and description, accurate keywords and categories, real screenshots and an appearance GIF, a quick start, and an FAQ.
+- **Documentation:** nine practical guides (`docs/guides`), an architecture overview, a roadmap, a contributing guide, a security policy, and issue and pull request templates on GitHub.
+- **Smaller package:** the icon is now 256 px and 44 KB (it was 906 px and 312 KB), and documentation and test files of bundled dependencies are no longer shipped.
+
+### Fixed
+
+- VS Code no longer logs "Unknown language" warnings for the Vue, TOML and Gradle snippets. Vue and TOML are now declared, and the Gradle snippets use VS Code's Groovy language, so `.gradle` files get them.
+- Saving a snippet from a `.gradle` or `.groovy` file now files it under Groovy.
+
+## 11.72.1 - Appearance themes for the whole extension
+
+Pick how DevSnip Pro looks from a new **Theme** selector at the top of the Tools sidebar. One click restyles every DevSnip Pro panel at once, with no reload, and the choice is remembered after restarting VS Code.
+
+### Added
+
+- **Nine appearances:**
+  - System Default, which follows your VS Code color theme;
+  - Dark, Midnight, Dracula, Monokai, Nord and Cyberpunk;
+  - Light;
+  - High Contrast.
+- **Theme selector:** a compact bar above the tool navigation shows the current theme and its colour swatches.
+  - It opens a grid of miniature previews: sidebar, text, button and accent colours.
+  - It is fully keyboard operable: arrows, Home and End to move, Enter to choose, Esc to close.
+  - In narrow sidebars it drops the label, and the grid becomes one column.
+- **Command palette:** **DevSnip Pro: Choose Theme** previews each theme as you move through the list, applies the one you accept, and restores the previous theme if you cancel.
+- **Everywhere at once:** the sidebar, REST API Client, toolkit tools, Browse All Tools, AI/ML and data tools, Security, Database Client, snippets, Dependencies, Milestones, README manager, console-log and import cleaners, and OpenCode. This includes buttons, inputs, dropdowns, modals, menus, toasts, and empty, loading and error states.
+- **Subtle transitions:** colours fade for about 0.2 s while a theme changes, and only then. Nothing animates otherwise, and reduced-motion settings are respected.
+
+### Improved
+
+- **Rank card:** it now shows that it opens the Milestone & Points Tracker. The card was already clickable, but only a faint hover and a tooltip said so.
+  - A labelled action strip at the bottom of the card has **How ranks work** and **Milestones & rewards →**.
+  - Hovering anywhere on the card tints its border and highlights the action, the arrow slides, and the card has a pressed state.
+  - The card shows **+N** when points arrive, highlights "Only 313 to Platinum" near the next rank, and announces rank-ups to screen readers.
+  - In narrow sidebars the strip shortens to "ⓘ" and "Milestones →".
+
+- **Milestones & Points, redesigned:**
+  - **Rank card:** one card with the level ring and a journey through all seven ranks. It sits beside three focused numbers: balance, with plain wording about what it covers; streak, with the last seven days as dots; and points earned today.
+  - **Daily card:** when the boost is unclaimed, it is a prominent **Claim** card. Once claimed, it settles into "You are all set for today". A **Next up** card shows the milestone closest to done and has a **Find a tool** button.
+  - **Milestones** list the ones in progress first, closest to done first, and the nearest is marked **Closest**. Each category has a tinted icon.
+  - **Ranks** are a connected timeline that shows how many points each locked rank still needs.
+  - **Activity** shows a points total for each day.
+  - **Reset progress** moved from a red header button into a ⋯ menu, next to **How points work**.
+  - Clean line icons replace emoji labels. Every colour follows the appearance theme, and the layout adapts down to narrow panels.
+
+### How it works
+
+- **One theme system:** each theme is one palette of semantic colours (background, surfaces, text, accent, status, syntax). It is expanded into overrides for the VS Code colour variables every DevSnip Pro page already uses, so all panels follow it without per-panel colour code.
+- **Design tokens:** shared `--ds-*` tokens (success, warning, danger, info, text on status fills, shadows) are defined on every page and follow the active theme. The remaining hard-coded status colours were replaced with them: tool-panel toasts, success and danger buttons, and the dependency manager's badges.
+- **Applied live:** themes are applied through the CSSOM, so pages keep their state when the theme changes. Each page's Content-Security-Policy gains only one extra nonce.
+- **Contrast is tested:** every theme is checked for WCAG contrast:
+  - 7:1 for body text;
+  - 4.5:1 for secondary text, links, button labels and status text;
+  - 3:1 for icons and focus rings.
+- **Coverage is tested:** a test fails if any stylesheet starts using a VS Code colour that the themes do not set.
+- **High Contrast** turns on the outlines pages already draw for VS Code's own high-contrast themes. The other themes switch them off.
+- **System Default** hands everything back to VS Code. If VS Code's theme changes while a DevSnip Pro theme is active, DevSnip Pro keeps its theme, and returning to System Default follows VS Code's new one.
+
 ## 11.71.1 - Database Client: connect, browse and edit your databases
 
 A lightweight database client inside DevSnip Pro. Paste a connection string for PostgreSQL, MySQL/MariaDB, SQL Server, SQLite, MongoDB or Redis; it is detected and checked, and you can browse the database's structure and read, insert, edit and delete its data from one panel. Open it from **Database → Database Client** in the sidebar, or run **DevSnip Pro: Database Client**.

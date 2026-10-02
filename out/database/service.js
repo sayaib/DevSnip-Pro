@@ -169,6 +169,10 @@ class DatabaseService {
                 session.version = info.version;
                 session.defaultDatabase = info.defaultDatabase;
                 void this.store.touch(id);
+                try {
+                    this.ui.onConnected?.(profile.kind);
+                }
+                catch { /* reporting must never break a connection */ }
                 return adapter;
             }
             catch (error) {

@@ -221,6 +221,22 @@ export const EVENT_CATALOG = defineCatalog({
     properties: {
       amount: { kind: "count", description: "Points spent." }
     }
+  },
+
+  // Activation and onboarding -------------------------------------------------
+  activation_milestone: {
+    description: "A core first-time action happened. Sent once per installation per milestone, to learn which first steps lead to lasting use.",
+    properties: {
+      milestone: { kind: "enum:first_launch|first_tool|first_api_request|first_snippet|first_ai_tool|first_security_scan|first_database_connection|first_opencode", description: "Which first: a request actually sent, a scan completed, a database connected - not just a panel opened." },
+      days_since_install: { kind: "count", description: "Whole days between the first launch and this milestone." }
+    }
+  },
+  onboarding_action: {
+    description: "The user interacted with the in-product onboarding (the sidebar Getting started card, the walkthrough or What's new).",
+    properties: {
+      action: { kind: "enum:step_opened|guide_dismissed|walkthrough_opened|whats_new_opened|whats_new_dismissed", description: "What was done." },
+      step: { kind: "id", description: "For step_opened: the checklist step, e.g. first_api_request." }
+    }
   }
 } as const);
 

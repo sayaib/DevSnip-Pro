@@ -5,6 +5,8 @@ import { DatabaseService, HostUi } from "./service";
 import { ConnectionStore } from "./store";
 import { renderDatabasePage } from "./page";
 import { confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
+import { setWebviewHtml } from "../theme/service";
+import { reach } from "../onboarding/activation";
 
 const VIEW_TYPE = "devsnip.databaseClient";
 
@@ -45,7 +47,8 @@ const hostUi: HostUi = {
     const doc = await vscode.workspace.openTextDocument({ content, language });
     await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
   },
-  baseDir: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  baseDir: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+  onConnected: () => { void reach("first_database_connection"); }
 };
 
 /** Opens (or reveals) the Database Client panel. */
@@ -67,12 +70,12 @@ export function openDatabaseClient(context: vscode.ExtensionContext): void {
   const store = new ConnectionStore(context.globalState, context.secrets);
   const service: DatabaseService = new DatabaseService(store, hostUi, () => safePostMessage(panel, { type: "connections", connections: service.views() }));
 
-  panel.webview.html = renderDatabasePage({
+  setWebviewHtml(panel.webview, renderDatabasePage({
     cspSource: panel.webview.cspSource,
     scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "db-client.js")).toString(),
     codiconsUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(codiconsRoot, "codicon.css")).toString(),
     platform: process.platform
-  });
+  }));
 
   const subscription = panel.webview.onDidReceiveMessage(async message => {
     if (!message || message.type !== "rpc" || typeof message.method !== "string") return;

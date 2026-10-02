@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.knownCommands = exports.isKnownCommand = exports.registerTrackedCommand = exports.setCommandObserver = exports.setUsageRecorder = exports.COMMAND_PREFIX = void 0;
+exports.registerLazyCommands = exports.knownCommands = exports.isKnownCommand = exports.registerTrackedCommand = exports.setCommandObserver = exports.setUsageRecorder = exports.COMMAND_PREFIX = void 0;
 const vscode = __importStar(require("vscode"));
 /** Namespace shared by every command this extension contributes. */
 exports.COMMAND_PREFIX = "sayaib.hue-console.";
@@ -95,4 +95,45 @@ function knownCommands() {
     return [...registeredCommands].sort();
 }
 exports.knownCommands = knownCommands;
+/**
+ * Registers commands whose implementation is loaded on first use.
+ *
+ * Each id gets a light placeholder until one of them runs. The placeholders
+ * are then disposed, `load()` imports the real module and registers the real
+ * commands (through registerTrackedCommand), and the original call is replayed
+ * with its arguments. Usage points and analytics are recorded once, by the
+ * real command. This keeps large modules - the REST client with axios, the
+ * security analysers - out of extension activation.
+ */
+function registerLazyCommands(subscriptions, commandIds, load) {
+    let loading;
+    let placeholders = [];
+    const install = () => {
+        placeholders = commandIds.map(id => {
+            registeredCommands.add(id);
+            return vscode.commands.registerCommand(id, async (...args) => {
+                if (!loading) {
+                    loading = (async () => {
+                        // The real commands take over these ids, so the placeholders must go first.
+                        placeholders.forEach(placeholder => placeholder.dispose());
+                        try {
+                            await load();
+                        }
+                        catch (error) {
+                            // Put the placeholders back so the next call retries instead of finding no command.
+                            loading = undefined;
+                            install();
+                            throw error;
+                        }
+                    })();
+                }
+                await loading;
+                return vscode.commands.executeCommand(id, ...args);
+            });
+        });
+        subscriptions.push(...placeholders);
+    };
+    install();
+}
+exports.registerLazyCommands = registerLazyCommands;
 //# sourceMappingURL=command-registry.js.map

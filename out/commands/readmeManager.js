@@ -30,6 +30,7 @@ const command_registry_1 = require("../utils/command-registry");
 const markdown_1 = require("../utils/markdown");
 const webview_ui_1 = require("../utils/webview-ui");
 const analytics_1 = require("../analytics");
+const service_1 = require("../theme/service");
 const README_TEMPLATE = `# Project Title
 
 ### Description
@@ -125,7 +126,7 @@ function registerReadmeManagerCommand(context) {
                 });
             }
         };
-        panel.webview.html = getPreviewHtml(vscode.workspace.asRelativePath(target), Object.keys(SECTION_TEMPLATES));
+        (0, service_1.setWebviewHtml)(panel.webview, getPreviewHtml(vscode.workspace.asRelativePath(target), Object.keys(SECTION_TEMPLATES)));
         await render();
         const changeSubscription = vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.uri.toString() !== target.toString())

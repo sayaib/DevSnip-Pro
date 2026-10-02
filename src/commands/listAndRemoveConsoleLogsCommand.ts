@@ -3,6 +3,7 @@ import { registerTrackedCommand } from "../utils/command-registry";
 import { THEME_TOKENS, confirmAction, embedJson, escapeHtml, getNonce, openToolPanel } from "../utils/webview-ui";
 import * as fs from "fs/promises";
 import * as path from "path";
+import { setWebviewHtml } from "../theme/service";
 
 interface ConsoleLog {
   filePath: string;
@@ -32,9 +33,9 @@ export function registerListAndRemoveConsoleLogsCommand(
       const iconPath = path.resolve(context.extensionPath, "logo.png");
       panel.iconPath = vscode.Uri.file(iconPath);
 
-      panel.webview.html = generateWebviewContentConsoleLoading(
+      setWebviewHtml(panel.webview, generateWebviewContentConsoleLoading(
         "Searching for console logs. Please wait..."
-      );
+      ));
 
       const allConsoleLogs: ConsoleLog[] = [];
 
@@ -50,16 +51,16 @@ export function registerListAndRemoveConsoleLogsCommand(
       allConsoleLogs.push(...scanResults.flat());
 
       if (allConsoleLogs.length === 0) {
-        panel.webview.html = generateWebviewContentConsoleLoading(
+        setWebviewHtml(panel.webview, generateWebviewContentConsoleLoading(
           "No `console.log` statements found."
-        );
+        ));
         vscode.window.showInformationMessage(
           "No console.log statements found."
         );
         return;
       }
 
-      panel.webview.html = generateWebviewContentConsole(allConsoleLogs);
+      setWebviewHtml(panel.webview, generateWebviewContentConsole(allConsoleLogs));
       let currentConsoleLogs = allConsoleLogs;
       let actionInProgress = false;
 
@@ -112,9 +113,9 @@ export function registerListAndRemoveConsoleLogsCommand(
  */
 async function refreshPanel(panel: vscode.WebviewPanel): Promise<ConsoleLog[]> {
   const logs = await fetchConsoleLogs();
-  panel.webview.html = logs.length
+  setWebviewHtml(panel.webview, logs.length
     ? generateWebviewContentConsole(logs)
-    : generateWebviewContentConsoleLoading("No console.log statements found.");
+    : generateWebviewContentConsoleLoading("No console.log statements found."));
   return logs;
 }
 
@@ -199,9 +200,9 @@ async function removeSelectedLogs(
   );
 
   const updatedConsoleLogs = await fetchConsoleLogs();
-  panel.webview.html = updatedConsoleLogs.length
+  setWebviewHtml(panel.webview, updatedConsoleLogs.length
     ? generateWebviewContentConsole(updatedConsoleLogs)
-    : generateWebviewContentConsoleLoading("All console.log statements are gone.");
+    : generateWebviewContentConsoleLoading("All console.log statements are gone."));
   return updatedConsoleLogs;
 }
 

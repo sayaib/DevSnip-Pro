@@ -30,15 +30,15 @@ const createSnippetCommand_1 = require("./commands/createSnippetCommand");
 const showSnippetsCommand_1 = require("./commands/showSnippetsCommand");
 const listAndRemoveConsoleLogsCommand_1 = require("./commands/listAndRemoveConsoleLogsCommand");
 const removeUnusedImportsCommand_1 = require("./commands/removeUnusedImportsCommand");
-const api_test_1 = require("./commands/api-test");
-const dependencyManager_1 = require("./commands/dependencyManager");
 const hubCommands_1 = require("./commands/hubCommands");
 const runner_1 = require("./toolkits/runner");
-const securityTools_1 = require("./commands/securityTools");
 const command_1 = require("./database/command");
+const service_1 = require("./theme/service");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
 const command_registry_1 = require("./utils/command-registry");
 const analytics_1 = require("./analytics");
+const activation_1 = require("./onboarding/activation");
+const commands_1 = require("./onboarding/commands");
 const readmeManager_1 = require("./commands/readmeManager");
 const openCodeIntegration_1 = require("./commands/openCodeIntegration");
 const command_dispatch_1 = require("./utils/command-dispatch");
@@ -47,6 +47,7 @@ const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
 const premium_commands_1 = require("./premium/premium-commands");
 const tools_sidebar_1 = require("./sidebar/tools-sidebar");
+const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 function activate(context) {
     const activationStart = Date.now();
     // Before anything writes state, so an existing user is never reported as a new install.
@@ -54,6 +55,16 @@ function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     // The milestone store needs its context before any command can record usage.
     (0, milestoneTracker_1.setMilestoneContext)(context);
+    // The appearance theme is read before any webview renders, so none flashes the wrong theme.
+    (0, service_1.initThemes)(context);
+    // Local first-use and onboarding state. The install snapshot decides whether this is a new user.
+    const version = String(context.extension?.packageJSON?.version ?? "0.0.0");
+    const install = (0, analytics_1.classifyInstall)(installSnapshot, version);
+    void (0, activation_1.initActivation)(context, version, {
+        isNewInstall: install.firstRun,
+        previousVersion: install.previousVersion,
+        recordDiscovery: id => (0, milestoneTracker_1.recordDiscovery)(context, id)
+    }).catch(error => console.error("DevSnip Pro: onboarding state could not be loaded.", error));
     // Tool usage points are awarded by registerTrackedCommand, which every
     // DevSnip Pro command is registered through. The recorder is installed before
     // any command is registered, so no invocation is missed and none is counted twice.
@@ -62,6 +73,7 @@ function activate(context) {
     (0, command_registry_1.setUsageRecorder)(command => {
         void (0, milestoneTracker_1.autoRecordToolUsage)(command);
         toolsSidebar?.recordUsage(command);
+        (0, activation_1.noteCommand)(command);
     });
     (0, command_registry_1.setCommandObserver)(analytics_1.trackCommand);
     // Premium REST API Client features are unlocked by spending DevSnip Pro
@@ -89,13 +101,22 @@ function activate(context) {
                 (0, readmeManager_1.registerReadmeManagerCommand)(context);
             }],
         ["OpenCode integration", () => (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context)],
-        ["REST API client", () => (0, api_test_1.apiTest)(context, { access, collections })],
+        // The three largest features load on first use, keeping them out of activation.
+        ["REST API client", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.openGUI"], async () => {
+                (await Promise.resolve().then(() => __importStar(require("./commands/api-test")))).apiTest(context, { access, collections });
+            })],
         ["premium commands", () => (0, premium_commands_1.registerPremiumCommands)(context, access)],
-        ["dependencies & installation", () => (0, dependencyManager_1.registerDependencyManagerCommand)(context)],
+        ["dependencies & installation", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.dependencyManager"], async () => {
+                (await Promise.resolve().then(() => __importStar(require("./commands/dependencyManager")))).registerDependencyManagerCommand(context);
+            })],
         ["tool hubs", () => (0, hubCommands_1.registerHubCommands)(context)],
         ["toolkit tools", () => (0, runner_1.registerToolkitCommands)(context)],
-        ["security tools", () => (0, securityTools_1.registerSecurityToolsCommands)(context)],
+        ["security tools", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, SECURITY_COMMANDS, async () => {
+                (await Promise.resolve().then(() => __importStar(require("./commands/securityTools")))).registerSecurityToolsCommands(context);
+            })],
         ["database client", () => (0, command_1.registerDatabaseClientCommand)(context)],
+        ["appearance themes", () => (0, service_1.registerThemeCommand)(context)],
+        ["onboarding", () => (0, commands_1.registerOnboardingCommands)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],
         ["tool search", () => registerUniversalToolSearch(context)],
     ];

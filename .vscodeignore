@@ -50,3 +50,17 @@ node_modules/sql.js/**
 !node_modules/sql.js/LICENSE
 !node_modules/sql.js/dist/sql-wasm.js
 !node_modules/sql.js/dist/sql-wasm.wasm
+
+# Marketplace images are served from GitHub (the README links to them); not needed inside the extension.
+Devsnip.jpg
+# Documentation, examples and tests inside dependencies are never loaded.
+node_modules/js-md4/doc/**
+node_modules/**/*.md
+!node_modules/**/LICENSE*
+node_modules/**/test/**
+node_modules/**/tests/**
+node_modules/**/example/**
+node_modules/**/examples/**
+
+CONTRIBUTING.md
+SECURITY.md

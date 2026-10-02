@@ -45,6 +45,8 @@ async function main(): Promise<void> {
   require("./sidebar.unit");
   require("./database.unit");
   require("./database-live.unit");
+  require("./theme.unit");
+  require("./onboarding.unit");
   /* eslint-enable @typescript-eslint/no-var-requires */
 
   let passed = 0;

@@ -95,7 +95,10 @@ function render() {
         const html = render();
         assert.ok(/<input id="search"[^>]*aria-label="Search tools"/.test(html));
         assert.ok(/role="tree"[^>]*aria-label="DevSnip Pro tools"/.test(html));
-        assert.ok(/id="status"[^>]*title="Open the Milestone/.test(html));
+        assert.ok(/id="status"[^>]*aria-label="[^"]*Open Milestones/.test(html), "the rank card says where it goes");
+        // The card's action is also spelled out on screen, not only in a tooltip.
+        assert.ok(/id="rankCta"[^>]*>[\s\S]*?Milestones/.test(html));
+        assert.ok(/id="rankInfo"[^>]*>[\s\S]*?How ranks work/.test(html));
     });
     (0, run_unit_tests_1.test)("media/tools-sidebar.js parses and acquires the VS Code API once", () => {
         const source = fs.readFileSync(path.join(ROOT, "media", "tools-sidebar.js"), "utf8");

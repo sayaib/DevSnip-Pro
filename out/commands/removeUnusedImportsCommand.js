@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 const path = __importStar(require("path"));
 const webview_ui_1 = require("../utils/webview-ui");
+const service_1 = require("../theme/service");
 const SEARCH_PATTERN = "**/*.{ts,tsx,js,jsx,mjs,cjs,java,py}";
 const READ_BATCH_SIZE = 40;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -44,9 +45,9 @@ function registerRemoveUnusedImportsCommand(context) {
         if (!created)
             return;
         panel.iconPath = vscode.Uri.file(path.resolve(context.extensionPath, "logo.png"));
-        panel.webview.html = loadingPage("Checking JavaScript, Java, and Python imports…");
+        (0, service_1.setWebviewHtml)(panel.webview, loadingPage("Checking JavaScript, Java, and Python imports…"));
         let imports = await findUnusedImports(folder);
-        const render = () => { panel.webview.html = imports.length ? resultsPage(imports) : loadingPage("No clearly unused whole import statements were found."); };
+        const render = () => { (0, service_1.setWebviewHtml)(panel.webview, imports.length ? resultsPage(imports) : loadingPage("No clearly unused whole import statements were found.")); };
         render();
         let busy = false;
         const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {

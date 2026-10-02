@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { THEME_TOKENS, embedJson, escapeHtml, openToolPanel } from "./webview-ui";
 import { executeQueuedCommand } from "./command-dispatch";
+import { setWebviewHtml } from "../theme/service";
 
 /**
  * The tool grid shared by every hub (Developer Tools, AI/ML, RAG, Big Data).
@@ -197,12 +198,12 @@ export function openToolHub(context: vscode.ExtensionContext, config: HubConfig,
   }
   const pinnedKey = PINNED_PREFIX + config.viewType;
   const known = new Set(config.tools.map(t => t.command));
-  panel.webview.html = renderToolHub(config, {
+  setWebviewHtml(panel.webview, renderToolHub(config, {
     cspSource: panel.webview.cspSource,
     scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "tool-hub.js")).toString(),
     pinned: context.globalState.get<string[]>(pinnedKey, []),
     initialCategory
-  });
+  }));
   const subscription = panel.webview.onDidReceiveMessage(async message => {
     if (message?.command === "openTool" && typeof message.toolCommand === "string" && known.has(message.toolCommand)) {
       // executeQueuedCommand also checks the id against this extension's commands.

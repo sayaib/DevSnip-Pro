@@ -29,6 +29,7 @@ const command_registry_1 = require("../utils/command-registry");
 const analytics_1 = require("../analytics");
 const webview_ui_1 = require("../utils/webview-ui");
 const snippet_utils_1 = require("../utils/snippet-utils");
+const activation_1 = require("../onboarding/activation");
 function registerCreateSnippetCommand(context) {
     const command = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.createCustomSnippet", async () => {
         try {
@@ -98,6 +99,7 @@ function registerCreateSnippetCommand(context) {
             };
             await (0, snippet_utils_1.saveSnippets)(snippetsPath, existingSnippets);
             (0, analytics_1.track)("snippet_created", { language, line_count: existingSnippets[name].body.length, overwrote });
+            void (0, activation_1.reach)("first_snippet");
             const action = await vscode.window.showInformationMessage(`Snippet "${name}" saved for ${language}. VS Code loads contributed snippets at startup, so reload the window to start using it.`, "Reload Window", "Later");
             if (action === "Reload Window") {
                 await vscode.commands.executeCommand("workbench.action.reloadWindow");

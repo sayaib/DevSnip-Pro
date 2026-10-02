@@ -28,6 +28,8 @@ export interface HostUi {
   openDocument(content: string, language: string): Promise<void>;
   /** Folder that relative SQLite paths resolve against. */
   baseDir(): string | undefined;
+  /** Called after a saved connection connects successfully. */
+  onConnected?(kind: string): void;
 }
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -211,6 +213,7 @@ export class DatabaseService {
         session.version = info.version;
         session.defaultDatabase = info.defaultDatabase;
         void this.store.touch(id);
+        try { this.ui.onConnected?.(profile.kind); } catch { /* reporting must never break a connection */ }
         return adapter;
       } catch (error) {
         await adapter?.close().catch(() => undefined);

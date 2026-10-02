@@ -34,6 +34,8 @@ const page_1 = require("./page");
 const command_registry_1 = require("../utils/command-registry");
 const webview_ui_1 = require("../utils/webview-ui");
 const analytics_1 = require("../analytics");
+const service_1 = require("../theme/service");
+const activation_1 = require("../onboarding/activation");
 /**
  * Hosts the toolkit tools: one command and one panel per tool. The webview
  * (media/toolkit.js) renders the form and results; everything that touches
@@ -93,7 +95,7 @@ async function openTool(context, tool, initial) {
     const ctx = createToolContext(context);
     const { SECTIONS } = await Promise.resolve().then(() => __importStar(require("./registry")));
     const section = SECTIONS.find(s => s.id === tool.section);
-    panel.webview.html = (0, page_1.renderToolPage)({
+    (0, service_1.setWebviewHtml)(panel.webview, (0, page_1.renderToolPage)({
         cspSource: panel.webview.cspSource,
         scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "toolkit.js")).toString(),
         tool: (0, types_1.describe)(tool),
@@ -101,7 +103,7 @@ async function openTool(context, tool, initial) {
         examples: await allExamples(tool, ctx),
         initial: initial ?? {},
         platform: process.platform
-    });
+    }));
     let liveTracked = false;
     let latestRequest = 0;
     const feature = tool.command;
@@ -128,6 +130,7 @@ async function openTool(context, tool, initial) {
                         liveTracked = true;
                     (0, analytics_1.track)("tool_run_completed", { feature, section: tool.section, outcome: outcome.outcome, trigger, duration_ms: durationMs });
                 }
+                (0, activation_1.noteToolRun)(tool.section, outcome.outcome);
                 return;
             }
             case "readEditor": {

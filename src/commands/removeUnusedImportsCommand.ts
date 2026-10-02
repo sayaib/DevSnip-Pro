@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { registerTrackedCommand } from "../utils/command-registry";
 import * as path from "path";
 import { THEME_TOKENS, confirmAction, escapeHtml, getNonce, openToolPanel } from "../utils/webview-ui";
+import { setWebviewHtml } from "../theme/service";
 
 interface UnusedImport { filePath: string; lineNumber: number; importStatement: string; importedSymbols: string[]; }
 
@@ -19,9 +20,9 @@ export function registerRemoveUnusedImportsCommand(context: vscode.ExtensionCont
     const { panel, created } = openToolPanel("removeUnusedImports", "Unused Import Cleaner", { enableScripts: true });
     if (!created) return;
     panel.iconPath = vscode.Uri.file(path.resolve(context.extensionPath, "logo.png"));
-    panel.webview.html = loadingPage("Checking JavaScript, Java, and Python imports…");
+    setWebviewHtml(panel.webview, loadingPage("Checking JavaScript, Java, and Python imports…"));
     let imports = await findUnusedImports(folder);
-    const render = () => { panel.webview.html = imports.length ? resultsPage(imports) : loadingPage("No clearly unused whole import statements were found."); };
+    const render = () => { setWebviewHtml(panel.webview, imports.length ? resultsPage(imports) : loadingPage("No clearly unused whole import statements were found.")); };
     render();
     let busy = false;
     const messageSubscription = panel.webview.onDidReceiveMessage(async (message: { command?: string; indexes?: unknown }) => {

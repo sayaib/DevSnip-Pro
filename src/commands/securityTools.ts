@@ -18,6 +18,8 @@ import {
   scanSourceText
 } from "../services/security-static";
 import { runEndpointScan } from "../services/security-probe";
+import { setWebviewHtml } from "../theme/service";
+import { reach } from "../onboarding/activation";
 
 /**
  * The Security section.
@@ -394,7 +396,7 @@ button.link:hover { text-decoration: underline; }
 @media (max-width: 620px) { .wrap { padding: 16px; } .grid { grid-template-columns: 1fr; } }
 `;
 
-function securityHubHtml(nonce: string, initial: { url: string; timeoutMs: number; activeChecks: boolean }): string {
+export function securityHubHtml(nonce: string, initial: { url: string; timeoutMs: number; activeChecks: boolean }): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1030,6 +1032,7 @@ export function registerSecurityToolsCommands(context: vscode.ExtensionContext):
   const pending = new Map<vscode.WebviewPanel, Array<Record<string, unknown>>>();
 
   const send = (panel: vscode.WebviewPanel, message: Record<string, unknown>): void => {
+    if (message.type === "result") void reach("first_security_scan");
     if (ready.has(panel)) { safePostMessage(panel, message); return; }
     const queue = pending.get(panel) || [];
     queue.push(message);
@@ -1042,7 +1045,7 @@ export function registerSecurityToolsCommands(context: vscode.ExtensionContext):
       retainContextWhenHidden: true
     });
     if (created) {
-      panel.webview.html = securityHubHtml(getNonce(), hubDefaults(context));
+      setWebviewHtml(panel.webview, securityHubHtml(getNonce(), hubDefaults(context)));
       const subscription = panel.webview.onDidReceiveMessage(message => {
         if (message?.type === "ready") {
           ready.add(panel);

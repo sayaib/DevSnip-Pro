@@ -10,6 +10,7 @@ import {
   readExistingSnippets,
   saveSnippets
 } from "../utils/snippet-utils";
+import { reach } from "../onboarding/activation";
 
 export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
   const command = registerTrackedCommand(
@@ -86,6 +87,7 @@ export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
 
         await saveSnippets(snippetsPath, existingSnippets);
         track("snippet_created", { language, line_count: existingSnippets[name].body.length, overwrote });
+        void reach("first_snippet");
 
         const action = await vscode.window.showInformationMessage(
           `Snippet "${name}" saved for ${language}. VS Code loads contributed snippets at startup, so reload the window to start using it.`,

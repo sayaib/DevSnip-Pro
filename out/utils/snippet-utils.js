@@ -191,8 +191,8 @@ function getLanguageFromFileName(fileName) {
         case ".makefile":
         case "Makefile":
             return "makefile";
+        // VS Code opens Gradle build files as Groovy.
         case ".gradle":
-            return "gradle";
         case ".groovy":
             return "groovy";
         case ".vb":

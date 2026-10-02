@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in DevSnip Pro does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please **never paste real connection strings, API keys or tokens**: replace them with placeholders.
+        Security problems go to the [private report form](https://github.com/sayaib/DevSnip-Pro/security/advisories/new) instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - REST API Client
+        - Database Client
+        - AI & LLM tools
+        - Security tools
+        - Snippets, cleanup or dependencies
+        - A toolkit tool (formatters, converters, generators…)
+        - OpenCode integration
+        - Tools sidebar, themes or onboarding
+        - Points & milestones
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Include any message shown.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: input
+    id: devsnip-version
+    attributes:
+      label: DevSnip Pro version
+      description: Extensions view → DevSnip Pro, or run "DevSnip Pro: What's New".
+      placeholder: "11.73.1"
+    validations:
+      required: true
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code version and OS
+      description: Help → About.
+      placeholder: "VS Code 1.104, macOS 15 (Apple silicon)"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots (optional)
+      description: Output panel or Developer Tools console (Help → Toggle Developer Tools). Remove anything secret.
+      render: text

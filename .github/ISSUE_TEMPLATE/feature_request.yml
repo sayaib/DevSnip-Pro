@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a new tool or an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or problem, in your own words. This matters more than a proposed solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you imagine it working in DevSnip Pro.
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: Another tool, a script, a website…
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the "Browse All Tools" list, and this is not already there.
+          required: true

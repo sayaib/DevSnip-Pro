@@ -22,16 +22,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setAnalyticsClientForTests = exports.shutdownAnalytics = exports.initAnalytics = exports.trackCommand = exports.featureCategory = exports.createPostHogTransport = exports.loadAnalyticsConfig = exports.classifyInstall = exports.snapshotInstall = exports.track = void 0;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const crypto_1 = require("crypto");
-const axios_1 = __importDefault(require("axios"));
 const client_1 = require("./client");
 const commands_1 = require("../toolkits/commands");
 const layout_1 = require("../toolkits/layout");
@@ -168,7 +164,9 @@ function createPostHogTransport(config, log) {
         async send(batch) {
             try {
                 // sent_at lets PostHog correct event timestamps for a user's skewed clock.
-                const response = await axios_1.default.post(`${config.host}/batch/`, { api_key: config.key, batch, sent_at: new Date().toISOString() }, {
+                // Loaded on first delivery (in the background), not during activation.
+                const { default: axios } = await Promise.resolve().then(() => __importStar(require("axios")));
+                const response = await axios.post(`${config.host}/batch/`, { api_key: config.key, batch, sent_at: new Date().toISOString() }, {
                     timeout: 10000,
                     headers: { "Content-Type": "application/json" },
                     validateStatus: () => true,

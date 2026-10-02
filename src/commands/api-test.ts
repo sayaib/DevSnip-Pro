@@ -10,6 +10,8 @@ import { FeatureAccessService } from "../premium/feature-access";
 import { CollectionStore } from "../services/collections";
 import { FeatureContext, buildCatalog, handleFeatureMessage } from "./api-client-features";
 import { API_CLIENT_INIT_SCRIPT, API_CLIENT_SCRIPT, API_CLIENT_STYLES, apiClientMarkup } from "./api-client-webview";
+import { setWebviewHtml } from "../theme/service";
+import { reach } from "../onboarding/activation";
 
 /**
  * What is needed to reopen a request from history. Values are the request's
@@ -944,7 +946,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
       activePanel = panel;
       const iconPath = path.resolve(context.extensionPath, "logo.png");
       panel.iconPath = vscode.Uri.file(iconPath);
-      panel.webview.html = getWebviewContent(apiTester.getHistory(), services.access.check("websocket-client").allowed);
+      setWebviewHtml(panel.webview, getWebviewContent(apiTester.getHistory(), services.access.check("websocket-client").allowed));
       const post = (message: unknown) => safePostMessage(panel, message);
 
       // Everything the Free/Premium feature system needs. `sendHttp` reuses the
@@ -966,7 +968,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
           // The WebSocket allowance is baked into the document's CSP, so the
           // page has to be rebuilt when affordability crosses that threshold.
           webSocketsAllowed = nowAllowed;
-          panel.webview.html = getWebviewContent(apiTester.getHistory(), nowAllowed);
+          setWebviewHtml(panel.webview, getWebviewContent(apiTester.getHistory(), nowAllowed));
           return;
         }
         post({ command: "featureCatalog", ...buildCatalog(featureContext) });
@@ -995,6 +997,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
                   command: "apiResponse",
                   ...result
                 });
+                void reach("first_api_request");
               } catch (error: any) {
                 // A cancelled request is reported by the cancelRequest handler
                 // (or superseded by a newer request), not as a failure.

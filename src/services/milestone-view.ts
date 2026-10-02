@@ -134,6 +134,7 @@ function remainingLabel(milestone: Milestone, remaining: number): string {
   if (milestone.id === "snippet_creator") return `${plural(remaining, "more snippet")}`;
   if (milestone.id === "security_audit") return `${plural(remaining, "more audit")}`;
   if (milestone.id === "ai_explorer") return `${plural(remaining, "more AI tool run")}`;
+  if (milestone.id === "feature_explorer") return `${plural(remaining, "more feature")} to try`;
   return `${plural(remaining, "more tool run")}`;
 }
 

@@ -4,15 +4,15 @@ import { registerCreateSnippetCommand } from "./commands/createSnippetCommand";
 import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
 import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
 import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImportsCommand";
-import { apiTest } from "./commands/api-test";
-import { registerDependencyManagerCommand } from "./commands/dependencyManager";
 import { registerHubCommands } from "./commands/hubCommands";
 import { registerToolkitCommands } from "./toolkits/runner";
-import { registerSecurityToolsCommands } from "./commands/securityTools";
 import { registerDatabaseClientCommand } from "./database/command";
-import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance } from "./commands/milestoneTracker";
-import { registerTrackedCommand, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
-import { initAnalytics, shutdownAnalytics, snapshotInstall, track, trackCommand } from "./analytics";
+import { initThemes, registerThemeCommand } from "./theme/service";
+import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance, recordDiscovery, Discovery } from "./commands/milestoneTracker";
+import { registerLazyCommands, registerTrackedCommand, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
+import { classifyInstall, initAnalytics, shutdownAnalytics, snapshotInstall, track, trackCommand } from "./analytics";
+import { initActivation, noteCommand } from "./onboarding/activation";
+import { registerOnboardingCommands } from "./onboarding/commands";
 import { registerReadmeManagerCommand } from "./commands/readmeManager";
 import { registerOpenCodeIntegrationCommand } from "./commands/openCodeIntegration";
 import { executeQueuedCommand } from "./utils/command-dispatch";
@@ -22,6 +22,8 @@ import { CollectionStore } from "./services/collections";
 import { registerPremiumCommands } from "./premium/premium-commands";
 import { ToolsSidebarProvider, TOOLS_VIEW_ID } from "./sidebar/tools-sidebar";
 
+const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
+
 export function activate(context: vscode.ExtensionContext) {
   const activationStart = Date.now();
   // Before anything writes state, so an existing user is never reported as a new install.
@@ -30,6 +32,16 @@ export function activate(context: vscode.ExtensionContext) {
 
   // The milestone store needs its context before any command can record usage.
   setMilestoneContext(context);
+  // The appearance theme is read before any webview renders, so none flashes the wrong theme.
+  initThemes(context);
+  // Local first-use and onboarding state. The install snapshot decides whether this is a new user.
+  const version = String(context.extension?.packageJSON?.version ?? "0.0.0");
+  const install = classifyInstall(installSnapshot, version);
+  void initActivation(context, version, {
+    isNewInstall: install.firstRun,
+    previousVersion: install.previousVersion,
+    recordDiscovery: id => recordDiscovery(context, id as Discovery)
+  }).catch(error => console.error("DevSnip Pro: onboarding state could not be loaded.", error));
 
   // Tool usage points are awarded by registerTrackedCommand, which every
   // DevSnip Pro command is registered through. The recorder is installed before
@@ -39,6 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
   setUsageRecorder(command => {
     void autoRecordToolUsage(command);
     toolsSidebar?.recordUsage(command);
+    noteCommand(command);
   });
   setCommandObserver(trackCommand);
 
@@ -70,13 +83,22 @@ export function activate(context: vscode.ExtensionContext) {
       registerReadmeManagerCommand(context);
     }],
     ["OpenCode integration", () => registerOpenCodeIntegrationCommand(context)],
-    ["REST API client", () => apiTest(context, { access, collections })],
+    // The three largest features load on first use, keeping them out of activation.
+    ["REST API client", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.openGUI"], async () => {
+      (await import("./commands/api-test")).apiTest(context, { access, collections });
+    })],
     ["premium commands", () => registerPremiumCommands(context, access)],
-    ["dependencies & installation", () => registerDependencyManagerCommand(context)],
+    ["dependencies & installation", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.dependencyManager"], async () => {
+      (await import("./commands/dependencyManager")).registerDependencyManagerCommand(context);
+    })],
     ["tool hubs", () => registerHubCommands(context)],
     ["toolkit tools", () => registerToolkitCommands(context)],
-    ["security tools", () => registerSecurityToolsCommands(context)],
+    ["security tools", () => registerLazyCommands(context.subscriptions, SECURITY_COMMANDS, async () => {
+      (await import("./commands/securityTools")).registerSecurityToolsCommands(context);
+    })],
     ["database client", () => registerDatabaseClientCommand(context)],
+    ["appearance themes", () => registerThemeCommand(context)],
+    ["onboarding", () => registerOnboardingCommands(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
     ["tool search", () => registerUniversalToolSearch(context)],
   ];

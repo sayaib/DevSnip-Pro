@@ -1,8 +1,8 @@
 {
   "name": "hue-console",
-  "displayName": "DevSnip Pro",
-  "description": "⚡A full-stack web and mobile (React, Next.js, Node, React Native, Flutter, Android, iOS), AI/ML, security, DevOps and observability toolkit for VS Code.",
-  "version": "11.71.1",
+  "displayName": "DevSnip Pro: API Client, AI & Developer Toolkit",
+  "description": "All-in-one developer toolkit for VS Code: REST API client, database client, AI & LLM tools, security scans, JSON/YAML formatters, code snippets and 100+ utilities for web, mobile and DevOps work.",
+  "version": "11.73.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -11,6 +11,11 @@
     "type": "git",
     "url": "https://github.com/sayaib/DevSnip-Pro"
   },
+  "homepage": "https://github.com/sayaib/DevSnip-Pro#readme",
+  "bugs": {
+    "url": "https://github.com/sayaib/DevSnip-Pro/issues"
+  },
+  "pricing": "Free",
   "engines": {
     "vscode": "^1.93.0"
   },
@@ -22,160 +27,65 @@
     "url": "https://github.com/sponsors/sayaib"
   },
   "categories": [
-    "Snippets",
-    "Other",
+    "AI",
     "Testing",
-    "Formatters"
+    "Snippets",
+    "Formatters",
+    "Other"
   ],
   "keywords": [
-    "code snippets",
-    "javascript code snippets",
-    "snippets",
-    "code",
-    "programming",
-    "language",
-    "all-languages",
-    "autocomplete",
-    "productivity",
-    "developer-tools",
-    "templates",
-    "boilerplate",
-    "multi-language",
-    "web-development",
-    "backend",
-    "frontend",
-    "java",
-    "python",
-    "javascript",
-    "typescript",
-    "csharp",
-    "c++",
-    "html",
-    "css",
-    "php",
-    "ruby",
-    "go",
-    "kotlin",
-    "dart",
-    "flutter",
-    "react",
-    "angular",
-    "vue",
-    "swift",
-    "rust",
-    "shell",
-    "bash",
+    "rest api client",
+    "api client",
+    "api testing",
+    "http client",
+    "graphql",
+    "websocket",
+    "json formatter",
     "yaml",
-    "json",
-    "markdown",
+    "database client",
     "sql",
-    "database",
-    "framework",
-    "tools",
-    "coding",
+    "postgresql",
+    "mysql",
+    "mongodb",
+    "redis",
+    "ai tools",
+    "llm",
+    "openai",
+    "prompt engineering",
+    "rag",
+    "security scanner",
+    "jwt",
     "code snippets",
-    "code examples",
-    "programming snippets",
     "developer tools",
-    "snippet manager",
-    "reusable code",
-    "programming resources",
-    "coding best practices",
-    "syntax highlighting",
-    "auto-complete code",
-    "multi-language support",
-    "JavaScript snippets",
-    "Python snippets",
-    "Java snippets",
-    "C# snippets",
-    "PHP snippets",
-    "Ruby snippets",
-    "HTML snippets",
-    "CSS snippets",
-    "Swift snippets",
-    "Kotlin snippets",
-    "Go snippets",
-    "TypeScript snippets",
-    "React snippets",
-    "Angular snippets",
-    "Vue.js snippets",
-    "Node.js snippets",
-    "Django snippets",
-    "Flask snippets",
-    "ASP.NET snippets",
-    "mobile development snippets",
-    "web development tools",
-    "debugging tools",
-    "performance optimization code",
-    "algorithm examples",
-    "data structure examples",
-    "machine learning code examples",
-    "API integration code examples",
-    "database queries snippets",
-    "RESTful API code examples",
-    "GraphQL code examples",
-    "unit testing code examples",
-    "integration testing code examples",
-    "front-end development snippets",
-    "back-end development snippets",
-    "full-stack development tools",
-    "version control integration tools",
-    "Git commands snippets",
-    "shell scripting examples",
-    "automation scripts examples",
-    "DevOps tools snippets",
-    "cloud computing code examples",
-    "containerization code examples",
-    "microservices architecture examples",
-    "data visualization code examples",
-    "data analysis scripts",
-    "data processing scripts",
-    "web scraping scripts",
-    "game development code examples",
-    "desktop application code examples",
-    "IoT device programming",
-    "embedded systems programming",
-    "blockchain development snippets",
-    "smart contract examples",
-    "cryptocurrency API integration",
-    "natural language processing code",
-    "image processing scripts",
-    "video processing scripts",
-    "UI/UX design code examples",
-    "responsive design techniques",
-    "CSS grid layout examples",
-    "CSS flexbox layout examples",
-    "JavaScript ES6 features",
-    "Java concurrency examples",
-    "C# LINQ queries",
-    "Python decorators",
-    "Python generators",
-    "Python context managers",
-    "JavaScript async/await patterns",
-    "React hooks examples",
-    "Angular services and components",
-    "Vue.js directives and components",
-    "Node.js middleware functions",
-    "Django models and views",
-    "Flask routing and templates",
-    "PHP OOP principles",
-    "react-native",
-    "nextjs",
-    "nodejs",
-    "android",
-    "ios",
-    "mobile",
+    "productivity",
     "curl",
     "openapi",
-    "graphql",
-    "jwt",
-    "oauth",
-    "cors",
-    "deep-links",
-    "regex"
+    "docker",
+    "kubernetes",
+    "git",
+    "opencode"
   ],
   "contributes": {
-    "languages": [],
+    "languages": [
+      {
+        "id": "vue",
+        "aliases": [
+          "Vue"
+        ],
+        "extensions": [
+          ".vue"
+        ]
+      },
+      {
+        "id": "toml",
+        "aliases": [
+          "TOML"
+        ],
+        "extensions": [
+          ".toml"
+        ]
+      }
+    ],
     "snippets": [
       {
         "language": "javascript",
@@ -238,7 +148,7 @@
         "path": "./custom/custom_java.json"
       },
       {
-        "language": "gradle",
+        "language": "groovy",
         "path": "./custom/custom_gradle.json"
       },
       {
@@ -340,6 +250,14 @@
     ],
     "commands": [
       {
+        "command": "sayaib.hue-console.whatsNew",
+        "title": "📣 DevSnip Pro: What's New"
+      },
+      {
+        "command": "sayaib.hue-console.getStarted",
+        "title": "🚀 DevSnip Pro: Get Started"
+      },
+      {
         "command": "sayaib.hue-console.advancedToolsHub",
         "title": "🧭 DevSnip Pro: Browse All Tools"
       },
@@ -366,6 +284,10 @@
       {
         "command": "sayaib.hue-console.devopsGenerator",
         "title": "🧭 DevSnip Pro: Browse DevOps & Cloud Tools"
+      },
+      {
+        "command": "sayaib.hue-console.chooseTheme",
+        "title": "🎨 DevSnip Pro: Choose Theme"
       },
       {
         "command": "sayaib.hue-console.searchTools",
@@ -1052,7 +974,93 @@
           "when": "false"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "devsnip.getStarted",
+        "title": "Get started with DevSnip Pro",
+        "description": "API requests, AI tools, security scans and databases, in five minutes.",
+        "steps": [
+          {
+            "id": "tools",
+            "title": "Find any tool in seconds",
+            "description": "Every tool lives in the DevSnip Pro sidebar, grouped into 13 sections. Search with Ctrl/Cmd+K and star the ones you use.\n[Open the Tools sidebar](command:workbench.view.extension.myActivityBar)",
+            "media": {
+              "markdown": "media/walkthrough/tools.md"
+            },
+            "completionEvents": [
+              "onView:myView"
+            ]
+          },
+          {
+            "id": "api",
+            "title": "Send your first API request",
+            "description": "The REST API Client sends HTTP, GraphQL and WebSocket requests with environments, collections and history - without leaving the editor.\n[Open the REST API Client](command:sayaib.hue-console.openGUI)",
+            "media": {
+              "markdown": "media/walkthrough/api.md"
+            },
+            "completionEvents": [
+              "onCommand:sayaib.hue-console.openGUI"
+            ]
+          },
+          {
+            "id": "ai",
+            "title": "Try the AI & LLM tools",
+            "description": "Count tokens and compare model costs, build prompts, validate LLM JSON output and plan RAG pipelines. They run locally.\n[Browse the AI & ML tools](command:sayaib.hue-console.aiMlHub)",
+            "media": {
+              "markdown": "media/walkthrough/ai.md"
+            },
+            "completionEvents": [
+              "onCommand:sayaib.hue-console.aiMlHub"
+            ]
+          },
+          {
+            "id": "security",
+            "title": "Run a security scan",
+            "description": "Audit the workspace for hard-coded secrets and unsafe code, check cloud configuration and dependencies, or scan an endpoint you own.\n[Open Security](command:sayaib.hue-console.securityHub)",
+            "media": {
+              "markdown": "media/walkthrough/security.md"
+            },
+            "completionEvents": [
+              "onCommand:sayaib.hue-console.securityHub"
+            ]
+          },
+          {
+            "id": "database",
+            "title": "Connect a database",
+            "description": "Paste a connection string for PostgreSQL, MySQL, SQL Server, SQLite, MongoDB or Redis to browse and edit data and run queries.\n[Open the Database Client](command:sayaib.hue-console.databaseClient)",
+            "media": {
+              "markdown": "media/walkthrough/database.md"
+            },
+            "completionEvents": [
+              "onCommand:sayaib.hue-console.databaseClient"
+            ]
+          },
+          {
+            "id": "theme",
+            "title": "Make it yours",
+            "description": "Pick one of nine appearance themes for every DevSnip Pro panel, from Dracula to High Contrast.\n[Choose a theme](command:sayaib.hue-console.chooseTheme)",
+            "media": {
+              "markdown": "media/walkthrough/theme.md"
+            },
+            "completionEvents": [
+              "onCommand:sayaib.hue-console.chooseTheme"
+            ]
+          },
+          {
+            "id": "points",
+            "title": "Track your progress",
+            "description": "Earn points as you use DevSnip Pro, keep a streak and unlock milestones. Points pay for premium REST client tools.\n[Open Milestones & Points](command:sayaib.hue-console.milestoneTracker)",
+            "media": {
+              "markdown": "media/walkthrough/points.md"
+            },
+            "completionEvents": [
+              "onCommand:sayaib.hue-console.milestoneTracker"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "activationEvents": [
     "onView:myView"

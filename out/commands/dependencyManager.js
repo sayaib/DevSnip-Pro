@@ -37,6 +37,7 @@ const command_registry_1 = require("../utils/command-registry");
 const analytics_1 = require("../analytics");
 const webview_ui_1 = require("../utils/webview-ui");
 const dependency_manager_1 = require("../services/dependency-manager");
+const service_1 = require("../theme/service");
 const COMMAND_ID = "sayaib.hue-console.dependencyManager";
 const OUTPUT_NAME = "DevSnip Pro: Dependencies";
 const MAX_MANIFEST_BYTES = 2 * 1024 * 1024;
@@ -1026,7 +1027,7 @@ function registerDependencyManagerCommand(context) {
         if (!created)
             return;
         const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, "media", "dependency-manager.js")));
-        panel.webview.html = getDependencyManagerHtml(panel.webview.cspSource, String(scriptUri));
+        (0, service_1.setWebviewHtml)(panel.webview, getDependencyManagerHtml(panel.webview.cspSource, String(scriptUri)));
         // The controller lives as long as the panel. The scan starts when the page
         // reports ready, because a message posted before that is dropped.
         void new DependencyPanel(panel, output);
@@ -1056,7 +1057,7 @@ function getDependencyManagerHtml(cspSource, scriptSrc) {
         .stat:hover, .stat.active { border-color: var(--border-focus); }
         .stat .num { display: block; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
         .stat .lbl { display: block; font-size: 11px; color: var(--fg-1); text-transform: uppercase; letter-spacing: .4px; }
-        .stat.ok .num { color: var(--success); } .stat.warn .num { color: var(--warning); } .stat.bad .num { color: var(--error); } .stat.major .num { color: #b180d7; }
+        .stat.ok .num { color: var(--success); } .stat.warn .num { color: var(--warning); } .stat.bad .num { color: var(--error); } .stat.major .num { color: var(--ds-purple, #b180d7); }
         .banner { border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 14px; font-size: 13px; border: 1px solid var(--border); background: var(--bg-1); white-space: pre-wrap; display: flex; gap: 10px; align-items: flex-start; }
         .banner .text { flex: 1; }
         .banner.error { border-color: var(--error); background: var(--error-bg); }
@@ -1088,7 +1089,7 @@ function getDependencyManagerHtml(cspSource, scriptSrc) {
         .chip.ok { color: var(--success); background: var(--success-bg); }
         .chip.bad { color: var(--error); background: var(--error-bg); }
         .project-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-        .notice { padding: 10px 16px; font-size: 12px; border-bottom: 1px solid var(--border); background: rgba(255,152,0,.08); color: var(--fg-0); line-height: 1.5; }
+        .notice { padding: 10px 16px; font-size: 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--warning) 8%, transparent); color: var(--fg-0); line-height: 1.5; }
         .notice.bad { background: var(--error-bg); }
         .notice-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
         code { font-family: var(--mono); font-size: 11.5px; background: var(--bg-3); padding: 1px 4px; border-radius: 3px; }
@@ -1105,8 +1106,8 @@ function getDependencyManagerHtml(cspSource, scriptSrc) {
         .status { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 10px; white-space: nowrap; }
         .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
         .s-up-to-date { color: var(--success); background: var(--success-bg); }
-        .s-outdated { color: var(--warning); background: rgba(255,152,0,.14); }
-        .s-major { color: #b180d7; background: rgba(177,128,215,.14); }
+        .s-outdated { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+        .s-major { color: var(--ds-purple, #b180d7); background: color-mix(in srgb, var(--ds-purple, #b180d7) 14%, transparent); }
         .s-missing, .s-mismatch { color: var(--error); background: var(--error-bg); }
         .s-unknown, .s-checking { color: var(--fg-1); background: var(--bg-3); }
         .detail { font-size: 11.5px; color: var(--fg-1); margin-top: 5px; max-width: 380px; line-height: 1.45; }

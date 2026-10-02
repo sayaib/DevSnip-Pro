@@ -87,15 +87,15 @@ exports.TOOL_CSS = `
     --border-focus: var(--vscode-focusBorder);
     --accent: var(--vscode-button-background, #0e639c);
     --accent-fg: var(--vscode-button-foreground, #ffffff);
-    --success: #4caf50;
-    --success-bg: rgba(76, 175, 80, 0.15);
-    --error: #f44336;
-    --error-bg: rgba(244, 67, 54, 0.15);
-    --warning: #ff9800;
+    --success: var(--ds-success, #4caf50);
+    --success-bg: color-mix(in srgb, var(--success) 15%, transparent);
+    --error: var(--ds-danger, #f44336);
+    --error-bg: color-mix(in srgb, var(--error) 15%, transparent);
+    --warning: var(--ds-warning, #ff9800);
     --radius-sm: 4px;
     --radius-md: 8px;
     --radius-lg: 12px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+    --shadow: 0 2px 8px var(--ds-shadow, rgba(0,0,0,0.3));
     --transition: 0.2s ease;
     --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -209,7 +209,7 @@ select {
 .btn-ghost:hover { background: var(--bg-2); color: var(--fg-0); }
 .btn-danger {
     background: var(--error);
-    color: #fff;
+    color: var(--ds-on-status, #fff);
 }
 .btn-row {
     display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -256,16 +256,19 @@ select {
     padding: 10px 16px;
     border-radius: var(--radius-md);
     font-size: 13px; font-weight: 500;
-    color: #fff;
+    color: var(--vscode-notifications-foreground, var(--fg-0));
+    background: var(--vscode-notifications-background, var(--bg-1));
+    border: 1px solid var(--vscode-notifications-border, var(--border));
+    border-left: 3px solid var(--toast-accent, var(--accent));
     box-shadow: var(--shadow);
     transform: translateX(120%);
     transition: transform 0.3s ease;
     max-width: 320px;
 }
 .toast.show { transform: translateX(0); }
-.toast.success { background: #2e7d32; }
-.toast.error { background: #c62828; }
-.toast.info { background: #1565c0; }
+.toast.success { --toast-accent: var(--success); }
+.toast.error { --toast-accent: var(--error); }
+.toast.info { --toast-accent: var(--ds-info, #3794ff); }
 `;
 /** Shared styling for the developer-utility webviews. */
 exports.UTILITY_CSS = `
@@ -281,15 +284,15 @@ exports.UTILITY_CSS = `
     --border-focus: var(--vscode-focusBorder);
     --accent: var(--vscode-button-background, #0e639c);
     --accent-fg: var(--vscode-button-foreground, #ffffff);
-    --success: #4caf50;
-    --success-bg: rgba(76, 175, 80, 0.15);
-    --error: #f44336;
-    --error-bg: rgba(244, 67, 54, 0.15);
-    --warning: #ff9800;
+    --success: var(--ds-success, #4caf50);
+    --success-bg: color-mix(in srgb, var(--success) 15%, transparent);
+    --error: var(--ds-danger, #f44336);
+    --error-bg: color-mix(in srgb, var(--error) 15%, transparent);
+    --warning: var(--ds-warning, #ff9800);
     --radius-sm: 4px;
     --radius-md: 8px;
     --radius-lg: 12px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+    --shadow: 0 2px 8px var(--ds-shadow, rgba(0,0,0,0.3));
     --transition: 0.2s ease;
     --mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -404,8 +407,8 @@ select {
     border: 1px solid var(--border);
 }
 .btn-ghost:hover { background: var(--bg-2); }
-.btn-success { background: var(--success); color: #fff; }
-.btn-danger { background: var(--error); color: #fff; }
+.btn-success { background: var(--success); color: var(--ds-on-status, #fff); }
+.btn-danger { background: var(--error); color: var(--ds-on-status, #fff); }
 .btn-sm { padding: 4px 10px; font-size: 11px; }
 
 .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -440,7 +443,10 @@ select {
     padding: 10px 16px;
     border-radius: var(--radius-md);
     font-size: 12px; font-weight: 600;
-    color: #fff;
+    color: var(--vscode-notifications-foreground, var(--fg-0));
+    background: var(--vscode-notifications-background, var(--bg-1));
+    border: 1px solid var(--vscode-notifications-border, var(--border));
+    border-left: 3px solid var(--toast-accent, var(--accent));
     transform: translateY(20px);
     opacity: 0;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -448,8 +454,8 @@ select {
     box-shadow: var(--shadow);
 }
 .toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { background: var(--success); }
-.toast.error { background: var(--error); }
+.toast.success { --toast-accent: var(--success); }
+.toast.error { --toast-accent: var(--error); }
 `;
 /** Toast helper injected into webview scripts (`_toast(message, type)`). */
 function toastScript() {

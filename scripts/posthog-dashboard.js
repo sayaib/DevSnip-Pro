@@ -102,6 +102,14 @@ FROM events WHERE event = 'session_ended' AND timestamp > now() - INTERVAL 30 DA
       period: "Week", totalIntervals: 8, retentionType: "retention_first_time",
       targetEntity: { id: "extension_activated", name: "extension_activated", type: "events" },
       returningEntity: { id: "feature_used", name: "feature_used", type: "events" } } } }],
+  ["Activation: first use of core features (30d)", "Installations reaching each first (request sent, scan finished, database connected...) and the median days after install it took.",
+    hogql(`SELECT properties.milestone AS milestone,
+  count(DISTINCT distinct_id) AS installations,
+  round(quantile(0.5)(toFloat(properties.days_since_install)), 1) AS median_days_since_install
+FROM events WHERE event = 'activation_milestone' AND timestamp > now() - INTERVAL 30 DAY
+GROUP BY milestone ORDER BY installations DESC`)],
+  ["Onboarding cards", "Get started steps opened, guide dismissed, walkthrough opened, What's new opened or dismissed.",
+    trend([["onboarding_action", "total", "Actions"]], { breakdown: "action", display: "ActionsBarValue" })],
   ["Snippets, search, copy, save and delete", "Feature-specific actions over time.",
     trend([["snippet_created", "total"], ["snippet_deleted", "total"], ["tool_search_performed", "total"], ["tool_search_selected", "total"],
       ["content_copied", "total"], ["request_saved", "total"], ["request_deleted", "total"], ["readme_saved", "total"]])],

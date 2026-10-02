@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
-import axios from "axios";
 import { AnalyticsClient, CapturedEvent, DeliveryResult, Transport } from "./client";
 import { EventName, EventProperties } from "./events";
 import { TOOLKIT_COMMANDS } from "../toolkits/commands";
@@ -171,6 +170,8 @@ export function createPostHogTransport(config: AnalyticsConfig, log?: (line: str
     async send(batch: CapturedEvent[]): Promise<DeliveryResult> {
       try {
         // sent_at lets PostHog correct event timestamps for a user's skewed clock.
+        // Loaded on first delivery (in the background), not during activation.
+        const { default: axios } = await import("axios");
         const response = await axios.post(`${config.host}/batch/`, { api_key: config.key, batch, sent_at: new Date().toISOString() }, {
           timeout: 10_000,
           headers: { "Content-Type": "application/json" },

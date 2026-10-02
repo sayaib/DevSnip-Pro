@@ -31,6 +31,7 @@ const command_registry_1 = require("../utils/command-registry");
 const analytics_1 = require("../analytics");
 const webview_ui_1 = require("../utils/webview-ui");
 const snippet_utils_1 = require("../utils/snippet-utils");
+const service_1 = require("../theme/service");
 /** Reads every contributed snippet file; a broken file is reported, not fatal. */
 async function loadSnippets(snippetsFolderPath) {
     const files = [];
@@ -68,7 +69,7 @@ function registerShowSnippetsCommand(context, snippetsFolderPath) {
         panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, "logo.png"));
         let loaded = await loadSnippets(snippetsFolderPath);
         const render = (status) => {
-            panel.webview.html = generateWebviewContent(loaded, status);
+            (0, service_1.setWebviewHtml)(panel.webview, generateWebviewContent(loaded, status));
         };
         render();
         const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {

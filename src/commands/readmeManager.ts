@@ -4,6 +4,7 @@ import { registerTrackedCommand } from "../utils/command-registry";
 import { renderMarkdown } from "../utils/markdown";
 import { THEME_TOKENS, confirmAction, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
 import { track } from "../analytics";
+import { setWebviewHtml } from "../theme/service";
 
 const README_TEMPLATE = `# Project Title
 
@@ -118,7 +119,7 @@ export function registerReadmeManagerCommand(context: vscode.ExtensionContext): 
       }
     };
 
-    panel.webview.html = getPreviewHtml(vscode.workspace.asRelativePath(target), Object.keys(SECTION_TEMPLATES));
+    setWebviewHtml(panel.webview, getPreviewHtml(vscode.workspace.asRelativePath(target), Object.keys(SECTION_TEMPLATES)));
     await render();
 
     const changeSubscription = vscode.workspace.onDidChangeTextDocument(event => {

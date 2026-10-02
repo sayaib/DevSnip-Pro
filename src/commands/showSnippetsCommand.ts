@@ -5,6 +5,7 @@ import { registerTrackedCommand } from "../utils/command-registry";
 import { track } from "../analytics";
 import { THEME_TOKENS, confirmAction, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
 import { readExistingSnippets, saveSnippets, type SnippetDefinition } from "../utils/snippet-utils";
+import { setWebviewHtml } from "../theme/service";
 
 interface SnippetFile {
   language: string;
@@ -66,7 +67,7 @@ export function registerShowSnippetsCommand(
 
     let loaded = await loadSnippets(snippetsFolderPath);
     const render = (status?: string) => {
-      panel.webview.html = generateWebviewContent(loaded, status);
+      setWebviewHtml(panel.webview, generateWebviewContent(loaded, status));
     };
     render();
 

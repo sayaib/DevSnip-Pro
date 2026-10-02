@@ -5,6 +5,8 @@ import * as os from "os";
 import * as path from "path";
 import { registerTrackedCommand } from "../utils/command-registry";
 import { THEME_TOKENS, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
+import { setWebviewHtml } from "../theme/service";
+import { reach } from "../onboarding/activation";
 
 const execFileAsync = util.promisify(execFile);
 
@@ -229,7 +231,7 @@ export function registerOpenCodeIntegrationCommand(context: vscode.ExtensionCont
 
     // Render immediately with a loading state: detection spawns child processes
     // and can take several seconds, and a blank panel looks like a broken tool.
-    panel.webview.html = getOpenCodeHubHtml(platform);
+    setWebviewHtml(panel.webview, getOpenCodeHubHtml(platform));
     post({ command: "hubLoading", message: "Checking Node.js, npm and OpenCode on this machine..." });
 
     const refresh = async (banner?: { ok: boolean; message: string }) => {
@@ -338,6 +340,7 @@ export function registerOpenCodeIntegrationCommand(context: vscode.ExtensionCont
             const workspacePath = getWorkspacePath();
             const terminal = vscode.window.createTerminal({ name: "OpenCode", cwd: workspacePath });
             terminal.show();
+            void reach("first_opencode");
 
             // Wait for shell initialisation before sending the command. On
             // Windows, PowerShell may first show an execution-policy prompt and
