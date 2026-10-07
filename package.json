@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, MongoDB and Redis, LLM token and cost tools, and a secret scanner.",
-  "version": "11.75.2",
+  "version": "11.75.3",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",

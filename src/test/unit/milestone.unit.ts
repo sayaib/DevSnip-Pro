@@ -408,7 +408,7 @@ suite("milestone tracker view", () => {
   });
 
   test("the page loads its script only from the extension and the script parses", () => {
-    const html = getMilestoneTrackerHtml("vscode-resource:", "vscode-resource:/media/milestone-tracker.js");
+    const html = getMilestoneTrackerHtml("vscode-resource:", "vscode-resource:/media/milestone-tracker.js", "vscode-resource:/media/bmc-button.png");
     assert.ok(/script-src vscode-resource:;/.test(html));
     assert.ok(!/script-src[^;]*unsafe-inline/.test(html));
     assert.ok(html.includes('<script src="vscode-resource:/media/milestone-tracker.js"></script>'));
@@ -419,6 +419,8 @@ suite("milestone tracker view", () => {
       assert.ok(html.includes(`id="${id}"`), `the page is missing #${id}, which the script uses`);
     }
     assert.ok(html.indexOf('id="coffeeBtn"') < html.indexOf('id="spendBtn"'), "Buy me a coffee sits to the left of Spend points");
+    assert.ok(html.includes('src="vscode-resource:/media/bmc-button.png"') && /img-src vscode-resource:;/.test(html), "the button is the bundled image, allowed by the CSP");
+    assert.ok(fs.existsSync(path.resolve(__dirname, "../../../media/bmc-button.png")), "the button image ships in media/");
     assert.ok(script.includes("command: 'openSupport'"), "the coffee button asks the host to open the support page");
   });
 });

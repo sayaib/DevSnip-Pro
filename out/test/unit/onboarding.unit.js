@@ -104,6 +104,16 @@ function state(context) {
         await (0, activation_1.dismissWhatsNew)(VERSION, false);
         assert.strictEqual((0, activation_1.whatsNew)(VERSION), null, "shown once");
     });
+    (0, run_unit_tests_1.test)("a release with no highlights shows no What's New card", async () => {
+        const empty = activation_1.RELEASE_HIGHLIGHTS.find(release => release.items.length === 0);
+        if (!empty)
+            return;
+        const index = activation_1.RELEASE_HIGHLIGHTS.indexOf(empty);
+        const previous = activation_1.RELEASE_HIGHLIGHTS[index + 1];
+        const context = (0, vscode_stub_1.createExtensionContext)();
+        await (0, activation_1.initActivation)(context, empty.version, { isNewInstall: false, previousVersion: previous.version });
+        assert.strictEqual((0, activation_1.whatsNew)(empty.version), null, `updating ${previous.version} -> ${empty.version} shows no card`);
+    });
     (0, run_unit_tests_1.test)("an update between two versions records where it came from", async () => {
         const context = (0, vscode_stub_1.createExtensionContext)({ "devsnip.activation": { installedAt: 1, reached: {}, activeDays: [], lastVersion: "11.72.1" } });
         await (0, activation_1.initActivation)(context, VERSION, { isNewInstall: false });

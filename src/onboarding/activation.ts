@@ -48,6 +48,8 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  // A cosmetic patch: no items, so updating from 11.75.2 shows no What's New card.
+  { version: "11.75.3", items: [] },
   {
     version: "11.75.2",
     items: [{ title: "REST API Client: reliable batch tests, and large or binary responses shown safely", command: "openGUI" }]

@@ -1,5 +1,11 @@
 # Development Changelog of DevSnip Pro
 
+## 11.75.3 - The official Buy Me a Coffee button
+
+### Improved
+
+- **Buy me a coffee:** the button next to **Spend points** in Milestones & Points is now the official Buy Me a Coffee button, the same one as in the README. The image ships with the extension, so it works offline and the panel never loads anything from Buy Me a Coffee's servers; clicking it still opens the page in your browser.
+
 ## 11.75.2 - Sturdier REST client, lower memory use, and a full QA pass
 
 A bug-fix release from an end-to-end check of every command, tool and panel: the REST client's batch tests and large responses, a memory leak in long sessions, and a set of smaller fixes across the toolkit, security scans and snippets.

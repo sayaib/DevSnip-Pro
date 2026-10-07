@@ -96,6 +96,16 @@ suite("activation and onboarding", () => {
     assert.strictEqual(whatsNew(VERSION), null, "shown once");
   });
 
+  test("a release with no highlights shows no What's New card", async () => {
+    const empty = RELEASE_HIGHLIGHTS.find(release => release.items.length === 0);
+    if (!empty) return;
+    const index = RELEASE_HIGHLIGHTS.indexOf(empty);
+    const previous = RELEASE_HIGHLIGHTS[index + 1];
+    const context = createExtensionContext();
+    await initActivation(context, empty.version, { isNewInstall: false, previousVersion: previous.version });
+    assert.strictEqual(whatsNew(empty.version), null, `updating ${previous.version} -> ${empty.version} shows no card`);
+  });
+
   test("an update between two versions records where it came from", async () => {
     const context = createExtensionContext({ "devsnip.activation": { installedAt: 1, reached: {}, activeDays: [], lastVersion: "11.72.1" } });
     await initActivation(context, VERSION, { isNewInstall: false });
