@@ -7,6 +7,7 @@ type Listener = (...args: any[]) => any;
 
 export const registeredCommands = new Map<string, Listener>();
 export const shownMessages: { kind: string; message: string }[] = [];
+export const statusBarItems: { text: string; visible: boolean }[] = [];
 
 function disposable() {
   return { dispose() { /* nothing to release in the stub */ } };
@@ -30,6 +31,12 @@ const api = {
     createWebviewPanel() { throw new Error("createWebviewPanel is not available in unit tests"); },
     createOutputChannel() { return { appendLine() {}, clear() {}, show() {}, dispose() {} }; },
     createTreeView() { return disposable(); },
+    createStatusBarItem() {
+      const item = { text: "", tooltip: "", command: undefined as unknown, backgroundColor: undefined as unknown, visible: false, show() { item.visible = true; }, hide() { item.visible = false; }, dispose() { item.visible = false; } };
+      statusBarItems.push(item);
+      return item;
+    },
+    showQuickPick() { return Promise.resolve(undefined); },
     get activeTextEditor() { return undefined; }
   },
   workspace: {
@@ -67,6 +74,7 @@ const api = {
     }
   },
   ViewColumn: { One: 1, Two: 2 },
+  StatusBarAlignment: { Left: 1, Right: 2 },
   ExtensionMode: { Production: 1, Development: 2, Test: 3 },
   EventEmitter: class {
     private listeners: Listener[] = [];
@@ -96,5 +104,5 @@ const api = {
   RelativePattern: class { constructor(public base: unknown, public pattern: string) {} }
 };
 
-module.exports = Object.assign(api, { registeredCommands, shownMessages });
+module.exports = Object.assign(api, { registeredCommands, shownMessages, statusBarItems });
 export default api;

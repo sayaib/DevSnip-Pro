@@ -29,6 +29,7 @@ const path = __importStar(require("path"));
 const webview_ui_1 = require("../utils/webview-ui");
 const command_dispatch_1 = require("../utils/command-dispatch");
 const milestoneTracker_1 = require("../commands/milestoneTracker");
+const rewards_1 = require("../services/rewards");
 const tool_groups_1 = require("./tool-groups");
 const service_1 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
@@ -59,7 +60,11 @@ function sidebarStatus(context) {
         lifetimePoints: stats.lifetimePoints,
         nextLevel: next ? next.name : null,
         toNext: next ? Math.max(0, next.minPoints - stats.lifetimePoints) : 0,
-        progress: next && span > 0 ? Math.min(1, Math.max(0, (stats.lifetimePoints - level.minPoints) / span)) : 1
+        progress: next && span > 0 ? Math.min(1, Math.max(0, (stats.lifetimePoints - level.minPoints) / span)) : 1,
+        quests: { done: stats.quests.items.filter(item => item.done).length, total: stats.quests.items.length },
+        streak: stats.streakDays,
+        frame: (0, rewards_1.activeFrame)((0, milestoneTracker_1.effectiveUnlocked)(stats)),
+        themeLocks: (0, milestoneTracker_1.themeLockHints)(stats)
     };
 }
 exports.sidebarStatus = sidebarStatus;
@@ -140,6 +145,10 @@ function renderToolsSidebar(options) {
   </button>
   <div class="rank-foot">
     <button type="button" class="rank-info" id="rankInfo" aria-controls="rankTip" aria-expanded="false"><span class="codicon codicon-info" aria-hidden="true"></span><span class="rank-foot-label">How ranks work</span></button>
+    <span class="rank-today">
+      <button type="button" class="rank-chip quests" id="questChip" hidden><span class="codicon codicon-target" aria-hidden="true"></span><span id="questCount"></span></button>
+      <span class="rank-chip streak" id="streakChip" hidden><span class="codicon codicon-flame" aria-hidden="true"></span><span id="streakCount"></span></span>
+    </span>
     <!-- A labelled copy of the card's own action for the mouse; keyboard and screen readers use the card. -->
     <button type="button" class="rank-cta" id="rankCta" tabindex="-1" aria-hidden="true"><span>Milestones<span class="rank-foot-label"> &amp; rewards</span></span><span class="codicon codicon-arrow-right" aria-hidden="true"></span></button>
   </div>
@@ -259,7 +268,7 @@ class ToolsSidebarProvider {
             status: sidebarStatus(this.context),
             expanded: this.context.globalState.get(EXPANDED_KEY, []),
             favorites: this.favorites,
-            theme: { current: (0, service_1.currentThemeId)(), choices: (0, service_1.themeChoices)() },
+            theme: { current: (0, service_1.currentThemeId)(), choices: (0, service_1.themeChoices)(), lockedPreview: (0, service_1.lockedPreviewTheme)(), previewSeconds: service_1.LOCKED_PREVIEW_SECONDS },
             onboarding: this.onboarding(),
             usage: this.usage
         }), "sidebar");
@@ -268,7 +277,13 @@ class ToolsSidebarProvider {
         const activationSubscription = (0, activation_1.onDidChangeActivation)(() => this.post({ type: "onboarding", onboarding: this.onboarding() }));
         const subscription = view.webview.onDidReceiveMessage(async (message) => {
             if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
-                await (0, service_1.setTheme)(message.id);
+                // A locked theme explains how to unlock it instead; nothing is stored unless it is unlocked.
+                await (0, service_1.chooseThemeOrUnlock)(message.id);
+                return;
+            }
+            if (message?.type === "previewTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
+                // Try a locked theme for a short while; it switches back on its own.
+                await (0, service_1.previewLockedTheme)(message.id);
                 return;
             }
             if (await this.onOnboardingMessage(message))
@@ -385,6 +400,9 @@ button { font: inherit; color: inherit; }
 .theme-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .theme-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .theme-btn[aria-expanded="true"] { border-color: var(--accent); }
+/* A locked theme is being tried: the button says so until the preview ends. */
+.theme-btn.previewing { border-color: var(--gold); border-style: dashed; }
+.theme-btn.previewing .theme-name { color: var(--gold); }
 .theme-icon { color: var(--accent-fg); font-size: 14px !important; }
 .theme-label { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .theme-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
@@ -508,6 +526,31 @@ button { font: inherit; color: inherit; }
 .gain.show { animation: gain 1.6s var(--ease) forwards; }
 @keyframes gain { 15% { opacity: 1; transform: none; } 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-3px); } }
 .rank-sub .close-call { color: var(--gold); font-weight: 600; }
+/* Today at a glance: quest progress and the streak. */
+.rank-today { display: inline-flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+/* Room for the chips: the link labels shorten first. */
+@media (max-width: 340px) { .rank-info .rank-foot-label { display: none; } }
+@media (max-width: 290px) { .rank-cta .rank-foot-label { display: none; } }
+.rank-chip { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 5px; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.rank-chip .codicon { font-size: 12px !important; }
+.rank-chip.quests { cursor: pointer; }
+.rank-chip.quests:hover { background: var(--surface-2); color: var(--fg); }
+.rank-chip.quests:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.rank-chip.quests.all-done { color: var(--success, var(--gold)); }
+.rank-chip.streak { color: var(--gold); }
+.rank-chip[hidden] { display: none; }
+/* Badge frames earned as rewards. */
+.medal.frame-glow { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 60%, transparent), 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent), 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); }
+.medal.frame-flame { box-shadow: inset 0 0 0 1.5px #ff8a3d, 0 0 0 2px color-mix(in srgb, #ff5722 30%, transparent), 0 0 12px color-mix(in srgb, #ff8a3d 55%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .medal.frame-glow, .medal.frame-flame { animation: frame-pulse 3.2s ease-in-out infinite; }
+}
+@keyframes frame-pulse { 50% { filter: brightness(1.15); } }
+/* Reward themes not unlocked yet. */
+.theme-opt.locked .tp { filter: saturate(.55) brightness(.8); }
+.theme-opt .tp-lock { position: absolute; right: 3px; top: 3px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; }
+.theme-opt .tp-lock .codicon { font-size: 10px !important; }
+.theme-opt.locked .opt-name span { color: var(--muted); }
 .medal {
   flex: none; display: grid; place-items: center;
   width: 30px; height: 30px; border-radius: 50%;

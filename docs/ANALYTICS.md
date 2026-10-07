@@ -419,11 +419,60 @@ _No event-specific properties._
 
 ### `points_spent`
 
-Points were spent on a premium REST client tool.
+Points were spent: on a premium REST client tool, a streak freeze or a reward unlocked early.
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `amount` | count | Points spent. |
+
+### `quest_completed`
+
+One of the day's quests was finished.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `quest` | id | Quest id, e.g. new_tool. |
+
+### `quests_all_done`
+
+Every quest of the day was finished and the bonus chest paid out.
+
+_No event-specific properties._
+
+### `reward_unlocked`
+
+A reward (a theme or a badge frame) was unlocked.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `reward` | id | Reward id, e.g. theme_synthwave. |
+| `via` | enum:level \| milestone \| points \| kept | Earned by rank, earned by a milestone, bought with points, or kept free because it was in use when themes became paid. |
+
+### `streak_freeze`
+
+A streak freeze was earned, bought or used up to save a streak.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `action` | enum:earned \| bought \| used | What happened. |
+| `count` | count | Freezes involved. |
+
+### `theme_preview`
+
+A locked theme was tried for a short while, and how the preview ended.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `theme` | id | Theme id, e.g. dracula. |
+| `outcome` | enum:started \| unlocked \| ended \| expired \| replaced | started when it begins; then unlocked (bought), ended (stopped early), expired (time ran out) or replaced (another theme chosen). |
+
+### `weekly_recap`
+
+The once-a-week recap notification was shown, or opened.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `action` | enum:shown \| opened | What happened. |
 
 ### `activation_milestone`
 

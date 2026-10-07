@@ -1,8 +1,10 @@
-# VS Code security testing tools
+# How to find hard-coded secrets and security issues in VS Code
 
-Most security problems that reach production are not exotic. They are an API key committed to the repo, a container running as root, a missing `Strict-Transport-Security` header, or a dependency nobody updated. These are cheap to catch while you are still in the editor. This guide covers the checks worth running before every release, and how to run them in VS Code.
+**Short answer:** run a secret scan over your workspace before you commit or release. In VS Code, run **DevSnip Pro: Workspace Security Audit** from [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console): it finds hard-coded API keys, tokens, private keys and passwords, plus injection risks and weak cryptography, with the file, line, severity and fix for each, and masks the matched values in the report.
 
-The examples use the free **Security Hub** in [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console). Everything runs locally except the endpoint scan, which contacts only the URL you enter.
+![Workspace security audit in VS Code finding a hard-coded API key, with severity and fix](../images/security.jpg)
+
+Most security problems that reach production are not exotic: an API key committed to the repo, a container running as root, a missing `Strict-Transport-Security` header, or a dependency nobody updated. They are cheap to catch while you are still in the editor. All the checks below are in the free **Security Hub**, and everything runs locally except the endpoint scan, which contacts only the URL you enter.
 
 ## 1. Secrets and risky code in your workspace
 
@@ -64,3 +66,9 @@ Two active checks, a reflected-input probe and well-known sensitive paths, are o
 5. Export the report (Markdown or JSON) and attach it to the release PR.
 
 Automated checks find the common problems quickly; they do not replace a review or a penetration test of systems that handle sensitive data.
+
+---
+
+**Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
+
+Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [How to install and use OpenCode in VS Code](opencode-in-vscode.md) · [All guides](README.md)

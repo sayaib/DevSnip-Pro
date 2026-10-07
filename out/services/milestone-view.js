@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.toolNamesFromManifest = exports.buildTrackerView = exports.levelIndexFor = void 0;
+const quests_1 = require("./quests");
 function levelIndexFor(points, levels) {
     let index = 0;
     for (let i = 0; i < levels.length; i++) {
@@ -44,6 +45,8 @@ function remainingLabel(milestone, remaining) {
         return `${plural(remaining, "more AI tool run")}`;
     if (milestone.id === "feature_explorer")
         return `${plural(remaining, "more feature")} to try`;
+    if (milestone.id === "quest_master")
+        return `${plural(remaining, "more day")} with every quest done`;
     return `${plural(remaining, "more tool run")}`;
 }
 function activityKind(entry) {
@@ -53,6 +56,10 @@ function activityKind(entry) {
         return entry.points < 0 ? "spend" : "refund";
     if (entry.id === "daily_login" || entry.id === "daily_bonus")
         return "bonus";
+    if (entry.category === "Quest")
+        return "quest";
+    if (entry.id.startsWith("streak_freeze"))
+        return "freeze";
     if (entry.id.startsWith("sayaib."))
         return "tool";
     return "other";
@@ -110,6 +117,46 @@ function buildTrackerView(input) {
         .sort((a, b) => a.pointCost - b.pointCost)[0];
     const cheapest = premium.length ? Math.min(...premium.map(tool => tool.pointCost)) : null;
     const earned = Math.min(stats.dailyEarnedPoints, input.dailyCap);
+    const quests = [];
+    for (const item of stats.quests?.items ?? []) {
+        const quest = (0, quests_1.findQuest)(item.id);
+        if (!quest)
+            continue;
+        quests.push({
+            id: quest.id,
+            title: quest.title,
+            hint: quest.hint,
+            icon: quest.icon,
+            target: quest.target,
+            progress: item.progress,
+            percent: item.done ? 100 : Math.min(99, Math.floor((item.progress / quest.target) * 100)),
+            points: quest.points,
+            done: item.done
+        });
+    }
+    const rewardInput = input.rewards;
+    const rewards = (rewardInput?.list ?? []).map(reward => {
+        const unlocked = rewardInput.unlocked.includes(reward.id);
+        return {
+            id: reward.id,
+            kind: reward.kind,
+            name: reward.name,
+            description: reward.description,
+            icon: reward.icon,
+            unlocked,
+            hint: rewardInput.hint(reward),
+            cost: reward.cost ?? null,
+            affordable: reward.cost !== undefined && stats.totalPoints >= reward.cost,
+            active: unlocked && (reward.kind === "theme" ? rewardInput.currentTheme === reward.themeId : rewardInput.activeFrame === reward.frame),
+            previewing: !unlocked && reward.kind === "theme" && !!reward.themeId && rewardInput.previewTheme === reward.themeId,
+            themeId: reward.themeId ?? null,
+            swatches: reward.themeId ? rewardInput.swatches[reward.themeId] ?? [] : []
+        };
+    });
+    const maxFreezes = input.freezes?.max ?? 0;
+    const freezeCost = input.freezes?.cost ?? 0;
+    const freezes = stats.streakFreezes ?? 0;
+    const weekOf = (week) => ({ points: week.points, runs: week.runs, tools: week.tools.length });
     return {
         balance: stats.totalPoints,
         lifetime: stats.lifetimePoints,
@@ -127,7 +174,28 @@ function buildTrackerView(input) {
             bonusClaimed: Boolean(stats.dailyClaims[`${input.today}_bonus`]),
             bonusPoints: input.bonusPoints
         },
-        streak: { days: stats.streakDays, next: streakNext },
+        streak: {
+            days: stats.streakDays,
+            next: streakNext,
+            best: Math.max(stats.bestStreak ?? 1, stats.streakDays),
+            freezes,
+            maxFreezes,
+            freezeCost,
+            canBuyFreeze: maxFreezes > 0 && freezes < maxFreezes && stats.totalPoints >= freezeCost
+        },
+        quests: {
+            items: quests,
+            done: quests.filter(quest => quest.done).length,
+            total: quests.length,
+            chestPoints: quests_1.QUEST_CHEST_POINTS,
+            chestClaimed: Boolean(stats.quests?.chestClaimed),
+            perfectDays: stats.perfectQuestDays ?? 0
+        },
+        rewards,
+        week: {
+            current: stats.weekly ? weekOf(stats.weekly) : { points: 0, runs: 0, tools: 0 },
+            last: stats.lastWeek ? { ...weekOf(stats.lastWeek), previousPoints: stats.lastWeek.previousPoints ?? 0 } : null
+        },
         milestones: [
             // Closest to done first, completed ones last, so what to do next is on top.
             ...open.sort((a, b) => b.percent - a.percent || a.target - b.target),
@@ -154,7 +222,7 @@ function buildTrackerView(input) {
             cheapest,
             next: nextBuy ? { name: nextBuy.name, cost: nextBuy.pointCost, short: nextBuy.pointCost - stats.totalPoints } : null
         },
-        rules: { dailyCap: input.dailyCap, rateLimitAfter: input.rateLimitAfter }
+        rules: { dailyCap: input.dailyCap, rateLimitAfter: input.rateLimitAfter, freezeEvery: input.freezes?.every ?? 0, loginBonusMax: input.loginBonusMax ?? 0 }
     };
 }
 exports.buildTrackerView = buildTrackerView;

@@ -46,7 +46,7 @@ function pages(): Array<[string, string]> {
 
 suite("themes: palettes", () => {
   test("ships the promised themes, each with a unique id and complete #rrggbb palette", () => {
-    assert.deepStrictEqual(THEMES.map(t => t.label), ["Dark", "Midnight", "Dracula", "Monokai", "Nord", "Cyberpunk", "Light", "High Contrast"]);
+    assert.deepStrictEqual(THEMES.map(t => t.label), ["Dark", "Midnight", "Dracula", "Monokai", "Nord", "Cyberpunk", "Solarized", "Ember", "Synthwave", "Aurora", "Light", "High Contrast"]);
     assert.strictEqual(new Set(THEMES.map(t => t.id)).size, THEMES.length);
     assert.ok(!findTheme(SYSTEM_THEME_ID), "system is not a palette");
     for (const theme of THEMES) {

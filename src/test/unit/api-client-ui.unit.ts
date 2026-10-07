@@ -105,6 +105,11 @@ suite("REST API Client markup", () => {
     const html = renderClient();
     assert.ok(html.includes("No response yet"), "the response panel needs an empty state");
     assert.ok(/Configure your request/.test(html), "the empty state should say what to do next");
+    assert.ok(html.includes("Send a sample request"), "a new user should reach a first response in one click");
+    assert.ok(
+      /function sendSampleRequest\(\) \{\s*if \(\$\('url'\)\.value\.trim\(\)\)/.test(html),
+      "the sample request must never replace a URL the user typed"
+    );
   });
 
   test("the points balance is always visible and opens the points hub", () => {

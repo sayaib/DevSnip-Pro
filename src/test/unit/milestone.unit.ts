@@ -21,6 +21,7 @@ import {
   getMilestoneTrackerHtml
 } from "../../commands/milestoneTracker";
 import { buildTrackerView, levelIndexFor, toolNamesFromManifest } from "../../services/milestone-view";
+import { QUEST_CHEST_POINTS, findQuest } from "../../services/quests";
 import * as fs from "fs";
 import * as path from "path";
 import { createExtensionContext } from "./vscode-stub";
@@ -93,7 +94,8 @@ suite("milestone state", () => {
     await autoRecordToolUsage("sayaib.hue-console.openGUI");
     const stats = getUserStats(context);
     assert.strictEqual(stats.counters.toolRuns, 1);
-    assert.strictEqual(stats.activities.length, 2, "tool run plus the first_tool milestone");
+    // A quest the run happens to finish adds its own entry.
+    assert.strictEqual(stats.activities.filter(a => a.category !== "Quest").length, 2, "tool run plus the first_tool milestone");
     assert.ok(stats.totalPoints >= 3);
   });
 
@@ -136,7 +138,12 @@ suite("milestone state", () => {
     const milestoneBonus = stats.completedMilestones
       .map(id => MILESTONES.find(milestone => milestone.id === id)?.points ?? 0)
       .reduce((sum, points) => sum + points, 0);
-    assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus);
+    // Quests and the all-done chest are one-time per day too.
+    const questBonus = stats.quests.items
+      .filter(item => item.done)
+      .map(item => findQuest(item.id)?.points ?? 0)
+      .reduce((sum, points) => sum + points, 0) + (stats.quests.chestClaimed ? QUEST_CHEST_POINTS : 0);
+    assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus + questBonus);
     assert.ok(stats.dailyPoints < 500, "a single day cannot produce an unbounded score");
   });
 

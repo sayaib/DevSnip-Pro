@@ -1,9 +1,9 @@
 /**
  * Test helpers for running extension logic without launching VS Code.
  */
-import { registeredCommands, shownMessages } from "./vscode-shim";
+import { registeredCommands, shownMessages, statusBarItems } from "./vscode-shim";
 
-export { registeredCommands, shownMessages };
+export { registeredCommands, shownMessages, statusBarItems };
 
 export interface MemoryState {
   get<T>(key: string, defaultValue?: T): T | undefined;

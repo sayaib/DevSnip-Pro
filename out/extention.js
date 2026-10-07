@@ -55,6 +55,15 @@ function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     // The milestone store needs its context before any command can record usage.
     (0, milestoneTracker_1.setMilestoneContext)(context);
+    // Every theme but System Default unlocks with points; the picker asks the milestone store.
+    (0, service_1.setThemeAccess)({
+        lock: themeId => (0, milestoneTracker_1.themeLockFor)((0, milestoneTracker_1.getUserStats)(context), themeId),
+        unlock: async (themeId) => {
+            const lock = (0, milestoneTracker_1.themeLockFor)((0, milestoneTracker_1.getUserStats)(context), themeId);
+            return !lock || (await (0, milestoneTracker_1.buyReward)(context, lock.rewardId)) === "ok";
+        },
+        grant: themeId => (0, milestoneTracker_1.grantKeptTheme)(context, themeId)
+    });
     // The appearance theme is read before any webview renders, so none flashes the wrong theme.
     (0, service_1.initThemes)(context);
     // Local first-use and onboarding state. The install snapshot decides whether this is a new user.

@@ -1,19 +1,14 @@
-# AI developer tools inside VS Code
+# How to count LLM tokens and estimate cost in VS Code
 
-Building on top of large language models brings a new set of everyday questions:
+**Short answer:** paste your prompt into a token counter and multiply by each model's price. In VS Code, run **DevSnip Pro: LLM Models, Tokens & Cost** from [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console): it estimates tokens and the cost per request, per day and per month across 18 chat models, locally and without an API key.
 
-- How many tokens is this prompt?
-- What will a million calls cost on each model?
-- Why does the model's "JSON" not parse?
-- How many retrieved chunks fit in the context window?
+![LLM token and cost estimate for one prompt across 18 chat models in VS Code](../images/ai-tokens.jpg)
 
-None of these needs a chat assistant. They need small, deterministic tools, and those work best right next to the code that calls the model.
-
-This guide walks through those tasks with the **AI & ML** and **Data & RAG** tools in [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console). The tools below run locally and need no API key.
+Building on large language models brings a set of everyday questions: how many tokens is this prompt, what will a million calls cost, why does the model's "JSON" not parse, and how many retrieved chunks fit in the context window? None of these needs a chat assistant. They need small, deterministic tools next to the code that calls the model. All the tools below are in the **AI & ML** and **Data & RAG** sections of the DevSnip Pro sidebar, run locally and need no API key.
 
 ## Estimate tokens and cost before you ship
 
-Run **DevSnip Pro: LLM Models, Tokens & Cost** and paste a real prompt, including the system prompt and a typical user message. It estimates tokens and the cost per request, per day and per month across 18 chat models, or compares context windows and prices side by side.
+Run **DevSnip Pro: LLM Models, Tokens & Cost** and paste a real prompt, including the system prompt and a typical user message. Token counts are estimates, not a provider's exact tokenizer. It estimates tokens and the cost per request, per day and per month across 18 chat models, or compares context windows and prices side by side.
 
 Model prices change often. Treat the built-in table as an estimate and confirm against your provider's pricing page before committing to a budget.
 
@@ -47,4 +42,10 @@ The REST API Client knows the request shape of each major provider. It can send 
 
 ## Pair it with a coding agent
 
-If you use an AI coding agent in the terminal, **OpenCode Integration** installs, checks and launches OpenCode in your workspace. See [How to use an AI-powered developer toolkit](ai-powered-developer-toolkit.md).
+If you use an AI coding agent in the terminal, **OpenCode Integration** installs, checks and launches OpenCode in your workspace. See [How to install and use OpenCode in VS Code](opencode-in-vscode.md).
+
+---
+
+**Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
+
+Related: [How to install and use OpenCode in VS Code](opencode-in-vscode.md) · [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [All guides](README.md)

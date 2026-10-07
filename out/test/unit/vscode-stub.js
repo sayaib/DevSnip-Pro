@@ -1,12 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.installVscodeStub = exports.createExtensionContext = exports.createMemento = exports.shownMessages = exports.registeredCommands = void 0;
+exports.installVscodeStub = exports.createExtensionContext = exports.createMemento = exports.statusBarItems = exports.shownMessages = exports.registeredCommands = void 0;
 /**
  * Test helpers for running extension logic without launching VS Code.
  */
 const vscode_shim_1 = require("./vscode-shim");
 Object.defineProperty(exports, "registeredCommands", { enumerable: true, get: function () { return vscode_shim_1.registeredCommands; } });
 Object.defineProperty(exports, "shownMessages", { enumerable: true, get: function () { return vscode_shim_1.shownMessages; } });
+Object.defineProperty(exports, "statusBarItems", { enumerable: true, get: function () { return vscode_shim_1.statusBarItems; } });
 /** In-memory Memento that round-trips through JSON, like the real global state. */
 function createMemento(seed = {}) {
     const store = new Map(Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]));

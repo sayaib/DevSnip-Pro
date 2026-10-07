@@ -1,8 +1,8 @@
 {
   "name": "hue-console",
-  "displayName": "DevSnip Pro: API Client, AI & Developer Toolkit",
-  "description": "All-in-one developer toolkit for VS Code: REST API client, database client, AI & LLM tools, security scans, JSON/YAML formatters, code snippets and 100+ utilities for web, mobile and DevOps work.",
-  "version": "11.73.1",
+  "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
+  "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, MongoDB and Redis, LLM token and cost tools, and a secret scanner.",
+  "version": "11.74.3",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -27,42 +27,43 @@
     "url": "https://github.com/sponsors/sayaib"
   },
   "categories": [
-    "AI",
     "Testing",
+    "Data Science",
+    "AI",
+    "Machine Learning",
     "Snippets",
-    "Formatters",
-    "Other"
+    "Formatters"
   ],
   "keywords": [
     "rest api client",
     "api client",
-    "api testing",
     "http client",
-    "graphql",
+    "api testing",
+    "graphql client",
     "websocket",
-    "json formatter",
-    "yaml",
-    "database client",
-    "sql",
-    "postgresql",
-    "mysql",
-    "mongodb",
-    "redis",
-    "ai tools",
-    "llm",
-    "openai",
-    "prompt engineering",
-    "rag",
-    "security scanner",
-    "jwt",
-    "code snippets",
-    "developer tools",
-    "productivity",
     "curl",
     "openapi",
-    "docker",
-    "kubernetes",
-    "git",
+    "postman alternative",
+    "database client",
+    "sql client",
+    "postgresql",
+    "mysql",
+    "sql server",
+    "sqlite",
+    "mongodb",
+    "redis",
+    "llm",
+    "token counter",
+    "openai",
+    "rag",
+    "prompt engineering",
+    "ai tools",
+    "security scanner",
+    "secret scanner",
+    "jwt decoder",
+    "json formatter",
+    "yaml formatter",
+    "rest client",
     "opencode"
   ],
   "contributes": {
@@ -821,6 +822,21 @@
           "default": false,
           "markdownDescription": "Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel."
         },
+        "devsnip.rewards.notifications": {
+          "type": "string",
+          "enum": [
+            "all",
+            "levelsOnly",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Notify for rank-ups, unlocked rewards, milestones, finished quests, streak freezes and the weekly recap.",
+            "Notify only for rank-ups and unlocked rewards.",
+            "Never show progress notifications. The Milestones & Points page still shows everything."
+          ],
+          "default": "all",
+          "markdownDescription": "Which DevSnip Pro progress notifications to show. Notifications are skipped while the **Milestones & Points** page is open, because it shows its own."
+        },
         "devsnip.security.activeChecks": {
           "type": "boolean",
           "default": false,
@@ -1039,7 +1055,7 @@
           {
             "id": "theme",
             "title": "Make it yours",
-            "description": "Pick one of nine appearance themes for every DevSnip Pro panel, from Dracula to High Contrast.\n[Choose a theme](command:sayaib.hue-console.chooseTheme)",
+            "description": "Preview twelve appearance themes for every DevSnip Pro panel, from Dracula to Aurora, and unlock them with the points you earn.\n[Choose a theme](command:sayaib.hue-console.chooseTheme)",
             "media": {
               "markdown": "media/walkthrough/theme.md"
             },

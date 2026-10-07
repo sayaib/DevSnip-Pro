@@ -2,9 +2,10 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { embedJson, escapeHtml, getNonce } from "../utils/webview-ui";
 import { executeQueuedCommand } from "../utils/command-dispatch";
-import { LEVELS, getCurrentLevel, getNextLevel, getUserStats } from "../commands/milestoneTracker";
+import { LEVELS, effectiveUnlocked, getCurrentLevel, getNextLevel, getUserStats, themeLockHints } from "../commands/milestoneTracker";
+import { activeFrame } from "../services/rewards";
 import { MILESTONE_COMMAND, SEARCH_COMMAND, SIDEBAR_GROUPS, sidebarCommands } from "./tool-groups";
-import { currentThemeId, setTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
+import { chooseThemeOrUnlock, currentThemeId, LOCKED_PREVIEW_SECONDS, lockedPreviewTheme, previewLockedTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
 import { dismissGuide, dismissWhatsNew, GuideStep, guideSteps, guideVisible, onDidChangeActivation, whatsNew } from "../onboarding/activation";
 import { track } from "../analytics";
 import { isKnownCommand } from "../utils/command-registry";
@@ -33,6 +34,13 @@ export interface SidebarStatus {
   toNext: number;
   /** 0..1 progress through the current level. */
   progress: number;
+  /** Today's quests. Optional so older status payloads still render. */
+  quests?: { done: number; total: number };
+  streak?: number;
+  /** Badge frame earned as a reward (glow, flame), or null. */
+  frame?: string | null;
+  /** themeId -> how to unlock it, for reward themes still locked. */
+  themeLocks?: Record<string, string>;
 }
 
 /** How often and how recently each sidebar tool was opened, from any entry point. */
@@ -51,7 +59,11 @@ export function sidebarStatus(context: vscode.ExtensionContext): SidebarStatus {
     lifetimePoints: stats.lifetimePoints,
     nextLevel: next ? next.name : null,
     toNext: next ? Math.max(0, next.minPoints - stats.lifetimePoints) : 0,
-    progress: next && span > 0 ? Math.min(1, Math.max(0, (stats.lifetimePoints - level.minPoints) / span)) : 1
+    progress: next && span > 0 ? Math.min(1, Math.max(0, (stats.lifetimePoints - level.minPoints) / span)) : 1,
+    quests: { done: stats.quests.items.filter(item => item.done).length, total: stats.quests.items.length },
+    streak: stats.streakDays,
+    frame: activeFrame(effectiveUnlocked(stats)),
+    themeLocks: themeLockHints(stats)
   };
 }
 
@@ -89,7 +101,7 @@ export function renderToolsSidebar(options: {
   expanded: string[];
   favorites?: string[];
   usage?: ToolUsage;
-  theme?: { current: string; choices: ThemeChoice[] };
+  theme?: { current: string; choices: ThemeChoice[]; lockedPreview?: string | null; previewSeconds?: number };
   onboarding?: SidebarOnboarding;
 }): string {
   const nonce = getNonce();
@@ -146,6 +158,10 @@ export function renderToolsSidebar(options: {
   </button>
   <div class="rank-foot">
     <button type="button" class="rank-info" id="rankInfo" aria-controls="rankTip" aria-expanded="false"><span class="codicon codicon-info" aria-hidden="true"></span><span class="rank-foot-label">How ranks work</span></button>
+    <span class="rank-today">
+      <button type="button" class="rank-chip quests" id="questChip" hidden><span class="codicon codicon-target" aria-hidden="true"></span><span id="questCount"></span></button>
+      <span class="rank-chip streak" id="streakChip" hidden><span class="codicon codicon-flame" aria-hidden="true"></span><span id="streakCount"></span></span>
+    </span>
     <!-- A labelled copy of the card's own action for the mouse; keyboard and screen readers use the card. -->
     <button type="button" class="rank-cta" id="rankCta" tabindex="-1" aria-hidden="true"><span>Milestones<span class="rank-foot-label"> &amp; rewards</span></span><span class="codicon codicon-arrow-right" aria-hidden="true"></span></button>
   </div>
@@ -271,7 +287,7 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
       status: sidebarStatus(this.context),
       expanded: this.context.globalState.get<string[]>(EXPANDED_KEY, []),
       favorites: this.favorites,
-      theme: { current: currentThemeId(), choices: themeChoices() },
+      theme: { current: currentThemeId(), choices: themeChoices(), lockedPreview: lockedPreviewTheme(), previewSeconds: LOCKED_PREVIEW_SECONDS },
       onboarding: this.onboarding(),
       usage: this.usage
     }), "sidebar");
@@ -281,7 +297,13 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     const activationSubscription = onDidChangeActivation(() => this.post({ type: "onboarding", onboarding: this.onboarding() }));
     const subscription = view.webview.onDidReceiveMessage(async message => {
       if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
-        await setTheme(message.id);
+        // A locked theme explains how to unlock it instead; nothing is stored unless it is unlocked.
+        await chooseThemeOrUnlock(message.id);
+        return;
+      }
+      if (message?.type === "previewTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
+        // Try a locked theme for a short while; it switches back on its own.
+        await previewLockedTheme(message.id);
         return;
       }
       if (await this.onOnboardingMessage(message)) return;
@@ -392,6 +414,9 @@ button { font: inherit; color: inherit; }
 .theme-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .theme-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .theme-btn[aria-expanded="true"] { border-color: var(--accent); }
+/* A locked theme is being tried: the button says so until the preview ends. */
+.theme-btn.previewing { border-color: var(--gold); border-style: dashed; }
+.theme-btn.previewing .theme-name { color: var(--gold); }
 .theme-icon { color: var(--accent-fg); font-size: 14px !important; }
 .theme-label { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .theme-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
@@ -515,6 +540,31 @@ button { font: inherit; color: inherit; }
 .gain.show { animation: gain 1.6s var(--ease) forwards; }
 @keyframes gain { 15% { opacity: 1; transform: none; } 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-3px); } }
 .rank-sub .close-call { color: var(--gold); font-weight: 600; }
+/* Today at a glance: quest progress and the streak. */
+.rank-today { display: inline-flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+/* Room for the chips: the link labels shorten first. */
+@media (max-width: 340px) { .rank-info .rank-foot-label { display: none; } }
+@media (max-width: 290px) { .rank-cta .rank-foot-label { display: none; } }
+.rank-chip { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 5px; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.rank-chip .codicon { font-size: 12px !important; }
+.rank-chip.quests { cursor: pointer; }
+.rank-chip.quests:hover { background: var(--surface-2); color: var(--fg); }
+.rank-chip.quests:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.rank-chip.quests.all-done { color: var(--success, var(--gold)); }
+.rank-chip.streak { color: var(--gold); }
+.rank-chip[hidden] { display: none; }
+/* Badge frames earned as rewards. */
+.medal.frame-glow { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 60%, transparent), 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent), 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); }
+.medal.frame-flame { box-shadow: inset 0 0 0 1.5px #ff8a3d, 0 0 0 2px color-mix(in srgb, #ff5722 30%, transparent), 0 0 12px color-mix(in srgb, #ff8a3d 55%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .medal.frame-glow, .medal.frame-flame { animation: frame-pulse 3.2s ease-in-out infinite; }
+}
+@keyframes frame-pulse { 50% { filter: brightness(1.15); } }
+/* Reward themes not unlocked yet. */
+.theme-opt.locked .tp { filter: saturate(.55) brightness(.8); }
+.theme-opt .tp-lock { position: absolute; right: 3px; top: 3px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; }
+.theme-opt .tp-lock .codicon { font-size: 10px !important; }
+.theme-opt.locked .opt-name span { color: var(--muted); }
 .medal {
   flex: none; display: grid; place-items: center;
   width: 30px; height: 30px; border-radius: 50%;

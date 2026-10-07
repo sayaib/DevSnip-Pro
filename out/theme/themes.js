@@ -119,6 +119,75 @@ exports.THEMES = [
             shadow: "rgba(0, 0, 0, 0.6)"
         }
     },
+    // Unlockable themes (see src/services/rewards.ts). Every theme above is free.
+    {
+        id: "solarized",
+        label: "Solarized",
+        description: "Calm deep teal with amber and cyan.",
+        palette: {
+            kind: "dark",
+            bg: "#002b36", sidebar: "#00232c", surface: "#073642", surface2: "#0d4250", surface3: "#15505f",
+            border: "#0a3c48", borderStrong: "#2a5f6c",
+            fg: "#f2ecd9", muted: "#a7b8ba", disabled: "#5f7a80",
+            accent: "#2aa198", accentFg: "#001f27", accentHover: "#3db5ab", link: "#5cb8f2", focus: "#d9a400",
+            selection: "#0f4b5c", selectionFg: "#ffffff",
+            success: "#a3b800", warning: "#d9a400", danger: "#f4736d", info: "#5cb8f2",
+            ansi: { red: "#f4736d", green: "#a3b800", yellow: "#d9a400", blue: "#5cb8f2", magenta: "#e07bb0", cyan: "#2aa198", white: "#eee8d5" },
+            syntax: { string: "#3cc0b5", number: "#e98bbb", boolean: "#f28a5c", name: "#5cb8f2" },
+            shadow: "rgba(0, 0, 0, 0.5)"
+        }
+    },
+    {
+        id: "ember",
+        label: "Ember",
+        description: "Warm coal with glowing orange.",
+        palette: {
+            kind: "dark",
+            bg: "#1a1210", sidebar: "#140e0c", surface: "#241917", surface2: "#2f211e", surface3: "#3b2a26",
+            border: "#2e211d", borderStrong: "#4a3530",
+            fg: "#f5e9e2", muted: "#c2aca2", disabled: "#7d665d",
+            accent: "#ff7a2f", accentFg: "#1a1210", accentHover: "#ff9152", link: "#ffb070", focus: "#ffb347",
+            selection: "#4a2a1c", selectionFg: "#ffffff",
+            success: "#8fd16a", warning: "#ffc25c", danger: "#ff6b6b", info: "#7cc4ff",
+            ansi: { red: "#ff6b6b", green: "#8fd16a", yellow: "#ffc25c", blue: "#7cc4ff", magenta: "#e48ad6", cyan: "#6fd6c9", white: "#f5e9e2" },
+            syntax: { string: "#ffc25c", number: "#ff9e64", boolean: "#ff8a45", name: "#f5b78a" },
+            shadow: "rgba(0, 0, 0, 0.55)"
+        }
+    },
+    {
+        id: "synthwave",
+        label: "Synthwave",
+        description: "Retro sunset purple with hot-pink neon.",
+        palette: {
+            kind: "dark",
+            bg: "#241b2f", sidebar: "#1d1526", surface: "#2d2240", surface2: "#372a4e", surface3: "#44345e",
+            border: "#34284a", borderStrong: "#4f3f6b",
+            fg: "#f4eefc", muted: "#bcaed6", disabled: "#7c6e98",
+            accent: "#ff7edb", accentFg: "#241b2f", accentHover: "#ff9be3", link: "#72f1b8", focus: "#fede5d",
+            selection: "#4d2f6b", selectionFg: "#ffffff",
+            success: "#72f1b8", warning: "#fede5d", danger: "#fe6b8b", info: "#36f9f6",
+            ansi: { red: "#fe6b8b", green: "#72f1b8", yellow: "#fede5d", blue: "#6fb2ff", magenta: "#ff7edb", cyan: "#36f9f6", white: "#f4eefc" },
+            syntax: { string: "#ff8b39", number: "#f97e72", boolean: "#fede5d", name: "#72f1b8" },
+            shadow: "rgba(0, 0, 0, 0.55)"
+        }
+    },
+    {
+        id: "aurora",
+        label: "Aurora",
+        description: "Polar night with green and violet light.",
+        palette: {
+            kind: "dark",
+            bg: "#0b1420", sidebar: "#08101a", surface: "#122030", surface2: "#1a2b3e", surface3: "#23374d",
+            border: "#172636", borderStrong: "#2c4560",
+            fg: "#e6f1f7", muted: "#9fb6c8", disabled: "#5b7085",
+            accent: "#5af2a6", accentFg: "#08101a", accentHover: "#7ff5b9", link: "#7fd8ff", focus: "#b48cff",
+            selection: "#23395a", selectionFg: "#ffffff",
+            success: "#5af2a6", warning: "#f7d774", danger: "#ff7a93", info: "#7fd8ff",
+            ansi: { red: "#ff7a93", green: "#5af2a6", yellow: "#f7d774", blue: "#7fb2ff", magenta: "#c79bff", cyan: "#7fd8ff", white: "#e6f1f7" },
+            syntax: { string: "#a6f0c6", number: "#c79bff", boolean: "#7fb2ff", name: "#7fd8ff" },
+            shadow: "rgba(0, 0, 0, 0.55)"
+        }
+    },
     {
         id: "light",
         label: "Light",

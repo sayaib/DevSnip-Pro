@@ -1,5 +1,43 @@
 # Development Changelog of DevSnip Pro
 
+## Unreleased - Daily quests, streak freezes and themes to unlock
+
+Points now give you something new to do every day and something to work towards.
+
+### Added
+
+- **Daily quests.** Three new goals every day at the top of **Milestones & Points**, such as "Try a tool you have never used", "Run 2 AI tools" or "Open the Database Client". Each pays +10 to +20 points, and finishing all three opens a +15 bonus chest. Quest points are never limited by the daily cap. The Tools sidebar shows today's progress (for example "2/3") on the rank card.
+- **Streak freezes.** Earn one every 7 streak days (hold up to 2), or buy one for 50 points. A freeze is used up automatically so one missed day no longer resets your streak.
+- **A bigger login bonus for streaks:** +1 point for every day of your streak, up to +15 a day.
+- **Four new themes:** **Solarized**, **Ember**, **Synthwave** and **Aurora**.
+- **Themes now unlock with points.** Every theme except System Default has a price, from 25 points (Dark, Light, High Contrast) to 900 (Aurora). Solarized, Synthwave and Aurora also unlock free at Silver, Gold and Platinum, and Ember after a 14-day streak. Locked themes show a lock in the theme picker; click one to unlock it, or use the new **Rewards** tab in Milestones & Points. **If you already use a theme, you keep it for free.**
+- **Preview locked themes.** Click a locked theme in the sidebar picker, or **Preview** on the Rewards tab, to try it on every DevSnip Pro panel for 30 seconds. A status bar countdown lets you unlock it or end the preview, and DevSnip Pro switches back to your theme when time is up. The theme picker in the Command Palette previews locked themes as you browse too. Every tool still works at every rank.
+- **Badge frames:** **Quest glow** and **Flame ring** light up your rank badge in the sidebar.
+- **New milestones:** Monthly Marathon (30-day streak), Century Streak (100 days) and Quest Master (finish every quest on 7 days).
+- **Progress notifications.** Rank-ups, unlocked rewards, milestones and finished quests now show a short VS Code notification wherever you are working, with a button to try a new theme or open your progress. A weekly recap of points, tool runs and your streak appears once at the start of each week. Choose `all`, `levelsOnly` or `off` with the new `devsnip.rewards.notifications` setting.
+- **This week** on the Milestones & Points page: points, tool runs and tools used so far, compared with last week.
+
+## 11.74.1 - REST API Client: a first response in one click, and clearer docs
+
+### Added
+
+- **Send a sample request** in the REST API Client. A new, empty request shows a button that sends `GET https://jsonplaceholder.typicode.com/todos/1`, a free public test API, so you see a real response, headers and timing in one click. It only appears while the URL bar is empty, so it never replaces a URL you typed. The Get started walkthrough mentions it too.
+
+### Improved
+
+- **Marketplace listing:** the name is now **REST API Client & Database Client – DevSnip Pro**, so the extension is easier to find by what it does. The description now says up front that it is free and needs no account, and the description, keywords and categories describe the REST API client, database client, LLM token and cost tools and the secret scanner more precisely. The extension ID (`sayaib.hue-console`) is unchanged, so updates and settings carry over.
+- **README:** a "Get started in 60 seconds" section, one section per job (REST API client, database client, LLM tools, security scan, utilities), an honest comparison with Postman and Thunder Client that lists what DevSnip Pro does not do, and an FAQ that answers common questions such as testing GraphQL in VS Code.
+- **Guides** (`docs/guides`), rewritten as one guide per task, each with a screenshot:
+  - How to test REST APIs in VS Code;
+  - How to test a GraphQL API in VS Code (new);
+  - Free Postman alternative in VS Code;
+  - How to connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code;
+  - How to count LLM tokens and estimate cost in VS Code;
+  - How to install and use OpenCode in VS Code;
+  - How to find hard-coded secrets and security issues in VS Code;
+  - Format JSON and YAML, decode JWTs and other quick tools in VS Code.
+- Removed a README link to an online documentation page that no longer loads.
+
 ## 11.73.1 - Getting started, What's new and a faster startup
 
 Easier first steps for new users, a short summary of what changed for everyone who updates, and an extension that starts noticeably faster.
@@ -260,11 +298,11 @@ The Tools sidebar was redesigned again, to read like a polished navigation panel
 - **Design system:** a consistent 8px spacing system, corner radii and icon sizes, with layered surfaces taken from the VS Code theme.
 - **Narrow sidebars:** they keep more of each tool's name visible.
 
-## 11.68.1 - Revamped Tools Sidebar UI/UX
+## 11.68.1 - Tools sidebar redesign: cleaner categories and spacing
 
 Redesigned the left navigation panel for a cleaner, more compact, and highly scannable VS Code-style experience. Improved category hierarchy, spacing, active/hover states, and icon alignment, while keeping all existing tools and functionality completely intact.
 
-## 11.67.1 - Updated the REST API client UI & UX make easy to use
+## 11.67.1 - REST API Client redesign: clearer requests and responses
 
 Enhanced the REST API Client with an improved UI/UX, simplified navigation, clearer request/response sections, better button placement, and an easier workflow for creating, testing, and managing API requests.
 
@@ -354,7 +392,7 @@ Every tool section was reviewed. Low-value tools were removed or merged, rarely-
 - **Analytics:** two new anonymous events, `tool_run_completed` and `tool_output_used`, carry the tool id, outcome and duration only, never inputs or outputs.
 - **Tests:** a new test suite runs every tool with its defaults, every preset and every option (about 480 runs). Generated JSON and YAML are parsed, TypeScript and JavaScript are compiled, and Python is byte-compiled.
 
-## Redesigned tool hubs
+### Redesigned tool hubs
 
 - **One consistent tool grid.** The Developer Tools, AI & ML, RAG, Data and DevOps hubs share a single design:
   - Every card has a line icon (the same on every OS and theme, instead of emoji), a colour per category, the title, a short description, a tag and an Open cue.

@@ -109,6 +109,8 @@
     status = next;
     const percent = Math.round(status.progress * 100);
     $("statusBadge").textContent = status.badge;
+    $("statusBadge").className = "medal" + (status.frame ? " frame-" + status.frame : "");
+    renderToday();
     $("statusLevel").textContent = status.level;
     $("statusPoints").textContent = status.points.toLocaleString() + " pts";
     const nextLine = $("statusNext");
@@ -137,7 +139,34 @@
       gain.classList.add("show");
       if (status.level !== previous.level) say("Rank up: you reached " + status.level + ".");
     }
+    if (previous && previous.quests && status.quests && status.quests.done > previous.quests.done) {
+      say(status.quests.done >= status.quests.total ? "All of today's quests done." : "Quest complete: " + status.quests.done + " of " + status.quests.total + ".");
+    }
+    // A theme unlocked since the panel was drawn loses its lock straight away.
+    if (previous && JSON.stringify(previous.themeLocks || {}) !== JSON.stringify(status.themeLocks || {}) && !themePanel.hidden) renderThemePanel();
     if (!rankTip.hidden) fillRankTip();
+  }
+
+  /** Quest progress and streak beside the rank card's links. */
+  function renderToday() {
+    const quests = status.quests;
+    const questChip = $("questChip");
+    questChip.hidden = !quests || !quests.total;
+    if (quests && quests.total) {
+      const allDone = quests.done >= quests.total;
+      $("questCount").textContent = quests.done + "/" + quests.total;
+      questChip.classList.toggle("all-done", allDone);
+      questChip.title = allDone
+        ? "All of today's quests are done. New quests tomorrow."
+        : "Today's quests: " + quests.done + " of " + quests.total + " done. Click to see them.";
+      questChip.setAttribute("aria-label", questChip.title);
+    }
+    const streakChip = $("streakChip");
+    streakChip.hidden = !status.streak || status.streak < 2;
+    if (status.streak) {
+      $("streakCount").textContent = String(status.streak);
+      streakChip.title = status.streak + "-day streak";
+    }
   }
 
   function fillRankTip() {
@@ -186,6 +215,7 @@
   const openMilestones = () => vscode.postMessage({ type: "run", command: data.milestoneCommand });
   $("status").addEventListener("click", openMilestones);
   $("rankCta").addEventListener("click", openMilestones);
+  $("questChip").addEventListener("click", openMilestones);
 
   /* ------------------------------------------------------------ hover card */
   let hoverTimer = null;
@@ -737,9 +767,20 @@
   const themePanel = $("themePanel");
   const themeChoices = (data.theme && data.theme.choices) || [];
   let currentTheme = (data.theme && data.theme.current) || "system";
+  // True while a locked theme is only being tried; the extension switches back when it ends.
+  let themePreviewing = Boolean(data.theme && data.theme.lockedPreview);
+  const previewSeconds = (data.theme && data.theme.previewSeconds) || 30;
 
   function choiceById(id) {
     return themeChoices.find(choice => choice.id === id) || themeChoices[0];
+  }
+
+  /** How to unlock a reward theme, or "" when it can be used. Status carries the live answer. */
+  function lockHint(id) {
+    const locks = status && status.themeLocks;
+    if (locks) return locks[id] || "";
+    const choice = choiceById(id);
+    return choice && choice.locked ? choice.lockHint || "Locked" : "";
   }
 
   function themePreview(choice) {
@@ -781,7 +822,8 @@
   function renderThemeButton() {
     const choice = choiceById(currentTheme);
     if (!choice) return;
-    $("themeName").textContent = choice.label;
+    $("themeName").textContent = choice.label + (themePreviewing ? " · preview" : "");
+    themeBtn.classList.toggle("previewing", themePreviewing);
     const dots = $("themeDots");
     dots.innerHTML = "";
     if (!choice.swatches.length) dots.appendChild(el("i", "system"));
@@ -790,7 +832,7 @@
       dot.style.background = color;
       dots.appendChild(dot);
     });
-    themeBtn.setAttribute("aria-label", "Theme: " + choice.label + ". Change how DevSnip Pro looks");
+    themeBtn.setAttribute("aria-label", "Theme: " + choice.label + (themePreviewing ? ", previewing a locked theme" : "") + ". Change how DevSnip Pro looks");
   }
 
   function renderThemePanel() {
@@ -804,19 +846,42 @@
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", choice.id === currentTheme ? "true" : "false");
       option.dataset.theme = choice.id;
-      option.title = choice.label + " — " + choice.description;
+      const hint = lockHint(choice.id);
+      option.title = choice.label + " — " + choice.description + (hint ? "\nLocked: " + hint + ". Click to try it for " + previewSeconds + " seconds." : "");
       option.tabIndex = choice.id === currentTheme ? 0 : -1;
+      if (hint) {
+        option.classList.add("locked");
+        option.setAttribute("aria-label", choice.label + ", locked: " + hint + ". Activate to preview it for " + previewSeconds + " seconds.");
+      }
       const name = el("span", "opt-name");
       name.appendChild(el("span", "", choice.shortLabel || choice.label));
       name.appendChild(codicon("check"));
-      option.append(themePreview(choice), name);
+      const preview = themePreview(choice);
+      if (hint) {
+        const lock = el("span", "tp-lock");
+        lock.appendChild(codicon("lock"));
+        preview.appendChild(lock);
+      }
+      option.append(preview, name);
       option.addEventListener("click", () => chooseTheme(choice.id));
       themePanel.appendChild(option);
     });
   }
 
   function chooseTheme(id) {
-    if (id === currentTheme) return;
+    if (id === currentTheme && !themePreviewing) return;
+    if (lockHint(id) && id === currentTheme) {
+      // Clicking the theme being previewed offers to unlock it.
+      vscode.postMessage({ type: "setTheme", id });
+      return;
+    }
+    if (lockHint(id)) {
+      // A locked theme is tried for a short while on every panel; the extension offers to unlock it.
+      vscode.postMessage({ type: "previewTheme", id });
+      say("Previewing " + choiceById(id).label + " for " + previewSeconds + " seconds.");
+      return;
+    }
+    themePreviewing = false;
     currentTheme = id;
     renderThemeButton();
     themePanel.querySelectorAll(".theme-opt").forEach(option => {
@@ -1009,8 +1074,9 @@
       onboarding = message.onboarding;
       renderOnboarding();
     }
-    if (message.type === "devsnip:theme" && typeof message.id === "string" && message.id !== currentTheme) {
+    if (message.type === "devsnip:theme" && typeof message.id === "string" && (message.id !== currentTheme || Boolean(message.lockedPreview) !== themePreviewing)) {
       currentTheme = message.id;
+      themePreviewing = Boolean(message.lockedPreview);
       renderThemeButton();
       if (!themePanel.hidden) renderThemePanel();
     }

@@ -70,7 +70,7 @@ function pages() {
 }
 (0, run_unit_tests_1.suite)("themes: palettes", () => {
     (0, run_unit_tests_1.test)("ships the promised themes, each with a unique id and complete #rrggbb palette", () => {
-        assert.deepStrictEqual(themes_1.THEMES.map(t => t.label), ["Dark", "Midnight", "Dracula", "Monokai", "Nord", "Cyberpunk", "Light", "High Contrast"]);
+        assert.deepStrictEqual(themes_1.THEMES.map(t => t.label), ["Dark", "Midnight", "Dracula", "Monokai", "Nord", "Cyberpunk", "Solarized", "Ember", "Synthwave", "Aurora", "Light", "High Contrast"]);
         assert.strictEqual(new Set(themes_1.THEMES.map(t => t.id)).size, themes_1.THEMES.length);
         assert.ok(!(0, themes_1.findTheme)(themes_1.SYSTEM_THEME_ID), "system is not a palette");
         for (const theme of themes_1.THEMES) {

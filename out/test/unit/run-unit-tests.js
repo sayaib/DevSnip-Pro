@@ -28,6 +28,7 @@ async function main() {
     require("./markdown.unit");
     require("./webview-ui.unit");
     require("./milestone.unit");
+    require("./rewards.unit");
     require("./analysis.unit");
     require("./api-client.unit");
     require("./premium.unit");

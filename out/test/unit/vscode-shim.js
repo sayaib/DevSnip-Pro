@@ -4,9 +4,10 @@
  * Kept in its own module so the test helpers keep their own exports.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.shownMessages = exports.registeredCommands = void 0;
+exports.statusBarItems = exports.shownMessages = exports.registeredCommands = void 0;
 exports.registeredCommands = new Map();
 exports.shownMessages = [];
+exports.statusBarItems = [];
 function disposable() {
     return { dispose() { } };
 }
@@ -28,6 +29,12 @@ const api = {
         createWebviewPanel() { throw new Error("createWebviewPanel is not available in unit tests"); },
         createOutputChannel() { return { appendLine() { }, clear() { }, show() { }, dispose() { } }; },
         createTreeView() { return disposable(); },
+        createStatusBarItem() {
+            const item = { text: "", tooltip: "", command: undefined, backgroundColor: undefined, visible: false, show() { item.visible = true; }, hide() { item.visible = false; }, dispose() { item.visible = false; } };
+            exports.statusBarItems.push(item);
+            return item;
+        },
+        showQuickPick() { return Promise.resolve(undefined); },
         get activeTextEditor() { return undefined; }
     },
     workspace: {
@@ -65,6 +72,7 @@ const api = {
         }
     },
     ViewColumn: { One: 1, Two: 2 },
+    StatusBarAlignment: { Left: 1, Right: 2 },
     ExtensionMode: { Production: 1, Development: 2, Test: 3 },
     EventEmitter: class {
         constructor() {
@@ -127,6 +135,6 @@ const api = {
         }
     }
 };
-module.exports = Object.assign(api, { registeredCommands: exports.registeredCommands, shownMessages: exports.shownMessages });
+module.exports = Object.assign(api, { registeredCommands: exports.registeredCommands, shownMessages: exports.shownMessages, statusBarItems: exports.statusBarItems });
 exports.default = api;
 //# sourceMappingURL=vscode-shim.js.map

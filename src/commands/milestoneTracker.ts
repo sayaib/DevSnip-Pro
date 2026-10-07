@@ -6,7 +6,10 @@ import { UTILITY_CSS, confirmAction, openToolPanel, safePostMessage } from "../u
 import { DEVELOPER_FEATURES } from "../premium/feature-registry";
 import { TrackerView, buildTrackerView, levelIndexFor, toolNamesFromManifest } from "../services/milestone-view";
 import { track } from "../analytics";
-import { setWebviewHtml } from "../theme/service";
+import { currentThemeId, endLockedPreview, lockedPreviewTheme, onDidChangeLockedPreview, onDidChangeTheme, previewLockedTheme, setTheme, setWebviewHtml } from "../theme/service";
+import { swatches, THEMES } from "../theme/themes";
+import { DailyQuests, QUEST_CHEST_POINTS, ToolRunEvent, advanceQuests, allQuestsDone, createDailyQuests, findQuest, sanitizeQuests } from "../services/quests";
+import { REWARDS, RewardDefinition, activeFrame, earnedRewardIds, findReward, rewardForTheme, unlockLabel } from "../services/rewards";
 
 export interface UserStats {
     /** Spendable balance. Premium tools deduct from it, so it can go down. */
@@ -47,6 +50,33 @@ export interface UserStats {
      * a panel opened. Drives the Feature Explorer milestone.
      */
     discovered: string[];
+    /** Today's quests. Always for the local date - a new day brings a new set. */
+    quests: DailyQuests;
+    /** Days on which every quest was finished. Drives the Quest Master milestone. */
+    perfectQuestDays: number;
+    /** Each freeze covers one missed day so the streak survives it. */
+    streakFreezes: number;
+    bestStreak: number;
+    /** Rewards earned or bought (REWARDS ids). Never removed except by a reset. */
+    unlocked: string[];
+    /** Every command ever run, for the "try a tool you have never used" quest. */
+    toolsUsed: string[];
+    /** This calendar week (Monday start) so far, and the week before it. */
+    weekly: WeekSummary;
+    lastWeek: WeekSummary | null;
+    /** weekStart of the last week whose recap was shown. */
+    lastRecapWeek: string;
+}
+
+export interface WeekSummary {
+    /** Monday, YYYY-MM-DD. */
+    weekStart: string;
+    points: number;
+    runs: number;
+    /** Distinct commands run this week. */
+    tools: string[];
+    /** Points of the week before, kept so the recap can compare. */
+    previousPoints?: number;
 }
 
 /** The core features the Feature Explorer milestone counts, each recorded once when first really used. */
@@ -63,15 +93,16 @@ export interface LevelInfo {
 }
 
 /**
- * Levels are recognition only: every DevSnip Pro tool is available at every
- * level (premium REST client tools are paid for with points, not unlocked by
- * level), so `reward` describes the recognition, never a feature unlock.
+ * Every DevSnip Pro tool is available at every level (premium REST client
+ * tools are paid for with points, not unlocked by level). Levels unlock
+ * cosmetic rewards only - see src/services/rewards.ts - so `reward` names
+ * the badge and any theme that comes with it, never a feature.
  */
 export const LEVELS: LevelInfo[] = [
     { name: "Bronze", minPoints: 0, color: "#CD7F32", badge: "🥉", rank: "Novice Developer", reward: "Bronze badge and title in the Tools view" },
-    { name: "Silver", minPoints: 150, color: "#C0C0C0", badge: "🥈", rank: "Skilled Coder", reward: "Silver badge and title in the Tools view" },
-    { name: "Gold", minPoints: 600, color: "#FFD700", badge: "🥇", rank: "Senior Engineer", reward: "Gold badge and title in the Tools view" },
-    { name: "Platinum", minPoints: 1800, color: "#E5E4E2", badge: "💎", rank: "Principal Architect", reward: "Platinum badge and title in the Tools view" },
+    { name: "Silver", minPoints: 150, color: "#C0C0C0", badge: "🥈", rank: "Skilled Coder", reward: "Silver badge and the Solarized theme" },
+    { name: "Gold", minPoints: 600, color: "#FFD700", badge: "🥇", rank: "Senior Engineer", reward: "Gold badge and the Synthwave theme" },
+    { name: "Platinum", minPoints: 1800, color: "#E5E4E2", badge: "💎", rank: "Principal Architect", reward: "Platinum badge and the Aurora theme" },
     { name: "Diamond", minPoints: 4500, color: "#B9F2FF", badge: "👑", rank: "Elite Innovator", reward: "Diamond badge and title in the Tools view" },
     { name: "Master", minPoints: 10000, color: "#9c27b0", badge: "🔮", rank: "Grand Master", reward: "Master badge and title in the Tools view" },
     { name: "Grandmaster", minPoints: 25000, color: "#ff5722", badge: "⚡", rank: "Global Legend", reward: "Grandmaster badge and title in the Tools view" }
@@ -94,6 +125,9 @@ export const MILESTONES: Milestone[] = [
     { id: "snippet_creator", title: "Snippet Creator", description: "Create 10 custom code snippets", target: 10, points: 75, category: "Snippets", icon: "📝" },
     { id: "streak_5", title: "Consistent Coder", description: "Maintain active usage for 5 consecutive days", target: 5, points: 60, category: "Activity", icon: "🔥" },
     { id: "streak_14", title: "Weekly Warrior", description: "Maintain active usage for 14 consecutive days", target: 14, points: 200, category: "Activity", icon: "🌟" },
+    { id: "streak_30", title: "Monthly Marathon", description: "Keep a 30-day streak going", target: 30, points: 400, category: "Activity", icon: "🏃" },
+    { id: "streak_100", title: "Century Streak", description: "Keep a 100-day streak going", target: 100, points: 1500, category: "Activity", icon: "💯" },
+    { id: "quest_master", title: "Quest Master", description: "Finish all of the day's quests on 7 days", target: 7, points: 150, category: "Quests", icon: "🎯" },
     { id: "security_audit", title: "Security Sentinel", description: "Run 5 Security or Cloud Audits", target: 5, points: 80, category: "Security", icon: "🛡️" },
     { id: "ai_explorer", title: "AI/ML Enthusiast", description: "Use AI/ML or RAG tools 10 times", target: 10, points: 90, category: "AI", icon: "🤖" },
     { id: "points_5000", title: "Point Tycoon", description: "Earn 5,000 points in total", target: 5000, points: 500, category: "Milestone", icon: "💰" },
@@ -125,6 +159,29 @@ const STATE_KEY = 'devsnip_user_stats';
 /** Points for the automatic once-a-day login bonus and the claimable daily boost. */
 export const DAILY_LOGIN_POINTS = 5;
 export const DAILY_BONUS_POINTS = 10;
+/** The login bonus grows by a point per streak day, up to this much extra. */
+export const STREAK_LOGIN_BONUS_MAX = 10;
+export const MAX_STREAK_FREEZES = 2;
+/** A freeze is earned every this many streak days. */
+export const FREEZE_EVERY_DAYS = 7;
+export const STREAK_FREEZE_COST = 50;
+const MAX_TOOLS_TRACKED = 500;
+
+/** What a progress change is worth telling the user about. */
+export interface Celebration {
+    kind: 'level' | 'milestone' | 'quest' | 'chest' | 'reward' | 'freeze';
+    icon: string;
+    text: string;
+    /** For theme rewards, so the notification can offer to apply it. */
+    themeId?: string;
+}
+
+let celebrationHandler: ((items: Celebration[]) => void) | undefined;
+
+/** Receives every batch of wins as it is saved. The tracker command installs the notification handler. */
+export function setCelebrationHandler(handler: ((items: Celebration[]) => void) | undefined): void {
+    celebrationHandler = handler;
+}
 
 export function setMilestoneContext(context: vscode.ExtensionContext) {
     globalContext = context;
@@ -149,7 +206,40 @@ function daysBetween(fromIsoDate: string, toIsoDate: string): number | undefined
     return Math.round((to - from) / 86400000);
 }
 
+/** The Monday that starts the week of a YYYY-MM-DD date. */
+function weekStartOf(isoDate: string): string {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    return getTodayString(date);
+}
+
+function addDays(isoDate: string, days: number): string {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    return getTodayString(new Date(year, month - 1, day + days));
+}
+
+function emptyWeek(weekStart: string): WeekSummary {
+    return { weekStart, points: 0, runs: 0, tools: [] };
+}
+
+function sanitizeWeek(raw: unknown): WeekSummary | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const source = raw as Partial<WeekSummary>;
+    if (typeof source.weekStart !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(source.weekStart)) return null;
+    const week: WeekSummary = {
+        weekStart: source.weekStart,
+        points: Math.max(0, Math.trunc(toFiniteNumber(source.points, 0))),
+        runs: Math.max(0, Math.trunc(toFiniteNumber(source.runs, 0))),
+        tools: [...new Set(toStringArray(source.tools))].slice(0, MAX_TOOLS_TRACKED)
+    };
+    const previous = Math.trunc(toFiniteNumber(source.previousPoints, NaN));
+    if (Number.isFinite(previous)) week.previousPoints = Math.max(0, previous);
+    return week;
+}
+
 function createDefaultStats(): UserStats {
+    const today = getTodayString();
     return {
         totalPoints: 0,
         lifetimePoints: 0,
@@ -163,7 +253,16 @@ function createDefaultStats(): UserStats {
         dailyToolUsage: {},
         dailyEarnedPoints: 0,
         counters: { toolRuns: 0, snippetRuns: 0, securityRuns: 0, aiRuns: 0 },
-        discovered: []
+        discovered: [],
+        quests: createDailyQuests(today),
+        perfectQuestDays: 0,
+        streakFreezes: 0,
+        bestStreak: 1,
+        unlocked: [],
+        toolsUsed: [],
+        weekly: emptyWeek(weekStartOf(today)),
+        lastWeek: null,
+        lastRecapWeek: ''
     };
 }
 
@@ -240,12 +339,19 @@ function sanitizeStats(raw: unknown): UserStats {
         ? Math.max(storedLifetime, totalPoints)
         : totalPoints + Math.max(0, netSpent);
 
+    const streakDays = Math.max(1, Math.trunc(toFiniteNumber(source.streakDays, 1)));
+    const today = getTodayString();
+    // Versions before quests did not record which tools were used; the log is the best guess.
+    const toolsUsed = Array.isArray(source.toolsUsed)
+        ? toStringArray(source.toolsUsed)
+        : activities.filter(a => a.id.startsWith(COMMAND_PREFIX)).map(a => a.id);
+
     return {
         totalPoints,
         lifetimePoints,
         dailyPoints: Math.max(0, Math.trunc(toFiniteNumber(source.dailyPoints, 0))),
         lastActiveDate,
-        streakDays: Math.max(1, Math.trunc(toFiniteNumber(source.streakDays, 1))),
+        streakDays,
         activities,
         completedMilestones: toStringArray(source.completedMilestones),
         claimedRewards: toStringArray(source.claimedRewards),
@@ -256,18 +362,80 @@ function sanitizeStats(raw: unknown): UserStats {
         }),
         dailyEarnedPoints: Math.max(0, Math.trunc(toFiniteNumber(source.dailyEarnedPoints, 0))),
         counters,
-        discovered: [...new Set(toStringArray(source.discovered).filter(id => (DISCOVERIES as readonly string[]).includes(id)))]
+        discovered: [...new Set(toStringArray(source.discovered).filter(id => (DISCOVERIES as readonly string[]).includes(id)))],
+        quests: sanitizeQuests(source.quests, today),
+        perfectQuestDays: Math.max(0, Math.trunc(toFiniteNumber(source.perfectQuestDays, 0))),
+        streakFreezes: Math.min(MAX_STREAK_FREEZES, Math.max(0, Math.trunc(toFiniteNumber(source.streakFreezes, 0)))),
+        bestStreak: Math.max(streakDays, Math.trunc(toFiniteNumber(source.bestStreak, 1))),
+        unlocked: [...new Set(toStringArray(source.unlocked).filter(id => !!findReward(id)))],
+        toolsUsed: [...new Set(toolsUsed)].slice(0, MAX_TOOLS_TRACKED),
+        weekly: sanitizeWeek(source.weekly) ?? emptyWeek(weekStartOf(today)),
+        lastWeek: sanitizeWeek(source.lastWeek),
+        lastRecapWeek: typeof source.lastRecapWeek === 'string' ? source.lastRecapWeek : ''
     };
 }
 
-/** Applies the day rollover (streak, daily counters, claim pruning). */
-function applyDayRollover(stats: UserStats): boolean {
-    const today = getTodayString();
-    if (stats.lastActiveDate === today) return false;
+export interface RolloverResult {
+    rolled: boolean;
+    /** Freezes spent to keep the streak across missed days. */
+    freezesUsed: number;
+    freezeEarned: boolean;
+}
+
+/**
+ * Applies the day rollover (streak, freezes, daily counters, quests, the
+ * weekly summary, claim pruning). Deterministic from the stored date, so a
+ * read that is never saved and the next saved write agree.
+ */
+function applyDayRollover(stats: UserStats, today: string = getTodayString()): RolloverResult {
+    const outcome: RolloverResult = { rolled: false, freezesUsed: 0, freezeEarned: false };
+    if (stats.quests.date !== today) stats.quests = createDailyQuests(today);
+    if (stats.lastActiveDate === today) return outcome;
+    outcome.rolled = true;
 
     const gap = daysBetween(stats.lastActiveDate, today);
-    if (gap === 1) stats.streakDays += 1;
-    else if (gap === undefined || gap > 1) stats.streakDays = 1;
+    const missed = gap === undefined ? Infinity : gap - 1;
+    if (gap !== undefined && gap >= 1 && missed <= stats.streakFreezes) {
+        // Yesterday counted, or every missed day is covered by a freeze.
+        if (missed > 0) {
+            stats.streakFreezes -= missed;
+            outcome.freezesUsed = missed;
+            pushActivity(stats, {
+                id: 'streak_freeze_used',
+                title: missed === 1 ? 'Streak freeze used: your streak survived a missed day' : `${missed} streak freezes used: your streak survived ${missed} missed days`,
+                points: 0,
+                timestamp: Date.now(),
+                category: 'Activity'
+            });
+        }
+        stats.streakDays += 1;
+        if (stats.streakDays % FREEZE_EVERY_DAYS === 0 && stats.streakFreezes < MAX_STREAK_FREEZES) {
+            stats.streakFreezes += 1;
+            outcome.freezeEarned = true;
+            pushActivity(stats, {
+                id: 'streak_freeze_earned',
+                title: `Earned a streak freeze for a ${stats.streakDays}-day streak`,
+                points: 0,
+                timestamp: Date.now(),
+                category: 'Activity'
+            });
+        }
+    } else if (gap === undefined || gap > 1) {
+        stats.streakDays = 1;
+    }
+    stats.bestStreak = Math.max(stats.bestStreak, stats.streakDays);
+
+    const week = weekStartOf(today);
+    if (stats.weekly.weekStart !== week) {
+        const previousWeek = addDays(week, -7);
+        if (stats.weekly.weekStart === previousWeek) {
+            const before = stats.lastWeek && stats.lastWeek.weekStart === addDays(previousWeek, -7) ? stats.lastWeek.points : 0;
+            stats.lastWeek = { ...stats.weekly, previousPoints: before };
+        } else {
+            stats.lastWeek = null;
+        }
+        stats.weekly = emptyWeek(week);
+    }
 
     stats.dailyPoints = 0;
     stats.dailyEarnedPoints = 0;
@@ -278,11 +446,10 @@ function applyDayRollover(stats: UserStats): boolean {
     for (const key of Object.keys(stats.dailyClaims)) {
         if (key.slice(0, 10) < cutoff) delete stats.dailyClaims[key];
     }
-    return true;
+    return outcome;
 }
 
-/** Reads a consistent, repaired snapshot of the user's progress. Never throws. */
-export function getUserStats(context: vscode.ExtensionContext): UserStats {
+function readStoredStats(context: vscode.ExtensionContext): UserStats {
     let stored: unknown;
     try {
         stored = context.globalState.get<unknown>(STATE_KEY);
@@ -290,7 +457,12 @@ export function getUserStats(context: vscode.ExtensionContext): UserStats {
         console.error('DevSnip Pro: unable to read milestone state.', error);
         stored = undefined;
     }
-    const stats = sanitizeStats(stored);
+    return sanitizeStats(stored);
+}
+
+/** Reads a consistent, repaired snapshot of the user's progress. Never throws. */
+export function getUserStats(context: vscode.ExtensionContext): UserStats {
+    const stats = readStoredStats(context);
     applyDayRollover(stats);
     return stats;
 }
@@ -313,28 +485,110 @@ export async function saveUserStats(context: vscode.ExtensionContext, stats: Use
     }
 }
 
+/** Rewards granted free by grantKeptTheme, announced differently from ones bought or earned. */
+const keptRewards = new Set<string>();
+
+/** Rewards the user has, counting ones their progress has earned but no write has recorded yet. */
+export function effectiveUnlocked(stats: UserStats): string[] {
+    const earned = earnedRewardIds(levelIndexFor(stats.lifetimePoints, LEVELS), stats.completedMilestones);
+    return [...new Set([...stats.unlocked, ...earned])];
+}
+
+/** Records rewards that progress has earned. */
+function syncUnlocks(stats: UserStats): void {
+    for (const id of earnedRewardIds(levelIndexFor(stats.lifetimePoints, LEVELS), stats.completedMilestones)) {
+        if (!stats.unlocked.includes(id)) stats.unlocked.push(id);
+    }
+}
+
 /**
  * Serialised read-modify-write. Two tools finishing at the same moment would
  * otherwise both read the same snapshot and one update would be lost.
+ *
+ * Every earning path goes through here, so this is also the one place that
+ * records unlocks, sends progress events and announces wins.
  */
 function mutateStats<T>(
     context: vscode.ExtensionContext,
     mutate: (stats: UserStats) => T
 ): Promise<{ stats: UserStats; result: T }> {
     const next = stateQueue.then(async () => {
-        const stats = getUserStats(context);
+        const stats = readStoredStats(context);
+        const rollover = applyDayRollover(stats);
         const levelBefore = levelIndexFor(stats.lifetimePoints, LEVELS);
+        const lifetimeBefore = stats.lifetimePoints;
         const milestonesBefore = new Set(stats.completedMilestones);
+        const questsBefore = new Set(stats.quests.items.filter(item => item.done).map(item => item.id));
+        const chestBefore = stats.quests.chestClaimed;
+        const unlockedBefore = new Set(stats.unlocked);
+
         const result = mutate(stats);
+        syncUnlocks(stats);
+        stats.weekly.points += Math.max(0, stats.lifetimePoints - lifetimeBefore);
+        stats.bestStreak = Math.max(stats.bestStreak, stats.streakDays);
         await saveUserStats(context, stats);
-        // Every earning path goes through here, so this is the one place progress events are sent.
-        for (const id of stats.completedMilestones) {
-            if (!milestonesBefore.has(id)) track('milestone_unlocked', { milestone: id });
-        }
+
+        const celebrations: Celebration[] = [];
         const levelAfter = levelIndexFor(stats.lifetimePoints, LEVELS);
-        if (levelAfter > levelBefore) track('level_reached', { level: LEVELS[levelAfter].name, level_index: levelAfter });
+        if (levelAfter > levelBefore) {
+            const level = LEVELS[levelAfter];
+            track('level_reached', { level: level.name, level_index: levelAfter });
+            celebrations.push({ kind: 'level', icon: level.badge, text: `Rank up! You are now ${level.name}: ${level.rank}` });
+        }
+        for (const id of stats.completedMilestones) {
+            if (milestonesBefore.has(id)) continue;
+            track('milestone_unlocked', { milestone: id });
+            const milestone = MILESTONES.find(m => m.id === id);
+            if (milestone) celebrations.push({ kind: 'milestone', icon: milestone.icon, text: `Milestone unlocked: ${milestone.title} (+${milestone.points} pts)` });
+        }
+        for (const item of stats.quests.items) {
+            if (!item.done || questsBefore.has(item.id)) continue;
+            track('quest_completed', { quest: item.id });
+            const quest = findQuest(item.id);
+            if (quest) celebrations.push({ kind: 'quest', icon: quest.icon, text: `Quest complete: ${quest.title} (+${quest.points} pts)` });
+        }
+        if (!chestBefore && stats.quests.chestClaimed) {
+            track('quests_all_done', {});
+            celebrations.push({ kind: 'chest', icon: '🎁', text: `All of today's quests done: +${QUEST_CHEST_POINTS} bonus pts` });
+        }
+        const earnedNow = new Set(earnedRewardIds(levelAfter, stats.completedMilestones));
+        for (const id of stats.unlocked) {
+            if (unlockedBefore.has(id)) continue;
+            const reward = findReward(id);
+            if (!reward) continue;
+            if (keptRewards.delete(id)) {
+                // A theme in use when themes became paid: kept free, and already applied.
+                track('reward_unlocked', { reward: id, via: 'kept' });
+                celebrations.push({ kind: 'reward', icon: reward.icon, text: `Themes now unlock with points. You keep ${reward.name} for free` });
+                continue;
+            }
+            const via = !earnedNow.has(id) || !reward.unlock ? 'points' : 'level' in reward.unlock ? 'level' : 'milestone';
+            track('reward_unlocked', { reward: id, via });
+            celebrations.push({
+                kind: 'reward',
+                icon: reward.icon,
+                text: reward.kind === 'theme' ? `New theme unlocked: ${reward.name}` : `New badge frame unlocked: ${reward.name}`,
+                themeId: reward.themeId
+            });
+        }
+        if (rollover.freezesUsed > 0) {
+            track('streak_freeze', { action: 'used', count: rollover.freezesUsed });
+            celebrations.push({ kind: 'freeze', icon: '❄️', text: `A streak freeze saved your ${stats.streakDays - 1}-day streak` });
+        }
+        if (rollover.freezeEarned) {
+            track('streak_freeze', { action: 'earned', count: 1 });
+            celebrations.push({ kind: 'freeze', icon: '❄️', text: `${stats.streakDays}-day streak! You earned a streak freeze` });
+        }
+
         if (refreshCallback) refreshCallback();
         pointsChangeEmitter.fire(stats.totalPoints);
+        if (celebrations.length && celebrationHandler) {
+            try {
+                celebrationHandler(celebrations);
+            } catch (error) {
+                console.error('DevSnip Pro: could not announce progress.', error);
+            }
+        }
         return { stats, result };
     });
     stateQueue = next.catch(() => undefined);
@@ -389,12 +643,48 @@ function milestoneProgress(stats: UserStats, milestoneId: string): number {
         case 'power_user': return stats.counters.toolRuns;
         case 'snippet_creator': return stats.counters.snippetRuns;
         case 'streak_5':
-        case 'streak_14': return stats.streakDays;
+        case 'streak_14':
+        case 'streak_30':
+        case 'streak_100': return stats.streakDays;
+        case 'quest_master': return stats.perfectQuestDays;
         case 'security_audit': return stats.counters.securityRuns;
         case 'ai_explorer': return stats.counters.aiRuns;
         case 'points_5000': return stats.lifetimePoints;
         case 'feature_explorer': return stats.discovered.length;
         default: return 0;
+    }
+}
+
+/** Milestone, quest and chest points: one-time rewards the daily cap never swallows. */
+function addUncappedPoints(stats: UserStats, points: number): void {
+    stats.totalPoints += points;
+    stats.lifetimePoints += points;
+    stats.dailyPoints += points;
+}
+
+/** Moves today's quests for a tool run and pays for any it completes, plus the all-done chest. */
+function awardQuests(stats: UserStats, run: ToolRunEvent): void {
+    for (const quest of advanceQuests(stats.quests, run)) {
+        addUncappedPoints(stats, quest.points);
+        pushActivity(stats, {
+            id: `quest_${quest.id}`,
+            title: `Quest complete: ${quest.title} (+${quest.points} pts)`,
+            points: quest.points,
+            timestamp: Date.now(),
+            category: 'Quest'
+        });
+    }
+    if (!stats.quests.chestClaimed && allQuestsDone(stats.quests)) {
+        stats.quests.chestClaimed = true;
+        stats.perfectQuestDays += 1;
+        addUncappedPoints(stats, QUEST_CHEST_POINTS);
+        pushActivity(stats, {
+            id: 'quest_chest',
+            title: `All quests done today (+${QUEST_CHEST_POINTS} pts)`,
+            points: QUEST_CHEST_POINTS,
+            timestamp: Date.now(),
+            category: 'Quest'
+        });
     }
 }
 
@@ -405,9 +695,7 @@ function awardMilestones(stats: UserStats): string[] {
         if (stats.completedMilestones.includes(milestone.id)) continue;
         if (milestoneProgress(stats, milestone.id) < milestone.target) continue;
         stats.completedMilestones.push(milestone.id);
-        stats.totalPoints += milestone.points;
-        stats.lifetimePoints += milestone.points;
-        stats.dailyPoints += milestone.points;
+        addUncappedPoints(stats, milestone.points);
         unlocked.push(milestone.title);
         pushActivity(stats, {
             id: `milestone_${milestone.id}`,
@@ -490,6 +778,10 @@ export async function autoRecordToolUsage(command: string): Promise<void> {
     await mutateStats(globalContext, stats => {
         const usedToday = stats.dailyToolUsage[command] || 0;
         stats.dailyToolUsage[command] = usedToday + 1;
+        const firstEver = !stats.toolsUsed.includes(command);
+        if (firstEver && stats.toolsUsed.length < MAX_TOOLS_TRACKED) stats.toolsUsed.push(command);
+        stats.weekly.runs += 1;
+        if (!stats.weekly.tools.includes(command) && stats.weekly.tools.length < MAX_TOOLS_TRACKED) stats.weekly.tools.push(command);
 
         stats.counters.toolRuns += 1;
         if (category === 'Snippets') stats.counters.snippetRuns += 1;
@@ -512,6 +804,7 @@ export async function autoRecordToolUsage(command: string): Promise<void> {
             timestamp: Date.now(),
             category
         });
+        awardQuests(stats, { command, category, newToday: usedToday === 0, firstEver });
         awardMilestones(stats);
     });
 }
@@ -523,7 +816,131 @@ export async function resetUserStats(context: vscode.ExtensionContext): Promise<
     });
 }
 
-export { milestoneProgress, DAILY_POINT_CAP, RATE_LIMIT_AFTER, sanitizeStats, createDefaultStats };
+export { milestoneProgress, DAILY_POINT_CAP, RATE_LIMIT_AFTER, sanitizeStats, createDefaultStats, applyDayRollover, weekStartOf };
+
+/** Today's login bonus: the base plus a point per streak day, capped. */
+export function loginPointsFor(streakDays: number): number {
+    return DAILY_LOGIN_POINTS + Math.min(STREAK_LOGIN_BONUS_MAX, Math.max(0, Math.trunc(streakDays) - 1));
+}
+
+export type PurchaseResult = 'ok' | 'owned' | 'full' | 'short' | 'unknown';
+
+/** Buys one streak freeze with points. */
+export async function buyStreakFreeze(context: vscode.ExtensionContext): Promise<PurchaseResult> {
+    const { result } = await mutateStats<PurchaseResult>(context, stats => {
+        if (stats.streakFreezes >= MAX_STREAK_FREEZES) return 'full';
+        if (stats.totalPoints < STREAK_FREEZE_COST) return 'short';
+        stats.totalPoints -= STREAK_FREEZE_COST;
+        stats.streakFreezes += 1;
+        track('points_spent', { amount: STREAK_FREEZE_COST });
+        track('streak_freeze', { action: 'bought', count: 1 });
+        pushActivity(stats, {
+            id: `redeem_freeze_${Date.now()}`,
+            title: `Bought a streak freeze (-${STREAK_FREEZE_COST} pts)`,
+            points: -STREAK_FREEZE_COST,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+        return 'ok';
+    });
+    return result;
+}
+
+/** Unlocks a reward early with points. Rewards without a price can only be earned. */
+export async function buyReward(context: vscode.ExtensionContext, rewardId: string): Promise<PurchaseResult> {
+    const reward = findReward(rewardId);
+    if (!reward || reward.cost === undefined) return 'unknown';
+    const cost = reward.cost;
+    const { result } = await mutateStats<PurchaseResult>(context, stats => {
+        if (effectiveUnlocked(stats).includes(reward.id)) return 'owned';
+        if (stats.totalPoints < cost) return 'short';
+        stats.totalPoints -= cost;
+        stats.unlocked.push(reward.id);
+        track('points_spent', { amount: cost });
+        pushActivity(stats, {
+            id: `redeem_reward_${Date.now()}`,
+            title: `Unlocked ${reward.name}${reward.kind === 'theme' ? ' theme' : ''} (-${cost} pts)`,
+            points: -cost,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+        return 'ok';
+    });
+    return result;
+}
+
+export interface ThemeLock {
+    rewardId: string;
+    name: string;
+    /** "Reach Gold" / "Complete Weekly Warrior"; absent when points are the only way. */
+    hint?: string;
+    cost?: number;
+    balance: number;
+}
+
+/** Short text for a locked theme: "150 pts" or "Reach Gold or 500 pts". */
+export function lockLabel(lock: ThemeLock): string {
+    const price = lock.cost !== undefined ? `${lock.cost.toLocaleString('en-US')} pts` : '';
+    return lock.hint ? (price ? `${lock.hint} or ${price}` : lock.hint) : price || 'Locked';
+}
+
+/**
+ * Gives a theme for free. Used once, when themes became paid, so a theme the
+ * user had already chosen is not taken away.
+ */
+export async function grantKeptTheme(context: vscode.ExtensionContext, themeId: string): Promise<void> {
+    const reward = rewardForTheme(themeId);
+    if (!reward) return;
+    await mutateStats(context, stats => {
+        if (effectiveUnlocked(stats).includes(reward.id)) return;
+        keptRewards.add(reward.id);
+        stats.unlocked.push(reward.id);
+        pushActivity(stats, {
+            id: `kept_${reward.id}`,
+            title: `Kept the ${reward.name} theme for free`,
+            points: 0,
+            timestamp: Date.now(),
+            category: 'Activity'
+        });
+    });
+}
+
+function rewardHint(reward: RewardDefinition): string | null {
+    return unlockLabel(
+        reward,
+        index => LEVELS[index]?.name ?? `level ${index + 1}`,
+        id => MILESTONES.find(m => m.id === id)?.title ?? id
+    );
+}
+
+/** Why a theme is locked, or undefined when it can be used. */
+export function themeLockFor(stats: UserStats, themeId: string): ThemeLock | undefined {
+    const reward = rewardForTheme(themeId);
+    if (!reward || effectiveUnlocked(stats).includes(reward.id)) return undefined;
+    return { rewardId: reward.id, name: reward.name, hint: rewardHint(reward) ?? undefined, cost: reward.cost, balance: stats.totalPoints };
+}
+
+/** themeId -> how to unlock it ("150 pts", "Reach Gold or 500 pts"), for every theme still locked. */
+export function themeLockHints(stats: UserStats): Record<string, string> {
+    const hints: Record<string, string> = {};
+    for (const reward of REWARDS) {
+        if (reward.kind !== 'theme' || !reward.themeId) continue;
+        const lock = themeLockFor(stats, reward.themeId);
+        if (lock) hints[reward.themeId] = lockLabel(lock);
+    }
+    return hints;
+}
+
+/** Last week's summary when it has not been shown yet and there is something to show. */
+export function pendingWeeklyRecap(stats: UserStats): WeekSummary | null {
+    const last = stats.lastWeek;
+    if (!last || last.runs === 0 || stats.lastRecapWeek === last.weekStart) return null;
+    return last;
+}
+
+export async function markRecapShown(context: vscode.ExtensionContext, weekStart: string): Promise<void> {
+    await mutateStats(context, stats => { stats.lastRecapWeek = weekStart; });
+}
 
 export function getCurrentLevel(totalPoints: number): LevelInfo {
     let current = LEVELS[0];
@@ -560,12 +977,14 @@ export function getNextLevel(totalPoints: number): LevelInfo | null {
 export async function claimDailyLogin(context: vscode.ExtensionContext): Promise<boolean> {
     const today = getTodayString();
     const { result } = await mutateStats(context, stats => {
-        if (stats.dailyClaims[today]) return false;
+        if (stats.dailyClaims[today]) return 0;
         stats.dailyClaims[today] = true;
-        return true;
+        return stats.streakDays;
     });
-    if (result) await recordActivity(context, 'daily_login', 'Daily Login Bonus', DAILY_LOGIN_POINTS, 'Activity');
-    return result;
+    if (!result) return false;
+    const title = result > 1 ? `Daily Login Bonus · ${result}-day streak` : 'Daily Login Bonus';
+    await recordActivity(context, 'daily_login', title, loginPointsFor(result), 'Activity');
+    return true;
 }
 
 /** Claims the once-a-day activity boost. Returns false if it was already claimed today. */
@@ -590,27 +1009,95 @@ export function buildMilestoneView(context: vscode.ExtensionContext): TrackerVie
     } catch {
         toolNames = {};
     }
+    const stats = getUserStats(context);
+    const unlocked = effectiveUnlocked(stats);
     return buildTrackerView({
-        stats: getUserStats(context),
+        stats,
         levels: LEVELS,
         milestones: MILESTONES,
         progress: milestoneProgress,
         today: getTodayString(),
         dailyCap: DAILY_POINT_CAP,
         rateLimitAfter: RATE_LIMIT_AFTER,
-        loginPoints: DAILY_LOGIN_POINTS,
+        loginPoints: loginPointsFor(stats.streakDays),
         bonusPoints: DAILY_BONUS_POINTS,
         premium: DEVELOPER_FEATURES
             .filter(feature => feature.enabled && feature.tier === 'premium' && (feature.pointCost ?? 0) > 0)
             .map(feature => ({ name: feature.name, pointCost: feature.pointCost as number })),
-        toolNames
+        toolNames,
+        rewards: {
+            list: REWARDS,
+            unlocked,
+            hint: rewardHint,
+            currentTheme: currentThemeId(),
+            previewTheme: lockedPreviewTheme(),
+            activeFrame: activeFrame(unlocked),
+            swatches: Object.fromEntries(THEMES.map(theme => [theme.id, swatches(theme)]))
+        },
+        freezes: { max: MAX_STREAK_FREEZES, cost: STREAK_FREEZE_COST, every: FREEZE_EVERY_DAYS },
+        loginBonusMax: STREAK_LOGIN_BONUS_MAX
     });
+}
+
+const MILESTONE_COMMAND = `${COMMAND_PREFIX}milestoneTracker`;
+let trackerPanel: vscode.WebviewPanel | undefined;
+
+type NotificationLevel = 'all' | 'levelsOnly' | 'off';
+
+function notificationLevel(): NotificationLevel {
+    const value = vscode.workspace.getConfiguration('devsnip').get<string>('rewards.notifications', 'all');
+    return value === 'off' || value === 'levelsOnly' ? value : 'all';
+}
+
+/**
+ * Announces wins with a VS Code notification, so progress is visible wherever
+ * the user is working. Skipped while the tracker is in view - it shows its own
+ * banner - and governed by the devsnip.rewards.notifications setting.
+ */
+export function showCelebrations(items: Celebration[]): void {
+    const level = notificationLevel();
+    if (level === 'off' || trackerPanel?.visible) return;
+    const shown = level === 'levelsOnly' ? items.filter(item => item.kind === 'level' || item.kind === 'reward') : items;
+    if (!shown.length) return;
+    const [first, ...rest] = shown;
+    const message = `${first.icon} ${first.text}${rest.length ? `  ·  ${rest.slice(0, 2).map(item => `${item.icon} ${item.text}`).join('  ·  ')}` : ''}${rest.length > 2 ? `  ·  +${rest.length - 2} more` : ''}`;
+    const theme = shown.find(item => item.themeId)?.themeId;
+    const actions = theme ? ['Try theme', 'View progress'] : ['View progress'];
+    void vscode.window.showInformationMessage(message, ...actions).then(async choice => {
+        if (choice === 'Try theme' && theme) await setTheme(theme);
+        else if (choice === 'View progress') await executeQueuedCommand(MILESTONE_COMMAND);
+    }, () => undefined);
+}
+
+/** Shows last week's recap once, on the first activation of a new week. */
+export async function maybeShowWeeklyRecap(context: vscode.ExtensionContext): Promise<void> {
+    if (notificationLevel() !== 'all') return;
+    const recap = pendingWeeklyRecap(getUserStats(context));
+    if (!recap) return;
+    await markRecapShown(context, recap.weekStart);
+    track('weekly_recap', { action: 'shown' });
+    const streak = getUserStats(context).streakDays;
+    const parts = [
+        `${recap.points.toLocaleString('en-US')} pts`,
+        `${recap.runs.toLocaleString('en-US')} tool ${recap.runs === 1 ? 'run' : 'runs'}`,
+        `${recap.tools.length} different ${recap.tools.length === 1 ? 'tool' : 'tools'}`
+    ];
+    if (streak > 1) parts.push(`🔥 ${streak}-day streak`);
+    const trend = recap.previousPoints ? (recap.points >= recap.previousPoints ? ' 📈' : '') : '';
+    const choice = await vscode.window.showInformationMessage(`📊 Your week in DevSnip Pro: ${parts.join(' · ')}${trend}`, 'See progress');
+    if (choice === 'See progress') {
+        track('weekly_recap', { action: 'opened' });
+        await executeQueuedCommand(MILESTONE_COMMAND);
+    }
 }
 
 export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext) {
     setMilestoneContext(context);
 
-    void claimDailyLogin(context).catch(error => console.error('DevSnip Pro: daily login bonus failed.', error));
+    setCelebrationHandler(showCelebrations);
+    void claimDailyLogin(context)
+        .then(() => maybeShowWeeklyRecap(context))
+        .catch(error => console.error('DevSnip Pro: daily login bonus failed.', error));
 
     const command = registerTrackedCommand('sayaib.hue-console.milestoneTracker', () => {
         const { panel, created } = openToolPanel('milestoneTracker', 'DevSnip Pro - Milestones & Points', {
@@ -618,6 +1105,7 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
             localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
         });
         if (!created) return;
+        trackerPanel = panel;
 
         const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'milestone-tracker.js')));
         setWebviewHtml(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri)));
@@ -644,6 +1132,9 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
 
         const subscriptions: vscode.Disposable[] = [
             onDidChangePoints(scheduleState),
+            // The Rewards tab shows which theme is in use or being previewed.
+            onDidChangeTheme(scheduleState),
+            onDidChangeLockedPreview(scheduleState),
             panel.onDidChangeViewState(event => {
                 if (event.webviewPanel.visible) scheduleState();
             }),
@@ -673,11 +1164,61 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
                                 'Reset all DevSnip Pro points, streaks and milestones? This cannot be undone.',
                                 'Reset everything'
                             );
-                            if (confirmed) await resetUserStats(context);
+                            if (confirmed) {
+                                await resetUserStats(context);
+                                // A reward theme in use is locked again; fall back to the default look.
+                                if (themeLockFor(getUserStats(context), currentThemeId())) await setTheme('system');
+                            }
                             pushState();
                             post({ type: 'result', action, ok: confirmed, message: confirmed ? 'Progress reset.' : 'Nothing was reset.' });
                             break;
                         }
+                        case 'buyFreeze': {
+                            const outcome = await buyStreakFreeze(context);
+                            pushState();
+                            post({
+                                type: 'result', action,
+                                ok: outcome === 'ok',
+                                message: outcome === 'ok' ? 'Streak freeze added. A missed day will not break your streak.'
+                                    : outcome === 'full' ? `You already hold the maximum of ${MAX_STREAK_FREEZES} freezes.`
+                                    : `A freeze costs ${STREAK_FREEZE_COST} points.`
+                            });
+                            break;
+                        }
+                        case 'buyReward': {
+                            const id = typeof message.id === 'string' ? message.id : '';
+                            const reward = findReward(id);
+                            const outcome = await buyReward(context, id);
+                            if (outcome === 'ok' && reward?.themeId) await setTheme(reward.themeId);
+                            pushState();
+                            post({
+                                type: 'result', action,
+                                ok: outcome === 'ok',
+                                message: outcome === 'ok' ? `${reward?.name ?? 'Reward'} unlocked${reward?.themeId ? ' and applied' : ''}.`
+                                    : outcome === 'owned' ? 'You already have this reward.'
+                                    : outcome === 'short' ? `You need ${reward?.cost ?? 0} points for this.`
+                                    : 'This reward can only be earned.'
+                            });
+                            break;
+                        }
+                        case 'useTheme': {
+                            const themeId = typeof message.themeId === 'string' ? message.themeId : '';
+                            const reward = rewardForTheme(themeId);
+                            if (reward && effectiveUnlocked(getUserStats(context)).includes(reward.id)) {
+                                await setTheme(themeId);
+                                pushState();
+                                post({ type: 'result', action, ok: true, message: `${reward.name} theme applied.` });
+                            }
+                            break;
+                        }
+                        case 'previewTheme': {
+                            const themeId = typeof message.themeId === 'string' ? message.themeId : '';
+                            if (rewardForTheme(themeId)) await previewLockedTheme(themeId);
+                            break;
+                        }
+                        case 'endPreview':
+                            await endLockedPreview('ended');
+                            break;
                         case 'openSpend':
                             await executeQueuedCommand(`${COMMAND_PREFIX}premiumStatus`);
                             break;
@@ -695,6 +1236,7 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
         ];
 
         panel.onDidDispose(() => {
+            if (trackerPanel === panel) trackerPanel = undefined;
             if (pending) clearTimeout(pending);
             subscriptions.forEach(subscription => subscription.dispose());
         });
@@ -971,6 +1513,65 @@ button { font: inherit; }
 .rule-title { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .rule-text { font-size: 12px; color: var(--fg-1); line-height: 1.45; margin-top: 3px; }
 
+/* Quests and this week */
+.quests { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.quests[hidden] { display: none; }
+.q-main { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.q-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.q-head-side { display: flex; align-items: center; gap: 8px; }
+.q-title { font-size: 15px; font-weight: 700; margin-top: 3px; }
+.q-list { display: flex; flex-direction: column; gap: 8px; }
+.quest { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(96px, 150px) auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); transition: border-color .2s; }
+.quest.done { border-color: color-mix(in srgb, var(--success) 40%, var(--line)); background: color-mix(in srgb, var(--success) 6%, var(--card)); }
+.q-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.quest.done .q-icon { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.q-body { min-width: 0; }
+.q-name { font-size: 13px; font-weight: 700; }
+.q-hint { font-size: 12px; color: var(--fg-1); line-height: 1.4; margin-top: 1px; }
+.quest.done .q-name { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--fg-0) 35%, transparent); }
+.q-progress { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; text-align: right; }
+.q-chest { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--fg-1); padding: 8px 12px; border-radius: 10px; border: 1px dashed color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.q-chest.open { border-style: solid; color: var(--fg-0); background: color-mix(in srgb, var(--gold) 9%, transparent); }
+.q-chest-icon { font-size: 18px; }
+.q-chest-text { flex: 1; min-width: 0; }
+.q-perfect { font-size: 12px; white-space: nowrap; }
+.week { padding: 18px 20px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.week-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.week-value { font-size: 22px; font-weight: 800; letter-spacing: -.01em; line-height: 1.1; }
+.week-label { font-size: 11.5px; color: var(--fg-1); margin-top: 2px; }
+.week-sub { font-size: 12px; color: var(--fg-1); margin-top: 6px; }
+.week-compare .bar { margin-top: 2px; }
+
+/* Streak freezes */
+.freezes { display: inline-flex; align-items: center; gap: 3px; }
+.freezes i { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; color: var(--fg-2, var(--fg-1)); background: var(--soft); opacity: .6; }
+.freezes i.on { color: var(--info); background: color-mix(in srgb, var(--info) 16%, transparent); opacity: 1; }
+.freezes i .ico { width: 12px; height: 12px; stroke-width: 2.2; }
+.freezes .link { margin-left: 3px; font-size: 11.5px; }
+.freezes .link[disabled] { opacity: .5; cursor: default; text-decoration: none; }
+
+/* Rewards */
+.rw { display: flex; flex-direction: column; overflow: hidden; transition: border-color .2s, transform .2s; }
+.rw:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--fg-0) 22%, var(--line)); }
+.rw.active { border-color: color-mix(in srgb, var(--success) 55%, var(--line)); }
+.rw-preview { display: flex; height: 54px; }
+.rw-preview > span { flex: 1; background: var(--sw); }
+.rw.locked .rw-preview { filter: saturate(.5) brightness(.85); }
+.rw-preview.frame > span { flex: none; }
+.rw-preview.frame { align-items: center; justify-content: center; background: var(--card-2); }
+.rw-frame { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: color-mix(in srgb, var(--gold) 13%, transparent); }
+.rw-frame.frame-glow { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 45%, transparent), 0 0 14px color-mix(in srgb, var(--gold) 55%, transparent); }
+.rw-frame.frame-flame { box-shadow: 0 0 0 2px #ff8a3d, 0 0 16px color-mix(in srgb, #ff5722 60%, transparent); }
+.rw.locked .rw-frame { filter: grayscale(1); opacity: .6; }
+.rw-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.rw-foot { margin-top: auto; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.rw-state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-1); }
+.rw-state .ico { width: 13px; height: 13px; }
+.rw-state.ok { color: var(--success); }
+.rw-state.preview { color: var(--gold-text); font-weight: 600; }
+.rw.previewing { border-color: color-mix(in srgb, var(--gold) 60%, var(--line)); border-style: dashed; }
+.rw-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
 .error-box { border: 1px solid var(--error); background: var(--error-bg); border-radius: var(--r); padding: 12px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 
 /* Feedback */
@@ -992,6 +1593,13 @@ button { font: inherit; }
     .kpi + .kpi { border-top: 0; border-left: 1px solid var(--line); }
     .kpi-side { align-items: flex-start; }
     .daily { grid-template-columns: 1fr; }
+    .quests { grid-template-columns: 1fr; }
+    .week { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 560px) {
+    .quest { grid-template-columns: 34px minmax(0, 1fr) auto; }
+    .quest > .chip { grid-column: 3; grid-row: 1; }
+    .q-progress { grid-column: 2 / -1; grid-row: 2; text-align: left; }
 }
 @media (max-width: 560px) {
     .top { padding: 12px 16px; position: static; }

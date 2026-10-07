@@ -15,6 +15,7 @@
     var TABS = [
         { id: 'milestones', label: 'Milestones' },
         { id: 'levels', label: 'Ranks' },
+        { id: 'rewards', label: 'Rewards' },
         { id: 'activity', label: 'Activity' },
         { id: 'earn', label: 'How to earn' }
     ];
@@ -40,12 +41,18 @@
         sparkle: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z',
         star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
         info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01',
-        inbox: 'M3 13l3-8h12l3 8M3 13v6h18v-6M3 13h5l1 2h6l1-2h5'
+        inbox: 'M3 13l3-8h12l3 8M3 13v6h18v-6M3 13h5l1 2h6l1-2h5',
+        target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2z',
+        snow: 'M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 6.5l2.5-2M9.5 19.5 12 17.5l2.5 2',
+        lock: 'M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+        eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+        palette: 'M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.7-1.7H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3zM7.5 12h.01M9.5 8h.01M14.5 8h.01'
     };
     // Category colours, all from theme tokens.
-    var TINT = { Core: 'var(--info)', Snippets: 'var(--purple)', Activity: 'var(--streak)', Security: 'var(--success)', AI: 'var(--purple)', Milestone: 'var(--gold)', Discovery: 'var(--accent)' };
+    var TINT = { Core: 'var(--info)', Snippets: 'var(--purple)', Activity: 'var(--streak)', Security: 'var(--success)', AI: 'var(--purple)', Milestone: 'var(--gold)', Discovery: 'var(--accent)', Quests: 'var(--accent)' };
     var KIND = {
         tool: ['tool', 'var(--info)'], milestone: ['trophy', 'var(--gold)'], bonus: ['gift', 'var(--gold)'],
+        quest: ['target', 'var(--accent)'], freeze: ['snow', 'var(--info)'],
         spend: ['card', 'var(--purple)'], refund: ['undo', 'var(--success)'], other: ['dot', 'var(--fg-1)']
     };
 
@@ -160,6 +167,7 @@
 
     function build() {
         els.hero = h('section', { className: 'card hero', 'aria-label': 'Your rank and points' });
+        els.quests = h('section', { className: 'card quests', 'aria-label': "Today's quests and this week" });
         els.daily = h('section', { className: 'daily', 'aria-label': 'Today' });
         els.tabs = h('div', { className: 'tabs', role: 'tablist', 'aria-label': 'Progress sections' });
         els.panels = {};
@@ -180,7 +188,7 @@
             selectTab(TABS[(next + TABS.length) % TABS.length].id, true, true);
         });
         els.tabsRow = h('div', { className: 'tabs-row' }, [els.tabs]);
-        replace(app, [els.hero, els.daily, h('div', {}, [els.tabsRow].concat(TABS.map(function (t) { return els.panels[t.id]; })))]);
+        replace(app, [els.hero, els.quests, els.daily, h('div', {}, [els.tabsRow].concat(TABS.map(function (t) { return els.panels[t.id]; })))]);
         app.removeAttribute('aria-busy');
         ui.built = true;
         selectTab(ui.tab, false);
@@ -269,6 +277,16 @@
         var streakNext = v.streak.next
             ? (v.streak.next.remaining > 0 ? plural(v.streak.next.remaining, 'more day') + ' → ' + v.streak.next.title : v.streak.next.title + ' reached')
             : 'Every streak milestone done';
+        var st = v.streak;
+        var freezes = h('span', { className: 'freezes', title: plural(st.freezes, 'streak freeze') + ' ready. Each one covers a missed day.' });
+        for (var f = 0; f < st.maxFreezes; f++) freezes.appendChild(h('i', { className: f < st.freezes ? 'on' : '' }, [icon('snow')]));
+        if (st.maxFreezes && st.freezes < st.maxFreezes) {
+            freezes.appendChild(h('button', {
+                type: 'button', className: 'link', 'data-buy': 'freeze', disabled: !st.canBuyFreeze,
+                title: st.canBuyFreeze ? 'Buy a streak freeze for ' + st.freezeCost + ' pts' : 'A streak freeze costs ' + st.freezeCost + ' pts',
+                onclick: function (event) { event.currentTarget.disabled = true; vscode.postMessage({ command: 'buyFreeze' }); }
+            }, ['Buy · ' + st.freezeCost + ' pts']));
+        }
         var dots = h('span', { className: 'dots', 'aria-hidden': 'true' });
         var filled = Math.min(7, v.streak.days);
         for (var i = 0; i < 7; i++) {
@@ -292,9 +310,9 @@
                 h('div', {}, [
                     h('div', { className: 'kpi-label', text: 'Streak' }),
                     h('div', { className: 'kpi-value' }, [h('span', { className: 'num', text: fmt(v.streak.days) }), h('small', { text: v.streak.days === 1 ? 'day' : 'days' })]),
-                    h('div', { className: 'kpi-sub', text: streakNext })
+                    h('div', { className: 'kpi-sub', text: streakNext + (st.best > st.days ? ' · best ' + fmt(st.best) : '') })
                 ]),
-                h('div', { className: 'kpi-side', title: 'Last 7 days' }, [dots])
+                h('div', { className: 'kpi-side' }, [h('span', { title: 'Last 7 days' }, [dots]), st.maxFreezes ? freezes : null])
             ]),
             h('div', { className: 'kpi' }, [
                 h('span', { className: 'kpi-icon', vars: { '--tint': 'var(--info)' } }, [icon('bolt')]),
@@ -310,6 +328,85 @@
         // Rank colours include near-white Platinum and Diamond: blend with the text colour so they read in every theme.
         els.hero.style.setProperty('--level-ink', 'color-mix(in srgb, ' + v.level.color + ' 72%, var(--fg-0))');
         replace(els.hero, [rank, kpis]);
+    }
+
+    // ------------------------------------------------------------------
+    // Quests: three goals a day, and this week at a glance
+    // ------------------------------------------------------------------
+
+    function hoursToMidnight() {
+        var now = new Date();
+        var end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 3600000));
+    }
+
+    function weekStat(label, value, sub) {
+        return h('div', { className: 'week-stat' }, [
+            h('div', { className: 'week-value num', text: fmt(value) }),
+            h('div', { className: 'week-label', text: label }),
+            sub ? h('div', { className: 'week-sub', text: sub }) : null
+        ]);
+    }
+
+    function renderQuests(v) {
+        var q = v.quests;
+        if (!changed('quests', [q, v.week, new Date().getHours()])) return;
+        if (!q || !q.total) { els.quests.hidden = true; return; }
+        els.quests.hidden = false;
+        var allDone = q.done >= q.total;
+        var head = h('div', { className: 'q-head' }, [
+            h('div', { style: 'min-width:0' }, [
+                h('div', { className: 'eyebrow', text: "Today's quests" }),
+                h('div', { className: 'q-title', text: allDone ? 'All done. New quests tomorrow.' : q.done + ' of ' + q.total + ' done' })
+            ]),
+            h('div', { className: 'q-head-side' }, [
+                h('span', { className: 'chip', title: 'New quests every day at midnight', text: 'New in ' + hoursToMidnight() + 'h' }),
+                allDone ? null : h('button', { type: 'button', className: 'xbtn sm', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, [icon('search'), h('span', { text: 'Find a tool' })])
+            ])
+        ]);
+        var list = h('div', { className: 'q-list' }, q.items.map(function (item) {
+            return h('div', { className: 'quest' + (item.done ? ' done' : ''), 'data-quest': item.id }, [
+                h('span', { className: 'q-icon', 'aria-hidden': 'true' }, [item.done ? icon('check') : item.icon]),
+                h('div', { className: 'q-body' }, [
+                    h('div', { className: 'q-name', text: item.title }),
+                    h('div', { className: 'q-hint', text: item.hint })
+                ]),
+                h('div', { className: 'q-progress' }, [
+                    bar(item.percent, item.done ? 'success' : 'accent', item.title + ' progress'),
+                    h('span', { className: 'num muted', text: item.done ? 'Done' : fmt(item.progress) + ' / ' + fmt(item.target) })
+                ]),
+                item.done ? chip('+' + fmt(item.points), 'ok', 'check') : chip('+' + fmt(item.points), 'pts')
+            ]);
+        }));
+        var chest = h('div', { className: 'q-chest' + (q.chestClaimed ? ' open' : '') }, [
+            h('span', { className: 'q-chest-icon', 'aria-hidden': 'true', text: q.chestClaimed ? '🎉' : '🎁' }),
+            h('span', { className: 'q-chest-text', text: q.chestClaimed ? 'Bonus chest opened: +' + q.chestPoints + ' pts' : 'Finish all ' + q.total + ' for a +' + q.chestPoints + ' pts bonus chest' }),
+            q.perfectDays ? h('span', { className: 'muted q-perfect', text: plural(q.perfectDays, 'perfect day') }) : null
+        ]);
+
+        var w = v.week;
+        var compare = null;
+        if (w.last && w.last.points > 0) {
+            var pct = Math.min(100, Math.round((w.current.points / w.last.points) * 100));
+            compare = h('div', { className: 'week-compare' }, [
+                bar(pct, w.current.points >= w.last.points ? 'success' : '', 'Points this week compared with last week'),
+                h('div', { className: 'week-sub', text: w.current.points >= w.last.points
+                    ? 'Ahead of last week (' + fmt(w.last.points) + ' pts)'
+                    : fmt(w.last.points - w.current.points) + ' pts to beat last week' })
+            ]);
+        } else if (w.last) {
+            compare = h('div', { className: 'week-sub', text: 'Last week: ' + plural(w.last.runs, 'tool run') });
+        }
+        var week = h('div', { className: 'week' }, [
+            h('div', { className: 'eyebrow', text: 'This week' }),
+            h('div', { className: 'week-stats' }, [
+                weekStat('points', w.current.points),
+                weekStat('tool runs', w.current.runs),
+                weekStat(w.current.tools === 1 ? 'tool used' : 'tools used', w.current.tools)
+            ]),
+            compare
+        ]);
+        replace(els.quests, [h('div', { className: 'q-main' }, [head, list, chest]), week]);
     }
 
     // ------------------------------------------------------------------
@@ -378,6 +475,7 @@
         var counts = {
             milestones: v.milestoneSummary.completed + '/' + v.milestoneSummary.total,
             levels: (v.level.index + 1) + '/' + v.levels.length,
+            rewards: v.rewards && v.rewards.length ? v.rewards.filter(function (r) { return r.unlocked; }).length + '/' + v.rewards.length : '',
             activity: v.activities.length ? String(v.activities.length) : '',
             earn: ''
         };
@@ -471,8 +569,75 @@
             return row;
         });
         replace(els.panels.levels, [
-            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Ranks follow the points you have earned in total, so spending never lowers them. They are recognition only: every tool is available at every rank.' })]),
+            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Ranks follow the points you have earned in total, so spending never lowers them. Every tool is available at every rank; reaching Silver, Gold and Platinum also unlocks a theme each (see Rewards).' })]),
             h('div', { className: 'card timeline', role: 'list' }, rows)
+        ]);
+    }
+
+    // ------------------------------------------------------------------
+    // Rewards: themes and badge frames to earn
+    // ------------------------------------------------------------------
+
+    function rewardPreview(r, badge) {
+        if (r.kind === 'theme' && r.swatches.length) {
+            return h('div', { className: 'rw-preview', 'aria-hidden': 'true' }, r.swatches.map(function (color) {
+                return h('span', { vars: { '--sw': color } });
+            }));
+        }
+        return h('div', { className: 'rw-preview frame', 'aria-hidden': 'true' }, [h('span', { className: 'rw-frame frame-' + r.id.replace(/^frame_/, ''), text: badge })]);
+    }
+
+    function rewardAction(r) {
+        if (r.unlocked) {
+            if (r.active) return chip(r.kind === 'theme' ? 'In use' : 'On your badge', 'ok', 'check');
+            if (r.kind === 'theme') {
+                return h('button', { type: 'button', className: 'xbtn sm primary', onclick: function () { vscode.postMessage({ command: 'useTheme', themeId: r.themeId }); } }, [icon('palette'), h('span', { text: 'Use theme' })]);
+            }
+            return chip('Unlocked', 'ok', 'check');
+        }
+        if (r.cost === null) return null;
+        var preview = r.kind === 'theme'
+            ? (r.previewing
+                ? h('button', { type: 'button', className: 'xbtn sm', title: 'Switch back to your theme now', onclick: function () { vscode.postMessage({ command: 'endPreview' }); } }, [icon('eye'), h('span', { text: 'End preview' })])
+                : h('button', { type: 'button', className: 'xbtn sm', title: 'Try it on every DevSnip Pro panel for a few seconds', onclick: function () { vscode.postMessage({ command: 'previewTheme', themeId: r.themeId }); } }, [icon('eye'), h('span', { text: 'Preview' })]))
+            : null;
+        var buy = h('button', {
+            type: 'button', className: 'xbtn sm' + (r.affordable ? ' gold' : ''), 'data-buy': r.id, disabled: !r.affordable,
+            title: r.affordable ? 'Spend ' + fmt(r.cost) + ' pts to unlock it now' : 'You need ' + fmt(r.cost) + ' pts to unlock it early',
+            onclick: function (event) {
+                var button = event.currentTarget;
+                button.disabled = true;
+                button.lastChild.textContent = 'Unlocking…';
+                vscode.postMessage({ command: 'buyReward', id: r.id });
+            }
+        }, [icon('wallet'), h('span', { text: fmt(r.cost) + ' pts' })]);
+        return preview ? h('span', { className: 'rw-actions' }, [preview, buy]) : buy;
+    }
+
+    function renderRewards(v) {
+        if (!changed('rewards', [v.rewards, v.balance, v.level.badge])) return;
+        var rewards = v.rewards || [];
+        var cards = rewards.map(function (r) {
+            return h('article', { className: 'card rw' + (r.unlocked ? ' unlocked' : ' locked') + (r.active ? ' active' : '') + (r.previewing ? ' previewing' : ''), 'data-reward': r.id }, [
+                rewardPreview(r, v.level.badge),
+                h('div', { className: 'rw-body' }, [
+                    h('div', { className: 'ms-cat', vars: tintVars(r.kind === 'theme' ? 'var(--purple)' : 'var(--gold)'), text: r.kind === 'theme' ? 'Theme' : 'Badge frame' }),
+                    h('div', { className: 'ms-title' }, [r.icon + ' ' + r.name]),
+                    h('div', { className: 'ms-desc', text: r.description }),
+                    h('div', { className: 'rw-foot' }, [
+                        r.unlocked
+                            ? h('span', { className: 'rw-state ok' }, [icon('check'), 'Unlocked'])
+                            : r.previewing
+                            ? h('span', { className: 'rw-state preview' }, [icon('eye'), 'Previewing now'])
+                            : h('span', { className: 'rw-state' }, [icon('lock'), r.hint ? r.hint + (r.cost !== null ? ' or unlock now' : '') : 'Unlock with points']),
+                        rewardAction(r)
+                    ])
+                ])
+            ]);
+        });
+        replace(els.panels.rewards, [
+            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Rewards are cosmetic: every tool works at every rank. Themes unlock with points, and some can also be earned by climbing the ranks or keeping a streak. System Default is always free.' })]),
+            rewards.length ? h('div', { className: 'grid' }, cards) : h('div', { className: 'card empty' }, [icon('gift'), 'No rewards to show.'])
         ]);
     }
 
@@ -541,13 +706,18 @@
     // ------------------------------------------------------------------
 
     function renderEarn(v) {
-        if (!changed('earn', [v.rules, v.today.loginPoints, v.today.bonusPoints, v.spend.cheapest])) return;
+        if (!changed('earn', [v.rules, v.today.loginPoints, v.today.bonusPoints, v.spend.cheapest, v.streak.maxFreezes, v.streak.freezeCost, (v.rewards || []).length])) return;
+        var themeCosts = (v.rewards || []).filter(function (r) { return r.kind === 'theme' && r.cost !== null; }).map(function (r) { return r.cost; });
+        var themeFrom = themeCosts.length ? Math.min.apply(null, themeCosts) : 0;
         var rules = [
             ['tool', 'var(--info)', 'Any tool run', '+3', 'Every DevSnip Pro command counts. After ' + v.rules.rateLimitAfter + ' runs of the same tool in a day, further runs give 1 point.'],
             ['snippet', 'var(--purple)', 'Create a snippet', '+10', 'Saving your own code snippet.'],
             ['shield', 'var(--success)', 'Security audit', '+8', 'Workspace, cloud, dependency or endpoint scans.'],
             ['sparkle', 'var(--purple)', 'AI, ML and RAG tools', '+5', 'Token counter, prompt tools, RAG calculators and more.'],
-            ['sun', 'var(--streak)', 'Daily login', '+' + v.today.loginPoints, 'Added automatically once a day.'],
+            ['target', 'var(--accent)', 'Daily quests', '+10 to +20', 'Three new quests every day. Finish all of them for a +' + (v.quests ? v.quests.chestPoints : 15) + ' pts bonus chest. Never limited by the daily cap.'],
+            ['sun', 'var(--streak)', 'Daily login', '+' + v.today.loginPoints + ' today', 'Added automatically once a day, plus 1 point for every day of your streak, up to +' + v.rules.loginBonusMax + '.'],
+            ['snow', 'var(--info)', 'Streak freezes', 'Up to ' + v.streak.maxFreezes, 'Earn one every ' + v.rules.freezeEvery + ' streak days, or buy one for ' + v.streak.freezeCost + ' pts. One is used up automatically to cover a missed day.'],
+            ['palette', 'var(--purple)', 'Themes', themeFrom ? 'From ' + fmt(themeFrom) + ' pts' : 'Points', 'Spend points to unlock themes on the Rewards tab. Some also unlock as you rank up, and milestones add badge frames.'],
             ['gift', 'var(--gold)', 'Daily boost', '+' + v.today.bonusPoints, 'Claim it once a day from this page.'],
             ['trophy', 'var(--gold)', 'Milestones', '+10 to +500', 'One-time bonuses. They are never limited by the daily cap.']
         ];
@@ -559,7 +729,7 @@
                 ]);
             })),
             h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Tool use can earn up to ' + v.rules.dailyCap + ' points a day, so ranks reflect steady use rather than repetition. ' +
-                (v.spend.cheapest ? 'Points are spent on premium REST API Client tools, from ' + v.spend.cheapest + ' points per run, and only after a run succeeds.' : '') })])
+                (v.spend.cheapest ? 'Points are spent on premium REST API Client tools, from ' + v.spend.cheapest + ' points per run, and only after a run succeeds, as well as on streak freezes and themes.' : '') })])
         ]);
     }
 
@@ -624,6 +794,26 @@
                 if (card) card.classList.add('pulse');
             }
         });
+        var questsBefore = {};
+        ((previous.quests && previous.quests.items) || []).forEach(function (q) { questsBefore[q.id] = q.done; });
+        ((v.quests && v.quests.items) || []).forEach(function (q) {
+            if (q.done && questsBefore[q.id] === false) {
+                celebrate(q.icon, 'Quest complete: ' + q.title + ' (+' + q.points + ' pts)');
+                var row = document.querySelector('[data-quest="' + q.id + '"]');
+                if (row) row.classList.add('pulse');
+            }
+        });
+        if (v.quests && previous.quests && v.quests.chestClaimed && !previous.quests.chestClaimed) {
+            celebrate('🎁', "All of today's quests done! +" + v.quests.chestPoints + ' bonus pts');
+        }
+        var rewardsBefore = {};
+        (previous.rewards || []).forEach(function (r) { rewardsBefore[r.id] = r.unlocked; });
+        (v.rewards || []).forEach(function (r) {
+            if (r.unlocked && rewardsBefore[r.id] === false) {
+                celebrate(r.icon, 'New ' + (r.kind === 'theme' ? 'theme' : 'badge frame') + ' unlocked: ' + r.name);
+            }
+        });
+        if (v.streak && previous.streak && v.streak.freezes > previous.streak.freezes) celebrate('❄️', 'Streak freeze ready');
         if (v.balance !== previous.balance) animateBalance(previous.balance, v.balance);
     }
 
@@ -681,10 +871,12 @@
         ui.view = v;
         if (!ui.built) build();
         renderHero(v);
+        renderQuests(v);
         renderDaily(v);
         renderCounts(v);
         renderMilestones(v);
         renderLevels(v);
+        renderRewards(v);
         renderActivity(v);
         renderEarn(v);
         feedback(previous, v);
@@ -712,6 +904,13 @@
                 // The state update already redrew the button if it was claimed elsewhere.
                 var claim = document.getElementById('claimBtn');
                 if (claim) { claim.disabled = false; claim.lastChild.textContent = 'Claim +' + (ui.view ? ui.view.today.bonusPoints : ''); }
+            }
+            if ((message.action === 'buyFreeze' || message.action === 'buyReward') && !message.ok && ui.view) {
+                // Nothing changed, so redraw the buttons that were disabled while waiting.
+                ui.keys.hero = null;
+                ui.keys.rewards = null;
+                renderHero(ui.view);
+                renderRewards(ui.view);
             }
             if (message.message) toast(message.message, message.ok ? 'success' : 'info');
         } else if (message.type === 'error') {

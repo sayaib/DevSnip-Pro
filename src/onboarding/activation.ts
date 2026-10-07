@@ -43,11 +43,15 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
   { id: "first_ai_tool", title: "Try an AI tool", description: "Count tokens, compare models or build a prompt.", command: "aiMlHub" },
   { id: "first_security_scan", title: "Run a security scan", description: "Audit this workspace or scan an endpoint.", command: "securityHub" },
   { id: "first_database_connection", title: "Connect a database", description: "Browse and edit Postgres, MySQL, MongoDB, Redis and more.", command: "databaseClient" },
-  { id: "theme_chosen", title: "Pick a theme", description: "Choose how every DevSnip Pro panel looks.", command: "chooseTheme" }
+  { id: "theme_chosen", title: "Pick a theme", description: "Preview the themes for every panel; your first 25 points unlock one.", command: "chooseTheme" }
 ];
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  {
+    version: "11.74.1",
+    items: [{ title: "REST API Client: send a sample request in one click", command: "openGUI" }]
+  },
   {
     version: "11.73.1",
     items: [

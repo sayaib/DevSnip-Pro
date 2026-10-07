@@ -1,4 +1,6 @@
 import type { LevelInfo, Milestone, UserStats } from "../commands/milestoneTracker";
+import { QUEST_CHEST_POINTS, findQuest } from "./quests";
+import type { RewardDefinition } from "./rewards";
 
 /**
  * Turns stored milestone stats into exactly what the tracker page shows.
@@ -23,10 +25,64 @@ export interface TrackerInputs {
   premium: Array<{ name: string; pointCost: number }>;
   /** Command id -> readable tool name, for the activity feed. */
   toolNames: Record<string, string>;
+  /** Optional so older callers keep working; the tracker always passes them. */
+  rewards?: {
+    list: RewardDefinition[];
+    /** Unlocked reward ids, including ones earned by progress but not yet recorded. */
+    unlocked: string[];
+    /** How it is earned without points, or null when points are the only way. */
+    hint: (reward: RewardDefinition) => string | null;
+    currentTheme: string;
+    /** A locked theme being tried right now, if any. */
+    previewTheme?: string | null;
+    activeFrame: string | null;
+    /** themeId -> four preview colours. */
+    swatches: Record<string, string[]>;
+  };
+  freezes?: { max: number; cost: number; every: number };
+  /** Most extra login points a streak can add. */
+  loginBonusMax?: number;
+}
+
+export interface QuestView {
+  id: string;
+  title: string;
+  hint: string;
+  icon: string;
+  target: number;
+  progress: number;
+  percent: number;
+  points: number;
+  done: boolean;
+}
+
+export interface RewardView {
+  id: string;
+  kind: "theme" | "frame";
+  name: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  /** "Reach Gold" / "Complete Weekly Warrior", or null when it is unlocked with points only. */
+  hint: string | null;
+  cost: number | null;
+  affordable: boolean;
+  /** The theme in use, or the frame the badge wears. */
+  active: boolean;
+  /** A locked theme being tried right now. */
+  previewing: boolean;
+  themeId: string | null;
+  swatches: string[];
+}
+
+export interface WeekView {
+  points: number;
+  runs: number;
+  tools: number;
 }
 
 export type LevelState = "achieved" | "current" | "locked";
-export type ActivityKind = "tool" | "milestone" | "bonus" | "spend" | "refund" | "other";
+export type ActivityKind = "tool" | "milestone" | "bonus" | "quest" | "freeze" | "spend" | "refund" | "other";
 
 export interface LevelView {
   index: number;
@@ -83,6 +139,24 @@ export interface TrackerView {
   streak: {
     days: number;
     next: { title: string; target: number; remaining: number } | null;
+    best: number;
+    freezes: number;
+    maxFreezes: number;
+    freezeCost: number;
+    canBuyFreeze: boolean;
+  };
+  quests: {
+    items: QuestView[];
+    done: number;
+    total: number;
+    chestPoints: number;
+    chestClaimed: boolean;
+    perfectDays: number;
+  };
+  rewards: RewardView[];
+  week: {
+    current: WeekView;
+    last: (WeekView & { previousPoints: number }) | null;
   };
   milestones: MilestoneView[];
   milestoneSummary: { completed: number; total: number; earned: number; available: number };
@@ -96,7 +170,7 @@ export interface TrackerView {
     cheapest: number | null;
     next: { name: string; cost: number; short: number } | null;
   };
-  rules: { dailyCap: number; rateLimitAfter: number };
+  rules: { dailyCap: number; rateLimitAfter: number; freezeEvery: number; loginBonusMax: number };
 }
 
 export function levelIndexFor(points: number, levels: LevelInfo[]): number {
@@ -135,6 +209,7 @@ function remainingLabel(milestone: Milestone, remaining: number): string {
   if (milestone.id === "security_audit") return `${plural(remaining, "more audit")}`;
   if (milestone.id === "ai_explorer") return `${plural(remaining, "more AI tool run")}`;
   if (milestone.id === "feature_explorer") return `${plural(remaining, "more feature")} to try`;
+  if (milestone.id === "quest_master") return `${plural(remaining, "more day")} with every quest done`;
   return `${plural(remaining, "more tool run")}`;
 }
 
@@ -142,6 +217,8 @@ function activityKind(entry: UserStats["activities"][number]): ActivityKind {
   if (entry.category === "Milestone") return "milestone";
   if (entry.category === "Redemption") return entry.points < 0 ? "spend" : "refund";
   if (entry.id === "daily_login" || entry.id === "daily_bonus") return "bonus";
+  if (entry.category === "Quest") return "quest";
+  if (entry.id.startsWith("streak_freeze")) return "freeze";
   if (entry.id.startsWith("sayaib.")) return "tool";
   return "other";
 }
@@ -206,6 +283,48 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
 
   const earned = Math.min(stats.dailyEarnedPoints, input.dailyCap);
 
+  const quests: QuestView[] = [];
+  for (const item of stats.quests?.items ?? []) {
+    const quest = findQuest(item.id);
+    if (!quest) continue;
+    quests.push({
+      id: quest.id,
+      title: quest.title,
+      hint: quest.hint,
+      icon: quest.icon,
+      target: quest.target,
+      progress: item.progress,
+      percent: item.done ? 100 : Math.min(99, Math.floor((item.progress / quest.target) * 100)),
+      points: quest.points,
+      done: item.done
+    });
+  }
+
+  const rewardInput = input.rewards;
+  const rewards: RewardView[] = (rewardInput?.list ?? []).map(reward => {
+    const unlocked = rewardInput!.unlocked.includes(reward.id);
+    return {
+      id: reward.id,
+      kind: reward.kind,
+      name: reward.name,
+      description: reward.description,
+      icon: reward.icon,
+      unlocked,
+      hint: rewardInput!.hint(reward),
+      cost: reward.cost ?? null,
+      affordable: reward.cost !== undefined && stats.totalPoints >= reward.cost,
+      active: unlocked && (reward.kind === "theme" ? rewardInput!.currentTheme === reward.themeId : rewardInput!.activeFrame === reward.frame),
+      previewing: !unlocked && reward.kind === "theme" && !!reward.themeId && rewardInput!.previewTheme === reward.themeId,
+      themeId: reward.themeId ?? null,
+      swatches: reward.themeId ? rewardInput!.swatches[reward.themeId] ?? [] : []
+    };
+  });
+
+  const maxFreezes = input.freezes?.max ?? 0;
+  const freezeCost = input.freezes?.cost ?? 0;
+  const freezes = stats.streakFreezes ?? 0;
+  const weekOf = (week: UserStats["weekly"]): WeekView => ({ points: week.points, runs: week.runs, tools: week.tools.length });
+
   return {
     balance: stats.totalPoints,
     lifetime: stats.lifetimePoints,
@@ -223,7 +342,28 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
       bonusClaimed: Boolean(stats.dailyClaims[`${input.today}_bonus`]),
       bonusPoints: input.bonusPoints
     },
-    streak: { days: stats.streakDays, next: streakNext },
+    streak: {
+      days: stats.streakDays,
+      next: streakNext,
+      best: Math.max(stats.bestStreak ?? 1, stats.streakDays),
+      freezes,
+      maxFreezes,
+      freezeCost,
+      canBuyFreeze: maxFreezes > 0 && freezes < maxFreezes && stats.totalPoints >= freezeCost
+    },
+    quests: {
+      items: quests,
+      done: quests.filter(quest => quest.done).length,
+      total: quests.length,
+      chestPoints: QUEST_CHEST_POINTS,
+      chestClaimed: Boolean(stats.quests?.chestClaimed),
+      perfectDays: stats.perfectQuestDays ?? 0
+    },
+    rewards,
+    week: {
+      current: stats.weekly ? weekOf(stats.weekly) : { points: 0, runs: 0, tools: 0 },
+      last: stats.lastWeek ? { ...weekOf(stats.lastWeek), previousPoints: stats.lastWeek.previousPoints ?? 0 } : null
+    },
     milestones: [
       // Closest to done first, completed ones last, so what to do next is on top.
       ...open.sort((a, b) => b.percent - a.percent || a.target - b.target),
@@ -250,7 +390,7 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
       cheapest,
       next: nextBuy ? { name: nextBuy.name, cost: nextBuy.pointCost, short: nextBuy.pointCost - stats.totalPoints } : null
     },
-    rules: { dailyCap: input.dailyCap, rateLimitAfter: input.rateLimitAfter }
+    rules: { dailyCap: input.dailyCap, rateLimitAfter: input.rateLimitAfter, freezeEvery: input.freezes?.every ?? 0, loginBonusMax: input.loginBonusMax ?? 0 }
   };
 }
 

@@ -3127,6 +3127,12 @@ function emptyResponseState() {
     wrap.appendChild(glyph);
     wrap.appendChild(make('h3', '', 'No response yet'));
     wrap.appendChild(make('p', '', 'Configure your request and select Send to see the response here.'));
+    /* A first result in one click: only offered while the URL bar is empty, so it never replaces a URL. */
+    var sample = makeButton('btn btn-sm', 'Send a sample request', sendSampleRequest, 'send');
+    sample.id = 'sampleRequestBtn';
+    sample.title = 'GET ' + SAMPLE_URL;
+    sample.hidden = !!$('url').value.trim();
+    wrap.appendChild(sample);
     var tips = make('ul', 'tips');
     [
         ['Enter', ' in the URL bar, or Ctrl/Cmd+Enter anywhere, sends the request'],
@@ -3140,6 +3146,23 @@ function emptyResponseState() {
     });
     wrap.appendChild(tips);
     return wrap;
+}
+
+var SAMPLE_URL = 'https://jsonplaceholder.typicode.com/todos/1';
+function sendSampleRequest() {
+    if ($('url').value.trim()) { updateSampleButton(); return; }
+    setRequestType('rest');
+    methodSelect.value = 'GET';
+    updateMethodColor();
+    $('url').value = SAMPLE_URL;
+    syncParamsFromUrl();
+    validateUrlField();
+    markChanged();
+    sendCurrentRequest();
+}
+function updateSampleButton() {
+    var button = $('sampleRequestBtn');
+    if (button) button.hidden = !!$('url').value.trim();
 }
 
 function stopElapsedTimer() {
@@ -3893,6 +3916,7 @@ $('url').addEventListener('input', function () {
     syncParamsFromUrl();
     validateUrlField();
     markChanged();
+    updateSampleButton();
 });
 $('url').addEventListener('keydown', function (event) {
     if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey) {

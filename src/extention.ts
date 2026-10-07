@@ -7,8 +7,8 @@ import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImpor
 import { registerHubCommands } from "./commands/hubCommands";
 import { registerToolkitCommands } from "./toolkits/runner";
 import { registerDatabaseClientCommand } from "./database/command";
-import { initThemes, registerThemeCommand } from "./theme/service";
-import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance, recordDiscovery, Discovery } from "./commands/milestoneTracker";
+import { initThemes, registerThemeCommand, setThemeAccess } from "./theme/service";
+import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance, recordDiscovery, Discovery, getUserStats, themeLockFor, buyReward, grantKeptTheme } from "./commands/milestoneTracker";
 import { registerLazyCommands, registerTrackedCommand, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
 import { classifyInstall, initAnalytics, shutdownAnalytics, snapshotInstall, track, trackCommand } from "./analytics";
 import { initActivation, noteCommand } from "./onboarding/activation";
@@ -32,6 +32,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   // The milestone store needs its context before any command can record usage.
   setMilestoneContext(context);
+  // Every theme but System Default unlocks with points; the picker asks the milestone store.
+  setThemeAccess({
+    lock: themeId => themeLockFor(getUserStats(context), themeId),
+    unlock: async themeId => {
+      const lock = themeLockFor(getUserStats(context), themeId);
+      return !lock || (await buyReward(context, lock.rewardId)) === "ok";
+    },
+    grant: themeId => grantKeptTheme(context, themeId)
+  });
   // The appearance theme is read before any webview renders, so none flashes the wrong theme.
   initThemes(context);
   // Local first-use and onboarding state. The install snapshot decides whether this is a new user.

@@ -1,8 +1,10 @@
-# VS Code developer productivity tools
+# Format JSON and YAML, decode JWTs and other quick developer tools in VS Code
 
-Most lost time in a developer's day is not hard problems. It is dozens of small detours: a website to format JSON, another to decode a JWT, a search for the right `git` command to undo a commit, a script to convert a timestamp. Each takes a minute, and each pulls you out of the editor.
+**Short answer:** instead of pasting a production payload or a real token into a website, use local tools in the editor. [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) has a JSON / YAML / XML formatter, a JWT decoder and signer, a cURL converter, a regex tester, encoders, timestamp and UUID tools and 100+ more, all running locally in one searchable sidebar.
 
-This guide lists the small tasks worth bringing into VS Code, and how [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) handles each one. There are 110 tools in 13 sections, all reachable from one sidebar.
+![All DevSnip Pro tools in one searchable grid in VS Code, grouped into 13 sections](../images/all-tools.jpg)
+
+Most lost time in a developer's day is not hard problems. It is dozens of small detours: a website to format JSON, another to decode a JWT, a search for the right `git` command, a script to convert a timestamp. Each takes a minute and pulls you out of the editor. There are 110 tools in 13 sections, all reachable from one sidebar.
 
 ## Find any tool in two keystrokes
 
@@ -19,6 +21,8 @@ Most toolkit panels end with the same four actions: **Copy**, **Insert at cursor
 | Test a regex with groups, and copy it as code for 9 languages | **Regex Tester & Library** |
 | Convert camelCase / snake_case / kebab-case; sort and de-duplicate lines | **Case Converter & Text Tools** |
 | Base64, URL, HTML entity, hex and Unicode encoding | **Encode / Decode** |
+| Decode a JWT, check its expiry, verify or sign a test token | **JWT Decoder & Signer** |
+| Turn a cURL command into fetch, Axios, Python, Go and more | **cURL Converter** |
 | Unix time ↔ dates, time zones, date math | **Timestamp Converter** |
 | UUID v4/v7, ULID, Nano ID, ObjectId | **UUID & ID Generator** |
 | Types from a JSON sample | **JSON to Types** |
@@ -41,8 +45,14 @@ Generators for Dockerfiles, Compose files, CI pipelines, Kubernetes and Helm, Te
 
 ## Make it comfortable
 
-Pick one of nine appearance themes for every DevSnip Pro panel from the **Theme** selector at the top of the sidebar. Points, streaks and milestones are optional and stay on your machine; they record what you have tried rather than asking for more clicks.
+Pick one of twelve appearance themes for every DevSnip Pro panel from the **Theme** selector at the top of the sidebar; System Default is free and the others unlock with points you earn by using the extension. Points, streaks and milestones are optional and stay on your machine; they record what you have tried rather than asking for more clicks.
 
 ## The habit that helps most
 
 Every time you open a browser tab for a small conversion or a lookup, check whether the sidebar search has it. After a week, the detours are mostly gone.
+
+---
+
+**Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
+
+Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [How to connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](connect-to-postgresql-mysql-mongodb-redis-in-vscode.md) · [All guides](README.md)

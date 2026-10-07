@@ -1,11 +1,15 @@
-# How to use an AI-powered developer toolkit
+# How to install and use OpenCode in VS Code
 
-"AI-powered" can mean anything from a chat box to an autonomous agent. In practice, two kinds of tools are useful during development:
+**Short answer:** OpenCode is an AI coding agent that runs in a terminal. Install it with npm (`npm install -g opencode-ai`) or let **DevSnip Pro: OpenCode Integration** in [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) check Node.js, install or repair the CLI, and launch it in a terminal rooted at your workspace, on Windows, macOS and Linux.
+
+![OpenCode Integration Hub in VS Code showing Node.js and OpenCode installed](../images/opencode.jpg)
+
+An agent is only half of a good workflow. Two kinds of tools are useful during development:
 
 - **Agents** write and change code from a description. They are great at boilerplate and refactors, and they need review.
 - **Deterministic tools** give the same answer every time: a formatter, a token counter, a schema validator, a security scanner. They are what you use to check the agent's work and your own.
 
-A good workflow uses both. This guide shows one with [DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console), which has an OpenCode launcher for the agent side and 110 local tools for the checking side.
+This guide sets up the agent, then shows which DevSnip Pro tools to check its work with.
 
 ## 1. Set up the agent
 
@@ -45,3 +49,9 @@ When you write (or the agent writes) a block you will need again, select it and 
 ## Why this split works
 
 Agents are fast but probabilistic; checks are slower to set up but repeatable. Using the agent for the first draft and deterministic tools for review gives you the speed without shipping its mistakes. Because the checking tools run locally, your code is not sent anywhere to verify it.
+
+---
+
+**Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
+
+Related: [How to count LLM tokens and estimate cost in VS Code](count-llm-tokens-and-cost-in-vscode.md) · [How to find hard-coded secrets in VS Code](find-hardcoded-secrets-in-vscode.md) · [All guides](README.md)

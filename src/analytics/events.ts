@@ -217,9 +217,46 @@ export const EVENT_CATALOG = defineCatalog({
     properties: {}
   },
   points_spent: {
-    description: "Points were spent on a premium REST client tool.",
+    description: "Points were spent: on a premium REST client tool, a streak freeze or a reward unlocked early.",
     properties: {
       amount: { kind: "count", description: "Points spent." }
+    }
+  },
+  quest_completed: {
+    description: "One of the day's quests was finished.",
+    properties: {
+      quest: { kind: "id", description: "Quest id, e.g. new_tool." }
+    }
+  },
+  quests_all_done: {
+    description: "Every quest of the day was finished and the bonus chest paid out.",
+    properties: {}
+  },
+  reward_unlocked: {
+    description: "A reward (a theme or a badge frame) was unlocked.",
+    properties: {
+      reward: { kind: "id", description: "Reward id, e.g. theme_synthwave." },
+      via: { kind: "enum:level|milestone|points|kept", description: "Earned by rank, earned by a milestone, bought with points, or kept free because it was in use when themes became paid." }
+    }
+  },
+  streak_freeze: {
+    description: "A streak freeze was earned, bought or used up to save a streak.",
+    properties: {
+      action: { kind: "enum:earned|bought|used", description: "What happened." },
+      count: { kind: "count", description: "Freezes involved." }
+    }
+  },
+  theme_preview: {
+    description: "A locked theme was tried for a short while, and how the preview ended.",
+    properties: {
+      theme: { kind: "id", description: "Theme id, e.g. dracula." },
+      outcome: { kind: "enum:started|unlocked|ended|expired|replaced", description: "started when it begins; then unlocked (bought), ended (stopped early), expired (time ran out) or replaced (another theme chosen)." }
+    }
+  },
+  weekly_recap: {
+    description: "The once-a-week recap notification was shown, or opened.",
+    properties: {
+      action: { kind: "enum:shown|opened", description: "What happened." }
     }
   },
 

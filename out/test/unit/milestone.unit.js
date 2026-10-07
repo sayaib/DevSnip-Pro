@@ -26,6 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const assert = __importStar(require("assert"));
 const milestoneTracker_1 = require("../../commands/milestoneTracker");
 const milestone_view_1 = require("../../services/milestone-view");
+const quests_1 = require("../../services/quests");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode_stub_1 = require("./vscode-stub");
@@ -92,7 +93,8 @@ function freshContext(seed = {}) {
         await (0, milestoneTracker_1.autoRecordToolUsage)("sayaib.hue-console.openGUI");
         const stats = (0, milestoneTracker_1.getUserStats)(context);
         assert.strictEqual(stats.counters.toolRuns, 1);
-        assert.strictEqual(stats.activities.length, 2, "tool run plus the first_tool milestone");
+        // A quest the run happens to finish adds its own entry.
+        assert.strictEqual(stats.activities.filter(a => a.category !== "Quest").length, 2, "tool run plus the first_tool milestone");
         assert.ok(stats.totalPoints >= 3);
     });
     (0, run_unit_tests_1.test)("concurrent tool runs do not lose points", async () => {
@@ -129,7 +131,12 @@ function freshContext(seed = {}) {
         const milestoneBonus = stats.completedMilestones
             .map(id => milestoneTracker_1.MILESTONES.find(milestone => milestone.id === id)?.points ?? 0)
             .reduce((sum, points) => sum + points, 0);
-        assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus);
+        // Quests and the all-done chest are one-time per day too.
+        const questBonus = stats.quests.items
+            .filter(item => item.done)
+            .map(item => (0, quests_1.findQuest)(item.id)?.points ?? 0)
+            .reduce((sum, points) => sum + points, 0) + (stats.quests.chestClaimed ? quests_1.QUEST_CHEST_POINTS : 0);
+        assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus + questBonus);
         assert.ok(stats.dailyPoints < 500, "a single day cannot produce an unbounded score");
     });
     (0, run_unit_tests_1.test)("milestones unlock once and only once", async () => {
