@@ -1236,7 +1236,9 @@
     var start = res.rows.length ? (t.page - 1) * t.pageSize + 1 : 0;
     var end = (t.page - 1) * t.pageSize + res.rows.length;
     var totalText = typeof res.total === "number" ? fmtNum(res.total) + (res.totalCapped ? "+" : "") : null;
-    foot.append(h("span", null, res.rows.length ? (totalText ? fmtNum(start) + "–" + fmtNum(end) + " of " + totalText + " " + noun + "s" : noun.charAt(0).toUpperCase() + noun.slice(1) + "s " + fmtNum(start) + "–" + fmtNum(end)) : "0 " + noun + "s"));
+    // "1 row", never "1 rows".
+    var plural = res.total === 1 && !res.totalCapped ? noun : noun + "s";
+    foot.append(h("span", null, res.rows.length ? (totalText ? fmtNum(start) + "–" + fmtNum(end) + " of " + totalText + " " + plural : noun.charAt(0).toUpperCase() + noun.slice(1) + "s " + fmtNum(start) + "–" + fmtNum(end)) : "0 " + noun + "s"));
     foot.append(h("span", { title: "Server round trip" }, icon("watch"), " " + res.elapsedMs + " ms"));
     if (res.totalCapped) foot.append(h("span", { class: "chip warn", title: "SCAN stopped after this many keys. Narrow the pattern to see the rest." }, icon("warning"), "first " + fmtNum(res.total) + " keys scanned"));
     if (t.selected.size) foot.append(h("span", { class: "chip" }, fmtNum(t.selected.size) + " selected"));

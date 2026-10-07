@@ -1,3 +1,13 @@
+## ☕ Support DevSnip Pro
+
+If DevSnip Pro helps you code faster, consider supporting the project with a coffee! ❤️
+
+<p align="center">
+  <a href="https://www.buymeacoffee.com/ssayaibj">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="217" height="60">
+  </a>
+</p>
+
 # DevSnip Pro — REST API Client & Database Client for VS Code
 
 **A free REST API client for VS Code: send HTTP and GraphQL requests with environments, collections, cURL import and code generation, then check the result in a built-in database client for PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis.** It also includes LLM token and cost tools, a security scan for hard-coded secrets, and 100+ everyday developer utilities.
@@ -51,14 +61,14 @@ Guides: [How to test REST APIs in VS Code](docs/guides/test-rest-apis-in-vscode.
 
 ![DevSnip Pro Database Client in VS Code browsing a PostgreSQL table with pagination and filters](docs/images/database.jpg)
 
-| Database | Connection string | What you can do |
-| :--- | :--- | :--- |
-| PostgreSQL | `postgresql://user:pass@host:5432/db` | Browse databases, schemas, tables and views; full CRUD; SQL console |
-| MySQL / MariaDB | `mysql://user:pass@host:3306/db` | Browse databases, tables and views; full CRUD; SQL console |
-| SQL Server | `Server=host,1433;Database=db;User Id=…;Password=…` or `sqlserver://…` | Browse databases, schemas, tables and views; full CRUD; T-SQL console |
-| SQLite | `sqlite:///path/to/app.db` (or **Browse…**) | Browse tables and views; full CRUD; SQL console |
-| MongoDB | `mongodb://…` or `mongodb+srv://…` | Browse databases and collections; edit documents; mongosh-style console |
-| Redis | `redis://…` or `rediss://…` | Browse keys by pattern and type; edit strings, hashes, lists, sets and sorted sets with TTLs; command console |
+| Database        | Connection string                                                      | What you can do                                                                                               |
+| :-------------- | :--------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
+| PostgreSQL      | `postgresql://user:pass@host:5432/db`                                  | Browse databases, schemas, tables and views; full CRUD; SQL console                                           |
+| MySQL / MariaDB | `mysql://user:pass@host:3306/db`                                       | Browse databases, tables and views; full CRUD; SQL console                                                    |
+| SQL Server      | `Server=host,1433;Database=db;User Id=…;Password=…` or `sqlserver://…` | Browse databases, schemas, tables and views; full CRUD; T-SQL console                                         |
+| SQLite          | `sqlite:///path/to/app.db` (or **Browse…**)                            | Browse tables and views; full CRUD; SQL console                                                               |
+| MongoDB         | `mongodb://…` or `mongodb+srv://…`                                     | Browse databases and collections; edit documents; mongosh-style console                                       |
+| Redis           | `redis://…` or `rediss://…`                                            | Browse keys by pattern and type; edit strings, hashes, lists, sets and sorted sets with TTLs; command console |
 
 - **Data grid** with pagination, sorting, search and filters; MongoDB filters such as `{ age: { $gt: 21 } }` and Redis key patterns such as `user:*`.
 - **Editing:** a type-aware row editor with NULL and DEFAULT, an Extended JSON document editor (`ObjectId()`, `ISODate()`), and a key editor per Redis type.
@@ -127,19 +137,19 @@ Guide: [How to install and use OpenCode in VS Code](docs/guides/opencode-in-vsco
 
 All three can send API requests from VS Code. They are built for different jobs, so pick by what you need.
 
-| | DevSnip Pro |
-| :--- | :--- |
-| Account required | No |
-| Where requests are stored | Locally, in VS Code storage |
-| HTTP, GraphQL | Yes, free |
-| WebSocket, OAuth 2.0 helper, assertions, chaining, batch runs | Yes, paid with points earned by use† |
-| Environments, collections, history, cURL import/export, code generation | Yes, free |
-| Import Postman or Insomnia collections | No (cURL import only) |
-| `.http` / `.rest` files | No |
-| Command-line runner for CI | No |
-| gRPC, SOAP | No |
-| Team workspaces and sync | No |
-| Also included | Database client, security scans, LLM tools, 100+ utilities |
+|                                                                         | DevSnip Pro                                                |
+| :---------------------------------------------------------------------- | :--------------------------------------------------------- |
+| Account required                                                        | No                                                         |
+| Where requests are stored                                               | Locally, in VS Code storage                                |
+| HTTP, GraphQL                                                           | Yes, free                                                  |
+| WebSocket, OAuth 2.0 helper, assertions, chaining, batch runs           | Yes, paid with points earned by use†                       |
+| Environments, collections, history, cURL import/export, code generation | Yes, free                                                  |
+| Import Postman or Insomnia collections                                  | No (cURL import only)                                      |
+| `.http` / `.rest` files                                                 | No                                                         |
+| Command-line runner for CI                                              | No                                                         |
+| gRPC, SOAP                                                              | No                                                         |
+| Team workspaces and sync                                                | No                                                         |
+| Also included                                                           | Database client, security scans, LLM tools, 100+ utilities |
 
 **Choose DevSnip Pro** if you work alone or locally, want no account, and also want a database client and everyday tools in the same extension. **Choose Postman or Thunder Client** if you need team sharing, collection import or a CI runner. **Choose REST Client** if you want requests as `.http` files in your repository. Features and plans of other tools change; check their pages for current details.
 
@@ -195,21 +205,21 @@ Twelve themes restyle every DevSnip Pro panel in one click from the **Theme** se
 
 ## All tools by section
 
-| Section | Tools |
-| :--- | :--- |
-| **Backend & API** | REST API Client, cURL Converter, API Response Inspector, URL & Query String Tool, CORS Builder & Debugger, OpenAPI / Swagger Toolkit, GraphQL Formatter & Types, API Resource Scaffolder |
-| **Web & Frontend** | React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder |
-| **Mobile Development** | adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes |
-| **Code & Productivity** | Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration |
-| **Text & Formatters** | JSON / YAML / XML Formatter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools |
-| **Encoders & Converters** | Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter |
-| **Database** | Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB |
-| **Testing & Debugging** | Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit |
-| **Git & Version Control** | Git Command Recipes, .gitignore Generator, Semver & App Versions |
-| **DevOps & Cloud** | Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter |
-| **Security & Auth** | JWT Decoder & Signer, Workspace Security Audit, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit |
-| **AI & ML** | Prompt Builder, LLM Models / Tokens & Cost, LLM Client Setup, LLM Output Cleaner & JSON Validator, LLM API Tester, JSON → TOON, AI App Starter, AI/ML Code Snippets, GPU Memory & Speed, Model Serving Starter, Model Metrics, Dataset Split Planner, Learning-Rate Schedule, Model Card |
-| **Data & RAG** | Chunking Tester, RAG Pipeline Generator, Vector Store Setup, Embedding Model Guide, Retrieval Configuration, Context Window Budget, Grounded Prompt Assembler, Chunk & Index Size Calculator, Retrieval Evaluation, Answer Grounding Checker, Vector Similarity, Near-Duplicate Chunk Finder, Hybrid Search Fusion, Chunk Metadata Validator, Data Transformer, Data Profiler, JSON Lines Inspector, Schema Viewer & Diff, Partition Planner, Spark Cluster & Cost, Delta Lake Log Analyzer |
+| Section                   | Tools                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| :------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Backend & API**         | REST API Client, cURL Converter, API Response Inspector, URL & Query String Tool, CORS Builder & Debugger, OpenAPI / Swagger Toolkit, GraphQL Formatter & Types, API Resource Scaffolder                                                                                                                                                                                                                                                                                                    |
+| **Web & Frontend**        | React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder                                                                                                                                                                                                                                                                                                                                                     |
+| **Mobile Development**    | adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes                                                                                                                                                                                                                                                                        |
+| **Code & Productivity**   | Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration                                                                                                                                                                                                                                                                                                                                       |
+| **Text & Formatters**     | JSON / YAML / XML Formatter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Encoders & Converters** | Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Database**              | Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Testing & Debugging**   | Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit                                                                                                                                                                                                                                                                                                                                                                         |
+| **Git & Version Control** | Git Command Recipes, .gitignore Generator, Semver & App Versions                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **DevOps & Cloud**        | Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter                                                                                                                                                                                                                                                                         |
+| **Security & Auth**       | JWT Decoder & Signer, Workspace Security Audit, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit                                                                                                                                                                                                                                                   |
+| **AI & ML**               | Prompt Builder, LLM Models / Tokens & Cost, LLM Client Setup, LLM Output Cleaner & JSON Validator, LLM API Tester, JSON → TOON, AI App Starter, AI/ML Code Snippets, GPU Memory & Speed, Model Serving Starter, Model Metrics, Dataset Split Planner, Learning-Rate Schedule, Model Card                                                                                                                                                                                                    |
+| **Data & RAG**            | Chunking Tester, RAG Pipeline Generator, Vector Store Setup, Embedding Model Guide, Retrieval Configuration, Context Window Budget, Grounded Prompt Assembler, Chunk & Index Size Calculator, Retrieval Evaluation, Answer Grounding Checker, Vector Similarity, Near-Duplicate Chunk Finder, Hybrid Search Fusion, Chunk Metadata Validator, Data Transformer, Data Profiler, JSON Lines Inspector, Schema Viewer & Diff, Partition Planner, Spark Cluster & Cost, Delta Lake Log Analyzer |
 
 Generated configuration is checked by the test suite: YAML and JSON are parsed, TypeScript and JavaScript are compiled, Python is byte-compiled, and Compose files are validated with `docker compose config`.
 
@@ -225,15 +235,15 @@ Requires VS Code 1.93 or newer, on Windows, macOS or Linux. After an update, the
 
 ## Settings
 
-| Setting | Default | What it does |
-| :--- | :--- | :--- |
-| `devsnip.apiTimeout` | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it. |
-| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true` | Ask before removing `console.log` statements. |
-| `devsnip.securityAudit.maxFiles` | `2000` | How many files each workspace, cloud or dependency security scan reads. |
-| `devsnip.security.endpointTimeout` | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner. |
-| `devsnip.security.activeChecks` | `false` | Pre-enable the endpoint scanner's active checks. |
-| `devsnip.analytics.enabled` | `true` | Send anonymous usage analytics. See [Privacy and analytics](#privacy-and-analytics). |
-| `devsnip.analytics.debug` | `false` | Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel. |
+| Setting                                         | Default | What it does                                                                                  |
+| :---------------------------------------------- | :------ | :-------------------------------------------------------------------------------------------- |
+| `devsnip.apiTimeout`                            | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it.  |
+| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before removing `console.log` statements.                                                 |
+| `devsnip.securityAudit.maxFiles`                | `2000`  | How many files each workspace, cloud or dependency security scan reads.                       |
+| `devsnip.security.endpointTimeout`              | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner.                |
+| `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks.                                              |
+| `devsnip.analytics.enabled`                     | `true`  | Send anonymous usage analytics. See [Privacy and analytics](#privacy-and-analytics).          |
+| `devsnip.analytics.debug`                       | `false` | Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel. |
 
 **Keyboard shortcuts:** none are set by default, so nothing conflicts with your bindings. Add your own in **Preferences: Open Keyboard Shortcuts (JSON)**, for example `{ "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" }`.
 

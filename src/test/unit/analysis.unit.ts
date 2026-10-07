@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { findConsoleLogs } from "../../commands/listAndRemoveConsoleLogsCommand";
+import { findConsoleLogs, wholeLineRange } from "../../commands/listAndRemoveConsoleLogsCommand";
 import { analyzeFileImports } from "../../commands/removeUnusedImportsCommand";
 import { suite, test } from "./run-unit-tests";
 
@@ -89,5 +89,16 @@ suite("unused import analysis", () => {
 
   test("ignores files in unsupported languages", () => {
     assert.deepStrictEqual(analyzeFileImports('import x from "y";', "/tmp/j.txt"), []);
+  });
+});
+
+suite("console.log removal", () => {
+  test("a statement alone on its line removes the whole line; an inline one only the call", () => {
+    const text = 'const a = 1;\n  console.log("x");\nconst b = 2; console.log("y");\nconsole.log("z");';
+    const [first, inline, last] = findConsoleLogs(text, "a.js");
+    const apply = (range: { start: number; end: number }) => text.slice(0, range.start) + text.slice(range.end);
+    assert.strictEqual(apply(wholeLineRange(text, first.startOffset, first.endOffset)!), 'const a = 1;\nconst b = 2; console.log("y");\nconsole.log("z");');
+    assert.strictEqual(wholeLineRange(text, inline.startOffset, inline.endOffset), undefined, "code before it on the line stays");
+    assert.strictEqual(apply(wholeLineRange(text, last.startOffset, last.endOffset)!), 'const a = 1;\n  console.log("x");\nconst b = 2; console.log("y");\n', "the last line without a newline");
   });
 });

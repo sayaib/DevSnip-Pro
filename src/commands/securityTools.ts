@@ -1053,7 +1053,11 @@ export function registerSecurityToolsCommands(context: vscode.ExtensionContext):
           pending.delete(panel);
           return;
         }
-        void handleMessage(panel, message);
+        // Anything a scan does not catch itself (opening a moved file, for one) is shown, not lost.
+        handleMessage(panel, message).catch(error => {
+          console.error("DevSnip Pro: Security Hub action failed.", error);
+          send(panel, { type: "toast", message: `That did not work: ${error instanceof Error ? error.message : String(error)}` });
+        });
       });
       panel.onDidDispose(() => {
         subscription.dispose();

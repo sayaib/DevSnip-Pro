@@ -924,4 +924,18 @@ function find(checks, id) {
         assert.strictEqual(find(checks, "deps.manifest-parse").status, "warn");
     });
 });
+(0, run_unit_tests_1.suite)("connection string placeholders", () => {
+    (0, run_unit_tests_1.test)("template connection strings are not reported; real ones are", () => {
+        const placeholders = [
+            'DATABASE_URL=postgres://user:password@localhost:5432/app',
+            'MONGO_URL=mongodb://admin:changeme@db:27017',
+            'url: "mysql://root:${DB_PASSWORD}@mysql:3306/app"',
+            'REDIS_URL=redis://default:<password>@cache:6379'
+        ];
+        for (const line of placeholders)
+            assert.deepStrictEqual((0, security_static_1.scanSourceText)(".env.example", line).filter(f => /connection string/i.test(f.title)), [], line);
+        const real = (0, security_static_1.scanSourceText)("config.js", 'const db = "postgres://app:Zq8#vL2pW9xK@db.prod.internal:5432/app";');
+        assert.ok(real.some(f => /connection string/i.test(f.title)), "a real password is still reported");
+    });
+});
 //# sourceMappingURL=security.unit.js.map

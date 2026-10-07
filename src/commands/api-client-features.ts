@@ -52,8 +52,12 @@ export interface FeatureContext {
   extensionContext: vscode.ExtensionContext;
   /** Sends a message back to the webview, tolerating a disposed panel. */
   post: (message: unknown) => void;
-  /** The client's own HTTP sender, reused so history and cookies stay shared. */
-  sendHttp: (request: Record<string, unknown>) => Promise<any>;
+  /**
+   * The client's own HTTP sender, reused so cookies stay shared. `background`
+   * requests (batch and load runs) run side by side without cancelling each
+   * other and are not added to history.
+   */
+  sendHttp: (request: Record<string, unknown>, options?: { background?: boolean }) => Promise<any>;
 }
 
 type Handler = (message: Record<string, any>, context: FeatureContext) => Promise<unknown>;
@@ -317,7 +321,7 @@ const handlers: Record<string, Handler> = {
 
       const latencies: number[] = [];
       const statuses: Record<string, number> = {};
-      let failures = 0;
+      let successes = 0;
       const started = Date.now();
 
       for (let index = 0; index < count; index += concurrency) {
@@ -326,24 +330,23 @@ const handlers: Record<string, Handler> = {
           Array.from({ length: size }, async () => {
             const at = Date.now();
             try {
-              const response = await context.sendHttp(template);
+              const response = await context.sendHttp(template, { background: true });
               latencies.push(Date.now() - at);
               const key = String(response?.status ?? 0);
               statuses[key] = (statuses[key] ?? 0) + 1;
               return response?.status < 500;
             } catch {
               latencies.push(Date.now() - at);
-              failures++;
               statuses.error = (statuses.error ?? 0) + 1;
               return false;
             }
           })
         );
-        void results;
+        // Any 5xx or network error is a failure, not only HTTP 500.
+        successes += results.filter(Boolean).length;
       }
 
       const elapsed = Date.now() - started;
-      const successes = count - failures - (statuses["500"] ?? 0);
       return {
         count,
         concurrency,
@@ -1117,7 +1120,7 @@ async function runPointUnlockedFeature(
       for (let index = 0; index < runs; index++) {
         const started = Date.now();
         try {
-          const response = await context.sendHttp(request);
+          const response = await context.sendHttp(request, { background: true });
           latencies.push(Date.now() - started);
           if (response?.status < 500) successes++;
         } catch {

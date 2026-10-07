@@ -79,10 +79,21 @@ function registerCreateSnippetCommand(context) {
             if (!snippetName)
                 return;
             const name = snippetName.trim();
+            const prefix = snippetPrefix.trim();
             const overwrote = Boolean(existingSnippets[name]);
             if (overwrote) {
                 if (!(await (0, webview_ui_1.confirmAction)(`A ${language} snippet named "${name}" already exists. Overwrite it?`, "Overwrite")))
                     return;
+            }
+            // Two snippets with one prefix both pop up when it is typed; make that a choice, not an accident.
+            const clash = Object.entries(existingSnippets).find(([key, snippet]) => key !== name && snippet && (Array.isArray(snippet.prefix) ? snippet.prefix.includes(prefix) : snippet.prefix === prefix));
+            let replaceKey;
+            if (clash) {
+                const choice = await vscode.window.showWarningMessage(`The ${language} snippet "${clash[0]}" already uses the prefix "${prefix}". Typing it would offer both.`, { modal: true }, "Replace it", "Keep both");
+                if (!choice)
+                    return;
+                if (choice === "Replace it")
+                    replaceKey = clash[0];
             }
             const description = await vscode.window.showInputBox({
                 title: "Snippet description (optional)",
@@ -91,8 +102,10 @@ function registerCreateSnippetCommand(context) {
             });
             if (description === undefined)
                 return;
+            if (replaceKey)
+                delete existingSnippets[replaceKey];
             existingSnippets[name] = {
-                prefix: snippetPrefix.trim(),
+                prefix,
                 // Tabs break VS Code snippet indentation handling in mixed files.
                 body: selectedText.replace(/\t/g, "    ").split(/\r?\n/),
                 description: description.trim()

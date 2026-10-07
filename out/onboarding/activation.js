@@ -61,6 +61,10 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     {
+        version: "11.75.2",
+        items: [{ title: "REST API Client: reliable batch tests, and large or binary responses shown safely", command: "openGUI" }]
+    },
+    {
         version: "11.75.1",
         items: [
             { title: "Daily quests, streak freezes and a weekly recap", command: "milestoneTracker" },

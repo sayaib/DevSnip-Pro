@@ -1040,6 +1040,8 @@ export function buildMilestoneView(context: vscode.ExtensionContext): TrackerVie
 }
 
 const MILESTONE_COMMAND = `${COMMAND_PREFIX}milestoneTracker`;
+/** The project's Buy Me a Coffee page, the same link as in the README. */
+export const SUPPORT_URL = "https://www.buymeacoffee.com/ssayaibj";
 let trackerPanel: vscode.WebviewPanel | undefined;
 
 type NotificationLevel = 'all' | 'levelsOnly' | 'off';
@@ -1222,6 +1224,10 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
                         case 'openSpend':
                             await executeQueuedCommand(`${COMMAND_PREFIX}premiumStatus`);
                             break;
+                        case 'openSupport':
+                            // Webviews cannot open web pages themselves; the browser opens through VS Code.
+                            await vscode.env.openExternal(vscode.Uri.parse(SUPPORT_URL));
+                            break;
                         case 'openSearch':
                             await executeQueuedCommand(`${COMMAND_PREFIX}searchTools`);
                             break;
@@ -1269,6 +1275,7 @@ export function getMilestoneTrackerHtml(cspSource: string, scriptSrc: string): s
             </div>
         </div>
         <div class="top-actions">
+            <button class="xbtn coffee" id="coffeeBtn" type="button" title="Support DevSnip Pro on Buy Me a Coffee (opens in your browser)" aria-label="Buy me a coffee: support DevSnip Pro (opens in your browser)">${icon("M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4zM6 2v3M10 2v3M14 2v3")}<span>Buy me a coffee</span></button>
             <button class="xbtn primary" id="spendBtn" type="button">${icon("M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2zM16 14h.01")}<span>Spend points</span></button>
             <div class="more-wrap">
                 <button class="xbtn icon" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" aria-label="More actions" title="More actions">${icon("M5 12h.01M12 12h.01M19 12h.01").replace('class="ico"', 'class="ico dots-ico"')}</button>
@@ -1331,6 +1338,10 @@ button { font: inherit; }
 .xbtn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 .xbtn.primary:hover { background: var(--vscode-button-hoverBackground, var(--accent)); }
 .xbtn.gold { background: var(--gold); color: #1d1606; border-color: transparent; }
+/* Buy Me a Coffee's own yellow, with dark text, so it reads as their button in every theme. */
+.xbtn.coffee { background: #ffdd00; color: #0d0c22; border-color: transparent; }
+.xbtn.coffee:hover { background: #ffe433; }
+.xbtn.coffee .ico { stroke-width: 2.1; }
 .xbtn.gold:hover { background: color-mix(in srgb, var(--gold) 88%, #fff); }
 .xbtn.icon { width: 32px; padding: 0; }
 .xbtn.sm { height: 28px; padding: 0 11px; font-size: 12px; }
@@ -1604,6 +1615,8 @@ button { font: inherit; }
 @media (max-width: 560px) {
     .top { padding: 12px 16px; position: static; }
     .top p { display: none; }
+    .xbtn.coffee span { display: none; }
+    .xbtn.coffee { width: 32px; padding: 0; }
     .page { padding: 14px 16px 32px; }
     .rank { flex-direction: column; text-align: center; padding: 20px 16px; }
     .rank-info { width: 100%; }

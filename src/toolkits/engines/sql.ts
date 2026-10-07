@@ -10,9 +10,10 @@ export type TokenType = "string" | "identifier" | "comment" | "number" | "word" 
 
 export interface Token { type: TokenType; value: string; offset: number }
 
-export class SqlSyntaxError extends Error {
+/** A problem with the SQL the user pasted, so tools report it as an input error with its position. */
+export class SqlSyntaxError extends ToolInputError {
   constructor(message: string, public offset: number) {
-    super(message);
+    super(`${message} (at character ${offset + 1}).`);
   }
 }
 

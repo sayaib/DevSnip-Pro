@@ -102,7 +102,7 @@ class Settings:
 
 def load_settings() -> Settings:
 ${requiredKey ? `    _require("${requiredKey}")\n` : ""}    return Settings(
-        model=os.environ.get("LLM_MODEL", "${o.model}"),
+        model=os.environ.get("LLM_MODEL", ${JSON.stringify(o.model)}),
         timeout_seconds=float(os.environ.get("LLM_TIMEOUT_SECONDS", "30")),
         max_retries=int(os.environ.get("LLM_MAX_RETRIES", "3")),
         base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
@@ -233,7 +233,7 @@ function required(name: string): string {
 }
 
 ${requiredKey ? `required("${requiredKey}");\n\n` : ""}export const settings = {
-  model: process.env.LLM_MODEL ?? "${o.model}",
+  model: process.env.LLM_MODEL ?? ${JSON.stringify(o.model)},
   timeoutMs: Number(process.env.LLM_TIMEOUT_SECONDS ?? 30) * 1000,
   maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 3),
   baseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",

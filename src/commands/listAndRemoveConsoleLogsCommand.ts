@@ -138,6 +138,18 @@ function matchKnownLogs(selection: unknown, known: ConsoleLog[]): ConsoleLog[] {
   return matched;
 }
 
+/**
+ * When a console.log is the only thing on its line(s), the whole line goes, so
+ * cleanup does not leave blank lines behind. Otherwise only the call is removed.
+ */
+export function wholeLineRange(text: string, start: number, end: number): { start: number; end: number } | undefined {
+  const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+  const newline = text.indexOf("\n", end);
+  const lineEnd = newline === -1 ? text.length : newline;
+  if (text.slice(lineStart, start).trim() || text.slice(end, lineEnd).trim()) return undefined;
+  return { start: lineStart, end: newline === -1 ? lineEnd : newline + 1 };
+}
+
 async function removeSelectedLogs(
   selectedLogs: ConsoleLog[],
   panel: vscode.WebviewPanel
@@ -169,7 +181,8 @@ async function removeSelectedLogs(
           stale++;
           continue;
         }
-        workspaceEdit.delete(uri, range);
+        const whole = wholeLineRange(document.getText(), log.startOffset, log.endOffset);
+        workspaceEdit.delete(uri, whole ? new vscode.Range(document.positionAt(whole.start), document.positionAt(whole.end)) : range);
       } catch (error) {
         console.error(`Error processing log in file ${log.filePath}:`, error);
       }

@@ -349,9 +349,9 @@ resource "azurerm_linux_web_app" "this" {
   https_only          = true
 
   site_config {
-    always_on           = var.sku != "F1"
-    minimum_tls_version = "1.2"
-    health_check_path   = "/health"
+    always_on                         = var.sku != "F1"
+    minimum_tls_version               = "1.2"
+    health_check_path                 = "/health"
     health_check_eviction_time_in_min = 5
 
     application_stack {

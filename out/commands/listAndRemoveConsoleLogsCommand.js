@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.findConsoleLogs = exports.registerListAndRemoveConsoleLogsCommand = void 0;
+exports.findConsoleLogs = exports.wholeLineRange = exports.registerListAndRemoveConsoleLogsCommand = void 0;
 const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 const webview_ui_1 = require("../utils/webview-ui");
@@ -129,6 +129,19 @@ function matchKnownLogs(selection, known) {
     }
     return matched;
 }
+/**
+ * When a console.log is the only thing on its line(s), the whole line goes, so
+ * cleanup does not leave blank lines behind. Otherwise only the call is removed.
+ */
+function wholeLineRange(text, start, end) {
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const newline = text.indexOf("\n", end);
+    const lineEnd = newline === -1 ? text.length : newline;
+    if (text.slice(lineStart, start).trim() || text.slice(end, lineEnd).trim())
+        return undefined;
+    return { start: lineStart, end: newline === -1 ? lineEnd : newline + 1 };
+}
+exports.wholeLineRange = wholeLineRange;
 async function removeSelectedLogs(selectedLogs, panel) {
     if (!selectedLogs.length)
         return fetchConsoleLogs();
@@ -155,7 +168,8 @@ async function removeSelectedLogs(selectedLogs, panel) {
                     stale++;
                     continue;
                 }
-                workspaceEdit.delete(uri, range);
+                const whole = wholeLineRange(document.getText(), log.startOffset, log.endOffset);
+                workspaceEdit.delete(uri, whole ? new vscode.Range(document.positionAt(whole.start), document.positionAt(whole.end)) : range);
             }
             catch (error) {
                 console.error(`Error processing log in file ${log.filePath}:`, error);

@@ -49,6 +49,10 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
   {
+    version: "11.75.2",
+    items: [{ title: "REST API Client: reliable batch tests, and large or binary responses shown safely", command: "openGUI" }]
+  },
+  {
     version: "11.75.1",
     items: [
       { title: "Daily quests, streak freezes and a weekly recap", command: "milestoneTracker" },

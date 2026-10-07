@@ -502,8 +502,9 @@ class ApiTester {
           }
           break;
         case "Basic":
-          if (resolvedUsername && resolvedPassword) {
-            auth = { username: resolvedUsername, password: resolvedPassword };
+          // Some APIs (Stripe, for one) use the key as the username and an empty password.
+          if (resolvedUsername) {
+            auth = { username: resolvedUsername, password: resolvedPassword ?? "" };
           }
           break;
         case "ApiKey":
@@ -688,14 +689,24 @@ class ApiTester {
     return JSON.stringify(this.history.map(({ request: _snapshot, ...summary }) => summary), null, 2);
   }
 
-  public async makeRequest(request: ApiRequest): Promise<any> {
+  /**
+   * Sends a request. By default it replaces any request in flight (the Send
+   * button) and is recorded in history. Batch and load runs pass
+   * `{ background: true }`: their requests run side by side without cancelling
+   * each other or the user's request, and they do not flood the history.
+   */
+  public async makeRequest(request: ApiRequest, options: { background?: boolean } = {}): Promise<any> {
     const { finalUrl, headers, bodyData, auth } = this.buildRequestParts(request);
+    const background = options.background === true;
 
-    // Cancel previous request if exists
-    if (this.cancelTokenSource) {
-      this.cancelTokenSource.cancel("New request initiated");
+    let cancelSource = axios.CancelToken.source();
+    if (!background) {
+      // A new Send replaces the request in flight.
+      if (this.cancelTokenSource) {
+        this.cancelTokenSource.cancel("New request initiated");
+      }
+      this.cancelTokenSource = cancelSource;
     }
-    this.cancelTokenSource = axios.CancelToken.source();
 
     const domain = this.getDomainFromUrl(finalUrl);
     const requestHeaders: RequestHeaders = {
@@ -718,7 +729,9 @@ class ApiTester {
         ? Math.min(request.timeout as number, 300000)
         : this.defaultTimeout,
       validateStatus: () => true,
-      cancelToken: this.cancelTokenSource.token,
+      // Raw bytes, decoded below, so binary responses are recognised instead of mangled into text.
+      responseType: 'arraybuffer',
+      cancelToken: cancelSource.token,
       headers: requestHeaders,
       maxRedirects,
       data: bodyData,
@@ -749,19 +762,16 @@ class ApiTester {
         const endTime = Date.now();
         const responseTime = endTime - startTime;
 
-        // Calculate response size
-        const serializedResponse = typeof response.data === 'string'
-          ? response.data
-          : JSON.stringify(response.data ?? '');
-        const responseSize = Buffer.byteLength(serializedResponse, 'utf8');
-
-        let responseData = response.data;
+        const raw = ApiTester.toBuffer(response.data);
+        const responseSize = raw.length;
+        const contentType = String(response.headers?.['content-type'] ?? '');
+        let responseData = ApiTester.decodeBody(raw, contentType);
         let truncated = false;
         if (responseSize > this.MAX_RESPONSE_DISPLAY_SIZE) {
+          // Posting many megabytes to the panel freezes it, whatever the format: show the start as text.
           truncated = true;
-          responseData = typeof response.data === 'string'
-            ? response.data.slice(0, this.MAX_RESPONSE_DISPLAY_SIZE) + '\n... [response truncated]'
-            : response.data;
+          const text = typeof responseData === 'string' ? responseData : JSON.stringify(responseData, null, 2);
+          responseData = text.slice(0, this.MAX_RESPONSE_DISPLAY_SIZE) + '\n... [response truncated]';
         }
 
         // Store cookies from response
@@ -774,17 +784,18 @@ class ApiTester {
           this.saveData();
         }
 
-        // Add to history
-        this.addToHistory({
-          url: finalUrl,
-          method: request.method,
-          timestamp: Date.now(),
-          status: response.status,
-          responseTime,
-          size: responseSize,
-          attempts: attempt + 1,
-          request: ApiTester.historySnapshot(request)
-        });
+        if (!background) {
+          this.addToHistory({
+            url: finalUrl,
+            method: request.method,
+            timestamp: Date.now(),
+            status: response.status,
+            responseTime,
+            size: responseSize,
+            attempts: attempt + 1,
+            request: ApiTester.historySnapshot(request)
+          });
+        }
 
         return {
           status: response.status,
@@ -814,28 +825,65 @@ class ApiTester {
 
         const endTime = Date.now();
         const responseTime = endTime - startTime;
-        // Add failed request to history
-        this.addToHistory({
-          url: finalUrl,
-          method: request.method,
-          timestamp: Date.now(),
-          status: errorStatus,
-          responseTime,
-          attempts: attempt + 1,
-          request: ApiTester.historySnapshot(request)
-        });
+        if (!background) {
+          this.addToHistory({
+            url: finalUrl,
+            method: request.method,
+            timestamp: Date.now(),
+            status: errorStatus,
+            responseTime,
+            attempts: attempt + 1,
+            request: ApiTester.historySnapshot(request)
+          });
+        }
 
         throw {
           message: error.message,
           code: error.code,
           timeout: config.timeout,
           status: errorStatus,
-          response: error.response?.data,
+          response: error.response ? ApiTester.decodeBody(ApiTester.toBuffer(error.response.data), String(error.response.headers?.['content-type'] ?? '')) : undefined,
           responseTime,
           attempts: attempt + 1
         };
       }
     }
+  }
+
+  /** Response bytes from axios (Buffer in Node, ArrayBuffer elsewhere). */
+  private static toBuffer(data: unknown): Buffer {
+    if (Buffer.isBuffer(data)) return data;
+    if (data instanceof ArrayBuffer) return Buffer.from(data);
+    if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    if (data === undefined || data === null || data === '') return Buffer.alloc(0);
+    return Buffer.from(typeof data === 'string' ? data : JSON.stringify(data), 'utf8');
+  }
+
+  /**
+   * Turns response bytes into what the panel shows. Text is decoded as UTF-8
+   * and parsed as JSON when it is JSON (as axios did before); anything binary
+   * (images, PDFs, archives) is described instead of shown as broken text.
+   */
+  public static decodeBody(raw: Buffer, contentType: string): unknown {
+    if (!raw.length) return '';
+    const type = contentType.toLowerCase();
+    const declaredText = /^text\/|json|xml|javascript|ecmascript|x-www-form-urlencoded|graphql|yaml|csv|svg|html/.test(type);
+    const declaredBinary = !declaredText && /^(image|audio|video|font)\/|application\/(octet-stream|pdf|zip|gzip|x-tar|x-7z|vnd\.|msword|protobuf|x-protobuf|wasm)/.test(type);
+    const text = raw.toString('utf8');
+    const looksBinary = declaredBinary || (!declaredText && (raw.includes(0) || /\uFFFD/.test(text)));
+    if (looksBinary) {
+      const size = raw.length < 1024 ? `${raw.length} B` : raw.length < 1048576 ? `${(raw.length / 1024).toFixed(1)} KB` : `${(raw.length / 1048576).toFixed(1)} MB`;
+      return `[Binary response: ${type.split(';')[0].trim() || 'unknown type'}, ${size}. It is not shown as text; use cURL export or save it from your app to inspect the bytes.]`;
+    }
+    const trimmed = text.trim();
+    if (trimmed && (type.includes('json') || /^[\[{"]|^(true|false|null|-?\d)/.test(trimmed))) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        // Not JSON after all; show it as text.
+      }
+    }
+    return text;
   }
 
   public cancelCurrentRequest(): void {
@@ -946,7 +994,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
         collections: services.collections,
         extensionContext: context,
         post,
-        sendHttp: (request) => apiTester.makeRequest(buildApiRequestFromMessage(request))
+        sendHttp: (request, options) => apiTester.makeRequest(buildApiRequestFromMessage(request), options)
       };
 
       // Premium tools are paid for with points, so the whole catalog - balance,

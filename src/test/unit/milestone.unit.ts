@@ -415,8 +415,10 @@ suite("milestone tracker view", () => {
     const script = fs.readFileSync(path.resolve(__dirname, "../../../media/milestone-tracker.js"), "utf8");
     assert.doesNotThrow(() => new Function(script));
     assert.ok(!/\.innerHTML\s*=/.test(script), "stored titles must never be written as HTML");
-    for (const id of ["app", "spendBtn", "resetBtn", "celebrate", "celebrateBadge", "celebrateText"]) {
+    for (const id of ["app", "coffeeBtn", "spendBtn", "resetBtn", "celebrate", "celebrateBadge", "celebrateText"]) {
       assert.ok(html.includes(`id="${id}"`), `the page is missing #${id}, which the script uses`);
     }
+    assert.ok(html.indexOf('id="coffeeBtn"') < html.indexOf('id="spendBtn"'), "Buy me a coffee sits to the left of Spend points");
+    assert.ok(script.includes("command: 'openSupport'"), "the coffee button asks the host to open the support page");
   });
 });

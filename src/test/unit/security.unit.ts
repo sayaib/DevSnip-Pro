@@ -1086,3 +1086,17 @@ suite("workspace posture checks", () => {
     assert.strictEqual(find(checks, "deps.manifest-parse")!.status, "warn");
   });
 });
+
+suite("connection string placeholders", () => {
+  test("template connection strings are not reported; real ones are", () => {
+    const placeholders = [
+      'DATABASE_URL=postgres://user:password@localhost:5432/app',
+      'MONGO_URL=mongodb://admin:changeme@db:27017',
+      'url: "mysql://root:${DB_PASSWORD}@mysql:3306/app"',
+      'REDIS_URL=redis://default:<password>@cache:6379'
+    ];
+    for (const line of placeholders) assert.deepStrictEqual(scanSourceText(".env.example", line).filter(f => /connection string/i.test(f.title)), [], line);
+    const real = scanSourceText("config.js", 'const db = "postgres://app:Zq8#vL2pW9xK@db.prod.internal:5432/app";');
+    assert.ok(real.some(f => /connection string/i.test(f.title)), "a real password is still reported");
+  });
+});

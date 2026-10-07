@@ -183,8 +183,25 @@ function sanitizeValues(raw: unknown): Values {
   return values;
 }
 
+/**
+ * A select can only hold one of its options. A blank or retired value (for
+ * example from state saved by an older version) falls back to the field's
+ * default, so no tool ever receives a choice it does not know.
+ */
+export function normalizeSelects(tool: ToolDefinition, values: Values): Values {
+  const out: Values = { ...values };
+  for (const field of tool.fields) {
+    if (field.kind !== "select" || !field.options?.length) continue;
+    const value = out[field.id];
+    if (value === undefined || field.options.some(option => option.value === String(value))) continue;
+    out[field.id] = field.default !== undefined ? field.default : field.options[0].value;
+  }
+  return out;
+}
+
 export async function runTool(tool: ToolDefinition, values: Values, ctx: ToolContext, action?: string): Promise<{ outcome: "success" | "input_error" | "error" | "timeout"; result?: ToolResult; error?: string }> {
   let timer: NodeJS.Timeout | undefined;
+  values = normalizeSelects(tool, values);
   try {
     const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new TimeoutError()), RUN_TIMEOUT_MS); });
     const result = await Promise.race([Promise.resolve().then(() => tool.run(values, ctx, action)), timeout]);

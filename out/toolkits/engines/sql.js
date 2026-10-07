@@ -3,9 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.columnsFromCreateTable = exports.queryHelper = exports.sqlFromRows = exports.lintSql = exports.formatSql = exports.tokenize = exports.SqlSyntaxError = void 0;
 const types_1 = require("../types");
 const data_convert_1 = require("./data-convert");
-class SqlSyntaxError extends Error {
+/** A problem with the SQL the user pasted, so tools report it as an input error with its position. */
+class SqlSyntaxError extends types_1.ToolInputError {
     constructor(message, offset) {
-        super(message);
+        super(`${message} (at character ${offset + 1}).`);
         this.offset = offset;
     }
 }

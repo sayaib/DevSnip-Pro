@@ -1,5 +1,31 @@
 # Development Changelog of DevSnip Pro
 
+## 11.75.2 - Sturdier REST client, lower memory use, and a full QA pass
+
+A bug-fix release from an end-to-end check of every command, tool and panel: the REST client's batch tests and large responses, a memory leak in long sessions, and a set of smaller fixes across the toolkit, security scans and snippets.
+
+### Fixed
+
+- **Memory:** every panel you closed stayed in memory (with its whole page) until you next changed the theme, so a long session kept growing. Closed panels are now released straight away.
+- **REST API Client:**
+  - **Batch test** no longer cancels its own requests: with a concurrency above 1, most requests used to fail. Its success rate now counts every 5xx and network error, not only HTTP 500, and batch and load runs no longer push your real requests out of History.
+  - Responses over 2 MB are now truncated for display whatever their format; a large JSON response used to be sent to the panel whole and could freeze it.
+  - Images, PDFs and other binary responses are recognised and described with their type and size instead of being shown as garbled text.
+  - Basic auth works with an empty password, for APIs that use the key as the user name (Stripe-style `-u sk_test_…:`).
+- **Toolkit tools:**
+  - A tool no longer fails when a saved choice is no longer one of its options (for example after an update); it falls back to the default. This affected the CI Pipeline Generator and LLM Client Setup.
+  - SQL tools report an unterminated string or quoted identifier as a clear input error with its position, instead of "Something went wrong".
+  - The App Signing CI snippet is now valid YAML, the AI App Starter escapes the model name in the code it generates, and the Azure Web App Terraform template is `terraform fmt` clean.
+- **Console Log Cleaner** removes the whole line when a `console.log` is alone on it, instead of leaving blank lines behind.
+- **Security Hub:** an action that fails (such as opening a file that has moved) now shows a message instead of being lost, and template connection strings in files such as `.env.example` (`postgres://user:password@localhost/db`, `${DB_PASSWORD}`) are no longer reported as leaked credentials. Real passwords still are.
+- **Snippets:** saving a snippet with a prefix another snippet already uses now asks whether to replace it or keep both, instead of silently creating two suggestions for the same prefix.
+- **Database Client:** the row count reads "1 row" instead of "1 rows".
+
+### Improved
+
+- **Buy me a coffee:** a button next to **Spend points** in Milestones & Points, and a link in the README, for anyone who wants to support the project. It opens the Buy Me a Coffee page in your browser. DevSnip Pro stays free.
+- **Tests:** a new integration test runs every command in a real VS Code and fails on any error, unhandled rejection, missing panel or memory growth across repeated open/close cycles.
+
 ## 11.75.1 - Daily quests, themes to unlock, and a more reliable extension
 
 Points now give you something new to do every day and something to work towards, and this release fixes snippets being lost on update, speeds up startup and makes several panels sturdier.

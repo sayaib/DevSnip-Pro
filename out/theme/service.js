@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerThemeCommand = exports.endLockedPreview = exports.previewLockedTheme = exports.lockedPreviewTheme = exports.onDidChangeLockedPreview = exports.LOCKED_PREVIEW_SECONDS = exports.chooseThemeOrUnlock = exports.themeChoices = exports.setTheme = exports.setWebviewHtml = exports.currentThemeId = exports.initThemes = exports.setThemeAccess = exports.lockText = exports.onDidChangeTheme = exports.CHOOSE_THEME_COMMAND = void 0;
+exports.registerThemeCommand = exports.endLockedPreview = exports.previewLockedTheme = exports.lockedPreviewTheme = exports.onDidChangeLockedPreview = exports.LOCKED_PREVIEW_SECONDS = exports.chooseThemeOrUnlock = exports.themeChoices = exports.setTheme = exports.setWebviewHtml = exports.trackedWebviewCount = exports.currentThemeId = exports.initThemes = exports.setThemeAccess = exports.lockText = exports.onDidChangeTheme = exports.CHOOSE_THEME_COMMAND = void 0;
 const vscode = __importStar(require("vscode"));
 const inject_1 = require("./inject");
 const themes_1 = require("./themes");
@@ -89,8 +89,29 @@ function currentThemeId() {
     return current;
 }
 exports.currentThemeId = currentThemeId;
+/**
+ * Forgets webviews whose panel has closed. VS Code throws when a disposed
+ * webview's properties are read; without this, every panel ever opened (and
+ * its whole page HTML) stayed in memory until the next theme change.
+ */
+function pruneDisposedWebviews() {
+    for (const webview of [...webviews.keys()]) {
+        try {
+            void webview.options;
+        }
+        catch {
+            webviews.delete(webview);
+        }
+    }
+}
+/** Number of webviews kept in sync with the theme (open pages only). Exposed for tests. */
+function trackedWebviewCount() {
+    return webviews.size;
+}
+exports.trackedWebviewCount = trackedWebviewCount;
 /** Sets a webview's HTML with the current theme applied, and keeps it in sync with later changes. */
 function setWebviewHtml(webview, html, surface = "panel") {
+    pruneDisposedWebviews();
     webviews.set(webview, surface);
     webview.html = (0, inject_1.injectTheme)(html, current, surface);
 }

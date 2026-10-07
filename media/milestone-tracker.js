@@ -856,6 +856,7 @@
         els.tabsRow.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
     });
     document.getElementById('spendBtn').addEventListener('click', function () { vscode.postMessage({ command: 'openSpend' }); });
+    document.getElementById('coffeeBtn').addEventListener('click', function () { vscode.postMessage({ command: 'openSupport' }); });
     document.getElementById('resetBtn').addEventListener('click', function (event) {
         closeMenu(false);
         event.currentTarget.disabled = true;

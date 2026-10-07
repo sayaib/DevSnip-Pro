@@ -620,9 +620,32 @@ const SECRET_FORMAT_RULES: CodeRule[] = SECRET_PATTERNS
     reference: OWASP_A02,
     pattern: pattern.pattern,
     // Vendor documentation uses fixed placeholder keys. Reporting one of those
-    // as a leaked credential is a false positive by construction.
-    accept: line => !isDocumentedExampleCredential(line)
+    // as a leaked credential is a false positive by construction. A connection
+    // string whose password is a placeholder (".env.example" style
+    // postgres://user:password@localhost/db, ${DB_PASSWORD}, <password>) is a
+    // template, not a leak.
+    accept: line => !isDocumentedExampleCredential(line) && !(pattern.id === "database-url" && hasPlaceholderPassword(line))
   }));
+
+/** True when every credentialed URL on the line uses a placeholder password. */
+function hasPlaceholderPassword(line: string): boolean {
+  const passwords = [...line.matchAll(/:\/\/[^\s"'<>:@/]*:([^\s"'<>@]+)@/g)].map(match => decodeURIComponentSafe(match[1]));
+  return passwords.length > 0 && passwords.every(password => URL_PASSWORD_PLACEHOLDER.test(password));
+}
+
+/**
+ * Only unmistakable template values. Weak real passwords such as "hunter2" or
+ * "secret" in a committed connection string are still reported.
+ */
+const URL_PASSWORD_PLACEHOLDER = /^(?:<[^>]*>|\{\{[^}]*\}\}|\$\{[^}]*\}|\$[A-Za-z_]\w*|%[A-Za-z_]+%|\[[^\]]*\]|x{3,}|\*{3,}|\.{3,}|(?:your|my)[-_]?(?:db[-_]?)?pass(?:word)?|pass(?:word)?|pwd|change[-_]?me|replace[-_]?me|placeholder|example|sample|dummy|redacted)$/i;
+
+function decodeURIComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 export const SECRET_RULES: CodeRule[] = [...SECRET_FORMAT_RULES, ...CODE_RULES];
 

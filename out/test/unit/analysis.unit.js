@@ -102,4 +102,14 @@ const run_unit_tests_1 = require("./run-unit-tests");
         assert.deepStrictEqual((0, removeUnusedImportsCommand_1.analyzeFileImports)('import x from "y";', "/tmp/j.txt"), []);
     });
 });
+(0, run_unit_tests_1.suite)("console.log removal", () => {
+    (0, run_unit_tests_1.test)("a statement alone on its line removes the whole line; an inline one only the call", () => {
+        const text = 'const a = 1;\n  console.log("x");\nconst b = 2; console.log("y");\nconsole.log("z");';
+        const [first, inline, last] = (0, listAndRemoveConsoleLogsCommand_1.findConsoleLogs)(text, "a.js");
+        const apply = (range) => text.slice(0, range.start) + text.slice(range.end);
+        assert.strictEqual(apply((0, listAndRemoveConsoleLogsCommand_1.wholeLineRange)(text, first.startOffset, first.endOffset)), 'const a = 1;\nconst b = 2; console.log("y");\nconsole.log("z");');
+        assert.strictEqual((0, listAndRemoveConsoleLogsCommand_1.wholeLineRange)(text, inline.startOffset, inline.endOffset), undefined, "code before it on the line stays");
+        assert.strictEqual(apply((0, listAndRemoveConsoleLogsCommand_1.wholeLineRange)(text, last.startOffset, last.endOffset)), 'const a = 1;\n  console.log("x");\nconst b = 2; console.log("y");\n', "the last line without a newline");
+    });
+});
 //# sourceMappingURL=analysis.unit.js.map

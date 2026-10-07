@@ -87,8 +87,29 @@ export function currentThemeId(): string {
   return current;
 }
 
+/**
+ * Forgets webviews whose panel has closed. VS Code throws when a disposed
+ * webview's properties are read; without this, every panel ever opened (and
+ * its whole page HTML) stayed in memory until the next theme change.
+ */
+function pruneDisposedWebviews(): void {
+  for (const webview of [...webviews.keys()]) {
+    try {
+      void webview.options;
+    } catch {
+      webviews.delete(webview);
+    }
+  }
+}
+
+/** Number of webviews kept in sync with the theme (open pages only). Exposed for tests. */
+export function trackedWebviewCount(): number {
+  return webviews.size;
+}
+
 /** Sets a webview's HTML with the current theme applied, and keeps it in sync with later changes. */
 export function setWebviewHtml(webview: vscode.Webview, html: string, surface: ThemeSurface = "panel"): void {
+  pruneDisposedWebviews();
   webviews.set(webview, surface);
   webview.html = injectTheme(html, current, surface);
 }
