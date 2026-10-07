@@ -71,6 +71,8 @@ function documentStats(text) {
     const trimmed = text.trim();
     return { words: trimmed ? trimmed.split(/\s+/).length : 0, characters: text.length };
 }
+/** Pause after the last keystroke before the live preview re-renders. */
+const PREVIEW_DEBOUNCE_MS = 200;
 function registerReadmeManagerCommand(context) {
     let activePanel;
     const command = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.readmeManager", async () => {
@@ -128,11 +130,21 @@ function registerReadmeManagerCommand(context) {
         };
         (0, service_1.setWebviewHtml)(panel.webview, getPreviewHtml(vscode.workspace.asRelativePath(target), Object.keys(SECTION_TEMPLATES)));
         await render();
+        // Typing fires a change per keystroke; re-render once the user pauses so large READMEs stay responsive.
+        let pendingRender;
         const changeSubscription = vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.uri.toString() !== target.toString())
                 return;
-            const text = event.document.getText();
-            (0, webview_ui_1.safePostMessage)(panel, { command: "update", html: (0, markdown_1.renderMarkdown)(text), ...documentStats(text) });
+            if (pendingRender)
+                clearTimeout(pendingRender);
+            const document = event.document;
+            pendingRender = setTimeout(() => {
+                pendingRender = undefined;
+                if (document.isClosed)
+                    return;
+                const text = document.getText();
+                (0, webview_ui_1.safePostMessage)(panel, { command: "update", html: (0, markdown_1.renderMarkdown)(text), ...documentStats(text) });
+            }, PREVIEW_DEBOUNCE_MS);
         });
         const messageSubscription = panel.webview.onDidReceiveMessage(async (message) => {
             try {
@@ -204,6 +216,8 @@ function registerReadmeManagerCommand(context) {
             }
         });
         panel.onDidDispose(() => {
+            if (pendingRender)
+                clearTimeout(pendingRender);
             changeSubscription.dispose();
             messageSubscription.dispose();
             if (activePanel === panel)

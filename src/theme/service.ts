@@ -279,7 +279,9 @@ export async function previewLockedTheme(id: string, seconds: number = LOCKED_PR
     themeId: id,
     saved,
     endsAt: Date.now() + seconds * 1000,
-    timer: setTimeout(() => void endLockedPreview("expired"), seconds * 1000),
+    timer: setTimeout(() => {
+      endLockedPreview("expired").catch(error => console.error("DevSnip Pro: could not end the theme preview.", error));
+    }, seconds * 1000),
     ticker: setInterval(() => updatePreviewStatus(session), 1000)
   };
   // Never keep VS Code (or a test run) alive just for a preview.
@@ -311,7 +313,7 @@ export async function previewLockedTheme(id: string, seconds: number = LOCKED_PR
     if (lockedPreview !== session) return;
     if (buy && choice === buy) await unlockPreviewed(id);
     else if (choice === "End preview") await endLockedPreview("ended");
-  }, () => undefined);
+  }).then(undefined, error => console.error("DevSnip Pro: theme preview action failed.", error));
   return true;
 }
 
@@ -390,7 +392,10 @@ export function registerThemeCommand(ctx: vscode.ExtensionContext): void {
       picker.dispose();
       if (lockedPick) {
         const id = lockedPick;
-        void revert.then(() => chooseThemeOrUnlock(id)).then(applied => { if (applied) void noteThemeChosen(); });
+        void revert
+          .then(() => chooseThemeOrUnlock(id))
+          .then(applied => { if (applied) void noteThemeChosen(); })
+          .catch(error => console.error("DevSnip Pro: could not apply that theme.", error));
       }
     });
     picker.show();

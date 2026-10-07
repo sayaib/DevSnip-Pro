@@ -296,30 +296,11 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     const themeIds = new Set(themeChoices().map(choice => choice.id));
     const activationSubscription = onDidChangeActivation(() => this.post({ type: "onboarding", onboarding: this.onboarding() }));
     const subscription = view.webview.onDidReceiveMessage(async message => {
-      if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
-        // A locked theme explains how to unlock it instead; nothing is stored unless it is unlocked.
-        await chooseThemeOrUnlock(message.id);
-        return;
-      }
-      if (message?.type === "previewTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
-        // Try a locked theme for a short while; it switches back on its own.
-        await previewLockedTheme(message.id);
-        return;
-      }
-      if (await this.onOnboardingMessage(message)) return;
-      if (message?.type === "run" && typeof message.command === "string" && this.known.has(message.command)) {
-        // executeQueuedCommand also checks the id against this extension's commands.
-        void executeQueuedCommand(message.command);
-      } else if (message?.type === "searchAll") {
-        void executeQueuedCommand(SEARCH_COMMAND);
-      } else if (message?.type === "expanded" && Array.isArray(message.groups)) {
-        const expanded = message.groups.filter((name: unknown): name is string => typeof name === "string" && groupNames.has(name));
-        await this.context.globalState.update(EXPANDED_KEY, expanded);
-      } else if (message?.type === "favorites" && Array.isArray(message.favorites)) {
-        const favorites = message.favorites
-          .filter((command: unknown): command is string => typeof command === "string" && this.known.has(command))
-          .slice(0, 100);
-        await this.context.globalState.update(FAVORITES_KEY, Array.from(new Set(favorites)));
+      try {
+        await this.onMessage(message, groupNames, themeIds);
+      } catch (error) {
+        console.error("DevSnip Pro: a Tools sidebar action failed.", error);
+        void vscode.window.showErrorMessage(`DevSnip Pro: that did not work: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
     view.onDidChangeVisibility(() => { if (view.visible) this.refresh(); });
@@ -328,6 +309,35 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
       activationSubscription.dispose();
       if (this.view === view) this.view = undefined;
     });
+  }
+
+  /** Handles one message from the sidebar page. Every id it acts on is checked first. */
+  private async onMessage(message: any, groupNames: Set<string>, themeIds: Set<string>): Promise<void> {
+    if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
+      // A locked theme explains how to unlock it instead; nothing is stored unless it is unlocked.
+      await chooseThemeOrUnlock(message.id);
+      return;
+    }
+    if (message?.type === "previewTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
+      // Try a locked theme for a short while; it switches back on its own.
+      await previewLockedTheme(message.id);
+      return;
+    }
+    if (await this.onOnboardingMessage(message)) return;
+    if (message?.type === "run" && typeof message.command === "string" && this.known.has(message.command)) {
+      // executeQueuedCommand also checks the id against this extension's commands.
+      void executeQueuedCommand(message.command);
+    } else if (message?.type === "searchAll") {
+      void executeQueuedCommand(SEARCH_COMMAND);
+    } else if (message?.type === "expanded" && Array.isArray(message.groups)) {
+      const expanded = message.groups.filter((name: unknown): name is string => typeof name === "string" && groupNames.has(name));
+      await this.context.globalState.update(EXPANDED_KEY, expanded);
+    } else if (message?.type === "favorites" && Array.isArray(message.favorites)) {
+      const favorites = message.favorites
+        .filter((command: unknown): command is string => typeof command === "string" && this.known.has(command))
+        .slice(0, 100);
+      await this.context.globalState.update(FAVORITES_KEY, Array.from(new Set(favorites)));
+    }
   }
 }
 

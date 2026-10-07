@@ -61,6 +61,14 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     {
+        version: "11.75.1",
+        items: [
+            { title: "Daily quests, streak freezes and a weekly recap", command: "milestoneTracker" },
+            { title: "Themes unlock with points; preview any theme for 30 seconds first", command: "chooseTheme" },
+            { title: "Your custom snippets now survive extension updates", command: "showSnippets" }
+        ]
+    },
+    {
         version: "11.74.1",
         items: [{ title: "REST API Client: send a sample request in one click", command: "openGUI" }]
     },

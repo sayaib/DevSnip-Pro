@@ -31,6 +31,7 @@ async function main(): Promise<void> {
   require("./webview-ui.unit");
   require("./milestone.unit");
   require("./rewards.unit");
+  require("./snippets.unit");
   require("./analysis.unit");
   require("./api-client.unit");
   require("./premium.unit");

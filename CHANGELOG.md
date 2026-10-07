@@ -1,8 +1,8 @@
 # Development Changelog of DevSnip Pro
 
-## Unreleased - Daily quests, streak freezes and themes to unlock
+## 11.75.1 - Daily quests, themes to unlock, and a more reliable extension
 
-Points now give you something new to do every day and something to work towards.
+Points now give you something new to do every day and something to work towards, and this release fixes snippets being lost on update, speeds up startup and makes several panels sturdier.
 
 ### Added
 
@@ -16,6 +16,19 @@ Points now give you something new to do every day and something to work towards.
 - **New milestones:** Monthly Marathon (30-day streak), Century Streak (100 days) and Quest Master (finish every quest on 7 days).
 - **Progress notifications.** Rank-ups, unlocked rewards, milestones and finished quests now show a short VS Code notification wherever you are working, with a button to try a new theme or open your progress. A weekly recap of points, tool runs and your streak appears once at the start of each week. Choose `all`, `levelsOnly` or `off` with the new `devsnip.rewards.notifications` setting.
 - **This week** on the Milestones & Points page: points, tool runs and tools used so far, compared with last week.
+
+### Fixed
+
+- **Custom snippets are no longer lost when DevSnip Pro updates.** VS Code replaces the extension's folder on every update, and that is where snippets were saved, so each update quietly deleted them. Every snippet you save is now also kept in DevSnip Pro's own storage and put back automatically after an update. If you update from 11.74.3 while its folder is still on disk, your existing snippets are recovered from it too, and you are told when snippets were restored.
+- Toolkit actions that insert into the editor, open a new document or save files now show an error in the tool panel if they fail (for example, a read-only file), instead of failing silently.
+- A failed action in the Tools sidebar, such as choosing or previewing a theme, now shows an error instead of being swallowed.
+- Clicking a button in a progress or theme-preview notification can no longer leave an unhandled error behind in the extension host.
+
+### Improved
+
+- **Faster startup.** Snippets, the README manager, the console.log and unused-import cleaners, and the OpenCode integration now load the first time you use them instead of when DevSnip Pro starts. Activation loads 31 modules instead of 38 and is about 20% quicker.
+- The README manager's live preview now updates once you pause typing instead of on every keystroke, so large READMEs stay responsive while you edit.
+- Removed unused code from the REST API Client.
 
 ## 11.74.1 - REST API Client: a first response in one click, and clearer docs
 

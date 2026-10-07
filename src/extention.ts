@@ -1,9 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { registerCreateSnippetCommand } from "./commands/createSnippetCommand";
-import { registerShowSnippetsCommand } from "./commands/showSnippetsCommand";
-import { registerListAndRemoveConsoleLogsCommand } from "./commands/listAndRemoveConsoleLogsCommand";
-import { registerRemoveUnusedImportsCommand } from "./commands/removeUnusedImportsCommand";
+import { setSnippetBackupFolder, syncSnippetBackups } from "./utils/snippet-utils";
 import { registerHubCommands } from "./commands/hubCommands";
 import { registerToolkitCommands } from "./toolkits/runner";
 import { registerDatabaseClientCommand } from "./database/command";
@@ -13,8 +10,6 @@ import { registerLazyCommands, registerTrackedCommand, setCommandObserver, setUs
 import { classifyInstall, initAnalytics, shutdownAnalytics, snapshotInstall, track, trackCommand } from "./analytics";
 import { initActivation, noteCommand } from "./onboarding/activation";
 import { registerOnboardingCommands } from "./onboarding/commands";
-import { registerReadmeManagerCommand } from "./commands/readmeManager";
-import { registerOpenCodeIntegrationCommand } from "./commands/openCodeIntegration";
 import { executeQueuedCommand } from "./utils/command-dispatch";
 import { disposeAllToolPanels } from "./utils/webview-ui";
 import { FeatureAccessService } from "./premium/feature-access";
@@ -22,6 +17,8 @@ import { CollectionStore } from "./services/collections";
 import { registerPremiumCommands } from "./premium/premium-commands";
 import { ToolsSidebarProvider, TOOLS_VIEW_ID } from "./sidebar/tools-sidebar";
 
+const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets"].map(id => `sayaib.hue-console.${id}`);
+const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 
 export function activate(context: vscode.ExtensionContext) {
@@ -32,6 +29,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // The milestone store needs its context before any command can record usage.
   setMilestoneContext(context);
+  // User snippets live inside the installed extension, which an update replaces;
+  // every save is mirrored to global storage and restored from there.
+  const snippetBackup = context.globalStorageUri ? path.join(context.globalStorageUri.fsPath, "snippets") : undefined;
+  setSnippetBackupFolder(snippetBackup);
+  if (snippetBackup) void restoreSnippetsAfterUpdate(snippetsFolderPath, snippetBackup, context.extensionPath);
   // Every theme but System Default unlocks with points; the picker asks the milestone store.
   setThemeAccess({
     lock: themeId => themeLockFor(getUserStats(context), themeId),
@@ -82,17 +84,19 @@ export function activate(context: vscode.ExtensionContext) {
   // One failing group must not stop the rest of the extension from loading:
   // a thrown error here would leave every other command unregistered.
   const registrations: Array<[string, () => void]> = [
-    ["snippets", () => {
-      registerCreateSnippetCommand(context);
-      registerShowSnippetsCommand(context, snippetsFolderPath);
-    }],
-    ["workspace hygiene", () => {
-      registerListAndRemoveConsoleLogsCommand(context);
-      registerRemoveUnusedImportsCommand(context);
-      registerReadmeManagerCommand(context);
-    }],
-    ["OpenCode integration", () => registerOpenCodeIntegrationCommand(context)],
-    // The three largest features load on first use, keeping them out of activation.
+    // Features with a single entry command load on first use, keeping them out of activation.
+    ["snippets", () => registerLazyCommands(context.subscriptions, SNIPPET_COMMANDS, async () => {
+      (await import("./commands/createSnippetCommand")).registerCreateSnippetCommand(context);
+      (await import("./commands/showSnippetsCommand")).registerShowSnippetsCommand(context, snippetsFolderPath);
+    })],
+    ["workspace hygiene", () => registerLazyCommands(context.subscriptions, HYGIENE_COMMANDS, async () => {
+      (await import("./commands/listAndRemoveConsoleLogsCommand")).registerListAndRemoveConsoleLogsCommand(context);
+      (await import("./commands/removeUnusedImportsCommand")).registerRemoveUnusedImportsCommand(context);
+      (await import("./commands/readmeManager")).registerReadmeManagerCommand(context);
+    })],
+    ["OpenCode integration", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.openCodeIntegration"], async () => {
+      (await import("./commands/openCodeIntegration")).registerOpenCodeIntegrationCommand(context);
+    })],
     ["REST API client", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.openGUI"], async () => {
       (await import("./commands/api-test")).apiTest(context, { access, collections });
     })],
@@ -125,6 +129,21 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Last, so activation_ms covers the whole activation and nothing waits on it.
   initAnalytics(context, activationStart, installSnapshot);
+}
+
+/** Puts back snippets an update removed, and tells the user when it did. Never throws. */
+async function restoreSnippetsAfterUpdate(liveFolder: string, backup: string, extensionPath: string): Promise<void> {
+  try {
+    const restored = await syncSnippetBackups(liveFolder, backup, extensionPath);
+    if (!restored) return;
+    const choice = await vscode.window.showInformationMessage(
+      `DevSnip Pro restored ${restored} custom snippet${restored === 1 ? "" : "s"} after the update. Reload the window if they do not appear in suggestions yet.`,
+      "Reload Window"
+    );
+    if (choice === "Reload Window") await vscode.commands.executeCommand("workbench.action.reloadWindow");
+  } catch (error) {
+    console.error("DevSnip Pro: could not restore snippets.", error);
+  }
 }
 
 type ToolSearchItem = {

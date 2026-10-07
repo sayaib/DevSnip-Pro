@@ -203,17 +203,6 @@ class ApiTester {
             return false;
         }
     }
-    validateJson(jsonString) {
-        if (!jsonString.trim())
-            return true;
-        try {
-            JSON.parse(jsonString);
-            return true;
-        }
-        catch {
-            return false;
-        }
-    }
     /**
      * Strips credential-looking query values before a URL is stored or exported.
      * API keys are commonly passed in the query string, and request history is

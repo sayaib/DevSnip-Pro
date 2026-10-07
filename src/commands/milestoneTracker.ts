@@ -1066,7 +1066,7 @@ export function showCelebrations(items: Celebration[]): void {
     void vscode.window.showInformationMessage(message, ...actions).then(async choice => {
         if (choice === 'Try theme' && theme) await setTheme(theme);
         else if (choice === 'View progress') await executeQueuedCommand(MILESTONE_COMMAND);
-    }, () => undefined);
+    }).then(undefined, error => console.error('DevSnip Pro: progress notification action failed.', error));
 }
 
 /** Shows last week's recap once, on the first activation of a new week. */

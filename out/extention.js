@@ -26,10 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
-const createSnippetCommand_1 = require("./commands/createSnippetCommand");
-const showSnippetsCommand_1 = require("./commands/showSnippetsCommand");
-const listAndRemoveConsoleLogsCommand_1 = require("./commands/listAndRemoveConsoleLogsCommand");
-const removeUnusedImportsCommand_1 = require("./commands/removeUnusedImportsCommand");
+const snippet_utils_1 = require("./utils/snippet-utils");
 const hubCommands_1 = require("./commands/hubCommands");
 const runner_1 = require("./toolkits/runner");
 const command_1 = require("./database/command");
@@ -39,14 +36,14 @@ const command_registry_1 = require("./utils/command-registry");
 const analytics_1 = require("./analytics");
 const activation_1 = require("./onboarding/activation");
 const commands_1 = require("./onboarding/commands");
-const readmeManager_1 = require("./commands/readmeManager");
-const openCodeIntegration_1 = require("./commands/openCodeIntegration");
 const command_dispatch_1 = require("./utils/command-dispatch");
 const webview_ui_1 = require("./utils/webview-ui");
 const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
 const premium_commands_1 = require("./premium/premium-commands");
 const tools_sidebar_1 = require("./sidebar/tools-sidebar");
+const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets"].map(id => `sayaib.hue-console.${id}`);
+const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 function activate(context) {
     const activationStart = Date.now();
@@ -55,6 +52,12 @@ function activate(context) {
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     // The milestone store needs its context before any command can record usage.
     (0, milestoneTracker_1.setMilestoneContext)(context);
+    // User snippets live inside the installed extension, which an update replaces;
+    // every save is mirrored to global storage and restored from there.
+    const snippetBackup = context.globalStorageUri ? path.join(context.globalStorageUri.fsPath, "snippets") : undefined;
+    (0, snippet_utils_1.setSnippetBackupFolder)(snippetBackup);
+    if (snippetBackup)
+        void restoreSnippetsAfterUpdate(snippetsFolderPath, snippetBackup, context.extensionPath);
     // Every theme but System Default unlocks with points; the picker asks the milestone store.
     (0, service_1.setThemeAccess)({
         lock: themeId => (0, milestoneTracker_1.themeLockFor)((0, milestoneTracker_1.getUserStats)(context), themeId),
@@ -100,17 +103,19 @@ function activate(context) {
     // One failing group must not stop the rest of the extension from loading:
     // a thrown error here would leave every other command unregistered.
     const registrations = [
-        ["snippets", () => {
-                (0, createSnippetCommand_1.registerCreateSnippetCommand)(context);
-                (0, showSnippetsCommand_1.registerShowSnippetsCommand)(context, snippetsFolderPath);
-            }],
-        ["workspace hygiene", () => {
-                (0, listAndRemoveConsoleLogsCommand_1.registerListAndRemoveConsoleLogsCommand)(context);
-                (0, removeUnusedImportsCommand_1.registerRemoveUnusedImportsCommand)(context);
-                (0, readmeManager_1.registerReadmeManagerCommand)(context);
-            }],
-        ["OpenCode integration", () => (0, openCodeIntegration_1.registerOpenCodeIntegrationCommand)(context)],
-        // The three largest features load on first use, keeping them out of activation.
+        // Features with a single entry command load on first use, keeping them out of activation.
+        ["snippets", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, SNIPPET_COMMANDS, async () => {
+                (await Promise.resolve().then(() => __importStar(require("./commands/createSnippetCommand")))).registerCreateSnippetCommand(context);
+                (await Promise.resolve().then(() => __importStar(require("./commands/showSnippetsCommand")))).registerShowSnippetsCommand(context, snippetsFolderPath);
+            })],
+        ["workspace hygiene", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, HYGIENE_COMMANDS, async () => {
+                (await Promise.resolve().then(() => __importStar(require("./commands/listAndRemoveConsoleLogsCommand")))).registerListAndRemoveConsoleLogsCommand(context);
+                (await Promise.resolve().then(() => __importStar(require("./commands/removeUnusedImportsCommand")))).registerRemoveUnusedImportsCommand(context);
+                (await Promise.resolve().then(() => __importStar(require("./commands/readmeManager")))).registerReadmeManagerCommand(context);
+            })],
+        ["OpenCode integration", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.openCodeIntegration"], async () => {
+                (await Promise.resolve().then(() => __importStar(require("./commands/openCodeIntegration")))).registerOpenCodeIntegrationCommand(context);
+            })],
         ["REST API client", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.openGUI"], async () => {
                 (await Promise.resolve().then(() => __importStar(require("./commands/api-test")))).apiTest(context, { access, collections });
             })],
@@ -142,6 +147,20 @@ function activate(context) {
     (0, analytics_1.initAnalytics)(context, activationStart, installSnapshot);
 }
 exports.activate = activate;
+/** Puts back snippets an update removed, and tells the user when it did. Never throws. */
+async function restoreSnippetsAfterUpdate(liveFolder, backup, extensionPath) {
+    try {
+        const restored = await (0, snippet_utils_1.syncSnippetBackups)(liveFolder, backup, extensionPath);
+        if (!restored)
+            return;
+        const choice = await vscode.window.showInformationMessage(`DevSnip Pro restored ${restored} custom snippet${restored === 1 ? "" : "s"} after the update. Reload the window if they do not appear in suggestions yet.`, "Reload Window");
+        if (choice === "Reload Window")
+            await vscode.commands.executeCommand("workbench.action.reloadWindow");
+    }
+    catch (error) {
+        console.error("DevSnip Pro: could not restore snippets.", error);
+    }
+}
 /** Every tool in the navigation, in section order: section, sub-group and keywords make it findable. */
 async function searchableTools() {
     const { NAV, COMMAND_PREFIX } = await Promise.resolve().then(() => __importStar(require("./toolkits/layout")));

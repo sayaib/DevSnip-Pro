@@ -54,6 +54,9 @@ function documentStats(text: string): { words: number; characters: number } {
   return { words: trimmed ? trimmed.split(/\s+/).length : 0, characters: text.length };
 }
 
+/** Pause after the last keystroke before the live preview re-renders. */
+const PREVIEW_DEBOUNCE_MS = 200;
+
 export function registerReadmeManagerCommand(context: vscode.ExtensionContext): void {
   let activePanel: vscode.WebviewPanel | undefined;
 
@@ -122,10 +125,18 @@ export function registerReadmeManagerCommand(context: vscode.ExtensionContext): 
     setWebviewHtml(panel.webview, getPreviewHtml(vscode.workspace.asRelativePath(target), Object.keys(SECTION_TEMPLATES)));
     await render();
 
+    // Typing fires a change per keystroke; re-render once the user pauses so large READMEs stay responsive.
+    let pendingRender: ReturnType<typeof setTimeout> | undefined;
     const changeSubscription = vscode.workspace.onDidChangeTextDocument(event => {
       if (event.document.uri.toString() !== target.toString()) return;
-      const text = event.document.getText();
-      safePostMessage(panel, { command: "update", html: renderMarkdown(text), ...documentStats(text) });
+      if (pendingRender) clearTimeout(pendingRender);
+      const document = event.document;
+      pendingRender = setTimeout(() => {
+        pendingRender = undefined;
+        if (document.isClosed) return;
+        const text = document.getText();
+        safePostMessage(panel, { command: "update", html: renderMarkdown(text), ...documentStats(text) });
+      }, PREVIEW_DEBOUNCE_MS);
     });
 
     const messageSubscription = panel.webview.onDidReceiveMessage(async (message: { command?: string; section?: string }) => {
@@ -206,6 +217,7 @@ export function registerReadmeManagerCommand(context: vscode.ExtensionContext): 
     });
 
     panel.onDidDispose(() => {
+      if (pendingRender) clearTimeout(pendingRender);
       changeSubscription.dispose();
       messageSubscription.dispose();
       if (activePanel === panel) activePanel = undefined;

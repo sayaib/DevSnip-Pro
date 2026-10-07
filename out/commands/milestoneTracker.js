@@ -973,7 +973,7 @@ function showCelebrations(items) {
             await (0, service_1.setTheme)(theme);
         else if (choice === 'View progress')
             await (0, command_dispatch_1.executeQueuedCommand)(MILESTONE_COMMAND);
-    }, () => undefined);
+    }).then(undefined, error => console.error('DevSnip Pro: progress notification action failed.', error));
 }
 exports.showCelebrations = showCelebrations;
 /** Shows last week's recap once, on the first activation of a new week. */

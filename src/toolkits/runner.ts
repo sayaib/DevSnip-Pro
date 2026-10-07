@@ -82,6 +82,15 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
   const feature = tool.command;
   const subscription = panel.webview.onDidReceiveMessage(async message => {
     if (!message || typeof message !== "object") return;
+    try {
+      await handleMessage(message);
+    } catch (error) {
+      // Insert, open and save touch the editor and the disk; a failure must reach the user, not vanish.
+      console.error(`DevSnip Pro: ${tool.id} action failed.`, error);
+      safePostMessage(panel, { type: "notice", kind: "error", text: `That did not work: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  });
+  async function handleMessage(message: any): Promise<void> {
     switch (message.type) {
       case "run": {
         const requestId = Number(message.requestId) || 0;
@@ -150,7 +159,7 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
         return;
       }
     }
-  });
+  }
   panel.onDidDispose(() => subscription.dispose());
 }
 

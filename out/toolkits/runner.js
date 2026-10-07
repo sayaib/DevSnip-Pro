@@ -110,6 +110,16 @@ async function openTool(context, tool, initial) {
     const subscription = panel.webview.onDidReceiveMessage(async (message) => {
         if (!message || typeof message !== "object")
             return;
+        try {
+            await handleMessage(message);
+        }
+        catch (error) {
+            // Insert, open and save touch the editor and the disk; a failure must reach the user, not vanish.
+            console.error(`DevSnip Pro: ${tool.id} action failed.`, error);
+            (0, webview_ui_1.safePostMessage)(panel, { type: "notice", kind: "error", text: `That did not work: ${error instanceof Error ? error.message : String(error)}` });
+        }
+    });
+    async function handleMessage(message) {
         switch (message.type) {
             case "run": {
                 const requestId = Number(message.requestId) || 0;
@@ -183,7 +193,7 @@ async function openTool(context, tool, initial) {
                 return;
             }
         }
-    });
+    }
     panel.onDidDispose(() => subscription.dispose());
 }
 exports.openTool = openTool;

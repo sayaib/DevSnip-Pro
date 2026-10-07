@@ -252,7 +252,9 @@ async function previewLockedTheme(id, seconds = exports.LOCKED_PREVIEW_SECONDS) 
         themeId: id,
         saved,
         endsAt: Date.now() + seconds * 1000,
-        timer: setTimeout(() => void endLockedPreview("expired"), seconds * 1000),
+        timer: setTimeout(() => {
+            endLockedPreview("expired").catch(error => console.error("DevSnip Pro: could not end the theme preview.", error));
+        }, seconds * 1000),
         ticker: setInterval(() => updatePreviewStatus(session), 1000)
     };
     // Never keep VS Code (or a test run) alive just for a preview.
@@ -284,7 +286,7 @@ async function previewLockedTheme(id, seconds = exports.LOCKED_PREVIEW_SECONDS) 
             await unlockPreviewed(id);
         else if (choice === "End preview")
             await endLockedPreview("ended");
-    }, () => undefined);
+    }).then(undefined, error => console.error("DevSnip Pro: theme preview action failed.", error));
     return true;
 }
 exports.previewLockedTheme = previewLockedTheme;
@@ -373,8 +375,11 @@ function registerThemeCommand(ctx) {
             picker.dispose();
             if (lockedPick) {
                 const id = lockedPick;
-                void revert.then(() => chooseThemeOrUnlock(id)).then(applied => { if (applied)
-                    void (0, activation_1.noteThemeChosen)(); });
+                void revert
+                    .then(() => chooseThemeOrUnlock(id))
+                    .then(applied => { if (applied)
+                    void (0, activation_1.noteThemeChosen)(); })
+                    .catch(error => console.error("DevSnip Pro: could not apply that theme.", error));
             }
         });
         picker.show();
