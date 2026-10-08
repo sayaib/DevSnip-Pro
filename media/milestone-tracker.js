@@ -182,8 +182,10 @@
 
     function build() {
         els.hero = h('section', { className: 'card hero', 'aria-label': 'Your rank and points' });
-        els.quests = h('section', { className: 'card quests', 'aria-label': "Today's quests and this week" });
-        els.daily = h('section', { className: 'daily', 'aria-label': 'Today' });
+        els.quests = h('section', { className: 'card quests', 'aria-label': "Today's quests" });
+        els.daily = h('div', { className: 'daily' });
+        els.week = h('section', { className: 'card week', 'aria-label': 'This week' });
+        els.todayReset = h('span', { className: 'chip', title: 'Quests, the daily boost and daily activities reset at midnight' });
         els.tabs = h('div', { className: 'tabs', role: 'tablist', 'aria-label': 'Progress sections' });
         els.panels = {};
         TABS.forEach(function (tab) {
@@ -232,7 +234,17 @@
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         });
         document.body.appendChild(els.redeem);
-        replace(app, [els.hero, els.quests, els.daily, h('div', {}, [els.tabsRow].concat(TABS.map(function (t) { return els.panels[t.id]; })))]);
+        replace(app, [
+            els.hero,
+            h('section', { className: 'block', 'aria-labelledby': 'todayHead' }, [
+                sectionHead('todayHead', 'Today', 'Quests, bonuses and your next milestone', els.todayReset),
+                h('div', { className: 'today' }, [els.quests, h('div', { className: 'today-side' }, [els.daily, els.week])])
+            ]),
+            h('section', { className: 'block', 'aria-labelledby': 'progressHead' }, [
+                sectionHead('progressHead', 'Your progress', 'Milestones, ranks and everything you have earned'),
+                els.tabsRow
+            ].concat(TABS.map(function (t) { return els.panels[t.id]; })))
+        ]);
         app.removeAttribute('aria-busy');
         ui.built = true;
         selectTab(ui.tab, false);
@@ -258,6 +270,13 @@
         var back = ui.redeemReturn && ui.redeemReturn !== document.body && document.contains(ui.redeemReturn) ? ui.redeemReturn : document.getElementById('redeemBtn');
         ui.redeemReturn = null;
         if (back) back.focus();
+    }
+
+    function sectionHead(id, title, sub, side) {
+        return h('div', { className: 'section-head' }, [
+            h('div', {}, [h('h2', { id: id, text: title }), h('p', { text: sub })]),
+            side || null
+        ]);
     }
 
     function selectTab(id, save, focus) {
@@ -294,10 +313,24 @@
         var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('viewBox', '0 0 128 128');
         svg.setAttribute('aria-hidden', 'true');
+        // The ring fills with a gradient from this rank's colour to the next one's.
+        var NS = 'http://www.w3.org/2000/svg';
+        var defs = document.createElementNS(NS, 'defs');
+        var gradient = document.createElementNS(NS, 'linearGradient');
+        gradient.setAttribute('id', 'ringGradient');
+        gradient.setAttribute('x1', '0'); gradient.setAttribute('y1', '0'); gradient.setAttribute('x2', '1'); gradient.setAttribute('y2', '1');
+        ['ring-stop-a', 'ring-stop-b'].forEach(function (cls, i) {
+            var stop = document.createElementNS(NS, 'stop');
+            stop.setAttribute('offset', String(i));
+            stop.setAttribute('class', cls);
+            gradient.appendChild(stop);
+        });
+        defs.appendChild(gradient);
+        svg.appendChild(defs);
         ['ring-track', 'ring-fill'].forEach(function (cls) {
             var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', '64'); circle.setAttribute('cy', '64'); circle.setAttribute('r', String(R));
-            circle.setAttribute('fill', 'none'); circle.setAttribute('stroke-width', '9');
+            circle.setAttribute('fill', 'none'); circle.setAttribute('stroke-width', '8');
             circle.setAttribute('class', cls);
             if (cls === 'ring-fill') {
                 circle.setAttribute('stroke-dasharray', String(C));
@@ -309,14 +342,34 @@
         var ringPercent = v.nextLevel ? v.levelPercent : 100;
         requestAnimationFrame(function () { fill.setAttribute('stroke-dashoffset', String(C * (1 - ringPercent / 100))); });
 
-        // The rank journey: one stop per rank, filled up to where you are now.
+        // The rank ladder: every rank's badge, filled up to where you are now.
         var stops = v.levels.map(function (lv) {
-            return h('span', { className: 'stop ' + lv.state, title: lv.badge + ' ' + lv.name + ' · ' + fmt(lv.minPoints) + ' pts' });
+            return h('span', {
+                className: 'rung ' + lv.state, title: lv.name + ' · ' + fmt(lv.minPoints) + ' pts' + (lv.state === 'achieved' ? ' · reached' : lv.state === 'current' ? ' · you are here' : ''),
+                vars: { '--lv-ink': 'color-mix(in srgb, ' + lv.color + ' 55%, var(--fg-0))' }
+            }, [h('span', { className: 'rung-badge', text: lv.badge })]);
         });
         var journeyFill = h('span', { className: 'journey-fill' });
         var span = Math.max(1, v.levels.length - 1);
         var journeyPercent = Math.min(100, ((v.level.index + (v.nextLevel ? v.levelPercent / 100 : 0)) / span) * 100);
         requestAnimationFrame(function () { journeyFill.style.width = journeyPercent + '%'; });
+        var nextBlock = v.nextLevel
+            ? h('div', { className: 'next-rank', vars: { '--next-ink': 'color-mix(in srgb, ' + v.nextLevel.color + ' 55%, var(--fg-0))' } }, [
+                h('div', { className: 'next-rank-line' }, [
+                    h('span', {}, [h('span', { className: 'muted', text: 'Next rank ' }), h('strong', { text: v.nextLevel.badge + ' ' + v.nextLevel.name })]),
+                    h('span', { className: 'next-rank-togo' }, [h('strong', { className: 'num', text: fmt(v.pointsToNext) }), ' pts to go'])
+                ]),
+                bar(v.levelPercent, 'rankbar', 'Progress to ' + v.nextLevel.name),
+                h('div', { className: 'next-rank-meta' }, [
+                    h('span', { className: 'num', text: fmt(v.lifetime) + ' / ' + fmt(v.nextLevel.minPoints) + ' pts earned in total' }),
+                    h('span', { className: 'num', text: v.levelPercent + '%' })
+                ])
+            ])
+            : h('div', { className: 'next-rank top' }, [
+                h('div', { className: 'next-rank-line' }, [h('strong', { text: 'Highest rank reached' }), h('span', { className: 'num muted', text: fmt(v.lifetime) + ' pts earned' })]),
+                bar(100, 'rankbar', 'Highest rank reached'),
+                h('div', { className: 'next-rank-meta' }, [h('span', { text: 'Every point still counts toward milestones.' })])
+            ]);
 
         var rank = h('div', { className: 'rank' }, [
             h('div', {
@@ -328,18 +381,13 @@
             ])]),
             h('div', { className: 'rank-info' }, [
                 h('div', { className: 'eyebrow', text: 'Rank ' + (v.level.index + 1) + ' of ' + v.levels.length + ' · ' + v.level.title }),
-                h('div', { className: 'rank-name', text: v.level.name }),
-                profile.title ? h('div', { className: 'rank-title-line' }, [h('span', { 'aria-hidden': 'true', text: profile.title.icon }), h('span', { text: profile.title.name })]) : null,
-                v.nextLevel
-                    ? h('div', { className: 'rank-next' }, [h('strong', { text: fmt(v.pointsToNext) + ' pts' }), ' to ', h('strong', { text: v.nextLevel.badge + ' ' + v.nextLevel.name }), h('span', { className: 'muted', text: '  ·  ' + fmt(v.lifetime) + ' / ' + fmt(v.nextLevel.minPoints) })])
-                    : h('div', { className: 'rank-next' }, [h('strong', { text: 'Highest rank reached' }), ' · every point still counts toward milestones']),
-                h('div', { className: 'journey', role: 'img', 'aria-label': 'Rank ' + (v.level.index + 1) + ' of ' + v.levels.length }, [journeyFill].concat(stops)),
-                // The journey spans every rank, so its labels name the two ends; each stop names itself on hover.
-                h('div', { className: 'journey-labels', 'aria-hidden': 'true' }, [
-                    h('span', { text: v.levels[0].name }),
-                    h('span', { text: v.levels[v.levels.length - 1].name })
+                h('div', { className: 'rank-name-row' }, [
+                    h('div', { className: 'rank-name', text: v.level.name }),
+                    profile.title ? h('div', { className: 'rank-title-line' }, [h('span', { 'aria-hidden': 'true', text: profile.title.icon }), h('span', { text: profile.title.name })]) : null
                 ]),
-                h('div', { className: 'rank-foot', text: fmt(v.lifetime) + ' points earned in total · spending never lowers your rank' }),
+                nextBlock,
+                h('div', { className: 'journey', role: 'img', 'aria-label': 'Rank ' + (v.level.index + 1) + ' of ' + v.levels.length + ': ' + v.level.name }, [journeyFill].concat(stops)),
+                h('div', { className: 'rank-foot', text: 'Ranks follow points earned in total, so spending never lowers your rank.' }),
                 h('div', { className: 'rank-redeem' }, [
                     h('button', {
                         type: 'button', className: 'xbtn gold', id: 'redeemBtn', 'aria-haspopup': 'dialog',
@@ -406,8 +454,9 @@
         ]);
         els.hero.className = 'card hero' + (profile.banner && profile.banner.value ? ' banner-' + profile.banner.value : '');
         els.hero.style.setProperty('--level-color', v.level.color);
+        els.hero.style.setProperty('--next-ink', 'color-mix(in srgb, ' + (v.nextLevel ? v.nextLevel.color : v.level.color) + ' 55%, var(--fg-0))');
         // Rank colours include near-white Platinum and Diamond: blend with the text colour so they read in every theme.
-        els.hero.style.setProperty('--level-ink', 'color-mix(in srgb, ' + v.level.color + ' 72%, var(--fg-0))');
+        els.hero.style.setProperty('--level-ink', 'color-mix(in srgb, ' + v.level.color + ' 55%, var(--fg-0))');
         replace(els.hero, [rank, kpis]);
     }
 
@@ -432,29 +481,31 @@
     function renderQuests(v) {
         var q = v.quests;
         if (!changed('quests', [q, v.week, v.shop && v.shop.reroll, new Date().getHours()])) return;
+        if (els.todayReset) els.todayReset.textContent = 'Resets in ' + hoursToMidnight() + 'h';
+        renderWeek(v);
         if (!q || !q.total) { els.quests.hidden = true; return; }
         els.quests.hidden = false;
         var allDone = q.done >= q.total;
         var head = h('div', { className: 'q-head' }, [
-            h('div', { style: 'min-width:0' }, [
-                h('div', { className: 'eyebrow', text: "Today's quests" }),
-                h('div', { className: 'q-title', text: allDone ? 'All done. New quests tomorrow.' : q.done + ' of ' + q.total + ' done' })
+            h('div', { className: 'q-head-text' }, [
+                h('div', { className: 'card-label' }, [icon('target'), h('span', { text: "Today's quests" })]),
+                h('div', { className: 'q-title' }, [
+                    h('span', { className: 'num', text: q.done + '/' + q.total }),
+                    h('span', { className: 'muted', text: allDone ? ' · all done, new quests tomorrow' : ' done' })
+                ])
             ]),
-            h('div', { className: 'q-head-side' }, [
-                h('span', { className: 'chip', title: 'New quests every day at midnight', text: 'New in ' + hoursToMidnight() + 'h' }),
-                allDone ? null : h('button', { type: 'button', className: 'xbtn sm', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, [icon('search'), h('span', { text: 'Find a tool' })])
-            ])
+            allDone ? null : h('button', { type: 'button', className: 'xbtn sm', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, [icon('search'), h('span', { text: 'Find a tool' })])
         ]);
         var list = h('div', { className: 'q-list' }, q.items.map(function (item) {
             return h('div', { className: 'quest' + (item.done ? ' done' : ''), 'data-quest': item.id }, [
                 h('span', { className: 'q-icon', 'aria-hidden': 'true' }, [item.done ? icon('check') : item.icon]),
                 h('div', { className: 'q-body' }, [
-                    h('div', { className: 'q-name', text: item.title }),
-                    h('div', { className: 'q-hint', text: item.hint })
-                ]),
-                h('div', { className: 'q-progress' }, [
-                    bar(item.percent, item.done ? 'success' : 'accent', item.title + ' progress'),
-                    h('span', { className: 'num muted', text: item.done ? 'Done' : fmt(item.progress) + ' / ' + fmt(item.target) })
+                    h('div', { className: 'q-line' }, [
+                        h('span', { className: 'q-name', text: item.title }),
+                        h('span', { className: 'q-count num', text: item.done ? 'Done' : fmt(item.progress) + ' / ' + fmt(item.target) })
+                    ]),
+                    h('div', { className: 'q-hint', text: item.hint }),
+                    bar(item.percent, item.done ? 'success' : 'accent', item.title + ' progress')
                 ]),
                 h('span', { className: 'q-side' }, [
                     item.done ? chip('+' + fmt(item.points), 'ok', 'check') : chip('+' + fmt(item.points), 'pts'),
@@ -467,62 +518,73 @@
                 ])
             ]);
         }));
+        var pips = h('span', { className: 'q-pips', 'aria-hidden': 'true' }, q.items.map(function (item) { return h('i', { className: item.done ? 'on' : '' }); }));
+        var left = q.total - q.done;
         var chest = h('div', { className: 'q-chest' + (q.chestClaimed ? ' open' : '') }, [
             h('span', { className: 'q-chest-icon', 'aria-hidden': 'true', text: q.chestClaimed ? '🎉' : '🎁' }),
-            h('span', { className: 'q-chest-text', text: q.chestClaimed ? 'Bonus chest opened: +' + q.chestPoints + ' pts' : 'Finish all ' + q.total + ' for a +' + q.chestPoints + ' pts bonus chest' }),
+            h('span', { className: 'q-chest-text' }, [
+                h('strong', { text: q.chestClaimed ? 'Bonus chest opened' : 'Bonus chest' }),
+                h('span', { className: 'muted', text: q.chestClaimed ? ' · +' + q.chestPoints + ' pts and a bonus spin' : ' · finish ' + plural(left, 'more quest') + ' for +' + q.chestPoints + ' pts and a bonus spin' })
+            ]),
+            pips,
             q.perfectDays ? h('span', { className: 'muted q-perfect', text: plural(q.perfectDays, 'perfect day') }) : null
         ]);
+        replace(els.quests, [head, list, chest]);
+    }
 
+    /** This week at a glance, beside today's quests. */
+    function renderWeek(v) {
         var w = v.week;
-        var compare = null;
+        var compare;
         if (w.last && w.last.points > 0) {
+            var ahead = w.current.points >= w.last.points;
             var pct = Math.min(100, Math.round((w.current.points / w.last.points) * 100));
             compare = h('div', { className: 'week-compare' }, [
-                bar(pct, w.current.points >= w.last.points ? 'success' : '', 'Points this week compared with last week'),
-                h('div', { className: 'week-sub', text: w.current.points >= w.last.points
-                    ? 'Ahead of last week (' + fmt(w.last.points) + ' pts)'
-                    : fmt(w.last.points - w.current.points) + ' pts to beat last week' })
+                bar(pct, ahead ? 'success' : 'accent', 'Points this week compared with last week'),
+                h('div', { className: 'week-sub' }, [
+                    ahead ? h('span', { className: 'up', text: '▲ ' }) : null,
+                    ahead ? 'Ahead of last week (' + fmt(w.last.points) + ' pts)' : fmt(w.last.points - w.current.points) + ' pts to beat last week'
+                ])
             ]);
-        } else if (w.last) {
-            compare = h('div', { className: 'week-sub', text: 'Last week: ' + plural(w.last.runs, 'tool run') });
+        } else {
+            compare = h('div', { className: 'week-sub', text: w.last ? 'Last week: ' + plural(w.last.runs, 'tool run') + '.' : 'Your first tracked week. These fill in as you use tools.' });
         }
-        var week = h('div', { className: 'week' }, [
-            h('div', { className: 'eyebrow', text: 'This week' }),
+        replace(els.week, [
+            h('div', { className: 'card-label' }, [icon('bolt'), h('span', { text: 'This week' })]),
             h('div', { className: 'week-stats' }, [
                 weekStat('points', w.current.points),
                 weekStat('tool runs', w.current.runs),
-                weekStat(w.current.tools === 1 ? 'tool used' : 'tools used', w.current.tools)
+                weekStat(w.current.tools === 1 ? 'tool' : 'tools', w.current.tools)
             ]),
             compare
         ]);
-        replace(els.quests, [h('div', { className: 'q-main' }, [head, list, chest]), week]);
     }
 
     // ------------------------------------------------------------------
-    // Today: the one action on this page, and what to do next
+    // Today: the daily boost and the next milestone
     // ------------------------------------------------------------------
 
     function renderDaily(v) {
         if (!changed('daily', [v.today, v.focus])) return;
         var t = v.today;
         var checklist = h('div', { className: 'checklist' }, [
-            h('span', { className: t.loginClaimed ? 'ok' : '' }, [icon(t.loginClaimed ? 'check' : 'sun'), t.loginClaimed ? 'Daily login +' + t.loginPoints : 'Daily login +' + t.loginPoints + ' on your first tool run']),
-            h('span', { className: t.bonusClaimed ? 'ok' : '' }, [icon(t.bonusClaimed ? 'check' : 'gift'), 'Daily boost +' + t.bonusPoints])
+            h('span', { className: t.loginClaimed ? 'ok' : '' }, [icon(t.loginClaimed ? 'check' : 'sun'), 'Login +' + t.loginPoints]),
+            h('span', { className: t.bonusClaimed ? 'ok' : '' }, [icon(t.bonusClaimed ? 'check' : 'gift'), 'Boost +' + t.bonusPoints])
         ]);
         var boost = t.bonusClaimed
             ? h('div', { className: 'card boost claimed' }, [
                 h('span', { className: 'boost-icon' }, [icon('check')]),
                 h('div', { className: 'boost-body' }, [
-                    h('div', { className: 'boost-title', text: 'You are all set for today' }),
-                    h('div', { className: 'boost-sub', text: 'Come back tomorrow for another +' + (t.loginPoints + t.bonusPoints) + ' pts. The boost resets at midnight.' }),
+                    h('div', { className: 'boost-title', text: 'Daily bonuses collected' }),
+                    h('div', { className: 'boost-sub', text: 'Back tomorrow for another +' + (t.loginPoints + t.bonusPoints) + ' pts.' }),
                     checklist
                 ])
             ])
             : h('div', { className: 'card boost ready' }, [
                 h('span', { className: 'boost-icon' }, [icon('gift')]),
                 h('div', { className: 'boost-body' }, [
-                    h('div', { className: 'boost-title', text: 'Your daily boost is ready' }),
-                    h('div', { className: 'boost-sub', text: 'Claim +' + t.bonusPoints + ' pts for coming back today.' }),
+                    h('div', { className: 'boost-title', text: 'Daily boost ready' }),
+                    h('div', { className: 'boost-sub', text: t.loginClaimed ? 'Claim +' + t.bonusPoints + ' pts for coming back.' : 'Claim +' + t.bonusPoints + ' pts. Your login bonus arrives with your first tool run.' }),
                     checklist
                 ]),
                 h('button', {
@@ -538,26 +600,33 @@
 
         var f = v.focus;
         var next = f
-            ? h('div', { className: 'card next', vars: { '--tint': TINT[f.category] || 'var(--info)' } }, [
-                h('span', { className: 'next-icon', text: f.icon, 'aria-hidden': 'true' }),
-                h('div', { style: 'min-width:0' }, [
-                    h('div', { className: 'next-title' }, [h('span', { text: 'Next up: ' + f.title }), chip('+' + fmt(f.points), 'pts')]),
-                    h('div', { className: 'next-sub', text: f.remainingLabel + ' · ' + f.description }),
-                    h('div', { className: 'next-row' }, [
-                        bar(f.percent, '', f.title + ' progress'),
-                        h('span', { className: 'num muted', style: 'font-size:12px', text: fmt(f.current) + ' / ' + fmt(f.target) }),
-                        h('button', { type: 'button', className: 'xbtn sm', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, [icon('search'), h('span', { text: 'Find a tool' })])
-                    ])
+            ? h('div', { className: 'card next', vars: tintVars(TINT[f.category] || 'var(--info)') }, [
+                h('div', { className: 'card-label' }, [icon('star'), h('span', { text: 'Next milestone' }), chip('+' + fmt(f.points), 'pts')]),
+                h('div', { className: 'next-main' }, [
+                    h('span', { className: 'next-icon', text: f.icon, 'aria-hidden': 'true' }),
+                    h('div', { style: 'min-width:0' }, [
+                        h('div', { className: 'next-title', text: f.title }),
+                        h('div', { className: 'next-sub', text: f.remainingLabel })
+                    ]),
+                    h('span', { className: 'next-pct num', text: f.percent + '%' })
+                ]),
+                bar(f.percent, 'accent', f.title + ' progress'),
+                h('div', { className: 'next-row' }, [
+                    h('span', { className: 'num muted', text: fmt(f.current) + ' / ' + fmt(f.target) + ' · ' + f.description }),
+                    h('button', { type: 'button', className: 'link', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, ['Find a tool', icon('arrow')])
                 ])
             ])
-            : h('div', { className: 'card next', vars: { '--tint': 'var(--success)' } }, [
-                h('span', { className: 'next-icon', text: '🎉', 'aria-hidden': 'true' }),
-                h('div', {}, [
-                    h('div', { className: 'next-title', text: 'Every milestone complete' }),
-                    h('div', { className: 'next-sub', style: 'margin-bottom:0', text: 'Keep your streak going to climb the ranks.' })
+            : h('div', { className: 'card next done', vars: tintVars('var(--success)') }, [
+                h('div', { className: 'card-label' }, [icon('trophy'), h('span', { text: 'Milestones' })]),
+                h('div', { className: 'next-main' }, [
+                    h('span', { className: 'next-icon', text: '🎉', 'aria-hidden': 'true' }),
+                    h('div', {}, [
+                        h('div', { className: 'next-title', text: 'Every milestone complete' }),
+                        h('div', { className: 'next-sub', text: 'Keep your streak going to climb the ranks.' })
+                    ])
                 ])
             ]);
-        replace(els.daily, [boost, next]);
+        replace(els.daily, [next, boost]);
     }
 
     function renderCounts(v) {
@@ -578,56 +647,89 @@
     // Milestones: closest first
     // ------------------------------------------------------------------
 
-    function milestoneCard(m, closest) {
+    function milestoneCard(m, closest, index) {
         var tint = TINT[m.category] || 'var(--info)';
-        var card = h('article', { className: 'card ms' + (m.completed ? ' completed' : '') + (closest ? ' closest' : ''), 'data-ms': m.id, vars: tintVars(m.completed ? 'var(--success)' : tint) }, [
+        var vars = tintVars(m.completed ? 'var(--success)' : tint);
+        vars['--i'] = String(Math.min(index || 0, 12));
+        if (m.completed) {
+            // Completed milestones are trophies: compact, so open goals stand out.
+            return h('article', { className: 'card ms completed', 'data-ms': m.id, vars: vars, title: m.description }, [
+                h('div', { className: 'ms-icon' }, [h('span', { text: m.icon, 'aria-hidden': 'true' }), h('span', { className: 'ms-check' }, [icon('check')])]),
+                h('div', { className: 'ms-done-body' }, [
+                    h('div', { className: 'ms-title', text: m.title }),
+                    h('div', { className: 'ms-cat', text: m.category + ' · completed' })
+                ]),
+                chip('+' + fmt(m.points), 'ok', 'check')
+            ]);
+        }
+        return h('article', { className: 'card ms' + (closest ? ' closest' : ''), 'data-ms': m.id, vars: vars }, [
             closest ? h('span', { className: 'tag' }, [chip('Closest', 'accent', 'star')]) : null,
             h('div', { className: 'ms-head' }, [
-                h('div', { className: 'ms-icon' }, [
-                    h('span', { text: m.icon, 'aria-hidden': 'true' }),
-                    m.completed ? h('span', { className: 'ms-check' }, [icon('check')]) : null
-                ]),
+                h('div', { className: 'ms-icon' }, [h('span', { text: m.icon, 'aria-hidden': 'true' })]),
                 h('div', { style: 'min-width:0' }, [h('div', { className: 'ms-cat', text: m.category }), h('div', { className: 'ms-title', text: m.title })]),
-                m.completed ? chip('+' + fmt(m.points), 'ok', 'check') : chip('+' + fmt(m.points), 'pts')
+                chip('+' + fmt(m.points), 'pts')
             ]),
             h('div', { className: 'ms-desc', text: m.description }),
-            bar(m.percent, m.completed ? 'success' : '', m.title + ' progress'),
+            h('div', { className: 'ms-progress' }, [
+                bar(m.percent, closest ? 'accent' : 'tint', m.title + ' progress'),
+                h('span', { className: 'ms-pct num', text: m.percent + '%' })
+            ]),
             h('div', { className: 'ms-foot' }, [
                 h('span', { className: 'num' }, [h('b', { text: fmt(m.current) }), ' / ' + fmt(m.target)]),
-                h('span', { text: m.completed ? 'Completed' : m.remainingLabel })
+                h('span', { text: m.remainingLabel })
             ])
         ]);
-        return card;
+    }
+
+    function statPill(iconName, tint, value, label) {
+        return h('div', { className: 'stat-pill', vars: tintVars(tint) }, [
+            h('span', { className: 'stat-pill-icon' }, [icon(iconName)]),
+            h('div', {}, [h('div', { className: 'stat-pill-value num', text: value }), h('div', { className: 'stat-pill-label', text: label })])
+        ]);
     }
 
     function renderMilestones(v) {
         if (!changed('milestones', [v.milestones, v.focus && v.focus.id, ui.filter, v.milestoneSummary])) return;
         var s = v.milestoneSummary;
         var filters = [['all', 'All'], ['open', 'In progress'], ['done', 'Completed']];
-        var head = h('div', { className: 'tabs-row', style: 'margin-top:12px' }, [
+        var summary = h('div', { className: 'ms-summary' }, [
+            statPill('trophy', 'var(--success)', s.completed + ' / ' + s.total, 'milestones complete'),
+            statPill('wallet', 'var(--gold)', fmt(s.earned), 'points earned from them'),
+            statPill('target', 'var(--accent)', fmt(s.available), 'points still to collect')
+        ]);
+        var head = h('div', { className: 'tabs-row ms-toolbar' }, [
             h('div', { className: 'filters', role: 'group', 'aria-label': 'Filter milestones' }, filters.map(function (f) {
                 return h('button', {
                     type: 'button', className: 'filter', text: f[1], 'aria-pressed': ui.filter === f[0] ? 'true' : 'false',
-                    onclick: function () { ui.filter = f[0]; persist(); renderMilestones(ui.view); }
+                    onclick: function () { ui.filter = f[0]; ui.msAnimate = true; persist(); renderMilestones(ui.view); }
                 });
             })),
-            h('div', { className: 'summary', style: 'margin:0' }, [
-                h('span', {}, [h('b', { text: s.completed + ' of ' + s.total }), ' complete']),
-                h('span', {}, [h('b', { text: fmt(s.earned) }), ' pts earned']),
-                h('span', {}, [h('b', { text: fmt(s.available) }), ' pts to collect'])
-            ])
+            h('div', { className: 'ms-overall' }, [bar(s.total ? Math.round((s.completed / s.total) * 100) : 0, 'success', 'Milestones complete'), h('span', { className: 'num muted', text: Math.round(s.total ? (s.completed / s.total) * 100 : 0) + '%' })])
         ]);
-        // In progress first, closest to done first; completed ones last.
-        var list = v.milestones.filter(function (m) {
-            return ui.filter === 'all' || (ui.filter === 'done' ? m.completed : !m.completed);
-        }).slice().sort(function (a, b) {
-            if (a.completed !== b.completed) return a.completed ? 1 : -1;
-            return a.completed ? 0 : b.percent - a.percent;
-        });
-        var body = list.length
-            ? h('div', { className: 'grid', style: 'margin-top:14px' }, list.map(function (m) { return milestoneCard(m, !m.completed && v.focus && v.focus.id === m.id); }))
-            : h('div', { className: 'card empty' }, [icon(ui.filter === 'done' ? 'trophy' : 'sparkle'), ui.filter === 'done' ? 'No milestones completed yet. Your first one is a single tool run away.' : 'Every milestone is complete. Nicely done.']);
-        replace(els.panels.milestones, [head, body]);
+        // In progress first, closest to done first; completed ones in their own group.
+        var open = v.milestones.filter(function (m) { return !m.completed; }).sort(function (a, b) { return b.percent - a.percent; });
+        var done = v.milestones.filter(function (m) { return m.completed; });
+        // Cards fade in on the first draw and on a filter change, not on every background update.
+        var animate = ui.msAnimate !== false;
+        ui.msAnimate = false;
+        function group(title, list, compact) {
+            return h('div', { className: 'ms-group' }, [
+                ui.filter === 'all' ? h('div', { className: 'group-head' }, [h('span', { text: title }), h('span', { className: 'count', text: String(list.length) })]) : null,
+                h('div', { className: 'grid' + (compact ? ' compact' : '') + (animate ? ' animate' : '') }, list.map(function (m, i) { return milestoneCard(m, !m.completed && v.focus && v.focus.id === m.id, i); }))
+            ]);
+        }
+        var body = [];
+        if (ui.filter !== 'done' && open.length) body.push(group('In progress', open, false));
+        if (ui.filter !== 'open' && done.length) body.push(group('Completed', done, true));
+        if (!body.length) {
+            body.push(h('div', { className: 'card empty' }, [
+                h('span', { className: 'empty-art', 'aria-hidden': 'true', text: ui.filter === 'done' ? '🏁' : '🏆' }),
+                h('div', { className: 'empty-title', text: ui.filter === 'done' ? 'No milestones completed yet' : 'Every milestone is complete' }),
+                h('div', { text: ui.filter === 'done' ? 'Your first one is a single tool run away.' : 'Nicely done. Keep your streak going to climb the ranks.' }),
+                ui.filter === 'done' ? h('div', { style: 'margin-top:14px' }, [h('button', { type: 'button', className: 'xbtn primary sm', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, [icon('search'), h('span', { text: 'Find a tool' })])]) : null
+            ]));
+        }
+        replace(els.panels.milestones, [summary, head].concat(body));
     }
 
     // ------------------------------------------------------------------
@@ -637,7 +739,7 @@
     function renderLevels(v) {
         if (!changed('levels', [v.levels, v.levelPercent, v.lifetime])) return;
         var rows = v.levels.map(function (lv) {
-            var row = h('div', { className: 'tl ' + lv.state, role: 'listitem', 'aria-current': lv.state === 'current' ? 'step' : null, vars: { '--lv-ink': 'color-mix(in srgb, ' + lv.color + ' 72%, var(--fg-0))' } }, [
+            var row = h('div', { className: 'tl ' + lv.state, role: 'listitem', 'aria-current': lv.state === 'current' ? 'step' : null, vars: { '--lv-ink': 'color-mix(in srgb, ' + lv.color + ' 55%, var(--fg-0))' } }, [
                 h('div', { className: 'tl-node', text: lv.badge, 'aria-hidden': 'true' }),
                 h('div', { style: 'min-width:0' }, [
                     h('div', { className: 'tl-name' }, [
@@ -755,7 +857,20 @@
                 }, [icon('play')])
             ]);
         }
-        return h('div', { className: 'rw-preview stage' }, [rankCardPreview(v, profileWith(v, r), true)]);
+        var look = profileWith(v, r);
+        var badge = v.level.badge;
+        if (r.kind === 'avatar' || r.kind === 'frame') {
+            // One big medal: the item itself, worn the way it would be on your card.
+            return h('div', { className: 'rw-preview stage medal-stage' + (look.banner ? ' banner-' + look.banner : '') }, [
+                medal('pv-medal big', look.avatar || badge, look.frame, look.avatar ? badge : null)
+            ]);
+        }
+        if (r.kind === 'title') {
+            return h('div', { className: 'rw-preview stage title-stage' }, [
+                h('span', { className: 'title-sample' }, [h('span', { className: 'muted', text: v.level.name + ' · ' }), h('strong', { text: r.name })])
+            ]);
+        }
+        return h('div', { className: 'rw-preview stage' }, [rankCardPreview(v, look, true)]);
     }
 
     function buyButton(r) {
@@ -774,14 +889,12 @@
     function rewardAction(r) {
         if (r.unlocked) {
             if (r.kind === 'theme') {
-                if (r.active) return chip('In use', 'ok', 'check');
+                // The card's ribbon already says "In use".
+                if (r.active) return null;
                 return h('button', { type: 'button', className: 'xbtn sm primary', onclick: function () { post('useTheme', { themeId: r.themeId }); } }, [icon('palette'), h('span', { text: 'Use theme' })]);
             }
             if (r.active) {
-                return h('span', { className: 'rw-actions' }, [
-                    chip('Equipped', 'ok', 'check'),
-                    h('button', { type: 'button', className: 'link', title: 'Take it off', onclick: function () { post('equipReward', { slot: r.kind, id: null }); } }, ['Remove'])
-                ]);
+                return h('button', { type: 'button', className: 'xbtn sm', title: 'Take it off', onclick: function () { post('equipReward', { slot: r.kind, id: null }); } }, [icon('x'), h('span', { text: 'Take off' })]);
             }
             return h('button', {
                 type: 'button', className: 'xbtn sm primary',
@@ -801,12 +914,20 @@
     }
 
     function rewardCard(r, v) {
-        return h('article', { className: 'card rw' + (r.unlocked ? ' unlocked' : ' locked') + (r.active ? ' active' : '') + (r.previewing ? ' previewing' : ''), 'data-reward': r.id }, [
+        var earnOnly = !r.unlocked && r.cost === null;
+        return h('article', { className: 'card rw' + (r.unlocked ? ' unlocked' : ' locked') + (earnOnly ? ' earn-only' : '') + (r.active ? ' active' : '') + (r.previewing ? ' previewing' : ''), 'data-reward': r.id }, [
+            r.active ? h('span', { className: 'rw-ribbon' }, [icon('check'), r.kind === 'theme' ? 'In use' : 'Equipped']) : earnOnly ? h('span', { className: 'rw-ribbon earn' }, [icon('star'), 'Earned only']) : null,
             rewardPreview(r, v),
             h('div', { className: 'rw-body' }, [
                 h('div', { className: 'ms-cat', vars: tintVars(KIND_TINT[r.kind] || 'var(--gold)'), text: KIND_LABEL[r.kind] || r.kind }),
                 h('div', { className: 'ms-title' }, [r.icon + ' ' + r.name]),
                 h('div', { className: 'ms-desc', text: r.description }),
+                !r.unlocked && r.cost !== null && !r.affordable && v.balance >= 0
+                    ? h('div', { className: 'rw-need' }, [
+                        bar(Math.min(99, Math.floor((v.balance / r.cost) * 100)), 'accent', 'Points towards ' + r.name),
+                        h('span', { className: 'num', text: fmt(r.cost - v.balance) + ' pts to go' })
+                    ])
+                    : null,
                 h('div', { className: 'rw-foot' }, [
                     r.unlocked
                         ? h('span', { className: 'rw-state ok' }, [icon('check'), 'Owned'])
@@ -850,17 +971,28 @@
         });
         var collected = v.shop ? v.shop.collected : 0;
         var collectible = v.shop ? v.shop.collectible : 0;
+        // How much of each type you own, so the collection reads at a glance.
+        var byType = ['avatar', 'title', 'frame', 'banner', 'effect'].map(function (slot) {
+            var items = v.rewards.filter(function (r) { return r.kind === slot; });
+            var owned = items.filter(function (r) { return r.unlocked; }).length;
+            return h('button', { type: 'button', className: 'coll-row', vars: tintVars(KIND_TINT[slot]), title: 'Browse ' + KIND_LABEL[slot].toLowerCase() + 's', onclick: function () { showShop(slot); } }, [
+                h('span', { className: 'coll-label', text: SHOP_KINDS.filter(function (k) { return k.id === slot; })[0].label }),
+                bar(items.length ? Math.round((owned / items.length) * 100) : 0, 'tint', KIND_LABEL[slot] + ' collected'),
+                h('span', { className: 'coll-count num', text: owned + '/' + items.length })
+            ]);
+        });
         return h('section', { className: 'card studio', 'aria-label': 'Your profile' }, [
             h('div', { className: 'studio-show' }, [
-                h('div', { className: 'eyebrow', text: 'Your profile' }),
-                h('div', { className: 'studio-sub', text: 'This is your rank card in the Tools view. Dress it up with points.' }),
+                h('div', { className: 'card-label' }, [icon('smile'), h('span', { text: 'Your profile' })]),
+                h('div', { className: 'studio-sub', text: 'Your rank card in the Tools view. Dress it up with points.' }),
                 rankCardPreview(v, profileWith(v, null), false),
                 h('div', { className: 'studio-collection' }, [
-                    h('div', { className: 'studio-collection-head' }, [h('span', { text: 'Collection' }), h('span', { className: 'num', text: fmt(collected) + ' / ' + fmt(collectible) })]),
-                    bar(collectible ? Math.round((collected / collectible) * 100) : 0, 'accent', 'Profile rewards collected')
+                    h('div', { className: 'studio-collection-head' }, [h('span', { text: 'Collection' }), h('span', { className: 'num', text: fmt(collected) + ' / ' + fmt(collectible) + ' · ' + (collectible ? Math.round((collected / collectible) * 100) : 0) + '%' })]),
+                    bar(collectible ? Math.round((collected / collectible) * 100) : 0, 'accent', 'Profile rewards collected'),
+                    h('div', { className: 'coll-list' }, byType)
                 ])
             ]),
-            h('div', { className: 'studio-slots' }, rows)
+            h('div', { className: 'studio-slots' }, [h('div', { className: 'card-label slots-label' }, [icon('check'), h('span', { text: 'Wearing now' })])].concat(rows))
         ]);
     }
 
@@ -981,7 +1113,9 @@
             acc[key] = (acc[key] || 0) + seg.chance;
             return acc;
         }, {});
-        var oddsText = Object.keys(odds).map(function (k) { return k + ' ' + odds[k] + '%'; }).join(' · ');
+        var oddsList = h('div', { className: 'odds-list' }, Object.keys(odds).map(function (k) {
+            return h('span', { className: 'odds-item' }, [h('span', { text: k }), h('b', { className: 'num', text: odds[k] + '%' })]);
+        }));
         var button = h('button', {
             type: 'button', className: 'xbtn ' + (w.spinsLeft ? 'gold' : ''), id: 'spinBtn', disabled: !w.spinsLeft || ui.spinning,
             onclick: function (event) {
@@ -991,14 +1125,15 @@
                 post('spinWheel');
             }
         }, [icon('refresh'), h('span', { text: w.spinsLeft ? (w.spinsLeft > 1 ? 'Spin (' + w.spinsLeft + ' left)' : 'Spin the wheel') : 'Spun today' })]);
-        return h('article', { className: 'card act-card spin-card' }, [
+        return h('article', { className: 'card act-card spin-card' + (w.spinsLeft ? '' : ' done'), id: 'act-spin' }, [
             h('div', { className: 'act-head' }, [
                 h('span', { className: 'act-emoji', 'aria-hidden': 'true', text: '🎡' }),
                 h('div', { className: 'act-heading' }, [h('div', { className: 'act-name', text: 'Daily spin' }), h('div', { className: 'act-sub', text: 'One free spin a day. Finish all of today’s quests for a bonus spin.' })]),
                 w.spinsLeft ? chip(w.spinsLeft + ' ready', 'accent') : chip('Done', 'ok', 'check')
             ]),
             h('div', { className: 'wheel', id: 'wheel' }, [h('span', { className: 'wheel-pointer', 'aria-hidden': 'true' }), svg]),
-            h('div', { className: 'act-foot' }, [button, h('span', { className: 'act-note', title: 'Chances for each prize', text: oddsText })])
+            h('div', { className: 'act-foot' }, [button]),
+            h('details', { className: 'odds' }, [h('summary', { text: 'See the odds' }), oddsList])
         ]);
     }
 
@@ -1019,7 +1154,7 @@
             }, [h('span', { className: 'quiz-letter', text: letters[i] }), h('span', { className: 'quiz-text', text: text })]);
         }));
         var right = answered && q.choice === q.answer;
-        return h('article', { className: 'card act-card quiz-card' }, [
+        return h('article', { className: 'card act-card quiz-card' + (answered ? ' done' : ''), id: 'act-quiz' }, [
             h('div', { className: 'act-head' }, [
                 h('span', { className: 'act-emoji', 'aria-hidden': 'true', text: '🧩' }),
                 h('div', { className: 'act-heading' }, [h('div', { className: 'act-name', text: 'Daily dev challenge' }), h('div', { className: 'act-sub', text: q.category + ' · a new question every day' })]),
@@ -1099,7 +1234,7 @@
                 ])
             ];
         }
-        return h('article', { className: 'card act-card sprint-card' + (ui.sprint ? ' playing' : ''), id: 'sprintCard' }, [
+        return h('article', { className: 'card act-card sprint-card' + (ui.sprint ? ' playing' : sp.played ? ' done' : ''), id: 'sprintCard' }, [
             h('div', { className: 'act-head' }, [
                 h('span', { className: 'act-emoji', 'aria-hidden': 'true', text: '⚡' }),
                 h('div', { className: 'act-heading' }, [h('div', { className: 'act-name', text: 'Bit Sprint' }), h('div', { className: 'act-sub', text: 'Convert decimal, hex and binary as fast as you can.' })]),
@@ -1165,7 +1300,7 @@
 
     function tipCard(v) {
         var t = v.play.tip;
-        return h('article', { className: 'card act-card tip-card' }, [
+        return h('article', { className: 'card act-card tip-card' + (t.tried ? ' done' : ''), id: 'act-tip' }, [
             h('div', { className: 'act-head' }, [
                 h('span', { className: 'act-emoji', 'aria-hidden': 'true', text: '💡' }),
                 h('div', { className: 'act-heading' }, [h('div', { className: 'act-name', text: 'Tip of the day' }), h('div', { className: 'act-sub', text: 'A tool worth knowing, one a day.' })]),
@@ -1262,9 +1397,46 @@
         return ui.view && ui.view.profile && ui.view.profile.effect && ui.view.profile.effect.value;
     }
 
+    /** Today's four daily activities at a glance: what is done and what is still worth playing. */
+    function playSummary(v) {
+        var p = v.play;
+        var items = [
+            { id: 'act-spin', icon: '🎡', label: 'Spin', done: !p.wheel.spinsLeft, reward: 'up to +50' },
+            { id: 'act-quiz', icon: '🧩', label: 'Challenge', done: p.quiz.choice !== null, reward: '+' + p.quiz.correctPoints },
+            { id: 'sprintCard', icon: '⚡', label: 'Bit Sprint', done: p.sprint.played, reward: 'up to +' + p.sprint.maxPoints },
+            { id: 'act-tip', icon: '💡', label: 'Tip', done: p.tip.tried, reward: '+' + p.tip.points }
+        ];
+        var done = items.filter(function (item) { return item.done; }).length;
+        var all = done === items.length;
+        return h('section', { className: 'card play-summary' + (all ? ' all-done' : ''), 'aria-label': "Today's activities" }, [
+            h('div', { className: 'ps-head' }, [
+                h('div', {}, [
+                    h('div', { className: 'card-label' }, [icon('play'), h('span', { text: "Today's activities" })]),
+                    h('div', { className: 'ps-title' }, [h('span', { className: 'num', text: done + '/' + items.length }), h('span', { className: 'muted', text: all ? ' · all done, back tomorrow' : ' done' })])
+                ]),
+                h('span', { className: 'chip', text: 'Resets in ' + hoursToMidnight() + 'h' })
+            ]),
+            h('div', { className: 'ps-segments', 'aria-hidden': 'true' }, items.map(function (item) { return h('i', { className: item.done ? 'on' : '' }); })),
+            h('div', { className: 'ps-items' }, items.map(function (item) {
+                return h('button', {
+                    type: 'button', className: 'ps-item' + (item.done ? ' done' : ''),
+                    title: item.done ? item.label + ': done for today' : item.label + ': ' + item.reward + ' waiting',
+                    onclick: function () {
+                        var card = document.getElementById(item.id);
+                        if (card) { card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }); card.classList.remove('pulse'); void card.offsetWidth; card.classList.add('pulse'); }
+                    }
+                }, [
+                    h('span', { className: 'ps-icon', 'aria-hidden': 'true' }, [item.done ? icon('check') : item.icon]),
+                    h('span', { className: 'ps-text' }, [h('span', { className: 'ps-label', text: item.label }), h('small', { text: item.done ? 'Done' : item.reward })])
+                ]);
+            }))
+        ]);
+    }
+
     function renderPlay(v) {
         if (!v.play) return [];
         return [
+            playSummary(v),
             eventCard(v),
             h('div', { className: 'act-grid' }, [spinCard(v), quizCard(v), sprintCard(v), tipCard(v)]),
             checkinCard(v),
@@ -1279,10 +1451,12 @@
         var view = REDEEM_VIEWS.some(function (r) { return r.id === ui.redeemView; }) ? ui.redeemView : 'play';
         var nav = h('div', { className: 'redeem-nav', role: 'tablist', 'aria-label': 'Redeem' }, REDEEM_VIEWS.map(function (r) {
             var badge = r.id === 'play' && v.play && v.play.waiting ? v.play.waiting : null;
+            var count = r.id === 'profile' && v.shop ? v.shop.collected + '/' + v.shop.collectible
+                : r.id === 'shop' ? (v.rewards || []).filter(function (x) { return !x.unlocked && x.affordable; }).length + ' affordable' : null;
             return h('button', {
                 type: 'button', role: 'tab', className: 'redeem-tab', 'aria-selected': view === r.id ? 'true' : 'false',
                 onclick: function () { ui.redeemView = r.id; persist(); renderRewards(ui.view); els.redeem.scrollTop = 0; }
-            }, [icon(r.icon), h('span', { text: r.label }), badge ? h('span', { className: 'redeem-badge', text: String(badge) }) : null]);
+            }, [icon(r.icon), h('span', { text: r.label }), badge ? h('span', { className: 'redeem-badge', text: String(badge) }) : count ? h('span', { className: 'redeem-count num', text: count }) : null]);
         }));
         els.redeemBalance.textContent = fmt(v.balance);
         if (view === 'play') { replace(els.redeemBody, [nav].concat(renderPlay(v))); return; }
@@ -1350,8 +1524,9 @@
         if (!changed('activity', [v.activities, ui.shown])) return;
         if (!v.activities.length) {
             replace(els.panels.activity, [h('div', { className: 'card empty', style: 'margin-top:14px' }, [
-                icon('inbox'),
-                'No activity yet. Run any DevSnip Pro tool to earn your first points.',
+                h('span', { className: 'empty-art', 'aria-hidden': 'true', text: '📭' }),
+                h('div', { className: 'empty-title', text: 'No activity yet' }),
+                h('div', { text: 'Run any DevSnip Pro tool to earn your first points. They show up here.' }),
                 h('div', { style: 'margin-top:14px' }, [h('button', { type: 'button', className: 'xbtn primary sm', onclick: function () { vscode.postMessage({ command: 'openSearch' }); } }, [icon('search'), h('span', { text: 'Find a tool' })])])
             ])]);
             return;

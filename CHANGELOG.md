@@ -1,5 +1,28 @@
 # Development Changelog of DevSnip Pro
 
+## 11.76.2 - A cleaner, more rewarding Milestones & Points page and Redeem
+
+The same points, milestones, ranks, rewards and data, presented more clearly. Nothing about how points are earned or spent has changed.
+
+### Improved
+
+- **Milestones & Points:**
+  - **Your rank:** a gradient progress ring, and a "Next rank" panel with a large progress bar and how many points to go. The rank journey is now a row of every rank's badge, so you can see what you have reached and what is next.
+  - **Today:** your quests, the next milestone, the daily boost and this week are grouped in one section. Quests show progress inline, and the bonus chest shows how many quests are left.
+  - **Next milestone:** shown prominently with its percentage and what is left to do.
+  - **Milestones:** summary tiles for completed milestones, points earned and points still to collect. Milestones are grouped into "In progress" and "Completed", with completed ones as compact trophies so open goals stand out.
+  - **Ranks:** your current rank is highlighted in the timeline. **Activity:** points show as coloured pills.
+- **Redeem:**
+  - **Play & earn:** a "Today's activities" summary at the top shows which of the spin, challenge, Bit Sprint and tip are done, with a progress bar and the points still waiting; click one to jump to it. Finished activities are marked done, and the wheel's odds sit behind a "See the odds" toggle.
+  - **Profile:** a larger preview of your rank card, plus how much of each type (avatars, titles, frames, banners, effects) you have collected, next to what you are wearing now.
+  - **Shop:** cleaner previews (a big medal for avatars and frames, the title itself for titles), an "Equipped" or "Earned only" ribbon on each card, and "N pts to go" with a progress bar on items you are saving up for. The Profile and Shop tabs show your collection and how many items you can afford.
+- Friendlier empty states, subtle entrance animations (off with "reduce motion"), and layouts that adapt from wide editors down to narrow panels.
+
+### Fixed
+
+- Rank colours such as Platinum and Diamond are now readable in light themes.
+- On narrow panels, the next-milestone and "This week" cards no longer come out wider or narrower than the cards around them.
+
 ## 11.76.1 - Redeem: daily games, weekly events and a profile to make your own
 
 Points are now worth coming back for. A new **Redeem** button on your rank card in Milestones & Points opens three pages: **Play & earn** (something new every day), **Profile** (dress up your rank card) and **Shop** (power-ups and every reward). Everything is cosmetic: every tool still works at every rank.

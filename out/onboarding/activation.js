@@ -61,6 +61,10 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     {
+        version: "11.76.2",
+        items: [{ title: "A cleaner Milestones & Points page: your next rank, today's goals and Redeem at a glance", command: "milestoneTracker" }]
+    },
+    {
         version: "11.76.1",
         items: [
             { title: "Redeem: a daily spin, dev challenge, Bit Sprint and weekly events", command: "milestoneTracker" },
