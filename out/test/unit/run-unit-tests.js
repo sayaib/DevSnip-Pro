@@ -25,6 +25,8 @@ exports.test = test;
 async function main() {
     // Registering the suites has to happen after the stub is installed.
     /* eslint-disable @typescript-eslint/no-var-requires */
+    // Lucky finds are random; switch them off so point totals are exact. Tests about luck pass their own random.
+    require("../../commands/milestoneTracker").setActivityRandom(() => 1);
     require("./markdown.unit");
     require("./webview-ui.unit");
     require("./milestone.unit");

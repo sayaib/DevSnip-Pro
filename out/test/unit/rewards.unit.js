@@ -28,6 +28,11 @@ const vscode = __importStar(require("vscode"));
 const milestoneTracker_1 = require("../../commands/milestoneTracker");
 const quests_1 = require("../../services/quests");
 const rewards_1 = require("../../services/rewards");
+const profile_style_1 = require("../../services/profile-style");
+const tools_sidebar_1 = require("../../sidebar/tools-sidebar");
+const fs = __importStar(require("fs"));
+const activities_1 = require("../../services/activities");
+const path = __importStar(require("path"));
 const service_1 = require("../../theme/service");
 const themes_1 = require("../../theme/themes");
 const vscode_stub_1 = require("./vscode-stub");
@@ -181,7 +186,7 @@ const EVERY_QUEST_COMMANDS = [
 (0, run_unit_tests_1.suite)("rewards", () => {
     (0, run_unit_tests_1.test)("every theme is a points reward; ranks and milestones earn only some", () => {
         assert.deepStrictEqual((0, rewards_1.earnedRewardIds)(0, []), []);
-        assert.deepStrictEqual((0, rewards_1.earnedRewardIds)(6, []), ["theme_solarized", "theme_synthwave", "theme_aurora"], "points-only themes are never earned");
+        assert.deepStrictEqual((0, rewards_1.earnedRewardIds)(6, []).filter(id => id.startsWith("theme_")), ["theme_solarized", "theme_synthwave", "theme_aurora"], "points-only themes are never earned");
         assert.ok((0, rewards_1.earnedRewardIds)(0, ["streak_14"]).includes("theme_ember"));
         const themeRewards = rewards_1.REWARDS.filter(r => r.kind === "theme");
         assert.deepStrictEqual(themeRewards.map(r => r.themeId).sort(), themes_1.THEMES.map(t => t.id).sort(), "one reward per theme");
@@ -471,4 +476,332 @@ const EVERY_QUEST_COMMANDS = [
         assert.ok(view.milestones.some(m => m.id === "quest_master" && /perfect|quest/i.test(m.remainingLabel)));
     });
 });
+(0, run_unit_tests_1.suite)("profile rewards", () => {
+    const cosmetics = rewards_1.REWARDS.filter(r => r.kind !== "theme");
+    (0, run_unit_tests_1.test)("every slot has rewards to buy and to earn, and each one names what it draws", () => {
+        const effectsJs = fs.readFileSync(path.resolve(__dirname, "../../../media/reward-effects.js"), "utf8");
+        for (const slot of rewards_1.SLOTS) {
+            const inSlot = cosmetics.filter(r => r.kind === slot);
+            assert.ok(inSlot.filter(r => r.cost !== undefined).length >= 4, `${slot} has at least four rewards to buy`);
+            assert.ok(inSlot.every(r => r.cost === undefined || r.cost > 0), `${slot} prices are positive`);
+        }
+        for (const reward of cosmetics) {
+            assert.ok(reward.cost !== undefined || reward.unlock, `${reward.id} can be bought or earned`);
+            if (reward.kind === "avatar")
+                assert.ok(reward.glyph, `${reward.id} has a glyph`);
+            if (reward.kind === "frame")
+                assert.ok(profile_style_1.FRAME_STYLES.includes(reward.frame), `${reward.id} has frame CSS`);
+            if (reward.kind === "banner")
+                assert.ok(profile_style_1.BANNER_STYLES.includes(reward.banner), `${reward.id} has banner CSS`);
+            if (reward.kind === "effect")
+                assert.ok(effectsJs.includes(`'${reward.effect}'`), `${reward.id} is drawn by reward-effects.js`);
+        }
+        assert.ok((0, rewards_1.earnedRewardIds)(6, []).includes("avatar_eagle"), "Grandmaster earns an exclusive avatar");
+        assert.ok((0, rewards_1.earnedRewardIds)(0, ["feature_explorer"]).includes("title_pathfinder"));
+        const css = (0, profile_style_1.profileCss)({ medal: [".m"], banner: [".b"], base: "var(--x)", ink: "var(--y)" });
+        for (const name of profile_style_1.FRAME_STYLES)
+            assert.ok(css.includes(`.m.frame-${name}`));
+        for (const name of profile_style_1.BANNER_STYLES)
+            assert.ok(css.includes(`.b.banner-${name}`));
+    });
+    (0, run_unit_tests_1.test)("stored loadouts are repaired: wrong kinds and unknown ids are dropped", () => {
+        assert.deepStrictEqual((0, rewards_1.sanitizeLoadout)({ avatar: "avatar_fox", title: "avatar_fox", frame: null, banner: "nope", effect: 3 }), { avatar: "avatar_fox", frame: null });
+        assert.deepStrictEqual((0, rewards_1.sanitizeLoadout)("junk"), {});
+        const stats = (0, milestoneTracker_1.sanitizeStats)({ ...(0, milestoneTracker_1.createDefaultStats)(), equipped: { avatar: "avatar_fox", effect: "theme_dark" } });
+        assert.deepStrictEqual(stats.equipped, { avatar: "avatar_fox" });
+    });
+    (0, run_unit_tests_1.test)("only owned rewards are worn; an earned frame shows until the slot is cleared", () => {
+        const worn = (0, rewards_1.resolveLoadout)({ avatar: "avatar_fox" }, []);
+        assert.strictEqual(worn.avatar, null, "not owned, so not worn");
+        assert.strictEqual((0, rewards_1.resolveLoadout)({ avatar: "avatar_fox" }, ["avatar_fox"]).avatar?.glyph, "🦊");
+        assert.strictEqual((0, rewards_1.activeFrame)(["frame_glow"]), "glow", "never chosen: the earned frame shows");
+        assert.strictEqual((0, rewards_1.activeFrame)(["frame_glow"], { frame: null }), null, "cleared on purpose");
+        assert.strictEqual((0, rewards_1.activeFrame)(["frame_glow", "frame_neon"], { frame: "frame_neon" }), "neon");
+    });
+    (0, run_unit_tests_1.test)("buying a profile reward equips it; equipping needs ownership; a reset takes it all off", async () => {
+        const context = seeded({ totalPoints: 500, lifetimePoints: 500 });
+        assert.strictEqual(await (0, milestoneTracker_1.equipReward)(context, "avatar", "avatar_fox"), "locked");
+        assert.strictEqual(await (0, milestoneTracker_1.buyReward)(context, "avatar_fox"), "ok");
+        assert.strictEqual(await (0, milestoneTracker_1.buyReward)(context, "title_regex"), "ok");
+        let stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats.totalPoints, 500 - 60 - 80);
+        assert.deepStrictEqual(stats.equipped, { avatar: "avatar_fox", title: "title_regex" });
+        assert.match(stats.activities[0].title, /Regex Wizard title/);
+        assert.strictEqual(await (0, milestoneTracker_1.equipReward)(context, "avatar", "title_regex"), "unknown", "a title is not an avatar");
+        assert.strictEqual(await (0, milestoneTracker_1.equipReward)(context, "title", null), "ok");
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(context).equipped.title, null);
+        const status = (0, tools_sidebar_1.sidebarStatus)(context);
+        assert.strictEqual(status.avatar, "🦊");
+        assert.strictEqual(status.title, null);
+        await (0, milestoneTracker_1.resetUserStats)(context);
+        stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.deepStrictEqual(stats.equipped, {});
+        assert.strictEqual((0, tools_sidebar_1.sidebarStatus)(context).avatar, null);
+    });
+    (0, run_unit_tests_1.test)("a mystery box gives a random profile reward not owned yet, and never replaces a chosen one", async () => {
+        assert.deepStrictEqual(await (0, milestoneTracker_1.openMysteryBox)(seeded({ totalPoints: rewards_1.MYSTERY_BOX_COST - 1 })), { outcome: "short" });
+        const context = seeded({ totalPoints: 1000, lifetimePoints: 1000, unlocked: ["avatar_cat"], equipped: { avatar: "avatar_cat" } });
+        const pool = (0, rewards_1.mysteryBoxPool)(["avatar_cat"]);
+        assert.ok(pool.every(r => r.kind !== "theme" && r.cost <= rewards_1.MYSTERY_BOX_MAX_VALUE && r.id !== "avatar_cat"));
+        const box = await (0, milestoneTracker_1.openMysteryBox)(context, () => 0);
+        assert.strictEqual(box.outcome, "ok");
+        const reward = box.outcome === "ok" ? box.reward : undefined;
+        assert.strictEqual(reward?.id, pool[0].id);
+        const stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.ok(stats.unlocked.includes(reward.id));
+        assert.strictEqual(stats.totalPoints, 1000 - rewards_1.MYSTERY_BOX_COST);
+        if (reward.kind === "avatar")
+            assert.strictEqual(stats.equipped.avatar, "avatar_cat", "the chosen avatar stays");
+        else
+            assert.strictEqual(stats.equipped[reward.kind], reward.id, "an empty slot is filled");
+        const everything = (0, rewards_1.mysteryBoxPool)([]).map(r => r.id);
+        assert.deepStrictEqual(await (0, milestoneTracker_1.openMysteryBox)(seeded({ totalPoints: 1000, unlocked: everything })), { outcome: "empty" });
+        assert.strictEqual((0, rewards_1.pickMysteryReward)([], () => 0.5), undefined);
+        assert.strictEqual((0, rewards_1.pickMysteryReward)(pool, () => 0.9999)?.id, pool[pool.length - 1].id);
+    });
+    (0, run_unit_tests_1.test)("a quest can be swapped for points, twice a day, and the swap survives a reload", async () => {
+        const today = (0, quests_1.createDailyQuests)(localDate());
+        const first = today.items[1].id;
+        const context = seeded({ totalPoints: 100, quests: today });
+        const swap = await (0, milestoneTracker_1.rerollDailyQuest)(context, first, () => 0);
+        assert.strictEqual(swap.outcome, "ok");
+        let stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.ok(!stats.quests.items.some(item => item.id === first), "the old quest is gone");
+        assert.strictEqual(new Set(stats.quests.items.map(item => item.id)).size, 3);
+        assert.strictEqual(stats.quests.rerolls, 1);
+        assert.strictEqual(stats.totalPoints, 100 - quests_1.QUEST_REROLL_COST);
+        assert.strictEqual((await (0, milestoneTracker_1.rerollDailyQuest)(context, stats.quests.items[2].id)).outcome, "ok");
+        assert.strictEqual((await (0, milestoneTracker_1.rerollDailyQuest)(context, stats.quests.items[0].id)).outcome, "limit", `only ${quests_1.MAX_REROLLS_PER_DAY} a day`);
+        stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats.totalPoints, 100 - 2 * quests_1.QUEST_REROLL_COST);
+        const done = (0, quests_1.createDailyQuests)(localDate());
+        done.items[0].done = true;
+        done.items[0].progress = (0, quests_1.findQuest)(done.items[0].id).target;
+        assert.strictEqual((await (0, milestoneTracker_1.rerollDailyQuest)(seeded({ totalPoints: 100, quests: done }), done.items[0].id)).outcome, "done");
+        assert.strictEqual((await (0, milestoneTracker_1.rerollDailyQuest)(seeded({ totalPoints: 0 }), (0, quests_1.createDailyQuests)(localDate()).items[0].id)).outcome, "short");
+        // A tampered set (duplicates) falls back to the day's pick.
+        const bad = { ...(0, quests_1.createDailyQuests)(localDate()), rerolls: 1 };
+        bad.items = [bad.items[0], bad.items[0], bad.items[1]];
+        assert.deepStrictEqual((0, quests_1.sanitizeQuests)(bad, localDate()).items.map(item => item.id), (0, quests_1.pickDailyQuestIds)(localDate()));
+        assert.strictEqual((0, quests_1.rerollQuest)((0, quests_1.createDailyQuests)(localDate()), "missing"), undefined);
+    });
+    (0, run_unit_tests_1.test)("the page gets the profile, the shop and which quests can be swapped", async () => {
+        const context = seeded({ totalPoints: 400, lifetimePoints: 700 });
+        await (0, milestoneTracker_1.buyReward)(context, "banner_ocean");
+        await (0, milestoneTracker_1.buyReward)(context, "effect_confetti");
+        const view = (0, milestoneTracker_1.buildMilestoneView)(context);
+        assert.strictEqual(view.profile.badge, "🥇");
+        assert.strictEqual(view.profile.banner?.value, "ocean");
+        assert.strictEqual(view.profile.effect?.value, "confetti");
+        assert.strictEqual(view.profile.avatar, null);
+        assert.ok(view.rewards.find(r => r.id === "banner_ocean").active);
+        assert.strictEqual(view.rewards.find(r => r.id === "avatar_fox").glyph, "🦊");
+        assert.strictEqual(view.shop.reroll.left, quests_1.MAX_REROLLS_PER_DAY);
+        assert.strictEqual(view.shop.box.cost, rewards_1.MYSTERY_BOX_COST);
+        assert.strictEqual(view.shop.collected, 2);
+        assert.strictEqual(view.shop.collectible, rewards_1.REWARDS.filter(r => r.kind !== "theme").length);
+        assert.ok(view.quests.items.every(q => q.canReroll), "enough points and swaps left");
+    });
+    (0, run_unit_tests_1.test)("both pages load the shared effects script", () => {
+        assert.match((0, milestoneTracker_1.getMilestoneTrackerHtml)("csp", "s.js", "c.png", "fx.js"), /<script src="fx.js"><\/script>/);
+        const html = (0, tools_sidebar_1.renderToolsSidebar)({ cspSource: "x", scriptUri: "s.js", effectsUri: "fx.js", codiconsUri: "c.css", status: (0, tools_sidebar_1.sidebarStatus)(seeded({})), expanded: [] });
+        assert.match(html, /<script nonce="[^"]+" src="fx.js"><\/script>/);
+        assert.ok(html.indexOf("fx.js") < html.indexOf('src="s.js"'), "effects load before the sidebar script");
+    });
+});
+(0, run_unit_tests_1.suite)("daily activities", () => {
+    const today = localDate();
+    const pointsOnly = activities_1.WHEEL.findIndex(segment => "points" in segment.prize);
+    /** A random() that lands the wheel on segment `index`. */
+    const landOn = (index) => {
+        const total = activities_1.WHEEL.reduce((sum, segment) => sum + segment.weight, 0);
+        const before = activities_1.WHEEL.slice(0, index).reduce((sum, segment) => sum + segment.weight, 0);
+        return () => (before + activities_1.WHEEL[index].weight / 2) / total;
+    };
+    (0, run_unit_tests_1.test)("the challenge bank is well formed and every question comes up before any repeats", () => {
+        assert.ok(activities_1.QUIZ_BANK.length >= 30);
+        assert.strictEqual(new Set(activities_1.QUIZ_BANK.map(q => q.id)).size, activities_1.QUIZ_BANK.length);
+        for (const q of activities_1.QUIZ_BANK) {
+            assert.strictEqual(q.options.length, 4, `${q.id} has four answers`);
+            assert.strictEqual(new Set(q.options).size, 4, `${q.id} answers are different`);
+            assert.ok(q.answer >= 0 && q.answer < 4, `${q.id} answer index`);
+            assert.ok(q.explain.length > 20, `${q.id} explains the answer`);
+        }
+        assert.strictEqual((0, activities_1.quizForDate)("2026-10-08").id, (0, activities_1.quizForDate)("2026-10-08").id, "same question all day");
+        const start = Date.parse("2026-03-02T00:00:00Z");
+        const firstDayOfCycle = Math.ceil(start / 86400000 / activities_1.QUIZ_BANK.length) * activities_1.QUIZ_BANK.length;
+        const seen = new Set();
+        for (let i = 0; i < activities_1.QUIZ_BANK.length; i++)
+            seen.add((0, activities_1.quizForDate)(new Date((firstDayOfCycle + i) * 86400000).toISOString().slice(0, 10)).id);
+        assert.strictEqual(seen.size, activities_1.QUIZ_BANK.length, "a full cycle shows every question once");
+    });
+    (0, run_unit_tests_1.test)("every tip opens a real DevSnip Pro command", () => {
+        const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../package.json"), "utf8"));
+        const commands = new Set(pkg.contributes.commands.map((c) => c.command));
+        for (const tip of activities_1.TIPS)
+            assert.ok(commands.has(tip.command), `${tip.id} → ${tip.command}`);
+        assert.ok(activities_1.TIPS.some(tip => tip.id === (0, activities_1.tipForDate)(today).id));
+    });
+    (0, run_unit_tests_1.test)("the wheel follows its weights", () => {
+        assert.strictEqual((0, activities_1.spinWheel)(() => 0), 0);
+        assert.strictEqual((0, activities_1.spinWheel)(() => 0.999999), activities_1.WHEEL.length - 1);
+        for (let i = 0; i < activities_1.WHEEL.length; i++)
+            assert.strictEqual((0, activities_1.spinWheel)(landOn(i)), i);
+    });
+    (0, run_unit_tests_1.test)("one free spin a day, plus a bonus spin for finishing every quest", async () => {
+        const context = seeded({ totalPoints: 0, lifetimePoints: 0 });
+        assert.strictEqual((0, milestoneTracker_1.activitiesWaiting)((0, milestoneTracker_1.getUserStats)(context)), 4, "spin, challenge, Bit Sprint and tip");
+        const spin = await (0, milestoneTracker_1.spinDailyWheel)(context, landOn(pointsOnly));
+        assert.strictEqual(spin.outcome, "ok");
+        const won = activities_1.WHEEL[pointsOnly].prize.points;
+        let stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats.totalPoints, won);
+        assert.strictEqual(stats.play.lastSpin, pointsOnly);
+        assert.deepStrictEqual(await (0, milestoneTracker_1.spinDailyWheel)(context), { outcome: "used" });
+        for (const command of EVERY_QUEST_COMMANDS) {
+            for (let i = 0; i < 2; i++)
+                await (0, milestoneTracker_1.autoRecordToolUsage)(command);
+        }
+        stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.ok(stats.quests.chestClaimed);
+        assert.strictEqual(stats.play.bonusSpins, 1);
+        assert.strictEqual((await (0, milestoneTracker_1.spinDailyWheel)(context, landOn(pointsOnly))).outcome, "ok", "the bonus spin");
+        assert.deepStrictEqual(await (0, milestoneTracker_1.spinDailyWheel)(context), { outcome: "used" });
+    });
+    (0, run_unit_tests_1.test)("a freeze prize falls back to points when freezes are full; an item prize gives a profile reward", async () => {
+        const freeze = activities_1.WHEEL.findIndex(segment => "freeze" in segment.prize);
+        const item = activities_1.WHEEL.findIndex(segment => "item" in segment.prize);
+        const empty = seeded({});
+        await (0, milestoneTracker_1.spinDailyWheel)(empty, landOn(freeze));
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(empty).streakFreezes, 1);
+        const full = seeded({ streakFreezes: milestoneTracker_1.MAX_STREAK_FREEZES });
+        await (0, milestoneTracker_1.spinDailyWheel)(full, landOn(freeze));
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(full).totalPoints, activities_1.WHEEL_FALLBACK_POINTS);
+        const lucky = seeded({});
+        const spin = await (0, milestoneTracker_1.spinDailyWheel)(lucky, landOn(item));
+        assert.ok(spin.outcome === "ok" && /the .+ (avatar|title|badge frame|banner|celebration effect)/.test(spin.text), spin.outcome === "ok" ? spin.text : "");
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(lucky).unlocked.length, 1);
+    });
+    (0, run_unit_tests_1.test)("the daily challenge pays once, more when right, and keeps its answer secret until then", async () => {
+        const question = (0, activities_1.quizForDate)(today);
+        const context = seeded({});
+        const before = (0, milestoneTracker_1.buildMilestoneView)(context).play.quiz;
+        assert.strictEqual(before.answer, null, "the answer is not sent before answering");
+        assert.strictEqual(before.explain, null);
+        const result = await (0, milestoneTracker_1.answerDailyQuiz)(context, question.answer);
+        assert.ok(result.outcome === "ok" && result.correct && result.points === activities_1.QUIZ_CORRECT_POINTS);
+        assert.deepStrictEqual(await (0, milestoneTracker_1.answerDailyQuiz)(context, 0), { outcome: "answered" });
+        const stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats.totalPoints, activities_1.QUIZ_CORRECT_POINTS);
+        assert.strictEqual(stats.quizCorrect, 1);
+        assert.strictEqual(stats.quizStreak, 1);
+        assert.strictEqual((0, milestoneTracker_1.buildMilestoneView)(context).play.quiz.answer, question.answer);
+        const wrong = seeded({ quizStreak: 4, quizLastCorrect: localDate(-1) });
+        const miss = await (0, milestoneTracker_1.answerDailyQuiz)(wrong, (question.answer + 1) % 4);
+        assert.ok(miss.outcome === "ok" && !miss.correct && miss.points === activities_1.QUIZ_TRY_POINTS);
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(wrong).quizStreak, 0);
+        const streak = seeded({ quizStreak: 4, quizLastCorrect: localDate(-1) });
+        await (0, milestoneTracker_1.answerDailyQuiz)(streak, question.answer);
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(streak).quizStreak, 5, "yesterday's streak continues");
+        assert.deepStrictEqual(await (0, milestoneTracker_1.answerDailyQuiz)(seeded({}), 9), { outcome: "invalid" });
+    });
+    (0, run_unit_tests_1.test)("ten correct answers complete Sharp Mind and unlock its title", async () => {
+        const context = seeded({ quizCorrect: 9 });
+        await (0, milestoneTracker_1.answerDailyQuiz)(context, (0, activities_1.quizForDate)(today).answer);
+        const stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.ok(stats.completedMilestones.includes("quiz_10"));
+        assert.ok((0, milestoneTracker_1.effectiveUnlocked)(stats).includes("title_sharp_mind"));
+    });
+    (0, run_unit_tests_1.test)("Bit Sprint pays the day's first game, capped, and later games only chase the best", async () => {
+        const context = seeded({});
+        const first = await (0, milestoneTracker_1.finishBitSprint)(context, 14);
+        assert.deepStrictEqual(first, { outcome: "ok", points: activities_1.SPRINT_MAX_POINTS, score: 14, best: 14, newBest: true, paid: true });
+        const second = await (0, milestoneTracker_1.finishBitSprint)(context, 999);
+        assert.strictEqual(second.points, 0);
+        assert.strictEqual(second.score, activities_1.SPRINT_MAX_SCORE, "impossible scores are clamped");
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(context).totalPoints, activities_1.SPRINT_MAX_POINTS);
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(context).sprintBest, activities_1.SPRINT_MAX_SCORE);
+    });
+    (0, run_unit_tests_1.test)("the tip of the day pays once and names the tool to open", async () => {
+        const context = seeded({});
+        assert.deepStrictEqual(await (0, milestoneTracker_1.tryDailyTip)(context), { command: (0, activities_1.tipForDate)(today).command, points: activities_1.TIP_POINTS });
+        assert.deepStrictEqual(await (0, milestoneTracker_1.tryDailyTip)(context), { command: (0, activities_1.tipForDate)(today).command, points: 0 });
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(context).totalPoints, activities_1.TIP_POINTS);
+        assert.strictEqual((0, milestoneTracker_1.activitiesWaiting)((0, milestoneTracker_1.getUserStats)(context)), 3);
+    });
+    (0, run_unit_tests_1.test)("weekly events rotate, and each has an exclusive reward only it can give", () => {
+        const ids = new Set();
+        for (let week = 0; week < activities_1.WEEKLY_EVENTS.length; week++)
+            ids.add((0, activities_1.eventForWeek)(addDaysIso("2026-10-05", week * 7)).id);
+        assert.strictEqual(ids.size, activities_1.WEEKLY_EVENTS.length, "six weeks show all six events");
+        for (const event of activities_1.WEEKLY_EVENTS) {
+            const reward = rewards_1.REWARDS.find(r => r.id === event.rewardId);
+            assert.ok(reward, `${event.id} prize exists`);
+            assert.deepStrictEqual(reward.unlock, { event: event.id });
+            assert.strictEqual(reward.cost, undefined, "event prizes cannot be bought");
+            assert.ok(!(0, rewards_1.mysteryBoxPool)([]).some(r => r.id === reward.id), "or won in a box");
+        }
+    });
+    (0, run_unit_tests_1.test)("tool runs move the week's event, which pays once and unlocks its prize", async () => {
+        const context = seeded({});
+        const event = (0, activities_1.eventForWeek)((0, milestoneTracker_1.weekStartOf)(today));
+        const stats0 = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats0.event.id, event.id);
+        const commands = {
+            security_week: "sayaib.hue-console.securityAudit",
+            ai_week: "sayaib.hue-console.aiTokenCounter",
+            snippet_week: "sayaib.hue-console.createSnippet",
+            api_week: "sayaib.hue-console.openGUI"
+        };
+        for (let i = 0; i < event.target + 2; i++) {
+            await (0, milestoneTracker_1.autoRecordToolUsage)(commands[event.id] ?? `sayaib.hue-console.eventTool${i}`);
+        }
+        const stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.ok(stats.event.done, `${event.id} done`);
+        assert.strictEqual(stats.eventsWon, 1, "paid once");
+        assert.ok(stats.unlocked.includes(event.rewardId));
+        assert.ok(stats.activities.filter(a => a.id === `event_${event.id}`).length === 1);
+        assert.match((0, milestoneTracker_1.buildMilestoneView)(context).rewards.find(r => r.id === event.rewardId).hint, new RegExp(`Win ${event.title}`));
+    });
+    (0, run_unit_tests_1.test)("every 7th check-in day opens a chest with a profile reward", async () => {
+        const context = seeded({ streakDays: 7, lastActiveDate: today, dailyClaims: {} });
+        await (0, milestoneTracker_1.claimDailyLogin)(context);
+        const stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats.unlocked.length, 1, "one reward from the chest");
+        assert.ok(stats.activities.some(a => a.id === "play_checkin"));
+        const day3 = seeded({ streakDays: 3, lastActiveDate: today, dailyClaims: {} });
+        await (0, milestoneTracker_1.claimDailyLogin)(day3);
+        assert.strictEqual((0, milestoneTracker_1.getUserStats)(day3).unlocked.length, 0);
+        assert.strictEqual((0, milestoneTracker_1.buildMilestoneView)(day3).play.checkin.day, 3);
+    });
+    (0, run_unit_tests_1.test)("a lucky find happens at most once a day", async () => {
+        try {
+            (0, milestoneTracker_1.setActivityRandom)(() => 0);
+            const context = seeded({ dailyEarnedPoints: milestoneTracker_1.DAILY_POINT_CAP });
+            await (0, milestoneTracker_1.autoRecordToolUsage)("sayaib.hue-console.jsonFormatter");
+            await (0, milestoneTracker_1.autoRecordToolUsage)("sayaib.hue-console.hashGenerator");
+            const stats = (0, milestoneTracker_1.getUserStats)(context);
+            assert.ok(stats.play.lucky);
+            assert.strictEqual(stats.activities.filter(a => a.id === "lucky_find").length, 1);
+            assert.ok(stats.totalPoints >= activities_1.LUCKY_POINTS, "paid past the daily cap");
+        }
+        finally {
+            (0, milestoneTracker_1.setActivityRandom)(() => 1);
+        }
+    });
+    (0, run_unit_tests_1.test)("activities reset with the day, and the Tools view shows how many wait", async () => {
+        const context = seeded({ play: { date: localDate(-1), spinsUsed: 1, bonusSpins: 0, lastSpin: 0, quizChoice: 2, tipTried: true, sprintScore: 5, lucky: true } });
+        const stats = (0, milestoneTracker_1.getUserStats)(context);
+        assert.strictEqual(stats.play.date, today);
+        assert.strictEqual(stats.play.quizChoice, null);
+        assert.strictEqual((0, tools_sidebar_1.sidebarStatus)(context).play, 4);
+        const html = (0, tools_sidebar_1.renderToolsSidebar)({ cspSource: "x", scriptUri: "s.js", codiconsUri: "c.css", status: (0, tools_sidebar_1.sidebarStatus)(context), expanded: [] });
+        assert.match(html, /id="playChip"/);
+    });
+});
+function addDaysIso(date, days) {
+    const d = new Date(`${date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}
 //# sourceMappingURL=rewards.unit.js.map

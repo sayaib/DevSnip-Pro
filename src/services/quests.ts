@@ -16,6 +16,8 @@ export interface ToolRunEvent {
   newToday: boolean;
   /** First run of this command ever recorded. */
   firstEver: boolean;
+  /** First run of this command this calendar week. */
+  newThisWeek?: boolean;
 }
 
 export interface QuestDefinition {
@@ -44,11 +46,16 @@ export interface DailyQuests {
   items: QuestProgress[];
   /** The all-done chest for this date has been paid out. */
   chestClaimed: boolean;
+  /** Quests swapped for points today. */
+  rerolls?: number;
 }
 
 export const QUESTS_PER_DAY = 3;
 /** Paid once a day when every quest is done. */
 export const QUEST_CHEST_POINTS = 15;
+/** Points to swap an unfinished quest for a different one. */
+export const QUEST_REROLL_COST = 25;
+export const MAX_REROLLS_PER_DAY = 2;
 
 const PREFIX = "sayaib.hue-console.";
 const any = (): number => 1;
@@ -101,7 +108,7 @@ export function pickDailyQuestIds(date: string): string[] {
 }
 
 export function createDailyQuests(date: string): DailyQuests {
-  return { date, items: pickDailyQuestIds(date).map(id => ({ id, progress: 0, done: false })), chestClaimed: false };
+  return { date, items: pickDailyQuestIds(date).map(id => ({ id, progress: 0, done: false })), chestClaimed: false, rerolls: 0 };
 }
 
 /** Repairs stored quests; anything unusable becomes a fresh set for `today`. */
@@ -109,15 +116,17 @@ export function sanitizeQuests(raw: unknown, today: string): DailyQuests {
   if (!raw || typeof raw !== "object") return createDailyQuests(today);
   const source = raw as Partial<DailyQuests>;
   if (source.date !== today || !Array.isArray(source.items)) return createDailyQuests(today);
-  const expected = pickDailyQuestIds(today);
-  const stored = new Map(
-    source.items
-      .filter((item): item is QuestProgress => !!item && typeof item === "object" && typeof item.id === "string")
-      .map(item => [item.id, item])
-  );
+  const valid = source.items.filter((item): item is QuestProgress => !!item && typeof item === "object" && typeof item.id === "string");
+  const stored = new Map(valid.map(item => [item.id, item]));
+  const rerolls = Math.max(0, Math.min(MAX_REROLLS_PER_DAY, Math.trunc(Number(source.rerolls) || 0)));
+  // A rerolled set differs from the day's pick; keep it when it is a well-formed set of real quests.
+  const storedIds = valid.map(item => item.id);
+  const keepStored = rerolls > 0 && storedIds.length === QUESTS_PER_DAY && new Set(storedIds).size === QUESTS_PER_DAY && storedIds.every(id => findQuest(id));
+  const ids = keepStored ? storedIds : pickDailyQuestIds(today);
   return {
     date: today,
-    items: expected.map(id => {
+    rerolls,
+    items: ids.map(id => {
       const quest = findQuest(id) as QuestDefinition;
       const item = stored.get(id);
       const progress = Math.max(0, Math.min(quest.target, Math.trunc(Number(item?.progress) || 0)));
@@ -143,6 +152,24 @@ export function advanceQuests(quests: DailyQuests, run: ToolRunEvent): QuestDefi
     }
   }
   return completed;
+}
+
+/**
+ * Swaps an unfinished quest for one not in today's set. Returns the new quest,
+ * or undefined when the quest is done, unknown, or nothing else is left.
+ */
+export function rerollQuest(quests: DailyQuests, questId: string, random: () => number = Math.random): QuestDefinition | undefined {
+  const item = quests.items.find(entry => entry.id === questId);
+  if (!item || item.done) return undefined;
+  const taken = new Set(quests.items.map(entry => entry.id));
+  const pool = QUEST_POOL.filter(quest => !taken.has(quest.id));
+  if (!pool.length) return undefined;
+  const next = pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
+  item.id = next.id;
+  item.progress = 0;
+  item.done = false;
+  quests.rerolls = (quests.rerolls ?? 0) + 1;
+  return next;
 }
 
 export function allQuestsDone(quests: DailyQuests): boolean {

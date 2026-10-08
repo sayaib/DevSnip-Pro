@@ -2,8 +2,9 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { embedJson, escapeHtml, getNonce } from "../utils/webview-ui";
 import { executeQueuedCommand } from "../utils/command-dispatch";
-import { LEVELS, effectiveUnlocked, getCurrentLevel, getNextLevel, getUserStats, themeLockHints } from "../commands/milestoneTracker";
-import { activeFrame } from "../services/rewards";
+import { LEVELS, activitiesWaiting, effectiveUnlocked, getCurrentLevel, getNextLevel, getUserStats, openRedeem, themeLockHints } from "../commands/milestoneTracker";
+import { resolveLoadout } from "../services/rewards";
+import { profileCss } from "../services/profile-style";
 import { MILESTONE_COMMAND, SEARCH_COMMAND, SIDEBAR_GROUPS, sidebarCommands } from "./tool-groups";
 import { chooseThemeOrUnlock, currentThemeId, LOCKED_PREVIEW_SECONDS, lockedPreviewTheme, previewLockedTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
 import { dismissGuide, dismissWhatsNew, GuideStep, guideSteps, guideVisible, onDidChangeActivation, whatsNew } from "../onboarding/activation";
@@ -37,8 +38,18 @@ export interface SidebarStatus {
   /** Today's quests. Optional so older status payloads still render. */
   quests?: { done: number; total: number };
   streak?: number;
-  /** Badge frame earned as a reward (glow, flame), or null. */
+  /** Badge frame worn (glow, flame, neon...), or null. */
   frame?: string | null;
+  /** Avatar emoji worn in place of the rank medal, or null. */
+  avatar?: string | null;
+  /** Profile title shown beside the rank, or null. */
+  title?: string | null;
+  /** Rank card banner style, or null. */
+  banner?: string | null;
+  /** Celebration effect played on quest completions and rank-ups, or null. */
+  effect?: string | null;
+  /** Daily activities in Redeem still waiting today (spin, challenge, Bit Sprint, tip). */
+  play?: number;
   /** themeId -> how to unlock it, for reward themes still locked. */
   themeLocks?: Record<string, string>;
 }
@@ -52,6 +63,7 @@ export function sidebarStatus(context: vscode.ExtensionContext): SidebarStatus {
   const level = getCurrentLevel(stats.lifetimePoints);
   const next = getNextLevel(stats.lifetimePoints);
   const span = next ? next.minPoints - level.minPoints : 0;
+  const loadout = resolveLoadout(stats.equipped, effectiveUnlocked(stats));
   return {
     badge: level.badge,
     level: level.name,
@@ -62,7 +74,12 @@ export function sidebarStatus(context: vscode.ExtensionContext): SidebarStatus {
     progress: next && span > 0 ? Math.min(1, Math.max(0, (stats.lifetimePoints - level.minPoints) / span)) : 1,
     quests: { done: stats.quests.items.filter(item => item.done).length, total: stats.quests.items.length },
     streak: stats.streakDays,
-    frame: activeFrame(effectiveUnlocked(stats)),
+    frame: loadout.frame?.frame ?? null,
+    avatar: loadout.avatar?.glyph ?? null,
+    title: loadout.title?.name ?? null,
+    banner: loadout.banner?.banner ?? null,
+    effect: loadout.effect?.effect ?? null,
+    play: activitiesWaiting(stats),
     themeLocks: themeLockHints(stats)
   };
 }
@@ -96,6 +113,8 @@ export interface SidebarOnboarding {
 export function renderToolsSidebar(options: {
   cspSource: string;
   scriptUri: string;
+  /** Celebration effects (media/reward-effects.js); optional so tests can omit it. */
+  effectsUri?: string;
   codiconsUri: string;
   status: SidebarStatus;
   expanded: string[];
@@ -159,6 +178,7 @@ export function renderToolsSidebar(options: {
   <div class="rank-foot">
     <button type="button" class="rank-info" id="rankInfo" aria-controls="rankTip" aria-expanded="false"><span class="codicon codicon-info" aria-hidden="true"></span><span class="rank-foot-label">How ranks work</span></button>
     <span class="rank-today">
+      <button type="button" class="rank-chip play" id="playChip" hidden><span class="codicon codicon-gift" aria-hidden="true"></span><span id="playCount"></span></button>
       <button type="button" class="rank-chip quests" id="questChip" hidden><span class="codicon codicon-target" aria-hidden="true"></span><span id="questCount"></span></button>
       <span class="rank-chip streak" id="streakChip" hidden><span class="codicon codicon-flame" aria-hidden="true"></span><span id="streakCount"></span></span>
     </span>
@@ -199,7 +219,8 @@ export function renderToolsSidebar(options: {
 <p class="sr-only" id="announce" role="status" aria-live="polite"></p>
 
 <script type="application/json" id="sidebar-data">${embedJson(data)}</script>
-<script nonce="${nonce}" src="${escapeHtml(options.scriptUri)}"></script>
+${options.effectsUri ? `<script nonce="${nonce}" src="${escapeHtml(options.effectsUri)}"></script>
+` : ""}<script nonce="${nonce}" src="${escapeHtml(options.scriptUri)}"></script>
 </body>
 </html>`;
 }
@@ -283,6 +304,7 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     setWebviewHtml(view.webview, renderToolsSidebar({
       cspSource: view.webview.cspSource,
       scriptUri: view.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "tools-sidebar.js")).toString(),
+      effectsUri: view.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "reward-effects.js")).toString(),
       codiconsUri: view.webview.asWebviewUri(vscode.Uri.joinPath(codiconsRoot, "codicon.css")).toString(),
       status: sidebarStatus(this.context),
       expanded: this.context.globalState.get<string[]>(EXPANDED_KEY, []),
@@ -327,6 +349,8 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     if (message?.type === "run" && typeof message.command === "string" && this.known.has(message.command)) {
       // executeQueuedCommand also checks the id against this extension's commands.
       void executeQueuedCommand(message.command);
+    } else if (message?.type === "openRedeem") {
+      void openRedeem();
     } else if (message?.type === "searchAll") {
       void executeQueuedCommand(SEARCH_COMMAND);
     } else if (message?.type === "expanded" && Array.isArray(message.groups)) {
@@ -562,14 +586,17 @@ button { font: inherit; color: inherit; }
 .rank-chip.quests:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .rank-chip.quests.all-done { color: var(--success, var(--gold)); }
 .rank-chip.streak { color: var(--gold); }
+.rank-chip.play { cursor: pointer; color: var(--accent-fg); }
+.rank-chip.play:hover { background: var(--surface-2); }
+.rank-chip.play:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+@media (prefers-reduced-motion: no-preference) { .rank-chip.play .codicon { animation: play-wiggle 2.4s ease-in-out 3; } }
+@keyframes play-wiggle { 0%, 80%, 100% { transform: none; } 85% { transform: rotate(-12deg); } 90% { transform: rotate(10deg); } 95% { transform: rotate(-6deg); } }
 .rank-chip[hidden] { display: none; }
-/* Badge frames earned as rewards. */
-.medal.frame-glow { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 60%, transparent), 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent), 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); }
-.medal.frame-flame { box-shadow: inset 0 0 0 1.5px #ff8a3d, 0 0 0 2px color-mix(in srgb, #ff5722 30%, transparent), 0 0 12px color-mix(in srgb, #ff8a3d 55%, transparent); }
-@media (prefers-reduced-motion: no-preference) {
-  .medal.frame-glow, .medal.frame-flame { animation: frame-pulse 3.2s ease-in-out infinite; }
-}
-@keyframes frame-pulse { 50% { filter: brightness(1.15); } }
+/* Profile rewards: badge frames, rank card banners, avatar and title. */
+${profileCss({ medal: [".medal"], banner: [".rank"], base: "var(--surface)", ink: "var(--fg)" })}
+.medal { position: relative; --frame-inner: var(--surface); }
+.medal .medal-rank { position: absolute; right: -5px; bottom: -4px; font-size: 10px; line-height: 1; padding: 1px; border-radius: 50%; background: var(--surface); }
+.rank-name .rank-title { font-weight: 500; color: var(--muted); }
 /* Reward themes not unlocked yet. */
 .theme-opt.locked .tp { filter: saturate(.55) brightness(.8); }
 .theme-opt .tp-lock { position: absolute; right: 3px; top: 3px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; }

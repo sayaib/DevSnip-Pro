@@ -108,10 +108,16 @@
     const previous = status;
     status = next;
     const percent = Math.round(status.progress * 100);
-    $("statusBadge").textContent = status.badge;
-    $("statusBadge").className = "medal" + (status.frame ? " frame-" + status.frame : "");
+    // Profile rewards: an avatar replaces the medal (which moves to its corner), plus frame, banner and title.
+    const medal = $("statusBadge");
+    medal.textContent = status.avatar || status.badge;
+    if (status.avatar) medal.appendChild(el("span", "medal-rank", status.badge));
+    medal.className = "medal" + (status.frame ? " frame-" + status.frame : "");
+    $("rank").className = "rank" + (status.banner ? " banner-" + status.banner : "");
     renderToday();
-    $("statusLevel").textContent = status.level;
+    const levelName = $("statusLevel");
+    levelName.textContent = status.level;
+    if (status.title) levelName.appendChild(el("span", "rank-title", " · " + status.title));
     $("statusPoints").textContent = status.points.toLocaleString() + " pts";
     const nextLine = $("statusNext");
     nextLine.textContent = "";
@@ -139,6 +145,12 @@
       gain.classList.add("show");
       if (status.level !== previous.level) say("Rank up: you reached " + status.level + ".");
     }
+    // The equipped celebration effect plays for the wins worth celebrating.
+    const questDone = previous && previous.quests && status.quests && status.quests.done > previous.quests.done;
+    const rankUp = previous && previous !== next && status.level !== previous.level;
+    if ((questDone || rankUp) && status.effect && window.DevSnipEffects) {
+      window.DevSnipEffects.play(status.effect, { anchor: $("statusBadge"), glyph: status.avatar || status.badge });
+    }
     if (previous && previous.quests && status.quests && status.quests.done > previous.quests.done) {
       say(status.quests.done >= status.quests.total ? "All of today's quests done." : "Quest complete: " + status.quests.done + " of " + status.quests.total + ".");
     }
@@ -160,6 +172,13 @@
         ? "All of today's quests are done. New quests tomorrow."
         : "Today's quests: " + quests.done + " of " + quests.total + " done. Click to see them.";
       questChip.setAttribute("aria-label", questChip.title);
+    }
+    const playChip = $("playChip");
+    playChip.hidden = !status.play;
+    if (status.play) {
+      $("playCount").textContent = String(status.play);
+      playChip.title = status.play + " daily " + (status.play === 1 ? "activity" : "activities") + " waiting: spin, challenge, Bit Sprint and tip. Click to play.";
+      playChip.setAttribute("aria-label", playChip.title);
     }
     const streakChip = $("streakChip");
     streakChip.hidden = !status.streak || status.streak < 2;
@@ -216,6 +235,7 @@
   $("status").addEventListener("click", openMilestones);
   $("rankCta").addEventListener("click", openMilestones);
   $("questChip").addEventListener("click", openMilestones);
+  $("playChip").addEventListener("click", () => vscode.postMessage({ type: "openRedeem" }));
 
   /* ------------------------------------------------------------ hover card */
   let hoverTimer = null;

@@ -99,7 +99,8 @@ function state(context) {
         const news = (0, activation_1.whatsNew)(VERSION);
         assert.ok(news);
         const titles = news.items.map(item => item.title).join(" | ");
-        assert.ok(/themes/i.test(titles), "11.72.1 highlights are included");
+        assert.ok(news.items.length <= 4, "at most four highlights");
+        assert.strictEqual(news.items[0].title, activation_1.RELEASE_HIGHLIGHTS.find(release => release.items.length).items[0].title, "the newest highlights come first");
         assert.ok(!/Database Client/.test(titles), "the version they already had is not repeated");
         await (0, activation_1.dismissWhatsNew)(VERSION, false);
         assert.strictEqual((0, activation_1.whatsNew)(VERSION), null, "shown once");

@@ -23,7 +23,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMilestoneTrackerHtml = exports.registerMilestoneTrackerCommand = exports.maybeShowWeeklyRecap = exports.showCelebrations = exports.SUPPORT_URL = exports.buildMilestoneView = exports.claimDailyBonus = exports.claimDailyLogin = exports.getNextLevel = exports.getCurrentLevel = exports.markRecapShown = exports.pendingWeeklyRecap = exports.themeLockHints = exports.themeLockFor = exports.grantKeptTheme = exports.lockLabel = exports.buyReward = exports.buyStreakFreeze = exports.loginPointsFor = exports.weekStartOf = exports.applyDayRollover = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordDiscovery = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.effectiveUnlocked = exports.saveUserStats = exports.getPointsBalance = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.setCelebrationHandler = exports.STREAK_FREEZE_COST = exports.FREEZE_EVERY_DAYS = exports.MAX_STREAK_FREEZES = exports.STREAK_LOGIN_BONUS_MAX = exports.DAILY_BONUS_POINTS = exports.DAILY_LOGIN_POINTS = exports.onDidChangePoints = exports.MILESTONES = exports.LEVELS = exports.DISCOVERIES = void 0;
+exports.markRecapShown = exports.pendingWeeklyRecap = exports.themeLockHints = exports.themeLockFor = exports.grantKeptTheme = exports.lockLabel = exports.tryDailyTip = exports.finishBitSprint = exports.answerDailyQuiz = exports.spinDailyWheel = exports.activitiesWaiting = exports.spinsLeft = exports.rerollDailyQuest = exports.openMysteryBox = exports.equipReward = exports.buyReward = exports.buyStreakFreeze = exports.loginPointsFor = exports.weekStartOf = exports.applyDayRollover = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordDiscovery = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.effectiveUnlocked = exports.setActivityRandom = exports.saveUserStats = exports.getPointsBalance = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.setCelebrationHandler = exports.REWARD_KIND_LABEL = exports.STREAK_FREEZE_COST = exports.FREEZE_EVERY_DAYS = exports.MAX_STREAK_FREEZES = exports.STREAK_LOGIN_BONUS_MAX = exports.DAILY_BONUS_POINTS = exports.DAILY_LOGIN_POINTS = exports.onDidChangePoints = exports.MILESTONES = exports.LEVELS = exports.DISCOVERIES = void 0;
+exports.getMilestoneTrackerHtml = exports.registerMilestoneTrackerCommand = exports.maybeShowWeeklyRecap = exports.showCelebrations = exports.openRedeem = exports.SUPPORT_URL = exports.buildMilestoneView = exports.claimDailyBonus = exports.claimDailyLogin = exports.getNextLevel = exports.getCurrentLevel = void 0;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const command_registry_1 = require("../utils/command-registry");
@@ -34,6 +35,8 @@ const milestone_view_1 = require("../services/milestone-view");
 const analytics_1 = require("../analytics");
 const service_1 = require("../theme/service");
 const themes_1 = require("../theme/themes");
+const profile_style_1 = require("../services/profile-style");
+const activities_1 = require("../services/activities");
 const quests_1 = require("../services/quests");
 const rewards_1 = require("../services/rewards");
 /** The core features the Feature Explorer milestone counts, each recorded once when first really used. */
@@ -66,7 +69,9 @@ exports.MILESTONES = [
     { id: "security_audit", title: "Security Sentinel", description: "Run 5 Security or Cloud Audits", target: 5, points: 80, category: "Security", icon: "🛡️" },
     { id: "ai_explorer", title: "AI/ML Enthusiast", description: "Use AI/ML or RAG tools 10 times", target: 10, points: 90, category: "AI", icon: "🤖" },
     { id: "points_5000", title: "Point Tycoon", description: "Earn 5,000 points in total", target: 5000, points: 500, category: "Milestone", icon: "💰" },
-    { id: "feature_explorer", title: "Feature Explorer", description: "Try 5 of: an API request, an AI tool, a security scan, a database, a snippet, OpenCode", target: 5, points: 60, category: "Discovery", icon: "🧭" }
+    { id: "feature_explorer", title: "Feature Explorer", description: "Try 5 of: an API request, an AI tool, a security scan, a database, a snippet, OpenCode", target: 5, points: 60, category: "Discovery", icon: "🧭" },
+    { id: "quiz_10", title: "Sharp Mind", description: "Answer 10 daily challenges correctly", target: 10, points: 120, category: "Learning", icon: "🧠" },
+    { id: "events_3", title: "Event Regular", description: "Complete 3 weekly events", target: 3, points: 150, category: "Events", icon: "🎪" }
 ];
 let globalContext;
 let refreshCallback;
@@ -100,6 +105,10 @@ exports.MAX_STREAK_FREEZES = 2;
 exports.FREEZE_EVERY_DAYS = 7;
 exports.STREAK_FREEZE_COST = 50;
 const MAX_TOOLS_TRACKED = 500;
+/** How each kind of reward is named in messages. */
+exports.REWARD_KIND_LABEL = {
+    theme: 'theme', avatar: 'avatar', title: 'title', frame: 'badge frame', banner: 'banner', effect: 'celebration effect'
+};
 let celebrationHandler;
 /** Receives every batch of wins as it is saved. The tracker command installs the notification handler. */
 function setCelebrationHandler(handler) {
@@ -160,6 +169,47 @@ function sanitizeWeek(raw) {
         week.previousPoints = Math.max(0, previous);
     return week;
 }
+function createPlay(date) {
+    return { date, spinsUsed: 0, bonusSpins: 0, lastSpin: null, quizChoice: null, tipTried: false, sprintScore: null, lucky: false };
+}
+function createEvent(weekStart) {
+    return { weekStart, id: (0, activities_1.eventForWeek)(weekStart).id, progress: 0, done: false };
+}
+function sanitizePlay(raw, today) {
+    const fresh = createPlay(today);
+    if (!raw || typeof raw !== 'object')
+        return fresh;
+    const source = raw;
+    if (source.date !== today)
+        return fresh;
+    const count = (value, max) => Math.max(0, Math.min(max, Math.trunc(toFiniteNumber(value, 0))));
+    // null means "not yet"; Number(null) would turn it into 0.
+    const optional = (value) => (typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : NaN);
+    const quizChoice = optional(source.quizChoice);
+    const sprintScore = optional(source.sprintScore);
+    const lastSpin = optional(source.lastSpin);
+    return {
+        date: today,
+        spinsUsed: count(source.spinsUsed, 10),
+        bonusSpins: count(source.bonusSpins, 5),
+        lastSpin: lastSpin >= 0 && lastSpin < activities_1.WHEEL.length ? lastSpin : null,
+        quizChoice: quizChoice >= 0 && quizChoice < 4 ? quizChoice : null,
+        tipTried: source.tipTried === true,
+        sprintScore: Number.isFinite(sprintScore) ? Math.max(0, Math.min(activities_1.SPRINT_MAX_SCORE, sprintScore)) : null,
+        lucky: source.lucky === true
+    };
+}
+function sanitizeEvent(raw, weekStart) {
+    const fresh = createEvent(weekStart);
+    if (!raw || typeof raw !== 'object')
+        return fresh;
+    const source = raw;
+    if (source.weekStart !== weekStart || source.id !== fresh.id)
+        return fresh;
+    const event = (0, activities_1.eventForWeek)(weekStart);
+    const progress = Math.max(0, Math.min(event.target, Math.trunc(toFiniteNumber(source.progress, 0))));
+    return { weekStart, id: fresh.id, progress, done: source.done === true };
+}
 function createDefaultStats() {
     const today = getTodayString();
     return {
@@ -184,7 +234,15 @@ function createDefaultStats() {
         toolsUsed: [],
         weekly: emptyWeek(weekStartOf(today)),
         lastWeek: null,
-        lastRecapWeek: ''
+        lastRecapWeek: '',
+        equipped: {},
+        play: createPlay(today),
+        event: createEvent(weekStartOf(today)),
+        quizCorrect: 0,
+        quizStreak: 0,
+        quizLastCorrect: '',
+        eventsWon: 0,
+        sprintBest: 0
     };
 }
 exports.createDefaultStats = createDefaultStats;
@@ -287,7 +345,15 @@ function sanitizeStats(raw) {
         toolsUsed: [...new Set(toolsUsed)].slice(0, MAX_TOOLS_TRACKED),
         weekly: sanitizeWeek(source.weekly) ?? emptyWeek(weekStartOf(today)),
         lastWeek: sanitizeWeek(source.lastWeek),
-        lastRecapWeek: typeof source.lastRecapWeek === 'string' ? source.lastRecapWeek : ''
+        lastRecapWeek: typeof source.lastRecapWeek === 'string' ? source.lastRecapWeek : '',
+        equipped: (0, rewards_1.sanitizeLoadout)(source.equipped),
+        play: sanitizePlay(source.play, today),
+        event: sanitizeEvent(source.event, weekStartOf(today)),
+        quizCorrect: Math.max(0, Math.trunc(toFiniteNumber(source.quizCorrect, 0))),
+        quizStreak: Math.max(0, Math.trunc(toFiniteNumber(source.quizStreak, 0))),
+        quizLastCorrect: typeof source.quizLastCorrect === 'string' ? source.quizLastCorrect : '',
+        eventsWon: Math.max(0, Math.trunc(toFiniteNumber(source.eventsWon, 0))),
+        sprintBest: Math.max(0, Math.min(activities_1.SPRINT_MAX_SCORE, Math.trunc(toFiniteNumber(source.sprintBest, 0))))
     };
 }
 exports.sanitizeStats = sanitizeStats;
@@ -300,6 +366,11 @@ function applyDayRollover(stats, today = getTodayString()) {
     const outcome = { rolled: false, freezesUsed: 0, freezeEarned: false };
     if (stats.quests.date !== today)
         stats.quests = (0, quests_1.createDailyQuests)(today);
+    if (stats.play.date !== today)
+        stats.play = createPlay(today);
+    const thisWeek = weekStartOf(today);
+    if (stats.event.weekStart !== thisWeek)
+        stats.event = createEvent(thisWeek);
     if (stats.lastActiveDate === today)
         return outcome;
     outcome.rolled = true;
@@ -399,6 +470,14 @@ async function saveUserStats(context, stats) {
 exports.saveUserStats = saveUserStats;
 /** Rewards granted free by grantKeptTheme, announced differently from ones bought or earned. */
 const keptRewards = new Set();
+const giftSources = new Map();
+const GIFT_PREFIX = { box: 'Mystery box: ', chest: 'Weekly chest: ', wheel: 'Lucky spin: ', event: 'Event reward: ' };
+/** Random numbers for chance-based rewards (lucky finds). Tests replace it. */
+let activityRandom = Math.random;
+function setActivityRandom(random) {
+    activityRandom = random ?? Math.random;
+}
+exports.setActivityRandom = setActivityRandom;
 /** Rewards the user has, counting ones their progress has earned but no write has recorded yet. */
 function effectiveUnlocked(stats) {
     const earned = (0, rewards_1.earnedRewardIds)((0, milestone_view_1.levelIndexFor)(stats.lifetimePoints, exports.LEVELS), stats.completedMilestones);
@@ -429,6 +508,8 @@ function mutateStats(context, mutate) {
         const questsBefore = new Set(stats.quests.items.filter(item => item.done).map(item => item.id));
         const chestBefore = stats.quests.chestClaimed;
         const unlockedBefore = new Set(stats.unlocked);
+        const eventBefore = stats.event.done;
+        const luckyBefore = stats.play.lucky;
         const result = mutate(stats);
         syncUnlocks(stats);
         stats.weekly.points += Math.max(0, stats.lifetimePoints - lifetimeBefore);
@@ -474,14 +555,27 @@ function mutateStats(context, mutate) {
                 celebrations.push({ kind: 'reward', icon: reward.icon, text: `Themes now unlock with points. You keep ${reward.name} for free` });
                 continue;
             }
-            const via = !earnedNow.has(id) || !reward.unlock ? 'points' : 'level' in reward.unlock ? 'level' : 'milestone';
+            const gift = giftSources.get(id);
+            giftSources.delete(id);
+            const via = gift ?? (!earnedNow.has(id) || !reward.unlock ? 'points' : 'level' in reward.unlock ? 'level' : 'milestone');
             (0, analytics_1.track)('reward_unlocked', { reward: id, via });
             celebrations.push({
                 kind: 'reward',
                 icon: reward.icon,
-                text: reward.kind === 'theme' ? `New theme unlocked: ${reward.name}` : `New badge frame unlocked: ${reward.name}`,
-                themeId: reward.themeId
+                text: `${gift ? GIFT_PREFIX[gift] : 'New '}${exports.REWARD_KIND_LABEL[reward.kind]} unlocked: ${reward.name}`,
+                themeId: reward.themeId,
+                rewardId: (0, rewards_1.isCosmetic)(reward) ? reward.id : undefined
             });
+        }
+        if (!eventBefore && stats.event.done) {
+            const event = (0, activities_1.findEvent)(stats.event.id);
+            (0, analytics_1.track)('activity_played', { activity: 'event', points: event?.points ?? 0 });
+            if (event)
+                celebrations.push({ kind: 'event', icon: event.icon, text: `${event.title} complete! +${event.points} pts` });
+        }
+        if (!luckyBefore && stats.play.lucky) {
+            (0, analytics_1.track)('activity_played', { activity: 'lucky', points: activities_1.LUCKY_POINTS });
+            celebrations.push({ kind: 'lucky', icon: '🍀', text: `Lucky find! +${activities_1.LUCKY_POINTS} bonus pts` });
         }
         if (rollover.freezesUsed > 0) {
             (0, analytics_1.track)('streak_freeze', { action: 'used', count: rollover.freezesUsed });
@@ -565,6 +659,8 @@ function milestoneProgress(stats, milestoneId) {
         case 'ai_explorer': return stats.counters.aiRuns;
         case 'points_5000': return stats.lifetimePoints;
         case 'feature_explorer': return stats.discovered.length;
+        case 'quiz_10': return stats.quizCorrect;
+        case 'events_3': return stats.eventsWon;
         default: return 0;
     }
 }
@@ -590,6 +686,8 @@ function awardQuests(stats, run) {
     if (!stats.quests.chestClaimed && (0, quests_1.allQuestsDone)(stats.quests)) {
         stats.quests.chestClaimed = true;
         stats.perfectQuestDays += 1;
+        // Finishing every quest also earns a bonus spin of the wheel.
+        stats.play.bonusSpins += 1;
         addUncappedPoints(stats, quests_1.QUEST_CHEST_POINTS);
         pushActivity(stats, {
             id: 'quest_chest',
@@ -599,6 +697,48 @@ function awardQuests(stats, run) {
             category: 'Quest'
         });
     }
+}
+/** Moves this week's event for a tool run and pays out when it is done. */
+function advanceEvent(stats, run) {
+    if (stats.event.done)
+        return;
+    const event = (0, activities_1.findEvent)(stats.event.id);
+    if (!event)
+        return;
+    const step = event.step(run);
+    if (step <= 0)
+        return;
+    stats.event.progress = Math.min(event.target, stats.event.progress + step);
+    if (stats.event.progress < event.target)
+        return;
+    stats.event.done = true;
+    stats.eventsWon += 1;
+    addUncappedPoints(stats, event.points);
+    if (!stats.unlocked.includes(event.rewardId) && (0, rewards_1.findReward)(event.rewardId)) {
+        stats.unlocked.push(event.rewardId);
+        giftSources.set(event.rewardId, 'event');
+    }
+    pushActivity(stats, {
+        id: `event_${event.id}`,
+        title: `${event.title} complete (+${event.points} pts)`,
+        points: event.points,
+        timestamp: Date.now(),
+        category: 'Event'
+    });
+}
+/**
+ * Gives a random profile reward the user does not own yet, filling an empty
+ * slot. Returns undefined when there is nothing left to give.
+ */
+function grantRandomItem(stats, source, random) {
+    const reward = (0, rewards_1.pickMysteryReward)((0, rewards_1.mysteryBoxPool)(effectiveUnlocked(stats)), random);
+    if (!reward)
+        return undefined;
+    stats.unlocked.push(reward.id);
+    giftSources.set(reward.id, source);
+    if ((0, rewards_1.isCosmetic)(reward) && !stats.equipped[reward.kind])
+        stats.equipped[reward.kind] = reward.id;
+    return reward;
 }
 /** Awards any milestone whose target is now met. Returns the newly unlocked titles. */
 function awardMilestones(stats) {
@@ -691,7 +831,8 @@ async function autoRecordToolUsage(command) {
         if (firstEver && stats.toolsUsed.length < MAX_TOOLS_TRACKED)
             stats.toolsUsed.push(command);
         stats.weekly.runs += 1;
-        if (!stats.weekly.tools.includes(command) && stats.weekly.tools.length < MAX_TOOLS_TRACKED)
+        const newThisWeek = !stats.weekly.tools.includes(command);
+        if (newThisWeek && stats.weekly.tools.length < MAX_TOOLS_TRACKED)
             stats.weekly.tools.push(command);
         stats.counters.toolRuns += 1;
         if (category === 'Snippets')
@@ -715,7 +856,15 @@ async function autoRecordToolUsage(command) {
             timestamp: Date.now(),
             category
         });
-        awardQuests(stats, { command, category, newToday: usedToday === 0, firstEver });
+        const run = { command, category, newToday: usedToday === 0, firstEver, newThisWeek };
+        awardQuests(stats, run);
+        advanceEvent(stats, run);
+        // Now and then a run is a lucky find: a small surprise bonus, at most once a day.
+        if (!stats.play.lucky && activityRandom() < activities_1.LUCKY_CHANCE) {
+            stats.play.lucky = true;
+            addUncappedPoints(stats, activities_1.LUCKY_POINTS);
+            pushActivity(stats, { id: 'lucky_find', title: `Lucky find (+${activities_1.LUCKY_POINTS} pts)`, points: activities_1.LUCKY_POINTS, timestamp: Date.now(), category: 'Activity' });
+        }
         awardMilestones(stats);
     });
 }
@@ -768,10 +917,13 @@ async function buyReward(context, rewardId) {
             return 'short';
         stats.totalPoints -= cost;
         stats.unlocked.push(reward.id);
+        // Something bought is something the user wants to see straight away.
+        if ((0, rewards_1.isCosmetic)(reward))
+            stats.equipped[reward.kind] = reward.id;
         (0, analytics_1.track)('points_spent', { amount: cost });
         pushActivity(stats, {
             id: `redeem_reward_${Date.now()}`,
-            title: `Unlocked ${reward.name}${reward.kind === 'theme' ? ' theme' : ''} (-${cost} pts)`,
+            title: `Unlocked the ${reward.name} ${exports.REWARD_KIND_LABEL[reward.kind]} (-${cost} pts)`,
             points: -cost,
             timestamp: Date.now(),
             category: 'Redemption'
@@ -781,6 +933,202 @@ async function buyReward(context, rewardId) {
     return result;
 }
 exports.buyReward = buyReward;
+/** Wears an owned profile reward in its slot, or clears the slot when `rewardId` is null. */
+async function equipReward(context, slot, rewardId) {
+    if (!rewards_1.SLOTS.includes(slot))
+        return 'unknown';
+    const reward = rewardId === null ? null : (0, rewards_1.findReward)(rewardId);
+    if (reward === undefined || (reward && reward.kind !== slot))
+        return 'unknown';
+    const { result } = await mutateStats(context, stats => {
+        if (reward && !effectiveUnlocked(stats).includes(reward.id))
+            return 'locked';
+        stats.equipped[slot] = reward ? reward.id : null;
+        (0, analytics_1.track)('reward_equipped', { slot, reward: reward ? reward.id : 'none' });
+        return 'ok';
+    });
+    return result;
+}
+exports.equipReward = equipReward;
+/** Spends points on a random profile reward the user does not own yet. */
+async function openMysteryBox(context, random = Math.random) {
+    const { result } = await mutateStats(context, stats => {
+        const pool = (0, rewards_1.mysteryBoxPool)(effectiveUnlocked(stats));
+        if (!pool.length)
+            return { outcome: 'empty' };
+        if (stats.totalPoints < rewards_1.MYSTERY_BOX_COST)
+            return { outcome: 'short' };
+        const reward = (0, rewards_1.pickMysteryReward)(pool, random);
+        stats.totalPoints -= rewards_1.MYSTERY_BOX_COST;
+        stats.unlocked.push(reward.id);
+        giftSources.set(reward.id, 'box');
+        // Fill an empty slot, but never replace something the user chose.
+        if ((0, rewards_1.isCosmetic)(reward) && !stats.equipped[reward.kind])
+            stats.equipped[reward.kind] = reward.id;
+        (0, analytics_1.track)('points_spent', { amount: rewards_1.MYSTERY_BOX_COST });
+        pushActivity(stats, {
+            id: `redeem_box_${Date.now()}`,
+            title: `Mystery box: the ${reward.name} ${exports.REWARD_KIND_LABEL[reward.kind]} (-${rewards_1.MYSTERY_BOX_COST} pts)`,
+            points: -rewards_1.MYSTERY_BOX_COST,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+        return { outcome: 'ok', reward };
+    });
+    return result;
+}
+exports.openMysteryBox = openMysteryBox;
+/** Spends points to swap one of today's unfinished quests for a different one. */
+async function rerollDailyQuest(context, questId, random = Math.random) {
+    const { result } = await mutateStats(context, stats => {
+        const item = stats.quests.items.find(entry => entry.id === questId);
+        if (!item)
+            return { outcome: 'unknown' };
+        if (item.done)
+            return { outcome: 'done' };
+        if ((stats.quests.rerolls ?? 0) >= quests_1.MAX_REROLLS_PER_DAY)
+            return { outcome: 'limit' };
+        if (stats.totalPoints < quests_1.QUEST_REROLL_COST)
+            return { outcome: 'short' };
+        const next = (0, quests_1.rerollQuest)(stats.quests, questId, random);
+        if (!next)
+            return { outcome: 'unknown' };
+        stats.totalPoints -= quests_1.QUEST_REROLL_COST;
+        (0, analytics_1.track)('points_spent', { amount: quests_1.QUEST_REROLL_COST });
+        (0, analytics_1.track)('quest_rerolled', { quest: next.id });
+        pushActivity(stats, {
+            id: `redeem_reroll_${Date.now()}`,
+            title: `Swapped a quest for ${next.title} (-${quests_1.QUEST_REROLL_COST} pts)`,
+            points: -quests_1.QUEST_REROLL_COST,
+            timestamp: Date.now(),
+            category: 'Redemption'
+        });
+        return { outcome: 'ok', title: next.title };
+    });
+    return result;
+}
+exports.rerollDailyQuest = rerollDailyQuest;
+// ---------------------------------------------------------------- daily activities
+/** Spins left today: one free spin, plus any bonus spins earned. */
+function spinsLeft(stats) {
+    return Math.max(0, 1 + stats.play.bonusSpins - stats.play.spinsUsed);
+}
+exports.spinsLeft = spinsLeft;
+/** How many of today's activities are still waiting: spins, challenge, Bit Sprint and tip. */
+function activitiesWaiting(stats) {
+    return spinsLeft(stats) + (stats.play.quizChoice === null ? 1 : 0) + (stats.play.sprintScore === null ? 1 : 0) + (stats.play.tipTried ? 0 : 1);
+}
+exports.activitiesWaiting = activitiesWaiting;
+/** Spins the daily wheel. The prize is paid at once; a freeze or item that cannot be given pays points instead. */
+async function spinDailyWheel(context, random = Math.random) {
+    const { result } = await mutateStats(context, stats => {
+        if (spinsLeft(stats) <= 0)
+            return { outcome: 'used' };
+        const index = (0, activities_1.spinWheel)(random);
+        const segment = activities_1.WHEEL[index];
+        stats.play.spinsUsed += 1;
+        stats.play.lastSpin = index;
+        let text;
+        let points = 0;
+        if ('points' in segment.prize) {
+            points = segment.prize.points;
+            text = `+${points} points`;
+        }
+        else if ('freeze' in segment.prize && stats.streakFreezes < exports.MAX_STREAK_FREEZES) {
+            stats.streakFreezes += 1;
+            text = 'a streak freeze';
+        }
+        else if ('item' in segment.prize) {
+            const reward = grantRandomItem(stats, 'wheel', random);
+            if (reward)
+                text = `the ${reward.name} ${exports.REWARD_KIND_LABEL[reward.kind]}`;
+            else {
+                points = activities_1.WHEEL_FALLBACK_POINTS;
+                text = `+${points} points`;
+            }
+        }
+        else {
+            points = activities_1.WHEEL_FALLBACK_POINTS;
+            text = `+${points} points (your freezes are full)`;
+        }
+        if (points)
+            addUncappedPoints(stats, points);
+        (0, analytics_1.track)('activity_played', { activity: 'spin', points });
+        pushActivity(stats, { id: 'play_spin', title: `Daily spin: ${text}`, points, timestamp: Date.now(), category: 'Play' });
+        return { outcome: 'ok', index, segment, text };
+    });
+    return result;
+}
+exports.spinDailyWheel = spinDailyWheel;
+/** Answers today's dev challenge, once. A right answer pays more, but trying always pays something. */
+async function answerDailyQuiz(context, choice) {
+    const picked = Math.trunc(Number(choice));
+    const { result } = await mutateStats(context, stats => {
+        const question = (0, activities_1.quizForDate)(stats.play.date);
+        if (!(picked >= 0 && picked < question.options.length))
+            return { outcome: 'invalid' };
+        if (stats.play.quizChoice !== null)
+            return { outcome: 'answered' };
+        stats.play.quizChoice = picked;
+        const correct = picked === question.answer;
+        const points = correct ? activities_1.QUIZ_CORRECT_POINTS : activities_1.QUIZ_TRY_POINTS;
+        addUncappedPoints(stats, points);
+        if (correct) {
+            stats.quizCorrect += 1;
+            stats.quizStreak = stats.quizLastCorrect === addDays(stats.play.date, -1) ? stats.quizStreak + 1 : 1;
+            stats.quizLastCorrect = stats.play.date;
+        }
+        else {
+            stats.quizStreak = 0;
+        }
+        (0, analytics_1.track)('activity_played', { activity: 'quiz', points });
+        pushActivity(stats, {
+            id: 'play_quiz',
+            title: `Daily challenge (${question.category}): ${correct ? 'correct' : 'tried'} (+${points} pts)`,
+            points, timestamp: Date.now(), category: 'Play'
+        });
+        awardMilestones(stats);
+        return { outcome: 'ok', correct, points, answer: question.answer, explain: question.explain, streak: stats.quizStreak };
+    });
+    return result;
+}
+exports.answerDailyQuiz = answerDailyQuiz;
+/** Records a finished Bit Sprint. Only the day's first game pays; later ones are practice for a better best. */
+async function finishBitSprint(context, rawScore) {
+    const score = Math.max(0, Math.min(activities_1.SPRINT_MAX_SCORE, Math.trunc(Number(rawScore) || 0)));
+    const { result } = await mutateStats(context, stats => {
+        const paid = stats.play.sprintScore === null;
+        const points = paid ? (0, activities_1.sprintPoints)(score) : 0;
+        const newBest = score > stats.sprintBest;
+        if (newBest)
+            stats.sprintBest = score;
+        if (paid) {
+            stats.play.sprintScore = score;
+            if (points)
+                addUncappedPoints(stats, points);
+            (0, analytics_1.track)('activity_played', { activity: 'sprint', points });
+            pushActivity(stats, { id: 'play_sprint', title: `Bit Sprint: ${score} correct (+${points} pts)`, points, timestamp: Date.now(), category: 'Play' });
+        }
+        return { outcome: 'ok', points, score, best: stats.sprintBest, newBest, paid };
+    });
+    return result;
+}
+exports.finishBitSprint = finishBitSprint;
+/** Pays the tip-of-the-day bonus once and returns the tip, so its tool can be opened. */
+async function tryDailyTip(context) {
+    const { result } = await mutateStats(context, stats => {
+        const tip = (0, activities_1.tipForDate)(stats.play.date);
+        if (stats.play.tipTried)
+            return { command: tip.command, points: 0 };
+        stats.play.tipTried = true;
+        addUncappedPoints(stats, activities_1.TIP_POINTS);
+        (0, analytics_1.track)('activity_played', { activity: 'tip', points: activities_1.TIP_POINTS });
+        pushActivity(stats, { id: 'play_tip', title: `Tip of the day: ${tip.title} (+${activities_1.TIP_POINTS} pts)`, points: activities_1.TIP_POINTS, timestamp: Date.now(), category: 'Play' });
+        return { command: tip.command, points: activities_1.TIP_POINTS };
+    });
+    return result;
+}
+exports.tryDailyTip = tryDailyTip;
 /** Short text for a locked theme: "150 pts" or "Reach Gold or 500 pts". */
 function lockLabel(lock) {
     const price = lock.cost !== undefined ? `${lock.cost.toLocaleString('en-US')} pts` : '';
@@ -811,7 +1159,7 @@ async function grantKeptTheme(context, themeId) {
 }
 exports.grantKeptTheme = grantKeptTheme;
 function rewardHint(reward) {
-    return (0, rewards_1.unlockLabel)(reward, index => exports.LEVELS[index]?.name ?? `level ${index + 1}`, id => exports.MILESTONES.find(m => m.id === id)?.title ?? id);
+    return (0, rewards_1.unlockLabel)(reward, index => exports.LEVELS[index]?.name ?? `level ${index + 1}`, id => exports.MILESTONES.find(m => m.id === id)?.title ?? id, id => (0, activities_1.findEvent)(id)?.title ?? id);
 }
 /** Why a theme is locked, or undefined when it can be used. */
 function themeLockFor(stats, themeId) {
@@ -889,9 +1237,26 @@ async function claimDailyLogin(context) {
         return false;
     const title = result > 1 ? `Daily Login Bonus · ${result}-day streak` : 'Daily Login Bonus';
     await recordActivity(context, 'daily_login', title, loginPointsFor(result), 'Activity');
+    if (result % activities_1.CHECKIN_CHEST_EVERY === 0)
+        await openCheckinChest(context, result);
     return true;
 }
 exports.claimDailyLogin = claimDailyLogin;
+/** Every 7th day of a streak: a random profile reward, or points when there is nothing left to give. */
+async function openCheckinChest(context, streak) {
+    await mutateStats(context, stats => {
+        const reward = grantRandomItem(stats, 'chest', activityRandom);
+        const points = reward ? 0 : activities_1.CHECKIN_CHEST_POINTS;
+        if (points)
+            addUncappedPoints(stats, points);
+        (0, analytics_1.track)('activity_played', { activity: 'checkin', points });
+        pushActivity(stats, {
+            id: 'play_checkin',
+            title: `Weekly check-in chest (${streak}-day streak): ${reward ? reward.name : `+${points} pts`}`,
+            points, timestamp: Date.now(), category: 'Play'
+        });
+    });
+}
 /** Claims the once-a-day activity boost. Returns false if it was already claimed today. */
 async function claimDailyBonus(context) {
     const key = `${getTodayString()}_bonus`;
@@ -918,6 +1283,7 @@ function buildMilestoneView(context) {
     }
     const stats = getUserStats(context);
     const unlocked = effectiveUnlocked(stats);
+    const loadout = (0, rewards_1.resolveLoadout)(stats.equipped, unlocked);
     return (0, milestone_view_1.buildTrackerView)({
         stats,
         levels: exports.LEVELS,
@@ -938,11 +1304,20 @@ function buildMilestoneView(context) {
             hint: rewardHint,
             currentTheme: (0, service_1.currentThemeId)(),
             previewTheme: (0, service_1.lockedPreviewTheme)(),
-            activeFrame: (0, rewards_1.activeFrame)(unlocked),
+            activeFrame: loadout.frame?.frame ?? null,
+            loadout,
             swatches: Object.fromEntries(themes_1.THEMES.map(theme => [theme.id, (0, themes_1.swatches)(theme)]))
         },
+        shop: {
+            boxCost: rewards_1.MYSTERY_BOX_COST,
+            boxLeft: (0, rewards_1.mysteryBoxPool)(unlocked).length,
+            rerollCost: quests_1.QUEST_REROLL_COST,
+            rerollsLeft: Math.max(0, quests_1.MAX_REROLLS_PER_DAY - (stats.quests.rerolls ?? 0)),
+            maxRerolls: quests_1.MAX_REROLLS_PER_DAY
+        },
         freezes: { max: exports.MAX_STREAK_FREEZES, cost: exports.STREAK_FREEZE_COST, every: exports.FREEZE_EVERY_DAYS },
-        loginBonusMax: exports.STREAK_LOGIN_BONUS_MAX
+        loginBonusMax: exports.STREAK_LOGIN_BONUS_MAX,
+        findReward: rewards_1.findReward
     });
 }
 exports.buildMilestoneView = buildMilestoneView;
@@ -950,6 +1325,20 @@ const MILESTONE_COMMAND = `${command_registry_1.COMMAND_PREFIX}milestoneTracker`
 /** The project's Buy Me a Coffee page, the same link as in the README. */
 exports.SUPPORT_URL = "https://www.buymeacoffee.com/ssayaibj";
 let trackerPanel;
+/** Set when the page should open Redeem as soon as it is ready. */
+let redeemRequested = false;
+let trackerReady = false;
+/** Opens Milestones & Points with the Redeem sheet showing (used by the Tools view). */
+async function openRedeem() {
+    redeemRequested = true;
+    await (0, command_dispatch_1.executeQueuedCommand)(MILESTONE_COMMAND);
+    if (trackerPanel && trackerReady) {
+        redeemRequested = false;
+        trackerPanel.reveal();
+        (0, webview_ui_1.safePostMessage)(trackerPanel, { type: 'openRedeem' });
+    }
+}
+exports.openRedeem = openRedeem;
 function notificationLevel() {
     const value = vscode.workspace.getConfiguration('devsnip').get('rewards.notifications', 'all');
     return value === 'off' || value === 'levelsOnly' ? value : 'all';
@@ -969,10 +1358,13 @@ function showCelebrations(items) {
     const [first, ...rest] = shown;
     const message = `${first.icon} ${first.text}${rest.length ? `  ·  ${rest.slice(0, 2).map(item => `${item.icon} ${item.text}`).join('  ·  ')}` : ''}${rest.length > 2 ? `  ·  +${rest.length - 2} more` : ''}`;
     const theme = shown.find(item => item.themeId)?.themeId;
-    const actions = theme ? ['Try theme', 'View progress'] : ['View progress'];
+    const wearable = theme ? undefined : shown.map(item => item.rewardId && (0, rewards_1.findReward)(item.rewardId)).find(Boolean) || undefined;
+    const actions = theme ? ['Try theme', 'View progress'] : wearable ? ['Equip', 'View progress'] : ['View progress'];
     void vscode.window.showInformationMessage(message, ...actions).then(async (choice) => {
         if (choice === 'Try theme' && theme)
             await (0, service_1.setTheme)(theme);
+        else if (choice === 'Equip' && wearable && globalContext && (0, rewards_1.isCosmetic)(wearable))
+            await equipReward(globalContext, wearable.kind, wearable.id);
         else if (choice === 'View progress')
             await (0, command_dispatch_1.executeQueuedCommand)(MILESTONE_COMMAND);
     }).then(undefined, error => console.error('DevSnip Pro: progress notification action failed.', error));
@@ -1017,9 +1409,11 @@ function registerMilestoneTrackerCommand(context) {
         if (!created)
             return;
         trackerPanel = panel;
+        trackerReady = false;
         const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'milestone-tracker.js')));
         const coffeeUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'bmc-button.png')));
-        (0, service_1.setWebviewHtml)(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri), String(coffeeUri)));
+        const effectsUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'reward-effects.js')));
+        (0, service_1.setWebviewHtml)(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri), String(coffeeUri), String(effectsUri)));
         let ready = false;
         let pending;
         const post = (message) => (0, webview_ui_1.safePostMessage)(panel, message);
@@ -1045,7 +1439,7 @@ function registerMilestoneTrackerCommand(context) {
         };
         const subscriptions = [
             (0, exports.onDidChangePoints)(scheduleState),
-            // The Rewards tab shows which theme is in use or being previewed.
+            // Redeem shows which theme is in use or being previewed.
             (0, service_1.onDidChangeTheme)(scheduleState),
             (0, service_1.onDidChangeLockedPreview)(scheduleState),
             panel.onDidChangeViewState(event => {
@@ -1058,10 +1452,50 @@ function registerMilestoneTrackerCommand(context) {
                     switch (action) {
                         case 'ready':
                             ready = true;
+                            trackerReady = true;
                             // A day may have started since activation.
                             await claimDailyLogin(context);
                             pushState();
+                            if (redeemRequested) {
+                                redeemRequested = false;
+                                post({ type: 'openRedeem' });
+                            }
                             break;
+                        case 'spinWheel': {
+                            const spin = await spinDailyWheel(context);
+                            pushState();
+                            post(spin.outcome === 'ok'
+                                ? { type: 'result', action, ok: true, index: spin.index, icon: spin.segment.icon, message: `You won ${spin.text}!` }
+                                : { type: 'result', action, ok: false, message: 'No spins left today. Finish all of today\'s quests for a bonus spin, or come back tomorrow.' });
+                            break;
+                        }
+                        case 'answerQuiz': {
+                            const quiz = await answerDailyQuiz(context, Number(message.choice));
+                            pushState();
+                            post(quiz.outcome === 'ok'
+                                ? { type: 'result', action, ok: true, correct: quiz.correct, message: quiz.correct ? `Correct! +${quiz.points} pts${quiz.streak > 1 ? ` · ${quiz.streak}-day streak` : ''}` : `Not quite, but +${quiz.points} pts for trying. Read why below.` }
+                                : { type: 'result', action, ok: false, message: quiz.outcome === 'answered' ? 'You already answered today\'s challenge. A new one arrives tomorrow.' : 'Pick one of the answers.' });
+                            break;
+                        }
+                        case 'sprintDone': {
+                            const sprint = await finishBitSprint(context, Number(message.score));
+                            pushState();
+                            post({
+                                type: 'result', action, ok: true, score: sprint.score, newBest: sprint.newBest,
+                                message: sprint.paid
+                                    ? `${sprint.score} correct: +${sprint.points} pts${sprint.newBest ? ' and a new best!' : ''}`
+                                    : `${sprint.score} correct${sprint.newBest ? ': a new best!' : ''} (practice: today's points are already in)`
+                            });
+                            break;
+                        }
+                        case 'tryTip': {
+                            const tip = await tryDailyTip(context);
+                            pushState();
+                            if (tip.points)
+                                post({ type: 'result', action, ok: true, message: `+${tip.points} pts for trying something new.` });
+                            await (0, command_dispatch_1.executeQueuedCommand)(tip.command);
+                            break;
+                        }
                         case 'claimBonus': {
                             const claimed = await claimDailyBonus(context);
                             pushState();
@@ -1114,6 +1548,49 @@ function registerMilestoneTrackerCommand(context) {
                             });
                             break;
                         }
+                        case 'equipReward': {
+                            const reward = typeof message.id === 'string' ? (0, rewards_1.findReward)(message.id) : undefined;
+                            const slot = typeof message.slot === 'string' ? message.slot : reward?.kind;
+                            if (!slot || slot === 'theme')
+                                break;
+                            const outcome = await equipReward(context, slot, message.id === null ? null : reward?.id ?? '');
+                            pushState();
+                            post({
+                                type: 'result', action,
+                                ok: outcome === 'ok',
+                                message: outcome !== 'ok' ? 'Unlock it first to wear it.'
+                                    : reward ? `${reward.name} equipped.` : `Your ${exports.REWARD_KIND_LABEL[slot]} was removed.`
+                            });
+                            break;
+                        }
+                        case 'openBox': {
+                            const box = await openMysteryBox(context);
+                            pushState();
+                            post({
+                                type: 'result', action,
+                                ok: box.outcome === 'ok',
+                                reward: box.outcome === 'ok' ? { id: box.reward.id, name: box.reward.name, icon: box.reward.icon, kind: box.reward.kind } : undefined,
+                                message: box.outcome === 'ok' ? `You got the ${box.reward.name} ${exports.REWARD_KIND_LABEL[box.reward.kind]}!`
+                                    : box.outcome === 'empty' ? 'You already own everything a mystery box can hold.'
+                                        : `A mystery box costs ${rewards_1.MYSTERY_BOX_COST} points.`
+                            });
+                            break;
+                        }
+                        case 'rerollQuest': {
+                            const id = typeof message.id === 'string' ? message.id : '';
+                            const reroll = await rerollDailyQuest(context, id);
+                            pushState();
+                            post({
+                                type: 'result', action,
+                                ok: reroll.outcome === 'ok',
+                                message: reroll.outcome === 'ok' ? `New quest: ${reroll.title}.`
+                                    : reroll.outcome === 'limit' ? `You can swap ${quests_1.MAX_REROLLS_PER_DAY} quests a day. New quests arrive at midnight.`
+                                        : reroll.outcome === 'short' ? `Swapping a quest costs ${quests_1.QUEST_REROLL_COST} points.`
+                                            : reroll.outcome === 'done' ? 'That quest is already done.'
+                                                : 'That quest could not be swapped.'
+                            });
+                            break;
+                        }
                         case 'useTheme': {
                             const themeId = typeof message.themeId === 'string' ? message.themeId : '';
                             const reward = (0, rewards_1.rewardForTheme)(themeId);
@@ -1154,8 +1631,10 @@ function registerMilestoneTrackerCommand(context) {
             })
         ];
         panel.onDidDispose(() => {
-            if (trackerPanel === panel)
+            if (trackerPanel === panel) {
                 trackerPanel = undefined;
+                trackerReady = false;
+            }
             if (pending)
                 clearTimeout(pending);
             subscriptions.forEach(subscription => subscription.dispose());
@@ -1164,8 +1643,11 @@ function registerMilestoneTrackerCommand(context) {
     context.subscriptions.push(command);
 }
 exports.registerMilestoneTrackerCommand = registerMilestoneTrackerCommand;
-/** `coffeeSrc` is the bundled Buy Me a Coffee button (the same image as in the README). */
-function getMilestoneTrackerHtml(cspSource, scriptSrc, coffeeSrc) {
+/**
+ * `coffeeSrc` is the bundled Buy Me a Coffee button (the same image as in the README);
+ * `effectsSrc` is the shared celebration effects script.
+ */
+function getMilestoneTrackerHtml(cspSource, scriptSrc, coffeeSrc, effectsSrc) {
     const icon = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
     return `<!DOCTYPE html>
 <html lang="en">
@@ -1208,6 +1690,7 @@ function getMilestoneTrackerHtml(cspSource, scriptSrc, coffeeSrc) {
         <p class="sr-only" role="status">Loading your progress...</p>
     </main>
     <div class="celebrate" id="celebrate" role="status" aria-live="polite"><span class="celebrate-badge" id="celebrateBadge"></span><span id="celebrateText"></span></div>
+    ${effectsSrc ? `<script src="${effectsSrc}"></script>` : ''}
     <script src="${scriptSrc}"></script>
 </body>
 </html>`;
@@ -1297,7 +1780,6 @@ button { font: inherit; }
 .ring-track { stroke: var(--soft); }
 .ring-fill { stroke: var(--level-ink); stroke-linecap: round; transition: stroke-dashoffset 1s var(--ease); }
 .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
-.ring-badge { font-size: 38px; line-height: 1; filter: drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
 .ring-pct { font-size: 12px; font-weight: 700; color: var(--fg-1); font-variant-numeric: tabular-nums; }
 .rank-info { min-width: 0; flex: 1; }
 .rank-name { margin: 4px 0 2px; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; color: var(--level-ink); }
@@ -1483,12 +1965,210 @@ button { font: inherit; }
 .rw-preview { display: flex; height: 54px; }
 .rw-preview > span { flex: 1; background: var(--sw); }
 .rw.locked .rw-preview { filter: saturate(.5) brightness(.85); }
-.rw-preview.frame > span { flex: none; }
-.rw-preview.frame { align-items: center; justify-content: center; background: var(--card-2); }
-.rw-frame { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: color-mix(in srgb, var(--gold) 13%, transparent); }
-.rw-frame.frame-glow { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 45%, transparent), 0 0 14px color-mix(in srgb, var(--gold) 55%, transparent); }
-.rw-frame.frame-flame { box-shadow: 0 0 0 2px #ff8a3d, 0 0 16px color-mix(in srgb, #ff5722 60%, transparent); }
-.rw.locked .rw-frame { filter: grayscale(1); opacity: .6; }
+.rw-preview.stage { position: relative; height: auto; min-height: 76px; align-items: center; justify-content: center; padding: 14px 16px; background: var(--card-2); border-bottom: 1px solid var(--line); }
+.rw.locked .rw-preview.stage { filter: none; }
+.rw-preview.stage > span { flex: none; }
+.rw-effect { font-size: 30px; line-height: 1; }
+.rw-play { position: absolute; right: 10px; bottom: 10px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--fg-0); display: grid; place-items: center; cursor: pointer; }
+.rw-play:hover { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.rw-play .ico { width: 12px; height: 12px; fill: currentColor; }
+.rw.active:not(.previewing) .rw-preview.stage { background: color-mix(in srgb, var(--success) 6%, var(--card-2)); }
+
+/* Profile rewards: frames, banners, medals and a copy of the Tools view rank card */
+${(0, profile_style_1.profileCss)({ medal: [".ring-medal", ".pv-medal"], banner: [".hero", ".pv-card"], base: "var(--card)", ink: "var(--fg-0)" })}
+.ring-medal, .pv-medal { position: relative; display: grid; place-items: center; border-radius: 50%; line-height: 1; background: color-mix(in srgb, var(--level-ink, var(--gold)) 12%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); --frame-inner: var(--card); }
+.ring-medal { width: 64px; height: 64px; font-size: 34px; }
+.medal-rank { position: absolute; right: -6px; bottom: -5px; font-size: 40%; padding: 2px; border-radius: 50%; background: var(--card); line-height: 1; }
+.rank-title-line { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 4px; padding: 2px 10px 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--fg-0); background: color-mix(in srgb, var(--level-ink) 14%, transparent); border: 1px solid color-mix(in srgb, var(--level-ink) 30%, transparent); }
+.pv-card { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 300px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); text-align: left; }
+.pv-card.compact { max-width: 100%; padding: 7px 10px; }
+.pv-medal { flex: none; width: 34px; height: 34px; font-size: 18px; }
+.pv-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pv-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.pv-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-title { font-weight: 500; color: var(--fg-1); }
+.pv-pts { flex: none; font-size: 11.5px; font-weight: 700; color: var(--gold-text); }
+.pv-meter { height: 4px; border-radius: 999px; background: var(--soft); overflow: hidden; }
+.pv-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--gold); }
+
+/* Redeem: the button on the rank card and the sheet it opens */
+.rank-redeem { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+.rank-redeem .xbtn { height: 36px; padding: 0 18px; font-size: 13.5px; box-shadow: 0 4px 14px color-mix(in srgb, var(--gold) 30%, transparent); }
+.rank-redeem .xbtn .ico { width: 17px; height: 17px; }
+.rank-redeem-sub { font-size: 12px; color: var(--fg-1); }
+.rank-redeem-sub strong { color: var(--gold-text); font-weight: 700; }
+.redeem { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding: 28px 20px; overflow-y: auto; background: color-mix(in srgb, var(--bg-0) 55%, rgba(0,0,0,.5)); backdrop-filter: blur(3px); animation: fade .16s ease-out; }
+.redeem[hidden] { display: none; }
+.redeem-sheet { width: 100%; max-width: 1080px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg-0); box-shadow: 0 24px 60px var(--ds-shadow, rgba(0,0,0,.45)); animation: rise .22s var(--ease); }
+.redeem-head { position: sticky; top: -28px; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); border-radius: 16px 16px 0 0; background: color-mix(in srgb, var(--bg-0) 92%, transparent); backdrop-filter: blur(8px); }
+.redeem-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; color: var(--gold-text); background: color-mix(in srgb, var(--gold) 15%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent); }
+.redeem-icon .ico { width: 19px; height: 19px; }
+.redeem-heading { flex: 1; min-width: 0; }
+.redeem-heading h2 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+.redeem-heading p { margin: 2px 0 0; font-size: 12px; color: var(--fg-1); }
+.redeem-balance { height: 28px; padding: 0 12px; font-size: 13px; }
+.redeem-body { padding: 4px 20px 22px; }
+.redeem-body .studio { margin-top: 16px; }
+body.redeem-open { overflow: hidden; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+
+/* Redeem navigation */
+.redeem-nav { display: flex; gap: 4px; margin: 16px 0 4px; padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.redeem-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--fg-1); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background-color .15s, color .15s; }
+.redeem-tab:hover { color: var(--fg-0); }
+.redeem-tab[aria-selected="true"] { background: var(--card-2); color: var(--fg-0); box-shadow: 0 1px 2px var(--ds-shadow, rgba(0,0,0,.2)), inset 0 0 0 1px var(--line); }
+.redeem-tab .ico { width: 15px; height: 15px; }
+.redeem-tab [class="ico"] path[d^="M7 4.5"] { fill: currentColor; }
+.redeem-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: 11px; font-weight: 800; background: var(--danger); color: #fff; font-variant-numeric: tabular-nums; }
+.rank-redeem .redeem-badge { margin-left: 2px; background: #1d1606; color: var(--gold); }
+
+/* Play: activity cards */
+.act-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.act-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 0; }
+.act-head { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.act-emoji { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: var(--soft); }
+.act-name { font-size: 14px; font-weight: 800; }
+.act-sub { font-size: 12px; color: var(--fg-1); margin-top: 1px; line-height: 1.4; }
+.act-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: auto; }
+.act-note { font-size: 11.5px; color: var(--fg-1); line-height: 1.45; }
+.act-card .xbtn .ico path[d^="M7 4.5"] { fill: currentColor; }
+
+/* Weekly event */
+.event-card { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); margin-top: 16px; overflow: hidden; border-color: color-mix(in srgb, var(--streak) 40%, var(--line)); background: linear-gradient(115deg, color-mix(in srgb, var(--streak) 14%, var(--card)), color-mix(in srgb, var(--purple) 8%, var(--card)) 60%, var(--card)); }
+.event-card.done { border-color: color-mix(in srgb, var(--success) 45%, var(--line)); }
+.event-main { padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.event-tags { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.event-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--streak-text); }
+.event-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--streak); box-shadow: 0 0 0 0 color-mix(in srgb, var(--streak) 60%, transparent); animation: live 1.8s ease-out infinite; }
+@keyframes live { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.event-title { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; letter-spacing: -.01em; }
+.event-desc { font-size: 13px; color: var(--fg-1); }
+.event-progress { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; margin-top: 4px; }
+.event-progress .bar { flex: 1; height: 8px; }
+.event-prize { padding: 18px 20px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; align-items: flex-start; justify-content: center; background: color-mix(in srgb, var(--card) 60%, transparent); }
+.event-reward { display: flex; align-items: center; gap: 12px; }
+.event-reward-icon { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; background: color-mix(in srgb, var(--gold) 15%, var(--card)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 35%, transparent), 0 0 18px color-mix(in srgb, var(--gold) 30%, transparent); }
+.event-reward-name { font-size: 14px; font-weight: 800; }
+
+/* Daily spin */
+.wheel { position: relative; width: min(230px, 100%); aspect-ratio: 1; margin: 2px auto 0; }
+.wheel-svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 6px 14px var(--ds-shadow, rgba(0,0,0,.3))); }
+.wheel-slice { stroke: var(--card); stroke-width: 2; }
+.wheel-icon { font-size: 17px; text-anchor: middle; dominant-baseline: middle; }
+.wheel-label { font-size: 12px; font-weight: 800; text-anchor: middle; fill: #1b1b1f; }
+.wheel-hub { fill: var(--card); stroke: var(--gold); stroke-width: 3; }
+.wheel-pointer { position: absolute; left: 50%; top: -6px; z-index: 1; width: 0; height: 0; transform: translateX(-50%); border-left: 11px solid transparent; border-right: 11px solid transparent; border-top: 20px solid var(--gold); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+.spin-card .act-foot { justify-content: center; text-align: center; }
+.spin-card .act-note { width: 100%; }
+
+/* Daily challenge */
+.quiz-q { font-size: 14px; font-weight: 700; line-height: 1.4; }
+.quiz-code { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--vscode-textCodeBlock-background, var(--card-2)); border: 1px solid var(--line); font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.quiz-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.quiz-opt { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--card-2); color: var(--fg-0); font-size: 12.5px; text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s, transform .1s; }
+.quiz-opt:hover:not([disabled]) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card-2)); }
+.quiz-opt:active:not([disabled]) { transform: translateY(1px); }
+.quiz-opt[disabled] { cursor: default; }
+.quiz-letter { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--soft); color: var(--fg-1); }
+.quiz-text { min-width: 0; overflow-wrap: anywhere; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+.quiz-opt.picked { border-color: var(--accent); }
+.quiz-opt.right { border-color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--card-2)); }
+.quiz-opt.right .quiz-letter { background: var(--success); color: var(--ds-on-status, #fff); }
+.quiz-opt.wrong { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--card-2)); }
+.quiz-opt.wrong .quiz-letter { background: var(--danger); color: #fff; }
+.quiz-opt.dim { opacity: .55; }
+.quiz-explain { font-size: 12.5px; line-height: 1.5; padding: 10px 12px; border-radius: 9px; border-left: 3px solid var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
+.quiz-explain.wrong { border-left-color: var(--streak); background: color-mix(in srgb, var(--streak) 8%, transparent); }
+
+/* Bit Sprint */
+.sprint-intro { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sprint-stat { padding: 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); text-align: center; }
+.sprint-stat span { display: block; font-size: 20px; font-weight: 800; }
+.sprint-stat small { font-size: 11px; color: var(--fg-1); }
+.sprint-top { display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; }
+.sprint-time { color: var(--streak-text); }
+.sprint-bar { height: 6px; }
+.sprint-bar > span { transition: width .1s linear; }
+.sprint-prompt { text-align: center; padding: 6px 0; }
+.sprint-prompt span { font-size: 30px; font-weight: 800; letter-spacing: .02em; font-family: var(--vscode-editor-font-family, ui-monospace, monospace); }
+.sprint-prompt small { font-size: 13px; color: var(--fg-1); font-weight: 600; }
+.sprint-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sprint-card.playing { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.flash-right { animation: flash-right .35s ease-out; }
+.flash-wrong { animation: flash-wrong .35s ease-out; }
+@keyframes flash-right { 30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 45%, transparent); } }
+@keyframes flash-wrong { 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } }
+
+/* Tip of the day */
+.tip-title { font-size: 15px; font-weight: 800; }
+.tip-text { margin: 0; font-size: 13px; line-height: 1.55; color: var(--fg-1); }
+
+/* Check-in week */
+.checkin-card { margin-top: 12px; }
+.ci-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.ci-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); }
+.ci-day small { font-size: 10.5px; color: var(--fg-1); font-weight: 600; }
+.ci-icon { font-size: 15px; font-weight: 800; line-height: 1.2; color: var(--fg-1); }
+.ci-day.past { background: color-mix(in srgb, var(--success) 10%, var(--card-2)); border-color: color-mix(in srgb, var(--success) 35%, var(--line)); }
+.ci-day.past .ci-icon { color: var(--success); }
+.ci-day.today { border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 18%, transparent); }
+.ci-day.today .ci-icon { color: var(--gold-text); }
+.ci-day.chest { background: color-mix(in srgb, var(--gold) 10%, var(--card-2)); }
+.lucky { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-1); padding: 8px 12px; border-radius: 9px; border: 1px dashed var(--line); }
+.lucky.found { color: var(--fg-0); border-style: solid; border-color: color-mix(in srgb, var(--success) 45%, var(--line)); background: color-mix(in srgb, var(--success) 8%, transparent); }
+
+@media (max-width: 860px) {
+    .act-grid { grid-template-columns: 1fr; }
+    .event-card { grid-template-columns: 1fr; }
+    .event-prize { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 420px) {
+    .quiz-options, .sprint-options { grid-template-columns: 1fr; }
+    .redeem-tab { padding: 0 8px; font-size: 12px; }
+    .ci-row { gap: 3px; }
+}
+
+/* Profile studio */
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); margin-top: 14px; overflow: hidden; }
+.studio-show { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 8%, var(--card)), var(--card) 70%); }
+.studio-sub { font-size: 12.5px; color: var(--fg-1); margin-top: -4px; }
+.studio .pv-card { max-width: none; padding: 12px 14px; box-shadow: 0 6px 20px var(--ds-shadow, rgba(0,0,0,.18)); }
+.studio .pv-medal { width: 44px; height: 44px; font-size: 24px; }
+.studio .pv-name { font-size: 14px; }
+.studio-collection { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+.studio-collection-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--fg-1); font-weight: 600; }
+.studio-slots { border-left: 1px solid var(--line); padding: 6px 0; }
+.slot { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 18px; }
+.slot + .slot { border-top: 1px solid var(--line); }
+.slot-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; background: color-mix(in srgb, var(--tint) 13%, transparent); color: var(--tint-text, var(--tint)); }
+.slot-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-1); }
+.slot-value { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot-actions { display: inline-flex; gap: 6px; align-items: center; }
+.slot-actions .xbtn.icon.sm { width: 28px; }
+.slot-actions .ico, .q-swap .ico { width: 13px; height: 13px; }
+.slot-actions [aria-label^="Play"] .ico { fill: currentColor; }
+
+/* Power-ups */
+.powers { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; margin-top: 16px; }
+.power { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; padding: 14px 16px; }
+.power-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: color-mix(in srgb, var(--tint) 14%, transparent); }
+.power-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.power-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13.5px; font-weight: 700; }
+.power-text { font-size: 12px; color: var(--fg-1); line-height: 1.45; flex: 1; }
+.power .xbtn { align-self: flex-start; margin-top: 6px; }
+.shake { animation: shake .5s ease-in-out infinite; }
+@keyframes shake { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+
+/* Shop */
+.shop-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 22px 0 10px; scroll-margin-top: 84px; }
+.shop-balance { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 15px; font-weight: 800; color: var(--gold-text); }
+.shop-kinds { margin-bottom: 12px; }
+.shop-kinds .tab .ico { width: 14px; height: 14px; }
+.shop-kinds .tab[aria-pressed="true"] { background: var(--card-2); color: var(--fg-0); box-shadow: 0 1px 2px var(--ds-shadow, rgba(0,0,0,.2)), inset 0 0 0 1px var(--line); }
+.shop-kinds .tab[aria-pressed="true"] .count { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg-0); }
+.q-side { display: inline-flex; align-items: center; gap: 6px; }
+.q-swap { width: 28px !important; height: 28px; }
 .rw-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .rw-foot { margin-top: auto; padding-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .rw-state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-1); }
@@ -1521,14 +2201,21 @@ button { font: inherit; }
     .daily { grid-template-columns: 1fr; }
     .quests { grid-template-columns: 1fr; }
     .week { border-left: 0; border-top: 1px solid var(--line); }
+    .studio { grid-template-columns: 1fr; }
+    .studio-slots { border-left: 0; border-top: 1px solid var(--line); }
 }
 @media (max-width: 560px) {
     .quest { grid-template-columns: 34px minmax(0, 1fr) auto; }
-    .quest > .chip { grid-column: 3; grid-row: 1; }
+    .quest > .q-side { grid-column: 3; grid-row: 1; }
     .q-progress { grid-column: 2 / -1; grid-row: 2; text-align: left; }
 }
 @media (max-width: 560px) {
     .top { padding: 12px 16px; position: static; }
+    .redeem { padding: 0; }
+    .redeem-sheet { border-radius: 0; min-height: 100%; border: 0; }
+    .redeem-head { top: 0; border-radius: 0; padding: 12px 16px; }
+    .redeem-heading p { display: none; }
+    .redeem-body { padding: 4px 16px 20px; }
     .top p { display: none; }
     .coffee img { height: 32px; }
     .page { padding: 14px 16px 32px; }

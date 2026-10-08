@@ -60,6 +60,13 @@ const GUIDE = [
 ];
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
+    {
+        version: "11.76.1",
+        items: [
+            { title: "Redeem: a daily spin, dev challenge, Bit Sprint and weekly events", command: "milestoneTracker" },
+            { title: "Make your rank card yours: avatars, titles, frames, banners and effects", command: "milestoneTracker" }
+        ]
+    },
     // A cosmetic patch: no items, so updating from 11.75.2 shows no What's New card.
     { version: "11.75.3", items: [] },
     {

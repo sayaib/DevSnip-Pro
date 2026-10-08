@@ -1,6 +1,10 @@
 import type { LevelInfo, Milestone, UserStats } from "../commands/milestoneTracker";
 import { QUEST_CHEST_POINTS, findQuest } from "./quests";
-import type { RewardDefinition } from "./rewards";
+import type { CosmeticSlot, RewardDefinition, RewardKind } from "./rewards";
+import {
+  CHECKIN_CHEST_EVERY, LUCKY_POINTS, QUIZ_CORRECT_POINTS, QUIZ_TRY_POINTS, SPRINT_MAX_POINTS, SPRINT_SECONDS, TIP_POINTS, WHEEL,
+  eventForWeek, quizForDate, tipForDate
+} from "./activities";
 
 /**
  * Turns stored milestone stats into exactly what the tracker page shows.
@@ -36,12 +40,62 @@ export interface TrackerInputs {
     /** A locked theme being tried right now, if any. */
     previewTheme?: string | null;
     activeFrame: string | null;
+    /** The reward worn in each profile slot. Optional: without it only the frame is known. */
+    loadout?: Record<CosmeticSlot, RewardDefinition | null>;
     /** themeId -> four preview colours. */
     swatches: Record<string, string[]>;
   };
+  /** Prices and limits for the mystery box and quest swaps. */
+  shop?: { boxCost: number; boxLeft: number; rerollCost: number; rerollsLeft: number; maxRerolls: number };
   freezes?: { max: number; cost: number; every: number };
   /** Most extra login points a streak can add. */
   loginBonusMax?: number;
+  /** Rewards by id, for naming a weekly event's prize. */
+  findReward?: (id: string) => RewardDefinition | undefined;
+}
+
+export interface PlayView {
+  /** Daily activities still waiting today (spins, challenge, Bit Sprint, tip). */
+  waiting: number;
+  wheel: {
+    segments: Array<{ label: string; icon: string; color: string; chance: number }>;
+    spinsLeft: number;
+    bonusSpins: number;
+    lastSpin: number | null;
+  };
+  quiz: {
+    id: string;
+    category: string;
+    question: string;
+    code: string | null;
+    options: string[];
+    /** The pick, the right answer and the explanation are only sent once answered. */
+    choice: number | null;
+    answer: number | null;
+    explain: string | null;
+    correctPoints: number;
+    tryPoints: number;
+    correctTotal: number;
+    streak: number;
+  };
+  sprint: { played: boolean; score: number | null; best: number; maxPoints: number; seconds: number };
+  tip: { id: string; title: string; text: string; action: string; tried: boolean; points: number };
+  event: {
+    id: string;
+    title: string;
+    icon: string;
+    description: string;
+    target: number;
+    progress: number;
+    percent: number;
+    done: boolean;
+    points: number;
+    reward: { id: string; name: string; icon: string; kind: RewardKind; owned: boolean } | null;
+    daysLeft: number;
+    won: number;
+  };
+  checkin: { day: number; every: number; streak: number };
+  lucky: { found: boolean; points: number };
 }
 
 export interface QuestView {
@@ -54,11 +108,13 @@ export interface QuestView {
   percent: number;
   points: number;
   done: boolean;
+  /** Can be swapped for another quest right now (not done, swaps left, enough points). */
+  canReroll: boolean;
 }
 
 export interface RewardView {
   id: string;
-  kind: "theme" | "frame";
+  kind: RewardKind;
   name: string;
   description: string;
   icon: string;
@@ -67,12 +123,44 @@ export interface RewardView {
   hint: string | null;
   cost: number | null;
   affordable: boolean;
-  /** The theme in use, or the frame the badge wears. */
+  /** The theme in use, or the profile reward being worn. */
   active: boolean;
+  /** For avatars: the emoji shown on the rank card. */
+  glyph: string | null;
+  /** For frames, banners and effects: the style name the pages draw. */
+  style: string | null;
   /** A locked theme being tried right now. */
   previewing: boolean;
   themeId: string | null;
   swatches: string[];
+}
+
+/** One worn profile slot. */
+export interface ProfileItem {
+  id: string;
+  name: string;
+  icon: string;
+  /** Avatar glyph, or the frame, banner or effect style name. */
+  value: string | null;
+}
+
+export interface ProfileView {
+  /** The rank medal, shown when no avatar is worn. */
+  badge: string;
+  avatar: ProfileItem | null;
+  title: ProfileItem | null;
+  frame: ProfileItem | null;
+  banner: ProfileItem | null;
+  effect: ProfileItem | null;
+}
+
+export interface ShopView {
+  balance: number;
+  box: { cost: number; left: number; affordable: boolean };
+  reroll: { cost: number; left: number; max: number; affordable: boolean };
+  /** Owned and total profile rewards (themes excluded). */
+  collected: number;
+  collectible: number;
 }
 
 export interface WeekView {
@@ -82,7 +170,7 @@ export interface WeekView {
 }
 
 export type LevelState = "achieved" | "current" | "locked";
-export type ActivityKind = "tool" | "milestone" | "bonus" | "quest" | "freeze" | "spend" | "refund" | "other";
+export type ActivityKind = "tool" | "milestone" | "bonus" | "quest" | "freeze" | "spend" | "refund" | "play" | "other";
 
 export interface LevelView {
   index: number;
@@ -154,6 +242,9 @@ export interface TrackerView {
     perfectDays: number;
   };
   rewards: RewardView[];
+  play: PlayView;
+  profile: ProfileView;
+  shop: ShopView;
   week: {
     current: WeekView;
     last: (WeekView & { previousPoints: number }) | null;
@@ -210,6 +301,8 @@ function remainingLabel(milestone: Milestone, remaining: number): string {
   if (milestone.id === "ai_explorer") return `${plural(remaining, "more AI tool run")}`;
   if (milestone.id === "feature_explorer") return `${plural(remaining, "more feature")} to try`;
   if (milestone.id === "quest_master") return `${plural(remaining, "more day")} with every quest done`;
+  if (milestone.id === "quiz_10") return `${plural(remaining, "more correct answer")} in the daily challenge`;
+  if (milestone.id === "events_3") return `${plural(remaining, "more weekly event")} to complete`;
   return `${plural(remaining, "more tool run")}`;
 }
 
@@ -219,6 +312,7 @@ function activityKind(entry: UserStats["activities"][number]): ActivityKind {
   if (entry.id === "daily_login" || entry.id === "daily_bonus") return "bonus";
   if (entry.category === "Quest") return "quest";
   if (entry.id.startsWith("streak_freeze")) return "freeze";
+  if (entry.category === "Play" || entry.category === "Event" || entry.id === "lucky_find") return "play";
   if (entry.id.startsWith("sayaib.")) return "tool";
   return "other";
 }
@@ -229,6 +323,73 @@ function activityTitle(entry: UserStats["activities"][number], toolNames: Record
   }
   // Stored titles repeat the amount ("(+50 pts)"); the feed shows it in its own column.
   return entry.title.replace(/\s*\([+-]?\d+ pts\)\s*$/, "").replace(/^Milestone Unlocked:\s*/, "Milestone unlocked: ");
+}
+
+/** Days from a local YYYY-MM-DD date to another. */
+function dayGap(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) || 0;
+}
+
+/** Today's activities, with nothing given away early (the challenge's answer stays on the extension side). */
+export function buildPlayView(stats: UserStats, today: string, findReward?: (id: string) => RewardDefinition | undefined): PlayView {
+  // Older callers may pass stats saved before activities existed.
+  const play = stats.play ?? { date: today, spinsUsed: 0, bonusSpins: 0, lastSpin: null, quizChoice: null, tipTried: false, sprintScore: null, lucky: false };
+  if (!stats.event) {
+    const [year, month, day] = today.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    const weekStart = date.toISOString().slice(0, 10);
+    stats = { ...stats, event: { weekStart, id: eventForWeek(weekStart).id, progress: 0, done: false } };
+  }
+  const totalWeight = WHEEL.reduce((sum, segment) => sum + segment.weight, 0);
+  const spinsLeft = Math.max(0, 1 + play.bonusSpins - play.spinsUsed);
+  const question = quizForDate(play.date || today);
+  const answered = play.quizChoice !== null;
+  const tip = tipForDate(play.date || today);
+  const event = eventForWeek(stats.event.weekStart);
+  const prize = findReward?.(event.rewardId);
+  const waiting = spinsLeft + (answered ? 0 : 1) + (play.sprintScore === null ? 1 : 0) + (play.tipTried ? 0 : 1);
+  return {
+    waiting,
+    wheel: {
+      segments: WHEEL.map(segment => ({ label: segment.label, icon: segment.icon, color: segment.color, chance: Math.round((segment.weight / totalWeight) * 100) })),
+      spinsLeft,
+      bonusSpins: play.bonusSpins,
+      lastSpin: play.lastSpin
+    },
+    quiz: {
+      id: question.id,
+      category: question.category,
+      question: question.question,
+      code: question.code ?? null,
+      options: question.options,
+      choice: play.quizChoice,
+      answer: answered ? question.answer : null,
+      explain: answered ? question.explain : null,
+      correctPoints: QUIZ_CORRECT_POINTS,
+      tryPoints: QUIZ_TRY_POINTS,
+      correctTotal: stats.quizCorrect ?? 0,
+      streak: stats.quizLastCorrect && dayGap(stats.quizLastCorrect, today) <= 1 ? stats.quizStreak : 0
+    },
+    sprint: { played: play.sprintScore !== null, score: play.sprintScore, best: stats.sprintBest ?? 0, maxPoints: SPRINT_MAX_POINTS, seconds: SPRINT_SECONDS },
+    tip: { id: tip.id, title: tip.title, text: tip.text, action: tip.action, tried: play.tipTried, points: TIP_POINTS },
+    event: {
+      id: event.id,
+      title: event.title,
+      icon: event.icon,
+      description: event.description,
+      target: event.target,
+      progress: stats.event.progress,
+      percent: Math.min(100, Math.floor((stats.event.progress / event.target) * 100)),
+      done: stats.event.done,
+      points: event.points,
+      reward: prize ? { id: prize.id, name: prize.name, icon: prize.icon, kind: prize.kind, owned: stats.unlocked.includes(prize.id) } : null,
+      daysLeft: Math.max(1, 7 - dayGap(stats.event.weekStart, today)),
+      won: stats.eventsWon ?? 0
+    },
+    checkin: { day: ((Math.max(1, stats.streakDays) - 1) % CHECKIN_CHEST_EVERY) + 1, every: CHECKIN_CHEST_EVERY, streak: stats.streakDays },
+    lucky: { found: play.lucky, points: LUCKY_POINTS }
+  };
 }
 
 export function buildTrackerView(input: TrackerInputs): TrackerView {
@@ -283,6 +444,8 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
 
   const earned = Math.min(stats.dailyEarnedPoints, input.dailyCap);
 
+  const shop = input.shop ?? { boxCost: 0, boxLeft: 0, rerollCost: 0, rerollsLeft: 0, maxRerolls: 0 };
+  const canReroll = shop.maxRerolls > 0 && shop.rerollsLeft > 0 && stats.totalPoints >= shop.rerollCost;
   const quests: QuestView[] = [];
   for (const item of stats.quests?.items ?? []) {
     const quest = findQuest(item.id);
@@ -296,11 +459,18 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
       progress: item.progress,
       percent: item.done ? 100 : Math.min(99, Math.floor((item.progress / quest.target) * 100)),
       points: quest.points,
-      done: item.done
+      done: item.done,
+      canReroll: canReroll && !item.done
     });
   }
 
   const rewardInput = input.rewards;
+  const loadout = rewardInput?.loadout;
+  const worn = (reward: RewardDefinition): boolean => {
+    if (reward.kind === "theme") return rewardInput!.currentTheme === reward.themeId;
+    if (loadout) return loadout[reward.kind]?.id === reward.id;
+    return reward.kind === "frame" && rewardInput!.activeFrame === reward.frame;
+  };
   const rewards: RewardView[] = (rewardInput?.list ?? []).map(reward => {
     const unlocked = rewardInput!.unlocked.includes(reward.id);
     return {
@@ -313,12 +483,29 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
       hint: rewardInput!.hint(reward),
       cost: reward.cost ?? null,
       affordable: reward.cost !== undefined && stats.totalPoints >= reward.cost,
-      active: unlocked && (reward.kind === "theme" ? rewardInput!.currentTheme === reward.themeId : rewardInput!.activeFrame === reward.frame),
+      active: unlocked && worn(reward),
+      glyph: reward.glyph ?? null,
+      style: reward.frame ?? reward.banner ?? reward.effect ?? null,
       previewing: !unlocked && reward.kind === "theme" && !!reward.themeId && rewardInput!.previewTheme === reward.themeId,
       themeId: reward.themeId ?? null,
       swatches: reward.themeId ? rewardInput!.swatches[reward.themeId] ?? [] : []
     };
   });
+
+  const item = (reward: RewardDefinition | null | undefined): ProfileItem | null =>
+    reward ? { id: reward.id, name: reward.name, icon: reward.icon, value: reward.glyph ?? reward.frame ?? reward.banner ?? reward.effect ?? null } : null;
+  const frameFallback = !loadout && rewardInput?.activeFrame
+    ? item((rewardInput.list ?? []).find(reward => reward.kind === "frame" && reward.frame === rewardInput.activeFrame))
+    : null;
+  const profile: ProfileView = {
+    badge: level.badge,
+    avatar: item(loadout?.avatar),
+    title: item(loadout?.title),
+    frame: loadout ? item(loadout.frame) : frameFallback,
+    banner: item(loadout?.banner),
+    effect: item(loadout?.effect)
+  };
+  const cosmetics = rewards.filter(reward => reward.kind !== "theme");
 
   const maxFreezes = input.freezes?.max ?? 0;
   const freezeCost = input.freezes?.cost ?? 0;
@@ -360,6 +547,15 @@ export function buildTrackerView(input: TrackerInputs): TrackerView {
       perfectDays: stats.perfectQuestDays ?? 0
     },
     rewards,
+    play: buildPlayView(stats, input.today, input.findReward),
+    profile,
+    shop: {
+      balance: stats.totalPoints,
+      box: { cost: shop.boxCost, left: shop.boxLeft, affordable: shop.boxLeft > 0 && stats.totalPoints >= shop.boxCost },
+      reroll: { cost: shop.rerollCost, left: shop.rerollsLeft, max: shop.maxRerolls, affordable: canReroll },
+      collected: cosmetics.filter(reward => reward.unlocked).length,
+      collectible: cosmetics.length
+    },
     week: {
       current: stats.weekly ? weekOf(stats.weekly) : { points: 0, runs: 0, tools: 0 },
       last: stats.lastWeek ? { ...weekOf(stats.lastWeek), previousPoints: stats.lastWeek.previousPoints ?? 0 } : null

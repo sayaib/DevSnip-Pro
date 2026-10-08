@@ -1,5 +1,36 @@
 # Development Changelog of DevSnip Pro
 
+## 11.76.1 - Redeem: daily games, weekly events and a profile to make your own
+
+Points are now worth coming back for. A new **Redeem** button on your rank card in Milestones & Points opens three pages: **Play & earn** (something new every day), **Profile** (dress up your rank card) and **Shop** (power-ups and every reward). Everything is cosmetic: every tool still works at every rank.
+
+### Added
+
+- **Play & earn:** daily activities that pay points and teach something. Each one resets at midnight (the event every Monday), and none of them count against the daily tool-use limit.
+  - **Daily spin:** one free spin of a prize wheel a day, for points, a streak freeze or a profile item. Finishing all of the day's quests earns a bonus spin. The odds are shown under the wheel.
+  - **Daily dev challenge:** one question a day on JavaScript, TypeScript, Git, HTTP, regex, SQL, shell, security, CSS, Python, Docker or VS Code. A right answer pays +15 and trying pays +3; either way you see why the answer is right.
+  - **Bit Sprint:** a 30-second mini-game converting between decimal, hex and binary, with the mouse or keys 1–4. The first game of the day pays up to +10; later games are practice for a new best.
+  - **Tip of the day:** a DevSnip Pro tool worth knowing, such as the JWT Decoder, the cURL Converter or the .env Checker, with a button that opens it (+5 the first time).
+  - **Weekly event:** a different event each week, such as Security Week, AI Week or Explorer Week. Completing it pays up to +100 points and an exclusive avatar, title, frame or banner you can only win that week.
+  - **Check-in week:** every 7th day of your streak opens a chest with a free profile item.
+  - **Lucky finds:** now and then a tool run pays a surprise +10, at most once a day.
+- **Your profile:** 54 items to personalise your rank card in the Tools view, from 40 points. Each one is previewed on your own card before you buy it.
+  - **Avatars** replace the rank medal, which moves to the avatar's corner.
+  - **Titles** show beside your rank, e.g. "Platinum · Regex Wizard".
+  - **Badge frames**, including Frost, Neon pulse, Rainbow halo and Orbit.
+  - **Banners** for the rank card background, such as Sunset, Synth grid and Starfield.
+  - **Celebration effects** (sparkles, confetti, coin shower, avatar rain or fireworks) play when you finish a quest or a milestone, or rank up.
+  - Wear one item per slot, swap it any time, or take it off with one click. Rewards you earn are announced with an **Equip** button.
+- **Exclusive rewards:** Diamond, Master and Grandmaster each unlock an avatar, and Grandmaster a title. Milestones such as Feature Explorer, Security Sentinel, Quest Master, a 100-day streak and Point Tycoon unlock titles and a banner. Weekly events have their own prizes that cannot be bought.
+- **New milestones:** **Sharp Mind** (answer 10 daily challenges correctly) and **Event Regular** (complete 3 weekly events), each with its own reward.
+- **Power-ups:** swap one of today's quests for another (25 points, twice a day) from the ↻ button on the quest, or open a **mystery box** (100 points) for a random profile item you do not own yet.
+- **Tools view:** a 🎁 chip on the rank card shows how many daily activities are waiting and opens Play & earn directly. The Redeem button shows the same count.
+
+### Changed
+
+- The **Rewards** tab of Milestones & Points has moved into **Redeem**. Themes are now in the Shop alongside profile items and power-ups, with filters for each type and for what you own or can afford.
+- Effects respect "reduce motion" and are drawn locally, without loading anything external.
+
 ## 11.75.3 - The official Buy Me a Coffee button
 
 ### Improved

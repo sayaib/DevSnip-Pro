@@ -217,7 +217,7 @@ export const EVENT_CATALOG = defineCatalog({
     properties: {}
   },
   points_spent: {
-    description: "Points were spent: on a premium REST client tool, a streak freeze or a reward unlocked early.",
+    description: "Points were spent: on a premium REST client tool, a streak freeze, a quest swap, a mystery box or a reward unlocked early.",
     properties: {
       amount: { kind: "count", description: "Points spent." }
     }
@@ -233,10 +233,30 @@ export const EVENT_CATALOG = defineCatalog({
     properties: {}
   },
   reward_unlocked: {
-    description: "A reward (a theme or a badge frame) was unlocked.",
+    description: "A reward (a theme, avatar, title, badge frame, banner or celebration effect) was unlocked.",
     properties: {
       reward: { kind: "id", description: "Reward id, e.g. theme_synthwave." },
-      via: { kind: "enum:level|milestone|points|kept", description: "Earned by rank, earned by a milestone, bought with points, or kept free because it was in use when themes became paid." }
+      via: { kind: "enum:level|milestone|points|kept|box|chest|wheel|event", description: "Earned by rank, earned by a milestone, bought with points, kept free because it was in use when themes became paid, won from a mystery box, the weekly check-in chest or the daily spin, or won in a weekly event." }
+    }
+  },
+  activity_played: {
+    description: "A daily activity in Redeem was played, or a surprise bonus happened: the spin wheel, the daily challenge, Bit Sprint, the tip of the day, a weekly event completed, the check-in chest or a lucky find.",
+    properties: {
+      activity: { kind: "enum:spin|quiz|sprint|tip|event|checkin|lucky", description: "Which activity." },
+      points: { kind: "count", description: "Points it paid (0 when the prize was an item or a freeze)." }
+    }
+  },
+  reward_equipped: {
+    description: "A profile reward (avatar, title, frame, banner or effect) was put on or taken off.",
+    properties: {
+      slot: { kind: "enum:avatar|title|frame|banner|effect", description: "The profile slot." },
+      reward: { kind: "id", description: "Reward id, or none when the slot was cleared." }
+    }
+  },
+  quest_rerolled: {
+    description: "One of the day's quests was swapped for another with points.",
+    properties: {
+      quest: { kind: "id", description: "The new quest's id, e.g. new_tool." }
     }
   },
   streak_freeze: {

@@ -9,6 +9,18 @@ import {
   buildMilestoneView,
   buyReward,
   buyStreakFreeze,
+  equipReward,
+  openMysteryBox,
+  rerollDailyQuest,
+  resetUserStats,
+  getMilestoneTrackerHtml,
+  activitiesWaiting,
+  answerDailyQuiz,
+  claimDailyLogin,
+  finishBitSprint,
+  setActivityRandom,
+  spinDailyWheel,
+  tryDailyTip,
   createDefaultStats,
   effectiveUnlocked,
   getUserStats,
@@ -25,8 +37,16 @@ import {
   themeLockFor,
   weekStartOf
 } from "../../commands/milestoneTracker";
-import { QUEST_CHEST_POINTS, QUEST_POOL, advanceQuests, createDailyQuests, findQuest, pickDailyQuestIds, sanitizeQuests } from "../../services/quests";
-import { REWARDS, activeFrame, earnedRewardIds } from "../../services/rewards";
+import { MAX_REROLLS_PER_DAY, QUEST_CHEST_POINTS, QUEST_POOL, QUEST_REROLL_COST, advanceQuests, createDailyQuests, findQuest, pickDailyQuestIds, rerollQuest, sanitizeQuests } from "../../services/quests";
+import { MYSTERY_BOX_COST, MYSTERY_BOX_MAX_VALUE, REWARDS, SLOTS, activeFrame, earnedRewardIds, mysteryBoxPool, pickMysteryReward, resolveLoadout, sanitizeLoadout } from "../../services/rewards";
+import { BANNER_STYLES, FRAME_STYLES, profileCss } from "../../services/profile-style";
+import { renderToolsSidebar, sidebarStatus } from "../../sidebar/tools-sidebar";
+import * as fs from "fs";
+import {
+  QUIZ_BANK, QUIZ_CORRECT_POINTS, QUIZ_TRY_POINTS, SPRINT_MAX_POINTS, SPRINT_MAX_SCORE, TIPS, TIP_POINTS, WEEKLY_EVENTS, WHEEL, WHEEL_FALLBACK_POINTS,
+  LUCKY_POINTS, eventForWeek, quizForDate, spinWheel, tipForDate
+} from "../../services/activities";
+import * as path from "path";
 import { currentThemeId, endLockedPreview, initThemes, lockedPreviewTheme, previewLockedTheme, setTheme, setThemeAccess, themeChoices } from "../../theme/service";
 import { THEMES } from "../../theme/themes";
 import { createExtensionContext, shownMessages, statusBarItems } from "./vscode-stub";
@@ -196,7 +216,7 @@ suite("streaks and freezes", () => {
 suite("rewards", () => {
   test("every theme is a points reward; ranks and milestones earn only some", () => {
     assert.deepStrictEqual(earnedRewardIds(0, []), []);
-    assert.deepStrictEqual(earnedRewardIds(6, []), ["theme_solarized", "theme_synthwave", "theme_aurora"], "points-only themes are never earned");
+    assert.deepStrictEqual(earnedRewardIds(6, []).filter(id => id.startsWith("theme_")), ["theme_solarized", "theme_synthwave", "theme_aurora"], "points-only themes are never earned");
     assert.ok(earnedRewardIds(0, ["streak_14"]).includes("theme_ember"));
     const themeRewards = REWARDS.filter(r => r.kind === "theme");
     assert.deepStrictEqual(themeRewards.map(r => r.themeId).sort(), THEMES.map(t => t.id).sort(), "one reward per theme");
@@ -499,3 +519,351 @@ suite("tracker view", () => {
     assert.ok(view.milestones.some(m => m.id === "quest_master" && /perfect|quest/i.test(m.remainingLabel)));
   });
 });
+
+suite("profile rewards", () => {
+  const cosmetics = REWARDS.filter(r => r.kind !== "theme");
+
+  test("every slot has rewards to buy and to earn, and each one names what it draws", () => {
+    const effectsJs = fs.readFileSync(path.resolve(__dirname, "../../../media/reward-effects.js"), "utf8");
+    for (const slot of SLOTS) {
+      const inSlot = cosmetics.filter(r => r.kind === slot);
+      assert.ok(inSlot.filter(r => r.cost !== undefined).length >= 4, `${slot} has at least four rewards to buy`);
+      assert.ok(inSlot.every(r => r.cost === undefined || r.cost > 0), `${slot} prices are positive`);
+    }
+    for (const reward of cosmetics) {
+      assert.ok(reward.cost !== undefined || reward.unlock, `${reward.id} can be bought or earned`);
+      if (reward.kind === "avatar") assert.ok(reward.glyph, `${reward.id} has a glyph`);
+      if (reward.kind === "frame") assert.ok(FRAME_STYLES.includes(reward.frame!), `${reward.id} has frame CSS`);
+      if (reward.kind === "banner") assert.ok(BANNER_STYLES.includes(reward.banner!), `${reward.id} has banner CSS`);
+      if (reward.kind === "effect") assert.ok(effectsJs.includes(`'${reward.effect}'`), `${reward.id} is drawn by reward-effects.js`);
+    }
+    assert.ok(earnedRewardIds(6, []).includes("avatar_eagle"), "Grandmaster earns an exclusive avatar");
+    assert.ok(earnedRewardIds(0, ["feature_explorer"]).includes("title_pathfinder"));
+    const css = profileCss({ medal: [".m"], banner: [".b"], base: "var(--x)", ink: "var(--y)" });
+    for (const name of FRAME_STYLES) assert.ok(css.includes(`.m.frame-${name}`));
+    for (const name of BANNER_STYLES) assert.ok(css.includes(`.b.banner-${name}`));
+  });
+
+  test("stored loadouts are repaired: wrong kinds and unknown ids are dropped", () => {
+    assert.deepStrictEqual(sanitizeLoadout({ avatar: "avatar_fox", title: "avatar_fox", frame: null, banner: "nope", effect: 3 }), { avatar: "avatar_fox", frame: null });
+    assert.deepStrictEqual(sanitizeLoadout("junk"), {});
+    const stats = sanitizeStats({ ...createDefaultStats(), equipped: { avatar: "avatar_fox", effect: "theme_dark" } });
+    assert.deepStrictEqual(stats.equipped, { avatar: "avatar_fox" });
+  });
+
+  test("only owned rewards are worn; an earned frame shows until the slot is cleared", () => {
+    const worn = resolveLoadout({ avatar: "avatar_fox" }, []);
+    assert.strictEqual(worn.avatar, null, "not owned, so not worn");
+    assert.strictEqual(resolveLoadout({ avatar: "avatar_fox" }, ["avatar_fox"]).avatar?.glyph, "🦊");
+    assert.strictEqual(activeFrame(["frame_glow"]), "glow", "never chosen: the earned frame shows");
+    assert.strictEqual(activeFrame(["frame_glow"], { frame: null }), null, "cleared on purpose");
+    assert.strictEqual(activeFrame(["frame_glow", "frame_neon"], { frame: "frame_neon" }), "neon");
+  });
+
+  test("buying a profile reward equips it; equipping needs ownership; a reset takes it all off", async () => {
+    const context = seeded({ totalPoints: 500, lifetimePoints: 500 });
+    assert.strictEqual(await equipReward(context, "avatar", "avatar_fox"), "locked");
+    assert.strictEqual(await buyReward(context, "avatar_fox"), "ok");
+    assert.strictEqual(await buyReward(context, "title_regex"), "ok");
+    let stats = getUserStats(context);
+    assert.strictEqual(stats.totalPoints, 500 - 60 - 80);
+    assert.deepStrictEqual(stats.equipped, { avatar: "avatar_fox", title: "title_regex" });
+    assert.match(stats.activities[0].title, /Regex Wizard title/);
+    assert.strictEqual(await equipReward(context, "avatar", "title_regex"), "unknown", "a title is not an avatar");
+    assert.strictEqual(await equipReward(context, "title", null), "ok");
+    assert.strictEqual(getUserStats(context).equipped.title, null);
+
+    const status = sidebarStatus(context);
+    assert.strictEqual(status.avatar, "🦊");
+    assert.strictEqual(status.title, null);
+
+    await resetUserStats(context);
+    stats = getUserStats(context);
+    assert.deepStrictEqual(stats.equipped, {});
+    assert.strictEqual(sidebarStatus(context).avatar, null);
+  });
+
+  test("a mystery box gives a random profile reward not owned yet, and never replaces a chosen one", async () => {
+    assert.deepStrictEqual(await openMysteryBox(seeded({ totalPoints: MYSTERY_BOX_COST - 1 })), { outcome: "short" });
+    const context = seeded({ totalPoints: 1000, lifetimePoints: 1000, unlocked: ["avatar_cat"], equipped: { avatar: "avatar_cat" } });
+    const pool = mysteryBoxPool(["avatar_cat"]);
+    assert.ok(pool.every(r => r.kind !== "theme" && r.cost! <= MYSTERY_BOX_MAX_VALUE && r.id !== "avatar_cat"));
+    const box = await openMysteryBox(context, () => 0);
+    assert.strictEqual(box.outcome, "ok");
+    const reward = box.outcome === "ok" ? box.reward : undefined;
+    assert.strictEqual(reward?.id, pool[0].id);
+    const stats = getUserStats(context);
+    assert.ok(stats.unlocked.includes(reward!.id));
+    assert.strictEqual(stats.totalPoints, 1000 - MYSTERY_BOX_COST);
+    if (reward!.kind === "avatar") assert.strictEqual(stats.equipped.avatar, "avatar_cat", "the chosen avatar stays");
+    else assert.strictEqual(stats.equipped[reward!.kind as "title"], reward!.id, "an empty slot is filled");
+
+    const everything = mysteryBoxPool([]).map(r => r.id);
+    assert.deepStrictEqual(await openMysteryBox(seeded({ totalPoints: 1000, unlocked: everything })), { outcome: "empty" });
+    assert.strictEqual(pickMysteryReward([], () => 0.5), undefined);
+    assert.strictEqual(pickMysteryReward(pool, () => 0.9999)?.id, pool[pool.length - 1].id);
+  });
+
+  test("a quest can be swapped for points, twice a day, and the swap survives a reload", async () => {
+    const today = createDailyQuests(localDate());
+    const first = today.items[1].id;
+    const context = seeded({ totalPoints: 100, quests: today });
+    const swap = await rerollDailyQuest(context, first, () => 0);
+    assert.strictEqual(swap.outcome, "ok");
+    let stats = getUserStats(context);
+    assert.ok(!stats.quests.items.some(item => item.id === first), "the old quest is gone");
+    assert.strictEqual(new Set(stats.quests.items.map(item => item.id)).size, 3);
+    assert.strictEqual(stats.quests.rerolls, 1);
+    assert.strictEqual(stats.totalPoints, 100 - QUEST_REROLL_COST);
+
+    assert.strictEqual((await rerollDailyQuest(context, stats.quests.items[2].id)).outcome, "ok");
+    assert.strictEqual((await rerollDailyQuest(context, stats.quests.items[0].id)).outcome, "limit", `only ${MAX_REROLLS_PER_DAY} a day`);
+    stats = getUserStats(context);
+    assert.strictEqual(stats.totalPoints, 100 - 2 * QUEST_REROLL_COST);
+
+    const done = createDailyQuests(localDate());
+    done.items[0].done = true;
+    done.items[0].progress = findQuest(done.items[0].id)!.target;
+    assert.strictEqual((await rerollDailyQuest(seeded({ totalPoints: 100, quests: done }), done.items[0].id)).outcome, "done");
+    assert.strictEqual((await rerollDailyQuest(seeded({ totalPoints: 0 }), createDailyQuests(localDate()).items[0].id)).outcome, "short");
+
+    // A tampered set (duplicates) falls back to the day's pick.
+    const bad = { ...createDailyQuests(localDate()), rerolls: 1 };
+    bad.items = [bad.items[0], bad.items[0], bad.items[1]];
+    assert.deepStrictEqual(sanitizeQuests(bad, localDate()).items.map(item => item.id), pickDailyQuestIds(localDate()));
+    assert.strictEqual(rerollQuest(createDailyQuests(localDate()), "missing"), undefined);
+  });
+
+  test("the page gets the profile, the shop and which quests can be swapped", async () => {
+    const context = seeded({ totalPoints: 400, lifetimePoints: 700 });
+    await buyReward(context, "banner_ocean");
+    await buyReward(context, "effect_confetti");
+    const view = buildMilestoneView(context);
+    assert.strictEqual(view.profile.badge, "🥇");
+    assert.strictEqual(view.profile.banner?.value, "ocean");
+    assert.strictEqual(view.profile.effect?.value, "confetti");
+    assert.strictEqual(view.profile.avatar, null);
+    assert.ok(view.rewards.find(r => r.id === "banner_ocean")!.active);
+    assert.strictEqual(view.rewards.find(r => r.id === "avatar_fox")!.glyph, "🦊");
+    assert.strictEqual(view.shop.reroll.left, MAX_REROLLS_PER_DAY);
+    assert.strictEqual(view.shop.box.cost, MYSTERY_BOX_COST);
+    assert.strictEqual(view.shop.collected, 2);
+    assert.strictEqual(view.shop.collectible, REWARDS.filter(r => r.kind !== "theme").length);
+    assert.ok(view.quests.items.every(q => q.canReroll), "enough points and swaps left");
+  });
+
+  test("both pages load the shared effects script", () => {
+    assert.match(getMilestoneTrackerHtml("csp", "s.js", "c.png", "fx.js"), /<script src="fx.js"><\/script>/);
+    const html = renderToolsSidebar({ cspSource: "x", scriptUri: "s.js", effectsUri: "fx.js", codiconsUri: "c.css", status: sidebarStatus(seeded({})), expanded: [] });
+    assert.match(html, /<script nonce="[^"]+" src="fx.js"><\/script>/);
+    assert.ok(html.indexOf("fx.js") < html.indexOf('src="s.js"'), "effects load before the sidebar script");
+  });
+});
+
+suite("daily activities", () => {
+  const today = localDate();
+  const pointsOnly = WHEEL.findIndex(segment => "points" in segment.prize);
+  /** A random() that lands the wheel on segment `index`. */
+  const landOn = (index: number) => {
+    const total = WHEEL.reduce((sum, segment) => sum + segment.weight, 0);
+    const before = WHEEL.slice(0, index).reduce((sum, segment) => sum + segment.weight, 0);
+    return () => (before + WHEEL[index].weight / 2) / total;
+  };
+
+  test("the challenge bank is well formed and every question comes up before any repeats", () => {
+    assert.ok(QUIZ_BANK.length >= 30);
+    assert.strictEqual(new Set(QUIZ_BANK.map(q => q.id)).size, QUIZ_BANK.length);
+    for (const q of QUIZ_BANK) {
+      assert.strictEqual(q.options.length, 4, `${q.id} has four answers`);
+      assert.strictEqual(new Set(q.options).size, 4, `${q.id} answers are different`);
+      assert.ok(q.answer >= 0 && q.answer < 4, `${q.id} answer index`);
+      assert.ok(q.explain.length > 20, `${q.id} explains the answer`);
+    }
+    assert.strictEqual(quizForDate("2026-10-08").id, quizForDate("2026-10-08").id, "same question all day");
+    const start = Date.parse("2026-03-02T00:00:00Z");
+    const firstDayOfCycle = Math.ceil(start / 86400000 / QUIZ_BANK.length) * QUIZ_BANK.length;
+    const seen = new Set<string>();
+    for (let i = 0; i < QUIZ_BANK.length; i++) seen.add(quizForDate(new Date((firstDayOfCycle + i) * 86400000).toISOString().slice(0, 10)).id);
+    assert.strictEqual(seen.size, QUIZ_BANK.length, "a full cycle shows every question once");
+  });
+
+  test("every tip opens a real DevSnip Pro command", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../package.json"), "utf8"));
+    const commands = new Set(pkg.contributes.commands.map((c: { command: string }) => c.command));
+    for (const tip of TIPS) assert.ok(commands.has(tip.command), `${tip.id} → ${tip.command}`);
+    assert.ok(TIPS.some(tip => tip.id === tipForDate(today).id));
+  });
+
+  test("the wheel follows its weights", () => {
+    assert.strictEqual(spinWheel(() => 0), 0);
+    assert.strictEqual(spinWheel(() => 0.999999), WHEEL.length - 1);
+    for (let i = 0; i < WHEEL.length; i++) assert.strictEqual(spinWheel(landOn(i)), i);
+  });
+
+  test("one free spin a day, plus a bonus spin for finishing every quest", async () => {
+    const context = seeded({ totalPoints: 0, lifetimePoints: 0 });
+    assert.strictEqual(activitiesWaiting(getUserStats(context)), 4, "spin, challenge, Bit Sprint and tip");
+    const spin = await spinDailyWheel(context, landOn(pointsOnly));
+    assert.strictEqual(spin.outcome, "ok");
+    const won = (WHEEL[pointsOnly].prize as { points: number }).points;
+    let stats = getUserStats(context);
+    assert.strictEqual(stats.totalPoints, won);
+    assert.strictEqual(stats.play.lastSpin, pointsOnly);
+    assert.deepStrictEqual(await spinDailyWheel(context), { outcome: "used" });
+
+    for (const command of EVERY_QUEST_COMMANDS) {
+      for (let i = 0; i < 2; i++) await autoRecordToolUsage(command);
+    }
+    stats = getUserStats(context);
+    assert.ok(stats.quests.chestClaimed);
+    assert.strictEqual(stats.play.bonusSpins, 1);
+    assert.strictEqual((await spinDailyWheel(context, landOn(pointsOnly))).outcome, "ok", "the bonus spin");
+    assert.deepStrictEqual(await spinDailyWheel(context), { outcome: "used" });
+  });
+
+  test("a freeze prize falls back to points when freezes are full; an item prize gives a profile reward", async () => {
+    const freeze = WHEEL.findIndex(segment => "freeze" in segment.prize);
+    const item = WHEEL.findIndex(segment => "item" in segment.prize);
+    const empty = seeded({});
+    await spinDailyWheel(empty, landOn(freeze));
+    assert.strictEqual(getUserStats(empty).streakFreezes, 1);
+    const full = seeded({ streakFreezes: MAX_STREAK_FREEZES });
+    await spinDailyWheel(full, landOn(freeze));
+    assert.strictEqual(getUserStats(full).totalPoints, WHEEL_FALLBACK_POINTS);
+    const lucky = seeded({});
+    const spin = await spinDailyWheel(lucky, landOn(item));
+    assert.ok(spin.outcome === "ok" && /the .+ (avatar|title|badge frame|banner|celebration effect)/.test(spin.text), spin.outcome === "ok" ? spin.text : "");
+    assert.strictEqual(getUserStats(lucky).unlocked.length, 1);
+  });
+
+  test("the daily challenge pays once, more when right, and keeps its answer secret until then", async () => {
+    const question = quizForDate(today);
+    const context = seeded({});
+    const before = buildMilestoneView(context).play.quiz;
+    assert.strictEqual(before.answer, null, "the answer is not sent before answering");
+    assert.strictEqual(before.explain, null);
+    const result = await answerDailyQuiz(context, question.answer);
+    assert.ok(result.outcome === "ok" && result.correct && result.points === QUIZ_CORRECT_POINTS);
+    assert.deepStrictEqual(await answerDailyQuiz(context, 0), { outcome: "answered" });
+    const stats = getUserStats(context);
+    assert.strictEqual(stats.totalPoints, QUIZ_CORRECT_POINTS);
+    assert.strictEqual(stats.quizCorrect, 1);
+    assert.strictEqual(stats.quizStreak, 1);
+    assert.strictEqual(buildMilestoneView(context).play.quiz.answer, question.answer);
+
+    const wrong = seeded({ quizStreak: 4, quizLastCorrect: localDate(-1) });
+    const miss = await answerDailyQuiz(wrong, (question.answer + 1) % 4);
+    assert.ok(miss.outcome === "ok" && !miss.correct && miss.points === QUIZ_TRY_POINTS);
+    assert.strictEqual(getUserStats(wrong).quizStreak, 0);
+
+    const streak = seeded({ quizStreak: 4, quizLastCorrect: localDate(-1) });
+    await answerDailyQuiz(streak, question.answer);
+    assert.strictEqual(getUserStats(streak).quizStreak, 5, "yesterday's streak continues");
+    assert.deepStrictEqual(await answerDailyQuiz(seeded({}), 9), { outcome: "invalid" });
+  });
+
+  test("ten correct answers complete Sharp Mind and unlock its title", async () => {
+    const context = seeded({ quizCorrect: 9 });
+    await answerDailyQuiz(context, quizForDate(today).answer);
+    const stats = getUserStats(context);
+    assert.ok(stats.completedMilestones.includes("quiz_10"));
+    assert.ok(effectiveUnlocked(stats).includes("title_sharp_mind"));
+  });
+
+  test("Bit Sprint pays the day's first game, capped, and later games only chase the best", async () => {
+    const context = seeded({});
+    const first = await finishBitSprint(context, 14);
+    assert.deepStrictEqual(first, { outcome: "ok", points: SPRINT_MAX_POINTS, score: 14, best: 14, newBest: true, paid: true });
+    const second = await finishBitSprint(context, 999);
+    assert.strictEqual(second.points, 0);
+    assert.strictEqual(second.score, SPRINT_MAX_SCORE, "impossible scores are clamped");
+    assert.strictEqual(getUserStats(context).totalPoints, SPRINT_MAX_POINTS);
+    assert.strictEqual(getUserStats(context).sprintBest, SPRINT_MAX_SCORE);
+  });
+
+  test("the tip of the day pays once and names the tool to open", async () => {
+    const context = seeded({});
+    assert.deepStrictEqual(await tryDailyTip(context), { command: tipForDate(today).command, points: TIP_POINTS });
+    assert.deepStrictEqual(await tryDailyTip(context), { command: tipForDate(today).command, points: 0 });
+    assert.strictEqual(getUserStats(context).totalPoints, TIP_POINTS);
+    assert.strictEqual(activitiesWaiting(getUserStats(context)), 3);
+  });
+
+  test("weekly events rotate, and each has an exclusive reward only it can give", () => {
+    const ids = new Set<string>();
+    for (let week = 0; week < WEEKLY_EVENTS.length; week++) ids.add(eventForWeek(addDaysIso("2026-10-05", week * 7)).id);
+    assert.strictEqual(ids.size, WEEKLY_EVENTS.length, "six weeks show all six events");
+    for (const event of WEEKLY_EVENTS) {
+      const reward = REWARDS.find(r => r.id === event.rewardId);
+      assert.ok(reward, `${event.id} prize exists`);
+      assert.deepStrictEqual(reward!.unlock, { event: event.id });
+      assert.strictEqual(reward!.cost, undefined, "event prizes cannot be bought");
+      assert.ok(!mysteryBoxPool([]).some(r => r.id === reward!.id), "or won in a box");
+    }
+  });
+
+  test("tool runs move the week's event, which pays once and unlocks its prize", async () => {
+    const context = seeded({});
+    const event = eventForWeek(weekStartOf(today));
+    const stats0 = getUserStats(context);
+    assert.strictEqual(stats0.event.id, event.id);
+    const commands: Record<string, string> = {
+      security_week: "sayaib.hue-console.securityAudit",
+      ai_week: "sayaib.hue-console.aiTokenCounter",
+      snippet_week: "sayaib.hue-console.createSnippet",
+      api_week: "sayaib.hue-console.openGUI"
+    };
+    for (let i = 0; i < event.target + 2; i++) {
+      await autoRecordToolUsage(commands[event.id] ?? `sayaib.hue-console.eventTool${i}`);
+    }
+    const stats = getUserStats(context);
+    assert.ok(stats.event.done, `${event.id} done`);
+    assert.strictEqual(stats.eventsWon, 1, "paid once");
+    assert.ok(stats.unlocked.includes(event.rewardId));
+    assert.ok(stats.activities.filter(a => a.id === `event_${event.id}`).length === 1);
+    assert.match(buildMilestoneView(context).rewards.find(r => r.id === event.rewardId)!.hint!, new RegExp(`Win ${event.title}`));
+  });
+
+  test("every 7th check-in day opens a chest with a profile reward", async () => {
+    const context = seeded({ streakDays: 7, lastActiveDate: today, dailyClaims: {} });
+    await claimDailyLogin(context);
+    const stats = getUserStats(context);
+    assert.strictEqual(stats.unlocked.length, 1, "one reward from the chest");
+    assert.ok(stats.activities.some(a => a.id === "play_checkin"));
+    const day3 = seeded({ streakDays: 3, lastActiveDate: today, dailyClaims: {} });
+    await claimDailyLogin(day3);
+    assert.strictEqual(getUserStats(day3).unlocked.length, 0);
+    assert.strictEqual(buildMilestoneView(day3).play.checkin.day, 3);
+  });
+
+  test("a lucky find happens at most once a day", async () => {
+    try {
+      setActivityRandom(() => 0);
+      const context = seeded({ dailyEarnedPoints: DAILY_POINT_CAP });
+      await autoRecordToolUsage("sayaib.hue-console.jsonFormatter");
+      await autoRecordToolUsage("sayaib.hue-console.hashGenerator");
+      const stats = getUserStats(context);
+      assert.ok(stats.play.lucky);
+      assert.strictEqual(stats.activities.filter(a => a.id === "lucky_find").length, 1);
+      assert.ok(stats.totalPoints >= LUCKY_POINTS, "paid past the daily cap");
+    } finally {
+      setActivityRandom(() => 1);
+    }
+  });
+
+  test("activities reset with the day, and the Tools view shows how many wait", async () => {
+    const context = seeded({ play: { date: localDate(-1), spinsUsed: 1, bonusSpins: 0, lastSpin: 0, quizChoice: 2, tipTried: true, sprintScore: 5, lucky: true } });
+    const stats = getUserStats(context);
+    assert.strictEqual(stats.play.date, today);
+    assert.strictEqual(stats.play.quizChoice, null);
+    assert.strictEqual(sidebarStatus(context).play, 4);
+    const html = renderToolsSidebar({ cspSource: "x", scriptUri: "s.js", codiconsUri: "c.css", status: sidebarStatus(context), expanded: [] });
+    assert.match(html, /id="playChip"/);
+  });
+});
+
+function addDaysIso(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

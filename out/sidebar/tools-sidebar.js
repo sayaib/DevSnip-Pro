@@ -30,6 +30,7 @@ const webview_ui_1 = require("../utils/webview-ui");
 const command_dispatch_1 = require("../utils/command-dispatch");
 const milestoneTracker_1 = require("../commands/milestoneTracker");
 const rewards_1 = require("../services/rewards");
+const profile_style_1 = require("../services/profile-style");
 const tool_groups_1 = require("./tool-groups");
 const service_1 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
@@ -53,6 +54,7 @@ function sidebarStatus(context) {
     const level = (0, milestoneTracker_1.getCurrentLevel)(stats.lifetimePoints);
     const next = (0, milestoneTracker_1.getNextLevel)(stats.lifetimePoints);
     const span = next ? next.minPoints - level.minPoints : 0;
+    const loadout = (0, rewards_1.resolveLoadout)(stats.equipped, (0, milestoneTracker_1.effectiveUnlocked)(stats));
     return {
         badge: level.badge,
         level: level.name,
@@ -63,7 +65,12 @@ function sidebarStatus(context) {
         progress: next && span > 0 ? Math.min(1, Math.max(0, (stats.lifetimePoints - level.minPoints) / span)) : 1,
         quests: { done: stats.quests.items.filter(item => item.done).length, total: stats.quests.items.length },
         streak: stats.streakDays,
-        frame: (0, rewards_1.activeFrame)((0, milestoneTracker_1.effectiveUnlocked)(stats)),
+        frame: loadout.frame?.frame ?? null,
+        avatar: loadout.avatar?.glyph ?? null,
+        title: loadout.title?.name ?? null,
+        banner: loadout.banner?.banner ?? null,
+        effect: loadout.effect?.effect ?? null,
+        play: (0, milestoneTracker_1.activitiesWaiting)(stats),
         themeLocks: (0, milestoneTracker_1.themeLockHints)(stats)
     };
 }
@@ -146,6 +153,7 @@ function renderToolsSidebar(options) {
   <div class="rank-foot">
     <button type="button" class="rank-info" id="rankInfo" aria-controls="rankTip" aria-expanded="false"><span class="codicon codicon-info" aria-hidden="true"></span><span class="rank-foot-label">How ranks work</span></button>
     <span class="rank-today">
+      <button type="button" class="rank-chip play" id="playChip" hidden><span class="codicon codicon-gift" aria-hidden="true"></span><span id="playCount"></span></button>
       <button type="button" class="rank-chip quests" id="questChip" hidden><span class="codicon codicon-target" aria-hidden="true"></span><span id="questCount"></span></button>
       <span class="rank-chip streak" id="streakChip" hidden><span class="codicon codicon-flame" aria-hidden="true"></span><span id="streakCount"></span></span>
     </span>
@@ -186,7 +194,8 @@ function renderToolsSidebar(options) {
 <p class="sr-only" id="announce" role="status" aria-live="polite"></p>
 
 <script type="application/json" id="sidebar-data">${(0, webview_ui_1.embedJson)(data)}</script>
-<script nonce="${nonce}" src="${(0, webview_ui_1.escapeHtml)(options.scriptUri)}"></script>
+${options.effectsUri ? `<script nonce="${nonce}" src="${(0, webview_ui_1.escapeHtml)(options.effectsUri)}"></script>
+` : ""}<script nonce="${nonce}" src="${(0, webview_ui_1.escapeHtml)(options.scriptUri)}"></script>
 </body>
 </html>`;
 }
@@ -264,6 +273,7 @@ class ToolsSidebarProvider {
         (0, service_1.setWebviewHtml)(view.webview, renderToolsSidebar({
             cspSource: view.webview.cspSource,
             scriptUri: view.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "tools-sidebar.js")).toString(),
+            effectsUri: view.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "reward-effects.js")).toString(),
             codiconsUri: view.webview.asWebviewUri(vscode.Uri.joinPath(codiconsRoot, "codicon.css")).toString(),
             status: sidebarStatus(this.context),
             expanded: this.context.globalState.get(EXPANDED_KEY, []),
@@ -310,6 +320,9 @@ class ToolsSidebarProvider {
         if (message?.type === "run" && typeof message.command === "string" && this.known.has(message.command)) {
             // executeQueuedCommand also checks the id against this extension's commands.
             void (0, command_dispatch_1.executeQueuedCommand)(message.command);
+        }
+        else if (message?.type === "openRedeem") {
+            void (0, milestoneTracker_1.openRedeem)();
         }
         else if (message?.type === "searchAll") {
             void (0, command_dispatch_1.executeQueuedCommand)(tool_groups_1.SEARCH_COMMAND);
@@ -548,14 +561,17 @@ button { font: inherit; color: inherit; }
 .rank-chip.quests:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .rank-chip.quests.all-done { color: var(--success, var(--gold)); }
 .rank-chip.streak { color: var(--gold); }
+.rank-chip.play { cursor: pointer; color: var(--accent-fg); }
+.rank-chip.play:hover { background: var(--surface-2); }
+.rank-chip.play:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+@media (prefers-reduced-motion: no-preference) { .rank-chip.play .codicon { animation: play-wiggle 2.4s ease-in-out 3; } }
+@keyframes play-wiggle { 0%, 80%, 100% { transform: none; } 85% { transform: rotate(-12deg); } 90% { transform: rotate(10deg); } 95% { transform: rotate(-6deg); } }
 .rank-chip[hidden] { display: none; }
-/* Badge frames earned as rewards. */
-.medal.frame-glow { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 60%, transparent), 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent), 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); }
-.medal.frame-flame { box-shadow: inset 0 0 0 1.5px #ff8a3d, 0 0 0 2px color-mix(in srgb, #ff5722 30%, transparent), 0 0 12px color-mix(in srgb, #ff8a3d 55%, transparent); }
-@media (prefers-reduced-motion: no-preference) {
-  .medal.frame-glow, .medal.frame-flame { animation: frame-pulse 3.2s ease-in-out infinite; }
-}
-@keyframes frame-pulse { 50% { filter: brightness(1.15); } }
+/* Profile rewards: badge frames, rank card banners, avatar and title. */
+${(0, profile_style_1.profileCss)({ medal: [".medal"], banner: [".rank"], base: "var(--surface)", ink: "var(--fg)" })}
+.medal { position: relative; --frame-inner: var(--surface); }
+.medal .medal-rank { position: absolute; right: -5px; bottom: -4px; font-size: 10px; line-height: 1; padding: 1px; border-radius: 50%; background: var(--surface); }
+.rank-name .rank-title { font-weight: 500; color: var(--muted); }
 /* Reward themes not unlocked yet. */
 .theme-opt.locked .tp { filter: saturate(.55) brightness(.8); }
 .theme-opt .tp-lock { position: absolute; right: 3px; top: 3px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; }

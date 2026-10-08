@@ -419,7 +419,7 @@ _No event-specific properties._
 
 ### `points_spent`
 
-Points were spent: on a premium REST client tool, a streak freeze or a reward unlocked early.
+Points were spent: on a premium REST client tool, a streak freeze, a quest swap, a mystery box or a reward unlocked early.
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
@@ -433,20 +433,46 @@ One of the day's quests was finished.
 | :--- | :--- | :--- |
 | `quest` | id | Quest id, e.g. new_tool. |
 
+### `quest_rerolled`
+
+One of the day's quests was swapped for another with points.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `quest` | id | The new quest's id, e.g. new_tool. |
+
 ### `quests_all_done`
 
 Every quest of the day was finished and the bonus chest paid out.
 
 _No event-specific properties._
 
+### `activity_played`
+
+A daily activity in Redeem was played, or a surprise bonus happened: the spin wheel, the daily challenge, Bit Sprint, the tip of the day, a weekly event completed, the check-in chest or a lucky find.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `activity` | enum:spin \| quiz \| sprint \| tip \| event \| checkin \| lucky | Which activity. |
+| `points` | count | Points it paid (0 when the prize was an item or a freeze). |
+
+### `reward_equipped`
+
+A profile reward (avatar, title, frame, banner or effect) was put on or taken off.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `slot` | enum:avatar \| title \| frame \| banner \| effect | The profile slot. |
+| `reward` | id | Reward id, or none when the slot was cleared. |
+
 ### `reward_unlocked`
 
-A reward (a theme or a badge frame) was unlocked.
+A reward (a theme, avatar, title, badge frame, banner or celebration effect) was unlocked.
 
 | Property | Type | Description |
 | :--- | :--- | :--- |
 | `reward` | id | Reward id, e.g. theme_synthwave. |
-| `via` | enum:level \| milestone \| points \| kept | Earned by rank, earned by a milestone, bought with points, or kept free because it was in use when themes became paid. |
+| `via` | enum:level \| milestone \| points \| kept \| box \| chest \| wheel \| event | Earned by rank, earned by a milestone, bought with points, kept free because it was in use when themes became paid, won from a mystery box, the weekly check-in chest or the daily spin, or won in a weekly event. |
 
 ### `streak_freeze`
 
