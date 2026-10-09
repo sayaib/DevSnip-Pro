@@ -1,0 +1,141 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CollectionStore = exports.sanitiseRequest = void 0;
+const analytics_1 = require("../analytics");
+const STORE_KEY = "devsnip.apiClient.collections";
+function sanitiseRecord(value) {
+    const out = {};
+    if (!value || typeof value !== "object")
+        return out;
+    for (const [key, entry] of Object.entries(value)) {
+        if (typeof key === "string" && typeof entry === "string")
+            out[key] = entry;
+    }
+    return out;
+}
+const VARIABLE_REFERENCE = /^\{\{\w+\}\}$/;
+function sanitiseAuth(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const source = value;
+    const out = {};
+    for (const key of ["keyName", "username"]) {
+        if (typeof source[key] === "string" && source[key])
+            out[key] = source[key].slice(0, 200);
+    }
+    if (source.keyLocation === "header" || source.keyLocation === "query")
+        out.keyLocation = source.keyLocation;
+    for (const key of ["token", "password", "keyValue"]) {
+        const entry = source[key];
+        if (typeof entry === "string" && VARIABLE_REFERENCE.test(entry.trim()))
+            out[key] = entry.trim();
+    }
+    return Object.keys(out).length ? out : undefined;
+}
+function sanitiseGraphql(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const source = value;
+    const text = (entry) => (typeof entry === "string" ? entry.slice(0, 200000) : "");
+    return { query: text(source.query), variables: text(source.variables), operationName: text(source.operationName).slice(0, 200) };
+}
+/** Rebuilds a request from untrusted input (webview message or imported file). */
+function sanitiseRequest(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const source = value;
+    const url = typeof source.url === "string" ? source.url.trim() : "";
+    const name = typeof source.name === "string" && source.name.trim() ? source.name.trim() : url;
+    if (!url || !name)
+        return undefined;
+    return {
+        id: typeof source.id === "string" && source.id ? source.id : `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: name.slice(0, 120),
+        folder: typeof source.folder === "string" ? source.folder.slice(0, 80) : "Default",
+        method: typeof source.method === "string" ? source.method.toUpperCase().slice(0, 10) : "GET",
+        url: url.slice(0, 2000),
+        headers: sanitiseRecord(source.headers),
+        params: sanitiseRecord(source.params),
+        body: typeof source.body === "string" ? source.body.slice(0, 200000) : undefined,
+        bodyType: typeof source.bodyType === "string" ? source.bodyType : undefined,
+        authType: typeof source.authType === "string" ? source.authType : undefined,
+        auth: sanitiseAuth(source.auth),
+        requestType: source.requestType === "graphql" ? "graphql" : undefined,
+        graphql: source.requestType === "graphql" ? sanitiseGraphql(source.graphql) : undefined,
+        extract: sanitiseRecord(source.extract),
+        updatedAt: Number.isFinite(Number(source.updatedAt)) ? Number(source.updatedAt) : Date.now()
+    };
+}
+exports.sanitiseRequest = sanitiseRequest;
+class CollectionStore {
+    constructor(context, access) {
+        this.context = context;
+        this.access = access;
+        this.writeQueue = Promise.resolve();
+    }
+    list() {
+        const stored = this.context.globalState.get(STORE_KEY);
+        if (!Array.isArray(stored))
+            return [];
+        return stored
+            .map(entry => sanitiseRequest(entry))
+            .filter((entry) => Boolean(entry))
+            .sort((a, b) => a.folder.localeCompare(b.folder) || a.name.localeCompare(b.name));
+    }
+    get(id) {
+        return this.list().find(request => request.id === id);
+    }
+    async write(requests) {
+        const next = this.writeQueue.then(() => this.context.globalState.update(STORE_KEY, requests));
+        this.writeQueue = next.catch(() => undefined);
+        await next;
+    }
+    /** Saves or updates a request. Saving is free and unlimited. */
+    async save(input) {
+        const request = sanitiseRequest(input);
+        if (!request)
+            throw new Error("A saved request needs at least a name and a URL.");
+        const existing = this.list();
+        const isUpdate = existing.some(entry => entry.id === request.id);
+        const next = isUpdate
+            ? existing.map(entry => (entry.id === request.id ? request : entry))
+            : [...existing, request];
+        await this.write(next);
+        (0, analytics_1.track)("request_saved", { updated: isUpdate, collection_size: next.length });
+        return { saved: request, total: next.length };
+    }
+    async delete(id) {
+        const next = this.list().filter(request => request.id !== id);
+        await this.write(next);
+        (0, analytics_1.track)("request_deleted", { collection_size: next.length });
+        return next.length;
+    }
+    /** Premium: the whole collection as a portable document. */
+    export() {
+        return {
+            kind: "devsnip-collection",
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            requests: this.list()
+        };
+    }
+    /** Premium: merges an exported collection, replacing entries with the same id. */
+    async import(payload) {
+        const document = payload;
+        const incoming = Array.isArray(document?.requests) ? document.requests : Array.isArray(payload) ? payload : undefined;
+        if (!incoming)
+            throw new Error("That file is not a DevSnip Pro collection export.");
+        const sanitised = incoming
+            .map(entry => sanitiseRequest(entry))
+            .filter((entry) => Boolean(entry));
+        const skipped = incoming.length - sanitised.length;
+        const byId = new Map(this.list().map(request => [request.id, request]));
+        for (const request of sanitised)
+            byId.set(request.id, request);
+        const next = [...byId.values()];
+        await this.write(next);
+        return { imported: sanitised.length, skipped, total: next.length };
+    }
+}
+exports.CollectionStore = CollectionStore;
+//# sourceMappingURL=collections.js.map
