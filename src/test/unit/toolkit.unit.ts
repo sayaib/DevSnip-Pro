@@ -12,7 +12,7 @@ import { ToolContext, ToolDefinition, ToolInputError, ToolResult, Values } from 
 import { runTool, safeRelativePath } from "../../toolkits/runner";
 import { decode, describeCron, encode, generateIds, nextRuns, parseCron, words, CASES } from "../../toolkits/engines/dev-utils";
 import { encodeToon } from "../../toolkits/engines/toon";
-import { featureCategory } from "../../analytics";
+import { toolSection } from "../../analytics";
 import { suite, test } from "./run-unit-tests";
 
 const ROOT = path.resolve(__dirname, "../../..");
@@ -107,14 +107,14 @@ suite("toolkit registry", () => {
   });
 
   test("analytics files toolkit tools under their section", () => {
-    assert.strictEqual(featureCategory("dockerfileHelper"), "devops");
-    assert.strictEqual(featureCategory("jwtDecoder"), "security");
-    assert.strictEqual(featureCategory("dataConverter"), "convert");
-    assert.strictEqual(featureCategory("ragPipeline"), "data");
-    assert.strictEqual(featureCategory("llmClientSetup"), "ai");
+    assert.strictEqual(toolSection("dockerfileHelper"), "devops");
+    assert.strictEqual(toolSection("jwtDecoder"), "security");
+    assert.strictEqual(toolSection("dataConverter"), "convert");
+    assert.strictEqual(toolSection("ragPipeline"), "data");
+    assert.strictEqual(toolSection("llmClientSetup"), "ai");
     // Aliases report under their tool's section.
-    assert.strictEqual(featureCategory("modelComparison"), "ai");
-    assert.strictEqual(featureCategory("yamlJsonTool"), "text");
+    assert.strictEqual(toolSection("modelComparison"), "ai");
+    assert.strictEqual(toolSection("yamlJsonTool"), "text");
   });
 });
 

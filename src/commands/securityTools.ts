@@ -20,6 +20,7 @@ import {
 import { runEndpointScan } from "../services/security-probe";
 import { setWebviewHtml } from "../theme/service";
 import { reach } from "../onboarding/activation";
+import { trackToolUsed } from "../analytics";
 
 /**
  * The Security section.
@@ -37,6 +38,8 @@ import { reach } from "../onboarding/activation";
  */
 
 export type ScanScope = "endpoint" | "workspace" | "cloud" | "posture";
+/** The tool (command) each scan belongs to, for usage analytics. */
+const SCAN_TOOL: Record<ScanScope, string> = { endpoint: "endpointSecurityScan", workspace: "securityAudit", cloud: "cloudSecurityAudit", posture: "dependencyAudit" };
 
 const DEFAULT_MAX_FILES = 2000;
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -1032,7 +1035,10 @@ export function registerSecurityToolsCommands(context: vscode.ExtensionContext):
   const pending = new Map<vscode.WebviewPanel, Array<Record<string, unknown>>>();
 
   const send = (panel: vscode.WebviewPanel, message: Record<string, unknown>): void => {
-    if (message.type === "result") void reach("first_security_scan");
+    if (message.type === "result") {
+      void reach("first_security_scan");
+      trackToolUsed(SCAN_TOOL[message.scope as ScanScope] ?? "securityAudit");
+    }
     if (ready.has(panel)) { safePostMessage(panel, message); return; }
     const queue = pending.get(panel) || [];
     queue.push(message);

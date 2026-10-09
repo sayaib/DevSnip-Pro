@@ -8,7 +8,6 @@ import { profileCss } from "../services/profile-style";
 import { MILESTONE_COMMAND, SEARCH_COMMAND, SIDEBAR_GROUPS, sidebarCommands } from "./tool-groups";
 import { chooseThemeOrUnlock, currentThemeId, LOCKED_PREVIEW_SECONDS, lockedPreviewTheme, previewLockedTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
 import { dismissGuide, dismissWhatsNew, GuideStep, guideSteps, guideVisible, onDidChangeActivation, whatsNew } from "../onboarding/activation";
-import { track } from "../analytics";
 import { isKnownCommand } from "../utils/command-registry";
 
 /**
@@ -257,7 +256,6 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     switch (message?.type) {
       case "guideStep":
         if (!isKnownCommand(message.command)) return true;
-        track("onboarding_action", { action: "step_opened", step: typeof message.step === "string" && /^[a-z_]{1,40}$/.test(message.step) ? message.step : undefined });
         await executeQueuedCommand(message.command);
         return true;
       case "dismissGuide":

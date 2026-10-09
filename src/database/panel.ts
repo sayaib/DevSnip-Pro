@@ -7,6 +7,7 @@ import { renderDatabasePage } from "./page";
 import { confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
 import { setWebviewHtml } from "../theme/service";
 import { reach } from "../onboarding/activation";
+import { trackToolUsed } from "../analytics";
 
 const VIEW_TYPE = "devsnip.databaseClient";
 
@@ -48,7 +49,7 @@ const hostUi: HostUi = {
     await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
   },
   baseDir: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-  onConnected: () => { void reach("first_database_connection"); }
+  onConnected: () => { void reach("first_database_connection"); trackToolUsed("databaseClient"); }
 };
 
 /** Opens (or reveals) the Database Client panel. */

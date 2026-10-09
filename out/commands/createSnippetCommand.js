@@ -111,7 +111,7 @@ function registerCreateSnippetCommand(context) {
                 description: description.trim()
             };
             await (0, snippet_utils_1.saveSnippets)(snippetsPath, existingSnippets);
-            (0, analytics_1.track)("snippet_created", { language, line_count: existingSnippets[name].body.length, overwrote });
+            (0, analytics_1.trackToolUsed)("createCustomSnippet");
             void (0, activation_1.reach)("first_snippet");
             const action = await vscode.window.showInformationMessage(`Snippet "${name}" saved for ${language}. VS Code loads contributed snippets at startup, so reload the window to start using it.`, "Reload Window", "Later");
             if (action === "Reload Window") {

@@ -5,7 +5,7 @@ import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
 import axios from "axios";
 import { registerTrackedCommand } from "../utils/command-registry";
-import { track } from "../analytics";
+import { trackToolUsed } from "../analytics";
 import { UTILITY_CSS, openToolPanel, safePostMessage } from "../utils/webview-ui";
 import {
   CommandKind, CommandOption, CommandSpec, DeclaredDependency, DependencyVerdict, DetectedProject, Ecosystem,
@@ -657,7 +657,6 @@ class DependencyPanel {
 
   async scan(refresh: boolean): Promise<void> {
     const token = ++this.scanToken;
-    const scanStarted = Date.now();
     if (refresh) registryCache.clear();
     this.post({ type: "scanning", message: "Detecting projects and package managers..." });
     try {
@@ -710,17 +709,7 @@ class DependencyPanel {
       }
       if (token !== this.scanToken) return;
       this.publish("done");
-      const deps = states.flatMap(state => state.dependencies);
-      track("dependency_scan_completed", {
-        project_count: states.length,
-        dependency_count: deps.length,
-        ecosystems: [...new Set(states.map(state => state.project.ecosystem))],
-        managers: [...new Set(states.map(state => state.project.manager))],
-        missing_count: deps.filter(dep => dep.verdict.status === "missing" || dep.verdict.status === "mismatch").length,
-        outdated_count: deps.filter(dep => dep.verdict.status === "outdated").length,
-        major_count: deps.filter(dep => dep.verdict.status === "major").length,
-        duration_ms: Date.now() - scanStarted
-      });
+      trackToolUsed("dependencyManager");
     } catch (error) {
       if (token === this.scanToken) {
         this.post({ type: "error", message: `Dependency scan failed: ${error instanceof Error ? error.message : String(error)}` });
@@ -796,7 +785,6 @@ class DependencyPanel {
       case "copy":
         if (typeof message.text === "string" && message.text.length > 0 && message.text.length <= 8000) {
           await vscode.env.clipboard.writeText(message.text);
-          track("content_copied", { feature: "dependencyManager", kind: typeof message.kind === "string" ? message.kind : "command" });
           this.post({ type: "toast", message: "Copied to the clipboard.", kind: "success" });
         }
         return;
@@ -911,14 +899,9 @@ class DependencyPanel {
     steps: JobStep[],
     context: { action: "install_missing" | "update_outdated" | "install" | "update" | "upgrade"; touchesManifest: string[]; skipped: string[] }
   ): Promise<void> {
-    let runStarted = 0;
-    const report = (outcome: "success" | "error" | "cancelled" | "declined" | "blocked") => track("dependency_job_finished", {
-      action: context.action,
-      outcome,
-      ecosystems: [...new Set(steps.map(step => step.state.project.ecosystem))],
-      step_count: steps.length,
-      duration_ms: runStarted ? Date.now() - runStarted : 0
-    });
+    const report = (outcome: "success" | "error" | "cancelled" | "declined" | "blocked") => {
+      if (outcome === "success") trackToolUsed("dependencyManager");
+    };
     if (this.busy) {
       this.post({ type: "toast", message: "Another install is still running.", kind: "error" });
       return;
@@ -976,7 +959,6 @@ class DependencyPanel {
       report("declined");
       return;
     }
-    runStarted = Date.now();
 
     this.busy = true;
     this.cancelRequested = false;

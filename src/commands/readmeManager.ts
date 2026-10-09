@@ -3,7 +3,7 @@ import * as path from "path";
 import { registerTrackedCommand } from "../utils/command-registry";
 import { renderMarkdown } from "../utils/markdown";
 import { THEME_TOKENS, confirmAction, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
-import { track } from "../analytics";
+import { trackToolUsed } from "../analytics";
 import { setWebviewHtml } from "../theme/service";
 
 const README_TEMPLATE = `# Project Title
@@ -163,7 +163,7 @@ export function registerReadmeManagerCommand(context: vscode.ExtensionContext): 
               break;
             }
             const saved = await doc.save();
-            if (saved) track("readme_saved", {});
+            if (saved) trackToolUsed("readmeManager");
             await render({ ok: saved, message: saved ? "README saved." : "VS Code could not save the README." });
             break;
           }
@@ -194,7 +194,6 @@ export function registerReadmeManagerCommand(context: vscode.ExtensionContext): 
             );
             if (!confirmed) break;
             await vscode.workspace.fs.delete(target, { useTrash: true });
-            track("readme_deleted", {});
             vscode.window.showInformationMessage("README deleted (moved to trash).");
             panel.dispose();
             break;

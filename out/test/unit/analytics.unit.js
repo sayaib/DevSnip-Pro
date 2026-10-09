@@ -27,14 +27,15 @@ const assert = __importStar(require("assert"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const client_1 = require("../../analytics/client");
-const events_1 = require("../../analytics/events");
 const analytics_1 = require("../../analytics");
 const command_registry_1 = require("../../utils/command-registry");
 const vscode_stub_1 = require("./vscode-stub");
 const layout_1 = require("../../toolkits/layout");
+const commands_1 = require("../../toolkits/commands");
 const run_unit_tests_1 = require("./run-unit-tests");
 const MIN = 60000;
 const KEY = "phc_abcdefghijklmnopqrstuvwxyz0123456789";
+const ID = "00000000-0000-4000-8000-000000000001";
 function fakeTransport(results = []) {
     const batches = [];
     return {
@@ -48,248 +49,177 @@ function fakeTransport(results = []) {
     };
 }
 function makeClient(options = {}) {
-    let now = Date.parse("2026-09-29T10:00:00Z");
+    let now = Date.parse(options.start ?? "2026-09-29T10:00:00");
     const fake = fakeTransport(options.results);
-    const invalid = [];
+    const days = [];
     const client = new client_1.AnalyticsClient({
-        distinctId: "00000000-0000-4000-8000-000000000001",
+        distinctId: ID,
         transport: fake.transport,
-        commonProperties: { extension_version: "10.65.1", platform: "darwin" },
+        commonProperties: { extension_version: "11.76.3", environment: "production" },
+        lastActiveDay: options.lastActiveDay,
+        previousId: options.previousId,
+        onMerged: options.onMerged,
+        onActiveDay: day => days.push(day),
         now: () => now,
         flushAt: options.flushAt ?? 1000,
-        maxQueue: options.maxQueue,
-        onInvalid: message => invalid.push(message)
+        maxQueue: options.maxQueue
     });
-    return { client, fake, invalid, advance: (ms) => { now += ms; } };
+    return { client, fake, days, advance: (ms) => { now += ms; } };
 }
 const names = (events) => events.map(event => event.event);
-(0, run_unit_tests_1.suite)("analytics privacy and validation", () => {
-    (0, run_unit_tests_1.test)("free text, paths, URLs and emails are rejected by every string kind", () => {
-        for (const value of ["/Users/alice/project/secret.ts", "C:\\Users\\bob", "https://internal.example.com/x", "alice@example.com", "a sentence with spaces", "", "x".repeat(65)]) {
-            assert.strictEqual((0, client_1.coerceProperty)("id", value), undefined, `id must reject ${JSON.stringify(value)}`);
-        }
-        assert.strictEqual((0, client_1.coerceProperty)("id", "typescript"), "typescript");
-        assert.strictEqual((0, client_1.coerceProperty)("id", "install_command"), "install_command");
-        assert.strictEqual((0, client_1.coerceProperty)("version", "1.93.0-insider"), "1.93.0-insider");
-        assert.strictEqual((0, client_1.coerceProperty)("version", "latest build"), undefined);
-        assert.strictEqual((0, client_1.coerceProperty)("enum:success|error", "success"), "success");
-        assert.strictEqual((0, client_1.coerceProperty)("enum:success|error", "boom"), undefined);
-        assert.deepStrictEqual((0, client_1.coerceProperty)("id_list", ["python", "node", "node", "/etc/passwd"]), ["node", "python"]);
-        assert.deepStrictEqual((0, client_1.coerceProperty)("id_list", []), []);
-    });
-    (0, run_unit_tests_1.test)("numbers are finite, non-negative and rounded; booleans are real booleans", () => {
-        assert.strictEqual((0, client_1.coerceProperty)("count", 3.6), 4);
-        assert.strictEqual((0, client_1.coerceProperty)("count", -1), undefined);
-        assert.strictEqual((0, client_1.coerceProperty)("count", Number.NaN), undefined);
-        assert.strictEqual((0, client_1.coerceProperty)("count", "5"), undefined);
-        assert.strictEqual((0, client_1.coerceProperty)("ms", 12.4), 12);
-        assert.strictEqual((0, client_1.coerceProperty)("bool", "true"), undefined);
-        assert.strictEqual((0, client_1.coerceProperty)("bool", false), false);
-    });
-    (0, run_unit_tests_1.test)("properties that are not in the catalog are dropped, and the drop is reported", () => {
-        const dropped = [];
-        const clean = (0, client_1.sanitizeProperties)("snippet_created", {
-            language: "typescript",
-            line_count: 12,
-            snippet_body: "const secret = 1;",
-            file_path: "/home/me/a.ts"
-        }, message => dropped.push(message));
-        assert.deepStrictEqual(clean, { language: "typescript", line_count: 12 });
-        assert.strictEqual(dropped.length, 2);
-    });
-    (0, run_unit_tests_1.test)("every catalogued property uses a known kind and every event is documented", () => {
-        const docs = fs.readFileSync(path.resolve(__dirname, "../../../docs/ANALYTICS.md"), "utf8");
-        for (const [event, spec] of Object.entries(events_1.EVENT_CATALOG)) {
-            assert.ok(/^[a-z]+(_[a-z]+)+$/.test(event), `${event} must be snake_case object_verb`);
-            assert.ok(docs.includes(`### \`${event}\``), `${event} is missing from docs/ANALYTICS.md`);
-            for (const [property, field] of Object.entries(spec.properties)) {
-                assert.ok(/^[a-z]+(_[a-z]+)*$/.test(property), `${event}.${property} must be snake_case`);
-                assert.ok(/^(id|id_list|version|count|ms|seconds|bool|enum:[a-z_]+(\|[a-z_]+)*)$/.test(field.kind), `${event}.${property} has an unknown kind ${field.kind}`);
-                assert.ok(docs.includes(`\`${property}\``), `${event}.${property} is missing from docs/ANALYTICS.md`);
-            }
-        }
-    });
-});
 (0, run_unit_tests_1.suite)("analytics client", () => {
     (0, run_unit_tests_1.test)("nothing is recorded while disabled", () => {
         const { client } = makeClient();
-        client.track("feature_used", { feature: "jsonFormatter" });
+        client.toolOpened("jsonFormatter", "text");
+        client.toolUsed("jsonFormatter", "text");
+        client.markActive();
         assert.strictEqual(client.pending().length, 0);
     });
-    (0, run_unit_tests_1.test)("events carry the anonymous id, session, common properties and privacy flags", () => {
-        const { client } = makeClient();
+    (0, run_unit_tests_1.test)("events carry only the anonymous id, the tool, its section, the version and the environment", () => {
+        const { client } = makeClient({ lastActiveDay: "2026-09-29" });
         client.setEnabled(true);
-        client.track("feature_used", { feature: "jsonFormatter", category: "utilities", outcome: "success" });
-        const [started, used] = client.pending();
-        assert.deepStrictEqual(names(client.pending()), ["session_started", "feature_used"]);
-        assert.strictEqual(started.properties.reason, "resumed");
-        assert.strictEqual(used.properties.distinct_id, "00000000-0000-4000-8000-000000000001");
-        assert.strictEqual(used.properties.$session_id, started.properties.$session_id);
-        assert.ok(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(String(used.properties.$session_id)), "session ids are UUIDv7");
-        assert.strictEqual(used.properties.$process_person_profile, false);
-        assert.strictEqual(used.properties.$geoip_disable, true);
-        assert.strictEqual(used.properties.extension_version, "10.65.1");
-        assert.strictEqual(used.properties.feature, "jsonFormatter");
-        assert.strictEqual(used.timestamp, "2026-09-29T10:00:00.000Z");
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("an unknown event name is dropped, not sent", () => {
-        const { client, invalid } = makeClient();
-        client.setEnabled(true);
-        client.track("user_email_seen", {});
-        assert.strictEqual(client.pending().length, 0);
-        assert.strictEqual(invalid.length, 1);
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("a session ends after 30 idle minutes with duration and engaged time, and a new one starts", () => {
-        const { client, advance } = makeClient();
-        client.setEnabled(true);
-        client.track("extension_activated", {});
-        advance(1 * MIN);
-        client.track("feature_used", { feature: "a" });
-        advance(2 * MIN);
-        client.track("feature_used", { feature: "b" });
-        advance(10 * MIN);
-        client.track("feature_used", { feature: "a" }); // gap > 5 min: not engaged time
-        const firstSession = client.pending()[0].properties.$session_id;
-        advance(31 * MIN);
-        client.track("feature_used", { feature: "c" });
-        const events = client.pending();
-        assert.deepStrictEqual(names(events), ["session_started", "extension_activated", "feature_used", "feature_used", "feature_used", "session_ended", "session_started", "feature_used"]);
-        assert.strictEqual(events[0].properties.reason, "activation");
-        const ended = events[5].properties;
-        assert.strictEqual(ended.reason, "idle");
-        assert.strictEqual(ended.duration_s, 13 * 60);
-        assert.strictEqual(ended.engaged_s, 3 * 60);
-        assert.strictEqual(ended.interaction_count, 4);
-        assert.strictEqual(ended.feature_count, 2);
-        assert.strictEqual(ended.$session_id, firstSession, "session_ended belongs to the session it closes");
-        assert.strictEqual(events[5].timestamp, new Date(Date.parse("2026-09-29T10:00:00Z") + 13 * MIN).toISOString(), "it is stamped at the last interaction, not when noticed");
-        assert.notStrictEqual(events[7].properties.$session_id, firstSession);
-        assert.strictEqual(events[6].properties.reason, "resumed");
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("events are batched and delivered when the batch size is reached", async () => {
-        const { client, fake } = makeClient({ flushAt: 3 });
-        client.setEnabled(true);
-        client.track("feature_used", { feature: "a" });
-        client.track("feature_used", { feature: "b" });
-        await client.flush();
-        assert.strictEqual(fake.batches.length, 1);
-        assert.deepStrictEqual(names(fake.batches[0]), ["session_started", "feature_used", "feature_used"]);
-        assert.strictEqual(client.pending().length, 0);
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("a failed delivery keeps the events and backs off; a rejected batch is dropped", async () => {
-        const { client, fake, advance } = makeClient({ results: ["retry", "ok", "drop"] });
-        client.setEnabled(true);
-        client.track("feature_used", { feature: "a" });
-        await client.flush();
-        assert.strictEqual(client.pending().length, 2, "kept for retry");
-        assert.strictEqual(client.consecutiveFailures(), 1);
-        await client.flush();
-        assert.strictEqual(fake.batches.length, 1, "no retry before the backoff expires");
-        advance(31000);
-        await client.flush();
-        assert.strictEqual(fake.batches.length, 2);
-        assert.strictEqual(client.pending().length, 0);
-        client.track("feature_used", { feature: "b" });
-        await client.flush();
-        assert.strictEqual(client.pending().length, 0, "a batch the server rejects is not retried forever");
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("the queue is bounded while offline", () => {
-        const { client } = makeClient({ maxQueue: 10 });
-        client.setEnabled(true);
-        for (let i = 0; i < 50; i++)
-            client.track("feature_used", { feature: `f${i}` });
-        assert.strictEqual(client.pending().length, 10);
-        assert.strictEqual(client.pending()[9].properties.feature, "f49", "the newest events are kept");
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("disabling discards everything not yet sent", () => {
-        const { client } = makeClient();
-        client.setEnabled(true);
-        client.track("feature_used", { feature: "a" });
-        client.setEnabled(false);
-        assert.strictEqual(client.pending().length, 0);
-    });
-    (0, run_unit_tests_1.test)("shutdown ends the session and delivers what is queued", async () => {
-        const { client, fake, advance } = makeClient();
-        client.setEnabled(true);
-        client.track("feature_used", { feature: "a" });
-        advance(2 * MIN);
-        client.track("feature_used", { feature: "a" });
-        await client.shutdown(1000);
-        const sent = fake.batches.flat();
-        assert.deepStrictEqual(names(sent), ["session_started", "feature_used", "feature_used", "session_ended"]);
-        assert.strictEqual(sent[3].properties.reason, "shutdown");
-        assert.strictEqual(sent[3].properties.engaged_s, 120);
-        client.setEnabled(false);
-    });
-    (0, run_unit_tests_1.test)("a throwing transport never escapes", async () => {
-        const client = new client_1.AnalyticsClient({
-            distinctId: "id",
-            transport: { send: async () => { throw new Error("network down"); } },
-            commonProperties: {}
+        client.toolOpened("jsonFormatter", "text");
+        client.toolUsed("jsonFormatter", "text");
+        const [opened, used] = client.pending();
+        assert.deepStrictEqual(names(client.pending()), ["tool_opened", "tool_used"]);
+        assert.deepStrictEqual(opened.properties, {
+            extension_version: "11.76.3", environment: "production", tool: "jsonFormatter", section: "text", distinct_id: ID, $lib: "devsnip-pro-vscode"
         });
+        // Geography comes from PostHog's own GeoIP lookup, so it must not be switched off.
+        assert.ok(!("$geoip_disable" in opened.properties));
+        assert.ok(!("$process_person_profile" in opened.properties), "persons are kept so unique and returning users can be counted");
+        assert.notStrictEqual(opened.uuid, used.uuid);
+        assert.strictEqual(opened.timestamp, new Date(Date.parse("2026-09-29T10:00:00")).toISOString());
+    });
+    (0, run_unit_tests_1.test)("tool ids that could carry text, paths or URLs are refused; odd sections are reported as other", () => {
+        const { client } = makeClient({ lastActiveDay: "2026-09-29" });
         client.setEnabled(true);
-        client.track("feature_used", { feature: "a" });
-        await client.flush();
-        assert.strictEqual(client.pending().length, 2);
-        client.setEnabled(false);
+        for (const bad of ["", "/Users/me/secret.txt", "https://example.com/x", "a b", "x".repeat(65), "1abc"])
+            client.toolOpened(bad, "text");
+        assert.strictEqual(client.pending().length, 0);
+        client.toolOpened("jsonFormatter", "Not A Section");
+        assert.strictEqual(client.pending()[0].properties.section, "other");
     });
-    (0, run_unit_tests_1.test)("events that cannot be delivered at shutdown are kept for the next start, then restored once", async () => {
-        const offline = makeClient({ results: ["retry", "retry", "retry"] });
-        offline.client.setEnabled(true);
-        offline.client.track("feature_used", { feature: "a" });
-        await offline.client.shutdown(200);
-        const left = offline.client.takePending();
-        assert.deepStrictEqual(names(left), ["session_started", "feature_used", "session_ended"], "session_ended is not lost");
-        assert.strictEqual(offline.client.pending().length, 0);
-        assert.strictEqual(new Set(left.map(event => event.uuid)).size, 3, "every event has its own uuid for de-duplication");
-        const next = makeClient();
-        next.client.setEnabled(true);
-        const persisted = JSON.parse(JSON.stringify(left));
-        const foreign = { ...persisted[0], uuid: "x", properties: { ...persisted[0].properties, distinct_id: "someone-else" } };
-        const bogus = { ...persisted[0], uuid: "y", event: "not_an_event" };
-        assert.strictEqual(next.client.restore([...persisted, foreign, bogus, null, 42]), 3, "only this installation's catalogued events are restored");
-        await next.client.flush();
-        assert.deepStrictEqual(next.fake.batches[0].map(event => event.uuid), left.map(event => event.uuid), "original ids and timestamps are resent unchanged");
-        assert.strictEqual(next.fake.batches[0][0].timestamp, left[0].timestamp);
-        next.client.setEnabled(false);
-        const disabled = makeClient();
-        assert.strictEqual(disabled.client.restore(persisted), 0, "nothing is restored while analytics is off");
-    });
-    (0, run_unit_tests_1.test)("a session left open by a crash is closed as interrupted on the next start", () => {
+    (0, run_unit_tests_1.test)("extension_active is sent once per local day, across restarts and past midnight", () => {
         const first = makeClient();
         first.client.setEnabled(true);
-        first.client.track("feature_used", { feature: "a" });
-        first.advance(90000);
-        first.client.track("feature_used", { feature: "b" });
-        const checkpoint = JSON.parse(JSON.stringify(first.client.snapshotState()));
-        assert.ok(checkpoint.session, "the open session is part of the checkpoint");
-        first.client.setEnabled(false); // the process "crashes" here: no session_ended was ever queued
-        const next = makeClient();
-        next.client.setEnabled(true);
-        const result = next.client.recover(checkpoint);
-        assert.deepStrictEqual(result, { events: 3, interrupted: true });
-        const ended = next.client.pending().find(event => event.event === "session_ended");
-        assert.strictEqual(ended.properties.reason, "interrupted");
-        assert.strictEqual(ended.properties.$session_id, checkpoint.session.id, "it closes the old session, not a new one");
-        assert.strictEqual(ended.properties.duration_s, 90);
-        assert.strictEqual(ended.timestamp, new Date(checkpoint.session.lastInteraction).toISOString());
-        next.client.setEnabled(false);
+        first.client.markActive();
+        first.client.toolOpened("jsonFormatter", "text");
+        assert.deepStrictEqual(names(first.client.pending()), ["extension_active", "tool_opened"]);
+        assert.deepStrictEqual(first.days, ["2026-09-29"]);
+        // A restart later the same day sends nothing new.
+        const again = makeClient({ lastActiveDay: "2026-09-29", start: "2026-09-29T18:00:00" });
+        again.client.setEnabled(true);
+        assert.strictEqual(again.client.pending().length, 0);
+        // VS Code left open past midnight: the next tool event also marks the new day.
+        again.advance(7 * 60 * MIN);
+        again.client.toolOpened("jwtDecoder", "security");
+        assert.deepStrictEqual(names(again.client.pending()), ["extension_active", "tool_opened"]);
+        assert.deepStrictEqual(again.days, ["2026-09-30"]);
+        assert.strictEqual((0, client_1.localDay)(Date.parse("2026-09-30T01:00:00")), "2026-09-30");
     });
-    (0, run_unit_tests_1.test)("UUIDv7 ids embed their timestamp and sort by time", () => {
-        const a = (0, client_1.uuidv7)(Date.parse("2026-01-01T00:00:00Z"));
-        const b = (0, client_1.uuidv7)(Date.parse("2026-01-01T00:00:01Z"));
-        assert.ok(a < b);
-        assert.strictEqual(parseInt(a.replace(/-/g, "").slice(0, 12), 16), Date.parse("2026-01-01T00:00:00Z"));
+    (0, run_unit_tests_1.test)("the same tool opened twice in a moment counts once; used counts once per five minutes per tool", () => {
+        const { client, advance } = makeClient({ lastActiveDay: "2026-09-29" });
+        client.setEnabled(true);
+        client.toolOpened("jsonFormatter", "text");
+        advance(500);
+        client.toolOpened("jsonFormatter", "text"); // a double click or a command that re-runs itself
+        advance(3000);
+        client.toolOpened("jsonFormatter", "text"); // opened again on purpose
+        assert.strictEqual(client.pending().filter(e => e.event === "tool_opened").length, 2);
+        for (let i = 0; i < 30; i++) {
+            client.toolUsed("regexTester", "text");
+            advance(5000);
+        } // live results on every keystroke
+        client.toolUsed("jwtDecoder", "security");
+        assert.deepStrictEqual(client.pending().filter(e => e.event === "tool_used").map(e => e.properties.tool), ["regexTester", "jwtDecoder"]);
+        advance(5 * MIN);
+        client.toolUsed("regexTester", "text");
+        assert.strictEqual(client.pending().filter(e => e.event === "tool_used").length, 3);
+    });
+    (0, run_unit_tests_1.test)("events are batched and delivered when the batch size is reached", async () => {
+        const { client, fake } = makeClient({ flushAt: 3, lastActiveDay: "2026-09-29" });
+        client.setEnabled(true);
+        client.toolOpened("a1", "text");
+        client.toolOpened("a2", "text");
+        assert.strictEqual(fake.batches.length, 0);
+        client.toolOpened("a3", "text");
+        await client.flush();
+        assert.strictEqual(fake.batches.length, 1);
+        assert.strictEqual(fake.batches[0].length, 3);
+        assert.strictEqual(client.pending().length, 0);
+    });
+    (0, run_unit_tests_1.test)("a failed delivery keeps the events and backs off; a rejected batch is dropped", async () => {
+        const { client, fake, advance } = makeClient({ results: ["retry", "ok"], lastActiveDay: "2026-09-29" });
+        client.setEnabled(true);
+        client.toolOpened("a1", "text");
+        await client.flush();
+        assert.strictEqual(client.pending().length, 1, "kept for a retry");
+        await client.flush();
+        assert.strictEqual(fake.batches.length, 1, "no retry before the back-off ends");
+        advance(MIN + 1);
+        await client.flush();
+        assert.strictEqual(client.pending().length, 0);
+        const rejected = makeClient({ results: ["drop"], lastActiveDay: "2026-09-29" });
+        rejected.client.setEnabled(true);
+        rejected.client.toolOpened("a1", "text");
+        await rejected.client.flush();
+        assert.strictEqual(rejected.client.pending().length, 0);
+    });
+    (0, run_unit_tests_1.test)("the queue is bounded while offline, disabling discards it, and a throwing transport never escapes", async () => {
+        const { client } = makeClient({ maxQueue: 5, lastActiveDay: "2026-09-29" });
+        client.setEnabled(true);
+        for (let i = 0; i < 12; i++)
+            client.toolOpened(`tool${i}`, "text");
+        assert.deepStrictEqual(client.pending().map(e => e.properties.tool), ["tool7", "tool8", "tool9", "tool10", "tool11"]);
+        client.setEnabled(false);
+        assert.strictEqual(client.pending().length, 0);
+        const broken = new client_1.AnalyticsClient({ distinctId: ID, commonProperties: {}, lastActiveDay: (0, client_1.localDay)(Date.now()), transport: { send: async () => { throw new Error("offline"); } } });
+        broken.setEnabled(true);
+        broken.toolOpened("a1", "text");
+        await assert.doesNotReject(() => broken.flush());
+        assert.strictEqual(broken.pending().length, 1);
+        broken.setEnabled(false);
+    });
+    (0, run_unit_tests_1.test)("saved events are restored once, and only this installation's known events", () => {
+        const { client } = makeClient({ lastActiveDay: "2026-09-29" });
+        client.setEnabled(true);
+        const good = { uuid: "u1", event: "tool_used", timestamp: "2026-09-28T10:00:00.000Z", properties: { distinct_id: ID, tool: "jsonFormatter" } };
+        const restored = client.restore([
+            good,
+            { ...good, uuid: "u2", properties: { distinct_id: "someone-else" } },
+            { ...good, uuid: "u3", event: "feature_used" },
+            "junk", null
+        ]);
+        assert.strictEqual(restored, 1);
+        assert.deepStrictEqual(client.pending().map(e => e.uuid), ["u1"]);
+        assert.strictEqual(client.restore("not a list"), 0);
+    });
+    (0, run_unit_tests_1.test)("an older id is merged into the current one once, before anything else, and its saved events are still accepted", () => {
+        const merged = [];
+        const { client, advance } = makeClient({ previousId: "old-profile-id", onMerged: id => merged.push(id) });
+        client.setEnabled(true);
+        client.setEnabled(false);
+        client.setEnabled(true);
+        advance(24 * 60 * MIN);
+        client.toolOpened("jsonFormatter", "text");
+        const [identify] = client.pending().filter(event => event.event === "$identify");
+        assert.deepStrictEqual(merged, ["old-profile-id"]);
+        assert.strictEqual(identify, undefined, "already sent before the client was disabled; never sent twice");
+        const fresh = makeClient({ previousId: "old-profile-id" });
+        fresh.client.setEnabled(true);
+        assert.deepStrictEqual(names(fresh.client.pending()), ["$identify", "extension_active"]);
+        assert.strictEqual(fresh.client.pending()[0].properties.$anon_distinct_id, "old-profile-id");
+        assert.strictEqual(fresh.client.pending()[0].properties.distinct_id, ID);
+        const saved = { uuid: "u1", event: "tool_used", timestamp: "2026-09-28T10:00:00.000Z", properties: { distinct_id: "old-profile-id", tool: "jsonFormatter" } };
+        assert.strictEqual(fresh.client.restore([saved], ["old-profile-id"]), 1);
+        const same = makeClient({ previousId: ID });
+        same.client.setEnabled(true);
+        assert.deepStrictEqual(names(same.client.pending()), ["extension_active"], "nothing to merge when the ids are the same");
     });
 });
 (0, run_unit_tests_1.suite)("analytics wiring", () => {
-    (0, run_unit_tests_1.test)("every command reports its outcome and duration, and a throwing observer cannot break it", async () => {
+    (0, run_unit_tests_1.test)("every command reports its outcome, and a throwing observer cannot break it", async () => {
         const seen = [];
         (0, command_registry_1.setCommandObserver)((id, outcome) => seen.push(`${id}:${outcome}`));
         const vscode = require("vscode");
@@ -308,86 +238,86 @@ const names = (events) => events.map(event => event.event);
         assert.strictEqual(await vscode.commands.executeCommand("sayaib.hue-console.analyticsOk"), 42);
         (0, command_registry_1.setCommandObserver)(undefined);
     });
-    (0, run_unit_tests_1.test)("feature_used names the feature, its area, and whether it is the first use", () => {
-        const { client } = makeClient();
+    (0, run_unit_tests_1.test)("only tools that opened successfully are reported; hubs, search and progress pages are not tools", () => {
+        const { client } = makeClient({ lastActiveDay: "2026-09-29" });
         client.setEnabled(true);
-        (0, analytics_1.setAnalyticsClientForTests)(client, new Set(["jsonFormatter"]));
-        (0, analytics_1.trackCommand)("sayaib.hue-console.jsonFormatter", "success", 12);
-        (0, analytics_1.trackCommand)("sayaib.hue-console.createCustomSnippet", "error", 5);
-        (0, analytics_1.trackCommand)("sayaib.hue-console.createCustomSnippet", "success", 5);
-        const used = client.pending().filter(event => event.event === "feature_used").map(event => event.properties);
-        assert.deepStrictEqual(used.map(p => [p.feature, p.category, p.outcome, p.first_use]), [
-            ["jsonFormatter", "text", "success", false],
-            ["createCustomSnippet", "code", "error", true],
-            ["createCustomSnippet", "code", "success", false]
+        (0, analytics_1.setAnalyticsClientForTests)(client);
+        (0, analytics_1.trackCommand)("sayaib.hue-console.jsonFormatter", "success");
+        (0, analytics_1.trackCommand)("sayaib.hue-console.createCustomSnippet", "error");
+        for (const notATool of ["milestoneTracker", "searchTools", "advancedToolsHub", "ragHub", "getStarted", "chooseTheme"])
+            (0, analytics_1.trackCommand)(`sayaib.hue-console.${notATool}`, "success");
+        (0, analytics_1.trackToolUsed)("openGUI");
+        (0, analytics_1.trackToolUsed)("milestoneTracker");
+        assert.deepStrictEqual(client.pending().map(e => [e.event, e.properties.tool, e.properties.section]), [
+            ["tool_opened", "jsonFormatter", "text"],
+            ["tool_used", "openGUI", "api"]
         ]);
         (0, analytics_1.setAnalyticsClientForTests)(undefined);
         client.setEnabled(false);
     });
-    (0, run_unit_tests_1.test)("every contributed command maps to a feature area", () => {
-        const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../../package.json"), "utf8"));
-        const categories = new Set([...layout_1.NAV.map(s => s.id), "navigation", "progress", "core"]);
-        const expect = {
-            openGUI: "api", tokenCounter: "ai", ragHub: "navigation", chunkingTester: "data", securityAudit: "security", securityHub: "security", schemaViewer: "data",
-            devopsGenerator: "navigation", observabilityAnalyze: "testing", dependencyManager: "code", milestoneTracker: "progress", searchTools: "navigation",
-            regexBuilder: "text", curlConverter: "api", deepLinkHelper: "mobile", showSnippets: "code", readmeManager: "code", listAndRemoveConsoleLogs: "code",
-            jwtDecoder: "security", sparkSqlFormatter: "database", gitRecipes: "git", colorPalette: "frontend"
-        };
-        for (const entry of manifest.contributes.commands) {
-            const feature = entry.command.replace("sayaib.hue-console.", "");
-            const category = (0, analytics_1.featureCategory)(feature);
-            assert.ok(categories.has(category), `${feature} -> ${category}`);
-            if (expect[feature])
-                assert.strictEqual(category, expect[feature], feature);
-        }
+    (0, run_unit_tests_1.test)("every tool in the sidebar and every toolkit command has a section, and so do the tool_used call sites", () => {
+        const sections = new Set(layout_1.NAV.map(s => s.id));
+        for (const section of layout_1.NAV)
+            for (const entry of section.entries)
+                assert.ok(sections.has((0, analytics_1.toolSection)(entry.command) ?? ""), entry.command);
+        for (const command of commands_1.TOOLKIT_COMMANDS)
+            assert.ok(sections.has((0, analytics_1.toolSection)(command.command) ?? ""), command.command);
+        const callSites = ["openGUI", "databaseClient", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit", "dependencyManager", "createCustomSnippet", "readmeManager", "openCodeIntegration"];
+        for (const tool of callSites)
+            assert.ok((0, analytics_1.toolSection)(tool), `${tool} is not a tool, so trackToolUsed would ignore it`);
+        assert.strictEqual((0, analytics_1.toolSection)("sayaib.hue-console.openGUI"), "api", "prefixed ids work too");
     });
-    (0, run_unit_tests_1.test)("track() before initialisation, or with no key built in, does nothing and never throws", () => {
+    (0, run_unit_tests_1.test)("tracking before initialisation, or with no key built in, does nothing and never throws", () => {
         (0, analytics_1.setAnalyticsClientForTests)(undefined);
-        assert.doesNotThrow(() => (0, analytics_1.track)("feature_used", { feature: "a" }));
-        assert.doesNotThrow(() => (0, analytics_1.trackCommand)("sayaib.hue-console.a", "success", 1));
+        assert.doesNotThrow(() => (0, analytics_1.trackCommand)("sayaib.hue-console.jsonFormatter", "success"));
+        assert.doesNotThrow(() => (0, analytics_1.trackToolUsed)("jsonFormatter"));
     });
-    (0, run_unit_tests_1.test)("new installs, updates and existing pre-analytics users are told apart", () => {
+    (0, run_unit_tests_1.test)("new installs, updates and existing users are told apart (for onboarding)", () => {
         assert.deepStrictEqual((0, analytics_1.classifyInstall)({ hadDevSnipState: false }, "10.66.0"), { installType: "new", firstRun: true });
         assert.deepStrictEqual((0, analytics_1.classifyInstall)({ hadDevSnipState: true, anonymousId: "id", lastVersion: "10.66.0" }, "10.66.0"), { installType: "returning", firstRun: false });
         assert.deepStrictEqual((0, analytics_1.classifyInstall)({ hadDevSnipState: true, anonymousId: "id", lastVersion: "10.65.1" }, "10.66.0"), { installType: "updated", firstRun: false, previousVersion: "10.65.1" });
-        // A user with points/snippets from before analytics existed is not a new install.
         assert.deepStrictEqual((0, analytics_1.classifyInstall)({ hadDevSnipState: true }, "10.66.0"), { installType: "updated", firstRun: false, previousVersion: undefined });
     });
-    (0, run_unit_tests_1.test)("builds are tagged with their environment so test data can be filtered out", () => {
-        const withEnv = (environment) => () => JSON.stringify({ posthogKey: KEY, ...(environment ? { environment } : {}) });
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, withEnv())?.environment, "production");
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, withEnv("test"))?.environment, "test");
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, withEnv("bogus"))?.environment, "production");
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", { DEVSNIP_ANALYTICS_ENVIRONMENT: "staging" }, withEnv("test"))?.environment, "staging");
+    (0, run_unit_tests_1.test)("only a well-formed project key and an https host are accepted, and builds carry their environment", () => {
+        const file = (content) => () => content;
+        assert.deepStrictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: KEY, posthogHost: "https://eu.i.posthog.com/" }))), { key: KEY, host: "https://eu.i.posthog.com", environment: "production" });
+        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file()), undefined, "no file: analytics off");
+        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file("{broken")), undefined);
+        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: "phx_personalkeypersonalkeypersonal" }))), undefined, "a personal key is refused");
+        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: KEY, posthogHost: "http://insecure.example.com" }))), undefined);
+        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: KEY, environment: "test" })))?.environment, "test");
+        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", { DEVSNIP_ANALYTICS_ENVIRONMENT: "staging" }, file(JSON.stringify({ posthogKey: KEY })))?.environment, "staging");
     });
-    (0, run_unit_tests_1.test)("when the network is gone at shutdown, the checkpoint file carries the session end to the next start", async () => {
+    (0, run_unit_tests_1.test)("the anonymous id survives restarts, and events that could not be sent at shutdown go out on the next start", async () => {
         const vscode = require("vscode");
         const os = require("os");
         const axios = require("axios");
         const storage = fs.mkdtempSync(path.join(os.tmpdir(), "devsnip-analytics-"));
+        fs.writeFileSync(path.join(storage, "analytics-checkpoint.json"), "{}"); // left by an older version
         const previous = process.env.DEVSNIP_POSTHOG_KEY;
         process.env.DEVSNIP_POSTHOG_KEY = KEY;
         const originalPost = axios.post;
         const sent = [];
-        const context = { ...(0, vscode_stub_1.createExtensionContext)(), extensionMode: vscode.ExtensionMode.Production, extension: { packageJSON: { version: "10.66.0" } }, globalStorageUri: { fsPath: storage } };
+        const context = {
+            ...(0, vscode_stub_1.createExtensionContext)({ "devsnip.analytics.anonymousId": ID, "devsnip.analytics.usedFeatures": ["x"] }),
+            extensionMode: vscode.ExtensionMode.Production, extension: { packageJSON: { version: "11.76.3" } }, globalStorageUri: { fsPath: storage }
+        };
         try {
             axios.post = async () => { throw new Error("Canceled"); }; // what VS Code's proxy does while quitting
-            (0, analytics_1.initAnalytics)(context, Date.now());
-            (0, analytics_1.track)("feature_used", { feature: "jsonFormatter" });
+            (0, analytics_1.initAnalytics)(context);
+            (0, analytics_1.trackCommand)("sayaib.hue-console.jsonFormatter", "success");
             await (0, analytics_1.shutdownAnalytics)();
-            const file = path.join(storage, "analytics-checkpoint.json");
-            assert.ok(fs.existsSync(file), "undelivered events are saved locally");
-            const saved = JSON.parse(fs.readFileSync(file, "utf8"));
-            assert.deepStrictEqual(saved.pending.map((event) => event.event), ["session_started", "extension_activated", "feature_used", "session_ended"]);
-            assert.strictEqual(saved.session, undefined, "the session was closed before saving");
+            const file = path.join(storage, "analytics-pending.json");
+            assert.deepStrictEqual(names(JSON.parse(fs.readFileSync(file, "utf8"))), ["extension_active", "tool_opened"], "undelivered events are saved locally");
+            assert.ok(!fs.existsSync(path.join(storage, "analytics-checkpoint.json")), "the old checkpoint file is cleaned up");
+            assert.strictEqual(context.globalState.get("devsnip.analytics.usedFeatures"), undefined, "old state is cleaned up");
             axios.post = async (_url, body) => { sent.push(body); return { status: 200 }; };
-            (0, analytics_1.initAnalytics)(context, Date.now());
+            (0, analytics_1.initAnalytics)(context);
             await (0, analytics_1.shutdownAnalytics)();
-            const events = sent.flatMap(body => body.batch.map((event) => event.event));
-            assert.deepStrictEqual(events.slice(0, 4), ["session_started", "extension_activated", "feature_used", "session_ended"], "the previous run's events are delivered first");
-            assert.strictEqual(sent[0].batch[1].properties.install_type, "new");
-            assert.ok(events.includes("session_ended") && events.filter(e => e === "extension_activated").length === 2);
-            assert.ok(!fs.existsSync(file), "the checkpoint is removed once delivered");
+            const events = sent.flatMap(body => body.batch);
+            assert.deepStrictEqual(names(events), ["extension_active", "tool_opened"], "the saved events, and no second extension_active the same day");
+            assert.ok(events.every(event => event.properties.distinct_id === ID), "an existing user keeps their id, so they are not counted as new");
+            assert.ok(!fs.existsSync(file), "nothing is left once delivered");
         }
         finally {
             axios.post = originalPost;
@@ -398,15 +328,58 @@ const names = (events) => events.map(event => event.event);
             fs.rmSync(storage, { recursive: true, force: true });
         }
     });
-    (0, run_unit_tests_1.test)("only a well-formed project key and an https host are accepted", () => {
-        const file = (content) => () => content;
-        assert.deepStrictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: KEY, posthogHost: "https://eu.i.posthog.com/" }))), { key: KEY, host: "https://eu.i.posthog.com", environment: "production" });
-        assert.deepStrictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: KEY }))), { key: KEY, host: "https://us.i.posthog.com", environment: "production" });
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file()), undefined, "no file: analytics off");
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file("{broken")), undefined);
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: "phx_personalkeypersonalkeypersonal" }))), undefined, "a personal key is refused");
-        assert.strictEqual((0, analytics_1.loadAnalyticsConfig)("/x", {}, file(JSON.stringify({ posthogKey: KEY, posthogHost: "http://insecure.example.com" }))), undefined);
-        assert.deepStrictEqual((0, analytics_1.loadAnalyticsConfig)("/x", { DEVSNIP_POSTHOG_KEY: KEY, DEVSNIP_POSTHOG_HOST: "https://ph.example.com" }, file()), { key: KEY, host: "https://ph.example.com", environment: "production" });
+    (0, run_unit_tests_1.test)("one id per machine: every profile and reinstall is the same user, and the old per-profile id is merged once", async () => {
+        const vscode = require("vscode");
+        const axios = require("axios");
+        const previous = process.env.DEVSNIP_POSTHOG_KEY;
+        process.env.DEVSNIP_POSTHOG_KEY = KEY;
+        const originalPost = axios.post;
+        const sent = [];
+        axios.post = async (_url, body) => { sent.push(...body.batch); return { status: 200 }; };
+        const MACHINE = "a".repeat(64);
+        const production = (state = {}) => ({ ...(0, vscode_stub_1.createExtensionContext)(state), extensionMode: vscode.ExtensionMode.Production, extension: { packageJSON: { version: "11.76.5" } } });
+        const run = async (context) => {
+            sent.length = 0;
+            (0, analytics_1.initAnalytics)(context);
+            await (0, analytics_1.shutdownAnalytics)();
+            return sent.slice();
+        };
+        try {
+            vscode.env.machineId = MACHINE;
+            const userId = (0, analytics_1.analyticsId)(MACHINE);
+            assert.match(userId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+            assert.ok(!userId.replace(/-/g, "").startsWith(MACHINE.slice(0, 8)) && !MACHINE.includes(userId.replace(/-/g, "")), "VS Code's machine id itself is never sent");
+            assert.strictEqual((0, analytics_1.analyticsId)(MACHINE.toUpperCase()), userId);
+            assert.strictEqual((0, analytics_1.analyticsId)("someValue.machineId"), undefined);
+            assert.strictEqual((0, analytics_1.analyticsId)(undefined), undefined);
+            const profileA = production({ "devsnip.analytics.anonymousId": ID });
+            const first = await run(profileA);
+            assert.deepStrictEqual(names(first), ["$identify", "extension_active"]);
+            assert.ok(first.every(event => event.properties.distinct_id === userId));
+            assert.strictEqual(first[0].properties.$anon_distinct_id, ID, "the id earlier versions sent is merged into the machine id");
+            await profileA.globalState.update("devsnip.analytics.lastActiveDay", undefined);
+            assert.deepStrictEqual(names(await run(profileA)), ["extension_active"], "the merge is sent once");
+            const profileB = production({ "devsnip.analytics.anonymousId": "00000000-0000-4000-8000-000000000002" });
+            const second = await run(profileB);
+            assert.ok(second.every(event => event.properties.distinct_id === userId), "another profile on the same machine is the same user");
+            assert.strictEqual(second[0].properties.$anon_distinct_id, "00000000-0000-4000-8000-000000000002");
+            const fresh = production();
+            assert.deepStrictEqual(names(await run(fresh)), ["extension_active"], "a new install has no earlier id to merge");
+            assert.ok(fresh.globalState.get("devsnip.analytics.anonymousId"), "the local id is still created for onboarding");
+            vscode.env.machineId = undefined;
+            const noMachine = production({ "devsnip.analytics.anonymousId": ID });
+            const fallback = await run(noMachine);
+            assert.deepStrictEqual(names(fallback), ["extension_active"]);
+            assert.strictEqual(fallback[0].properties.distinct_id, ID, "without a machine id the stored id is used, unchanged");
+        }
+        finally {
+            vscode.env.machineId = undefined;
+            axios.post = originalPost;
+            if (previous === undefined)
+                delete process.env.DEVSNIP_POSTHOG_KEY;
+            else
+                process.env.DEVSNIP_POSTHOG_KEY = previous;
+        }
     });
     (0, run_unit_tests_1.test)("the extension sends nothing when running from source, when VS Code telemetry is not 'all', or when the setting is off", async () => {
         const vscode = require("vscode");
@@ -416,13 +389,13 @@ const names = (events) => events.map(event => event.event);
         const axios = require("axios");
         const originalPost = axios.post;
         axios.post = async (...args) => { sent.push(args); return { status: 200 }; };
-        const production = () => ({ ...(0, vscode_stub_1.createExtensionContext)(), extensionMode: vscode.ExtensionMode.Production, extension: { packageJSON: { version: "10.65.1" } } });
+        const production = () => ({ ...(0, vscode_stub_1.createExtensionContext)(), extensionMode: vscode.ExtensionMode.Production, extension: { packageJSON: { version: "11.76.3" } } });
         const run = async (context, config, telemetryEnabled = true) => {
             vscode.workspace.configurationValues = config;
             vscode.env.isTelemetryEnabled = telemetryEnabled;
             sent.length = 0;
-            (0, analytics_1.initAnalytics)(context, Date.now());
-            (0, analytics_1.track)("feature_used", { feature: "jsonFormatter" });
+            (0, analytics_1.initAnalytics)(context);
+            (0, analytics_1.trackCommand)("sayaib.hue-console.jsonFormatter", "success");
             await (0, analytics_1.shutdownAnalytics)();
             return sent.length;
         };
@@ -436,9 +409,8 @@ const names = (events) => events.map(event => event.event);
             assert.strictEqual(url, "https://us.i.posthog.com/batch/");
             assert.strictEqual(body.api_key, KEY);
             assert.ok(!Number.isNaN(Date.parse(body.sent_at)), "sent_at lets PostHog correct clock skew");
-            assert.strictEqual(body.batch[1].properties.install_type, "new");
+            assert.deepStrictEqual(names(body.batch), ["extension_active", "tool_opened"]);
             assert.strictEqual(body.batch[1].properties.environment, "production");
-            assert.deepStrictEqual(body.batch.map((event) => event.event), ["session_started", "extension_activated", "feature_used", "session_ended"]);
         }
         finally {
             axios.post = originalPost;

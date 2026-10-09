@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CollectionStore = exports.sanitiseRequest = void 0;
-const analytics_1 = require("../analytics");
 const STORE_KEY = "devsnip.apiClient.collections";
 function sanitiseRecord(value) {
     const out = {};
@@ -101,13 +100,11 @@ class CollectionStore {
             ? existing.map(entry => (entry.id === request.id ? request : entry))
             : [...existing, request];
         await this.write(next);
-        (0, analytics_1.track)("request_saved", { updated: isUpdate, collection_size: next.length });
         return { saved: request, total: next.length };
     }
     async delete(id) {
         const next = this.list().filter(request => request.id !== id);
         await this.write(next);
-        (0, analytics_1.track)("request_deleted", { collection_size: next.length });
         return next.length;
     }
     /** Premium: the whole collection as a portable document. */

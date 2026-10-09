@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { registerTrackedCommand } from "../utils/command-registry";
-import { track } from "../analytics";
+import { trackToolUsed } from "../analytics";
 import { confirmAction } from "../utils/webview-ui";
 import {
   getLanguageFromFileName,
@@ -102,7 +102,7 @@ export function registerCreateSnippetCommand(context: vscode.ExtensionContext) {
         };
 
         await saveSnippets(snippetsPath, existingSnippets);
-        track("snippet_created", { language, line_count: existingSnippets[name].body.length, overwrote });
+        trackToolUsed("createCustomSnippet");
         void reach("first_snippet");
 
         const action = await vscode.window.showInformationMessage(

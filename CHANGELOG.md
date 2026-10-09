@@ -1,5 +1,46 @@
 # Development Changelog of DevSnip Pro
 
+## 11.76.5 - Each user counted once in analytics
+
+Anonymous analytics now count each person once. No tools, UI or features change.
+
+### Privacy and analytics
+
+- **One anonymous id per computer.** Earlier versions created a random id for every VS Code profile, user-data folder and reinstall, so one person could look like several users. The id is now a salted SHA-256 hash of VS Code's anonymous machine id, so every profile on a computer is the same user.
+  - VS Code's machine id itself is never sent, and the salted hash can't be matched with VS Code's or any other extension's telemetry.
+  - If VS Code has no machine id, the extension keeps using its stored random id.
+- **Existing users aren't counted twice.** On the first start after updating, DevSnip Pro sends PostHog's `$identify` event once, so PostHog merges the old id and the new one into one person. A new install has nothing to merge.
+- Everything else is unchanged: the same three events, no new properties, and the same opt-outs.
+
+### Dashboard
+
+- `scripts/posthog-dashboard.js` counts **people** (`person_id`) instead of raw ids, and every table applies the project's test account filter.
+- **Unique users (30d)** is a new single-number tile.
+- **Users (one row each, 30d)** replaces the two per-user tables, which listed the same user on many rows. It shows each user's country, first and last seen, active days, tools used, opens, favourite tool and top ten tools.
+- **Users by country** counts each user once, in the country they were last seen in.
+
+## 11.76.4 - Simpler, more private analytics
+
+DevSnip Pro's anonymous usage analytics now collect much less. No tools, UI or features change.
+
+### Privacy
+
+- **Three events instead of about thirty.** DevSnip Pro now sends only:
+  - a once-a-day "active" ping;
+  - which tool you opened;
+  - which tool produced a result (a run, a request, a scan).
+- They are used to count users, returning users and countries, and to rank the tools.
+- **What is gone:** session tracking, plus the onboarding, points and quests, search, snippet, theme and dependency events, and the platform and VS Code version data.
+- **Repeats are trimmed:** a tool opened twice in a moment counts once, and a tool counts as used at most once every 5 minutes, so live results are not counted per keystroke.
+- **Nothing else changes:** you keep your existing anonymous id. Analytics still only runs when VS Code's telemetry level is `all` and `devsnip.analytics.enabled` is on, and turning it off also deletes anything not yet sent.
+- **Never sent:** code, file contents or names, paths, keystrokes, tool input or output, URLs and credentials.
+- **Countries** come from PostHog's lookup of the connection. DevSnip Pro asks for no location permission.
+
+### Docs
+
+- [docs/ANALYTICS.md](docs/ANALYTICS.md) is rewritten. It lists the three events and every property, explains how to keep IP addresses out of PostHog, and describes the new dashboard (users, countries, returning users, most-used tools, each user's favourite tool, and daily and monthly trends).
+- The README privacy section and the `devsnip.analytics.enabled` setting description describe the new, smaller data set.
+
 ## 11.76.3 - A better daily spin and a smoother Play & earn
 
 Redeem's **Play & earn** shows what is left today and what each game can pay, and the daily spin shows every prize with its real odds. Points, prizes and odds are unchanged.

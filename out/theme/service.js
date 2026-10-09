@@ -29,7 +29,6 @@ const inject_1 = require("./inject");
 const themes_1 = require("./themes");
 const command_registry_1 = require("../utils/command-registry");
 const activation_1 = require("../onboarding/activation");
-const analytics_1 = require("../analytics");
 /**
  * The selected DevSnip Pro appearance theme.
  *
@@ -231,7 +230,7 @@ function updatePreviewStatus(session) {
     session.status.text = `$(eye) ${label} preview · ${secondsLeft(session)}s`;
 }
 /** Ends the session without touching the theme. */
-function stopPreview(outcome) {
+function stopPreview(_outcome) {
     const session = lockedPreview;
     if (!session)
         return undefined;
@@ -239,7 +238,6 @@ function stopPreview(outcome) {
     clearTimeout(session.timer);
     clearInterval(session.ticker);
     session.status?.dispose();
-    (0, analytics_1.track)("theme_preview", { theme: session.themeId, outcome });
     previewChanged.fire(null);
     return session;
 }
@@ -294,7 +292,6 @@ async function previewLockedTheme(id, seconds = exports.LOCKED_PREVIEW_SECONDS) 
     lockedPreview = session;
     updatePreviewStatus(session);
     await setTheme(id, { preview: true });
-    (0, analytics_1.track)("theme_preview", { theme: id, outcome: "started" });
     previewChanged.fire(id);
     const label = (0, themes_1.findTheme)(id)?.label ?? id;
     const lock = lockOf(id);

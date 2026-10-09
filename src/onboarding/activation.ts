@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { track } from "../analytics";
 import { COMMAND_PREFIX } from "../utils/command-registry";
 
 /**
@@ -48,6 +47,9 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  // Analytics-only patches: no items, so updating from 11.76.3 shows no What's New card.
+  { version: "11.76.5", items: [] },
+  { version: "11.76.4", items: [] },
   {
     version: "11.76.3",
     items: [{ title: "A better daily spin: real odds, the prize you actually won, and one click to wear it", command: "milestoneTracker" }]
@@ -193,7 +195,6 @@ export async function reach(milestone: ActivationMilestone): Promise<void> {
   if (state.reached[milestone]) return;
   state.reached[milestone] = Date.now();
   await write(state);
-  track("activation_milestone", { milestone, days_since_install: Math.max(0, Math.floor((Date.now() - state.installedAt) / 86_400_000)) });
   const discovery = DISCOVERY[milestone];
   if (discovery && discover) await discover(discovery).catch(() => undefined);
 }
@@ -237,7 +238,6 @@ export async function dismissGuide(): Promise<void> {
   const state = read();
   state.guideDismissed = true;
   await write(state);
-  track("onboarding_action", { action: "guide_dismissed" });
 }
 
 /** Highlights from releases newer than the version this user updated from; empty for new installs. */
@@ -252,11 +252,10 @@ export function whatsNew(currentVersion: string): { version: string; items: Arra
   return items.length ? { version: currentVersion, items } : null;
 }
 
-export async function dismissWhatsNew(currentVersion: string, opened: boolean): Promise<void> {
+export async function dismissWhatsNew(currentVersion: string, _opened: boolean): Promise<void> {
   const state = read();
   state.whatsNewSeen = currentVersion;
   await write(state);
-  track("onboarding_action", { action: opened ? "whats_new_opened" : "whats_new_dismissed" });
 }
 
 /** Local engagement summary (for diagnostics and tests). */

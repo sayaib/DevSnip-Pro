@@ -7,6 +7,7 @@ import { registerTrackedCommand } from "../utils/command-registry";
 import { THEME_TOKENS, escapeHtml, getNonce, safePostMessage } from "../utils/webview-ui";
 import { setWebviewHtml } from "../theme/service";
 import { reach } from "../onboarding/activation";
+import { trackToolUsed } from "../analytics";
 
 const execFileAsync = util.promisify(execFile);
 
@@ -341,6 +342,7 @@ export function registerOpenCodeIntegrationCommand(context: vscode.ExtensionCont
             const terminal = vscode.window.createTerminal({ name: "OpenCode", cwd: workspacePath });
             terminal.show();
             void reach("first_opencode");
+            trackToolUsed("openCodeIntegration");
 
             // Wait for shell initialisation before sending the command. On
             // Windows, PowerShell may first show an execution-policy prompt and

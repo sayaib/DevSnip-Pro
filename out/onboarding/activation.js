@@ -25,7 +25,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.disposeActivation = exports.activationSummary = exports.dismissWhatsNew = exports.whatsNew = exports.dismissGuide = exports.guideVisible = exports.guideSteps = exports.noteThemeChosen = exports.noteToolRun = exports.noteCommand = exports.reach = exports.initActivation = exports.onDidChangeActivation = exports.RELEASE_HIGHLIGHTS = exports.ACTIVATION_MILESTONES = void 0;
 const vscode = __importStar(require("vscode"));
-const analytics_1 = require("../analytics");
 const command_registry_1 = require("../utils/command-registry");
 /**
  * Activation and onboarding state, kept locally in globalState.
@@ -60,6 +59,9 @@ const GUIDE = [
 ];
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
+    // Analytics-only patches: no items, so updating from 11.76.3 shows no What's New card.
+    { version: "11.76.5", items: [] },
+    { version: "11.76.4", items: [] },
     {
         version: "11.76.3",
         items: [{ title: "A better daily spin: real odds, the prize you actually won, and one click to wear it", command: "milestoneTracker" }]
@@ -186,7 +188,6 @@ async function reach(milestone) {
         return;
     state.reached[milestone] = Date.now();
     await write(state);
-    (0, analytics_1.track)("activation_milestone", { milestone, days_since_install: Math.max(0, Math.floor((Date.now() - state.installedAt) / 86400000)) });
     const discovery = DISCOVERY[milestone];
     if (discovery && discover)
         await discover(discovery).catch(() => undefined);
@@ -235,7 +236,6 @@ async function dismissGuide() {
     const state = read();
     state.guideDismissed = true;
     await write(state);
-    (0, analytics_1.track)("onboarding_action", { action: "guide_dismissed" });
 }
 exports.dismissGuide = dismissGuide;
 /** Highlights from releases newer than the version this user updated from; empty for new installs. */
@@ -251,11 +251,10 @@ function whatsNew(currentVersion) {
     return items.length ? { version: currentVersion, items } : null;
 }
 exports.whatsNew = whatsNew;
-async function dismissWhatsNew(currentVersion, opened) {
+async function dismissWhatsNew(currentVersion, _opened) {
     const state = read();
     state.whatsNewSeen = currentVersion;
     await write(state);
-    (0, analytics_1.track)("onboarding_action", { action: opened ? "whats_new_opened" : "whats_new_dismissed" });
 }
 exports.dismissWhatsNew = dismissWhatsNew;
 /** Local engagement summary (for diagnostics and tests). */

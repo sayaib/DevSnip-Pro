@@ -606,7 +606,6 @@ class DependencyPanel {
     }
     async scan(refresh) {
         const token = ++this.scanToken;
-        const scanStarted = Date.now();
         if (refresh)
             registryCache.clear();
         this.post({ type: "scanning", message: "Detecting projects and package managers..." });
@@ -661,17 +660,7 @@ class DependencyPanel {
             if (token !== this.scanToken)
                 return;
             this.publish("done");
-            const deps = states.flatMap(state => state.dependencies);
-            (0, analytics_1.track)("dependency_scan_completed", {
-                project_count: states.length,
-                dependency_count: deps.length,
-                ecosystems: [...new Set(states.map(state => state.project.ecosystem))],
-                managers: [...new Set(states.map(state => state.project.manager))],
-                missing_count: deps.filter(dep => dep.verdict.status === "missing" || dep.verdict.status === "mismatch").length,
-                outdated_count: deps.filter(dep => dep.verdict.status === "outdated").length,
-                major_count: deps.filter(dep => dep.verdict.status === "major").length,
-                duration_ms: Date.now() - scanStarted
-            });
+            (0, analytics_1.trackToolUsed)("dependencyManager");
         }
         catch (error) {
             if (token === this.scanToken) {
@@ -749,7 +738,6 @@ class DependencyPanel {
             case "copy":
                 if (typeof message.text === "string" && message.text.length > 0 && message.text.length <= 8000) {
                     await vscode.env.clipboard.writeText(message.text);
-                    (0, analytics_1.track)("content_copied", { feature: "dependencyManager", kind: typeof message.kind === "string" ? message.kind : "command" });
                     this.post({ type: "toast", message: "Copied to the clipboard.", kind: "success" });
                 }
                 return;
@@ -865,14 +853,10 @@ class DependencyPanel {
      * time with no shell, a timeout, and cancellation.
      */
     async runJob(title, steps, context) {
-        let runStarted = 0;
-        const report = (outcome) => (0, analytics_1.track)("dependency_job_finished", {
-            action: context.action,
-            outcome,
-            ecosystems: [...new Set(steps.map(step => step.state.project.ecosystem))],
-            step_count: steps.length,
-            duration_ms: runStarted ? Date.now() - runStarted : 0
-        });
+        const report = (outcome) => {
+            if (outcome === "success")
+                (0, analytics_1.trackToolUsed)("dependencyManager");
+        };
         if (this.busy) {
             this.post({ type: "toast", message: "Another install is still running.", kind: "error" });
             return;
@@ -930,7 +914,6 @@ class DependencyPanel {
             report("declined");
             return;
         }
-        runStarted = Date.now();
         this.busy = true;
         this.cancelRequested = false;
         this.post({ type: "busy", busy: true });

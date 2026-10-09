@@ -7,7 +7,7 @@ import { registerDatabaseClientCommand } from "./database/command";
 import { initThemes, registerThemeCommand, setThemeAccess } from "./theme/service";
 import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance, recordDiscovery, Discovery, getUserStats, themeLockFor, buyReward, grantKeptTheme } from "./commands/milestoneTracker";
 import { registerLazyCommands, registerTrackedCommand, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
-import { classifyInstall, initAnalytics, shutdownAnalytics, snapshotInstall, track, trackCommand } from "./analytics";
+import { classifyInstall, initAnalytics, shutdownAnalytics, snapshotInstall, trackCommand } from "./analytics";
 import { initActivation, noteCommand } from "./onboarding/activation";
 import { registerOnboardingCommands } from "./onboarding/commands";
 import { executeQueuedCommand } from "./utils/command-dispatch";
@@ -22,8 +22,7 @@ const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "re
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 
 export function activate(context: vscode.ExtensionContext) {
-  const activationStart = Date.now();
-  // Before anything writes state, so an existing user is never reported as a new install.
+  // Before anything writes state, so an existing user is never treated as a new install.
   const installSnapshot = snapshotInstall(context);
   const snippetsFolderPath = path.join(context.extensionPath, "custom");
 
@@ -127,8 +126,8 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }
 
-  // Last, so activation_ms covers the whole activation and nothing waits on it.
-  initAnalytics(context, activationStart, installSnapshot);
+  // Last, so nothing waits on it.
+  initAnalytics(context, installSnapshot);
 }
 
 /** Puts back snippets an update removed, and tells the user when it did. Never throws. */
@@ -187,15 +186,12 @@ function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
     try {
       matcher = new RegExp(pattern || ".*", "i");
     } catch (error) {
-      track("tool_search_performed", { query_length: pattern.length, match_count: 0, invalid_pattern: true });
       vscode.window.showErrorMessage(`Invalid regular expression: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
 
     const tools = await searchableTools();
     const matches = tools.filter(tool => matcher.test(`${tool.label} ${tool.description} ${tool.command}`));
-    // The query itself is never sent - only its length and how many tools matched.
-    track("tool_search_performed", { query_length: pattern.length, match_count: matches.length, invalid_pattern: false });
     if (!matches.length) {
       vscode.window.showInformationMessage("No DevSnip Pro tools matched that regular expression.");
       return;
@@ -205,13 +201,7 @@ function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
       matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })),
       { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true }
     );
-    if (selected) {
-      track("tool_search_selected", {
-        feature: selected.command.replace("sayaib.hue-console.", ""),
-        rank: matches.findIndex(tool => tool.command === selected.command) + 1
-      });
-      await executeQueuedCommand(selected.command);
-    }
+    if (selected) await executeQueuedCommand(selected.command);
   });
   context.subscriptions.push(searchCommand);
 }
@@ -219,6 +209,6 @@ function registerUniversalToolSearch(context: vscode.ExtensionContext): void {
 export async function deactivate(): Promise<void> {
   // Panels opened through the shared registry are not in context.subscriptions.
   disposeAllToolPanels();
-  // Ends the session and makes one bounded (2s) attempt to send queued events.
+  // Saves undelivered events and makes one bounded (1s) attempt to send them.
   await shutdownAnalytics();
 }

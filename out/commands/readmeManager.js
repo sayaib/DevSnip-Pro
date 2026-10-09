@@ -169,7 +169,7 @@ function registerReadmeManagerCommand(context) {
                         }
                         const saved = await doc.save();
                         if (saved)
-                            (0, analytics_1.track)("readme_saved", {});
+                            (0, analytics_1.trackToolUsed)("readmeManager");
                         await render({ ok: saved, message: saved ? "README saved." : "VS Code could not save the README." });
                         break;
                     }
@@ -196,7 +196,6 @@ function registerReadmeManagerCommand(context) {
                         if (!confirmed)
                             break;
                         await vscode.workspace.fs.delete(target, { useTrash: true });
-                        (0, analytics_1.track)("readme_deleted", {});
                         vscode.window.showInformationMessage("README deleted (moved to trash).");
                         panel.dispose();
                         break;

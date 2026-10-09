@@ -33,6 +33,9 @@ const security_static_1 = require("../services/security-static");
 const security_probe_1 = require("../services/security-probe");
 const service_1 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
+const analytics_1 = require("../analytics");
+/** The tool (command) each scan belongs to, for usage analytics. */
+const SCAN_TOOL = { endpoint: "endpointSecurityScan", workspace: "securityAudit", cloud: "cloudSecurityAudit", posture: "dependencyAudit" };
 const DEFAULT_MAX_FILES = 2000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const SKIP_GLOB = "**/{node_modules,.git,dist,build,out,coverage,.next,.nuxt,.venv,venv,__pycache__,vendor,target,.gradle,.terraform,.vscode-test,Pods}/**";
@@ -977,8 +980,10 @@ function registerSecurityToolsCommands(context) {
     const ready = new Set();
     const pending = new Map();
     const send = (panel, message) => {
-        if (message.type === "result")
+        if (message.type === "result") {
             void (0, activation_1.reach)("first_security_scan");
+            (0, analytics_1.trackToolUsed)(SCAN_TOOL[message.scope] ?? "securityAudit");
+        }
         if (ready.has(panel)) {
             (0, webview_ui_1.safePostMessage)(panel, message);
             return;

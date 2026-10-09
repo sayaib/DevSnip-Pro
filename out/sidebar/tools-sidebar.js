@@ -34,7 +34,6 @@ const profile_style_1 = require("../services/profile-style");
 const tool_groups_1 = require("./tool-groups");
 const service_1 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
-const analytics_1 = require("../analytics");
 const command_registry_1 = require("../utils/command-registry");
 /**
  * The Tools view in the DevSnip Pro activity bar.
@@ -228,7 +227,6 @@ class ToolsSidebarProvider {
             case "guideStep":
                 if (!(0, command_registry_1.isKnownCommand)(message.command))
                     return true;
-                (0, analytics_1.track)("onboarding_action", { action: "step_opened", step: typeof message.step === "string" && /^[a-z_]{1,40}$/.test(message.step) ? message.step : undefined });
                 await (0, command_dispatch_1.executeQueuedCommand)(message.command);
                 return true;
             case "dismissGuide":

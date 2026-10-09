@@ -26,13 +26,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOnboardingCommands = exports.WALKTHROUGH_ID = void 0;
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
-const analytics_1 = require("../analytics");
 const command_registry_1 = require("../utils/command-registry");
 exports.WALKTHROUGH_ID = "sayaib.hue-console#devsnip.getStarted";
 /** "Get Started" opens the guided walkthrough; "What's New" opens the release notes. Neither opens on its own. */
 function registerOnboardingCommands(context) {
     context.subscriptions.push((0, command_registry_1.registerTrackedCommand)(`${command_registry_1.COMMAND_PREFIX}getStarted`, async () => {
-        (0, analytics_1.track)("onboarding_action", { action: "walkthrough_opened" });
         await vscode.commands.executeCommand("workbench.action.openWalkthrough", exports.WALKTHROUGH_ID, false);
     }), (0, command_registry_1.registerTrackedCommand)(`${command_registry_1.COMMAND_PREFIX}whatsNew`, async () => {
         const changelog = vscode.Uri.file(path.join(context.extensionPath, "CHANGELOG.md"));

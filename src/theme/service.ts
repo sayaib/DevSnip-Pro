@@ -3,7 +3,6 @@ import { injectTheme, themeMessage, ThemeSurface } from "./inject";
 import { findTheme, swatches, SYSTEM_THEME_ID, THEMES, validThemeId } from "./themes";
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 import { noteThemeChosen } from "../onboarding/activation";
-import { track } from "../analytics";
 
 /**
  * The selected DevSnip Pro appearance theme.
@@ -257,14 +256,13 @@ function updatePreviewStatus(session: LockedPreview): void {
 }
 
 /** Ends the session without touching the theme. */
-function stopPreview(outcome: PreviewOutcome): LockedPreview | undefined {
+function stopPreview(_outcome: PreviewOutcome): LockedPreview | undefined {
   const session = lockedPreview;
   if (!session) return undefined;
   lockedPreview = undefined;
   clearTimeout(session.timer);
   clearInterval(session.ticker);
   session.status?.dispose();
-  track("theme_preview", { theme: session.themeId, outcome });
   previewChanged.fire(null);
   return session;
 }
@@ -320,7 +318,6 @@ export async function previewLockedTheme(id: string, seconds: number = LOCKED_PR
   lockedPreview = session;
   updatePreviewStatus(session);
   await setTheme(id, { preview: true });
-  track("theme_preview", { theme: id, outcome: "started" });
   previewChanged.fire(id);
 
   const label = findTheme(id)?.label ?? id;

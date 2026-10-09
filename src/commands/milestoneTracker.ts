@@ -5,7 +5,6 @@ import { executeQueuedCommand } from "../utils/command-dispatch";
 import { UTILITY_CSS, confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
 import { DEVELOPER_FEATURES } from "../premium/feature-registry";
 import { TrackerView, buildTrackerView, levelIndexFor, toolNamesFromManifest } from "../services/milestone-view";
-import { track } from "../analytics";
 import { currentThemeId, endLockedPreview, lockedPreviewTheme, onDidChangeLockedPreview, onDidChangeTheme, previewLockedTheme, setTheme, setWebviewHtml } from "../theme/service";
 import { swatches, THEMES } from "../theme/themes";
 import { profileCss } from "../services/profile-style";
@@ -673,40 +672,32 @@ function mutateStats<T>(
         const levelAfter = levelIndexFor(stats.lifetimePoints, LEVELS);
         if (levelAfter > levelBefore) {
             const level = LEVELS[levelAfter];
-            track('level_reached', { level: level.name, level_index: levelAfter });
             celebrations.push({ kind: 'level', icon: level.badge, text: `Rank up! You are now ${level.name}: ${level.rank}` });
         }
         for (const id of stats.completedMilestones) {
             if (milestonesBefore.has(id)) continue;
-            track('milestone_unlocked', { milestone: id });
             const milestone = MILESTONES.find(m => m.id === id);
             if (milestone) celebrations.push({ kind: 'milestone', icon: milestone.icon, text: `Milestone unlocked: ${milestone.title} (+${milestone.points} pts)` });
         }
         for (const item of stats.quests.items) {
             if (!item.done || questsBefore.has(item.id)) continue;
-            track('quest_completed', { quest: item.id });
             const quest = findQuest(item.id);
             if (quest) celebrations.push({ kind: 'quest', icon: quest.icon, text: `Quest complete: ${quest.title} (+${quest.points} pts)` });
         }
         if (!chestBefore && stats.quests.chestClaimed) {
-            track('quests_all_done', {});
             celebrations.push({ kind: 'chest', icon: '🎁', text: `All of today's quests done: +${QUEST_CHEST_POINTS} bonus pts` });
         }
-        const earnedNow = new Set(earnedRewardIds(levelAfter, stats.completedMilestones));
         for (const id of stats.unlocked) {
             if (unlockedBefore.has(id)) continue;
             const reward = findReward(id);
             if (!reward) continue;
             if (keptRewards.delete(id)) {
                 // A theme in use when themes became paid: kept free, and already applied.
-                track('reward_unlocked', { reward: id, via: 'kept' });
                 celebrations.push({ kind: 'reward', icon: reward.icon, text: `Themes now unlock with points. You keep ${reward.name} for free` });
                 continue;
             }
             const gift = giftSources.get(id);
             giftSources.delete(id);
-            const via = gift ?? (!earnedNow.has(id) || !reward.unlock ? 'points' : 'level' in reward.unlock ? 'level' : 'milestone');
-            track('reward_unlocked', { reward: id, via });
             celebrations.push({
                 kind: 'reward',
                 icon: reward.icon,
@@ -717,19 +708,15 @@ function mutateStats<T>(
         }
         if (!eventBefore && stats.event.done) {
             const event = findEvent(stats.event.id);
-            track('activity_played', { activity: 'event', points: event?.points ?? 0 });
             if (event) celebrations.push({ kind: 'event', icon: event.icon, text: `${event.title} complete! +${event.points} pts` });
         }
         if (!luckyBefore && stats.play.lucky) {
-            track('activity_played', { activity: 'lucky', points: LUCKY_POINTS });
             celebrations.push({ kind: 'lucky', icon: '🍀', text: `Lucky find! +${LUCKY_POINTS} bonus pts` });
         }
         if (rollover.freezesUsed > 0) {
-            track('streak_freeze', { action: 'used', count: rollover.freezesUsed });
             celebrations.push({ kind: 'freeze', icon: '❄️', text: `A streak freeze saved your ${stats.streakDays - 1}-day streak` });
         }
         if (rollover.freezeEarned) {
-            track('streak_freeze', { action: 'earned', count: 1 });
             celebrations.push({ kind: 'freeze', icon: '❄️', text: `${stats.streakDays}-day streak! You earned a streak freeze` });
         }
 
@@ -753,7 +740,6 @@ export async function redeemPoints(context: vscode.ExtensionContext, cost: numbe
     const { result } = await mutateStats(context, stats => {
         if (stats.totalPoints < amount) return false;
         stats.totalPoints -= amount;
-        if (amount > 0) track('points_spent', { amount });
         pushActivity(stats, {
             id: `redeem_${Date.now()}`,
             title: `Redeemed Points: ${reason} (-${amount} pts)`,
@@ -1036,8 +1022,6 @@ export async function buyStreakFreeze(context: vscode.ExtensionContext): Promise
         if (stats.totalPoints < STREAK_FREEZE_COST) return 'short';
         stats.totalPoints -= STREAK_FREEZE_COST;
         stats.streakFreezes += 1;
-        track('points_spent', { amount: STREAK_FREEZE_COST });
-        track('streak_freeze', { action: 'bought', count: 1 });
         pushActivity(stats, {
             id: `redeem_freeze_${Date.now()}`,
             title: `Bought a streak freeze (-${STREAK_FREEZE_COST} pts)`,
@@ -1062,7 +1046,6 @@ export async function buyReward(context: vscode.ExtensionContext, rewardId: stri
         stats.unlocked.push(reward.id);
         // Something bought is something the user wants to see straight away.
         if (isCosmetic(reward)) stats.equipped[reward.kind] = reward.id;
-        track('points_spent', { amount: cost });
         pushActivity(stats, {
             id: `redeem_reward_${Date.now()}`,
             title: `Unlocked the ${reward.name} ${REWARD_KIND_LABEL[reward.kind]} (-${cost} pts)`,
@@ -1083,7 +1066,6 @@ export async function equipReward(context: vscode.ExtensionContext, slot: Cosmet
     const { result } = await mutateStats<'ok' | 'locked'>(context, stats => {
         if (reward && !effectiveUnlocked(stats).includes(reward.id)) return 'locked';
         stats.equipped[slot] = reward ? reward.id : null;
-        track('reward_equipped', { slot, reward: reward ? reward.id : 'none' });
         return 'ok';
     });
     return result;
@@ -1103,7 +1085,6 @@ export async function openMysteryBox(context: vscode.ExtensionContext, random: (
         giftSources.set(reward.id, 'box');
         // Fill an empty slot, but never replace something the user chose.
         if (isCosmetic(reward) && !stats.equipped[reward.kind]) stats.equipped[reward.kind] = reward.id;
-        track('points_spent', { amount: MYSTERY_BOX_COST });
         pushActivity(stats, {
             id: `redeem_box_${Date.now()}`,
             title: `Mystery box: the ${reward.name} ${REWARD_KIND_LABEL[reward.kind]} (-${MYSTERY_BOX_COST} pts)`,
@@ -1129,8 +1110,6 @@ export async function rerollDailyQuest(context: vscode.ExtensionContext, questId
         const next = rerollQuest(stats.quests, questId, random);
         if (!next) return { outcome: 'unknown' };
         stats.totalPoints -= QUEST_REROLL_COST;
-        track('points_spent', { amount: QUEST_REROLL_COST });
-        track('quest_rerolled', { quest: next.id });
         pushActivity(stats, {
             id: `redeem_reroll_${Date.now()}`,
             title: `Swapped a quest for ${next.title} (-${QUEST_REROLL_COST} pts)`,
@@ -1184,7 +1163,6 @@ export async function spinDailyWheel(context: vscode.ExtensionContext, random: (
         }
         if (points) addUncappedPoints(stats, points);
         stats.play.prize = { text, points, ...(rewardId ? { rewardId } : {}) };
-        track('activity_played', { activity: 'spin', points });
         pushActivity(stats, { id: 'play_spin', title: `Daily spin: ${text}`, points, timestamp: Date.now(), category: 'Play' });
         return { outcome: 'ok', index, segment, text };
     });
@@ -1211,7 +1189,6 @@ export async function answerDailyQuiz(context: vscode.ExtensionContext, choice: 
         } else {
             stats.quizStreak = 0;
         }
-        track('activity_played', { activity: 'quiz', points });
         pushActivity(stats, {
             id: 'play_quiz',
             title: `Daily challenge (${question.category}): ${correct ? 'correct' : 'tried'} (+${points} pts)`,
@@ -1236,7 +1213,6 @@ export async function finishBitSprint(context: vscode.ExtensionContext, rawScore
         if (paid) {
             stats.play.sprintScore = score;
             if (points) addUncappedPoints(stats, points);
-            track('activity_played', { activity: 'sprint', points });
             pushActivity(stats, { id: 'play_sprint', title: `Bit Sprint: ${score} correct (+${points} pts)`, points, timestamp: Date.now(), category: 'Play' });
         }
         return { outcome: 'ok', points, score, best: stats.sprintBest, newBest, paid };
@@ -1251,7 +1227,6 @@ export async function tryDailyTip(context: vscode.ExtensionContext): Promise<{ c
         if (stats.play.tipTried) return { command: tip.command, points: 0 };
         stats.play.tipTried = true;
         addUncappedPoints(stats, TIP_POINTS);
-        track('activity_played', { activity: 'tip', points: TIP_POINTS });
         pushActivity(stats, { id: 'play_tip', title: `Tip of the day: ${tip.title} (+${TIP_POINTS} pts)`, points: TIP_POINTS, timestamp: Date.now(), category: 'Play' });
         return { command: tip.command, points: TIP_POINTS };
     });
@@ -1384,7 +1359,6 @@ async function openCheckinChest(context: vscode.ExtensionContext, streak: number
         const reward = grantRandomItem(stats, 'chest', activityRandom);
         const points = reward ? 0 : CHECKIN_CHEST_POINTS;
         if (points) addUncappedPoints(stats, points);
-        track('activity_played', { activity: 'checkin', points });
         pushActivity(stats, {
             id: 'play_checkin',
             title: `Weekly check-in chest (${streak}-day streak): ${reward ? reward.name : `+${points} pts`}`,
@@ -1402,7 +1376,6 @@ export async function claimDailyBonus(context: vscode.ExtensionContext): Promise
         return true;
     });
     if (result) {
-        track('daily_bonus_claimed', {});
         await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', DAILY_BONUS_POINTS, 'Activity');
     }
     return result;
@@ -1509,7 +1482,6 @@ export async function maybeShowWeeklyRecap(context: vscode.ExtensionContext): Pr
     const recap = pendingWeeklyRecap(getUserStats(context));
     if (!recap) return;
     await markRecapShown(context, recap.weekStart);
-    track('weekly_recap', { action: 'shown' });
     const streak = getUserStats(context).streakDays;
     const parts = [
         `${recap.points.toLocaleString('en-US')} pts`,
@@ -1520,7 +1492,6 @@ export async function maybeShowWeeklyRecap(context: vscode.ExtensionContext): Pr
     const trend = recap.previousPoints ? (recap.points >= recap.previousPoints ? ' 📈' : '') : '';
     const choice = await vscode.window.showInformationMessage(`📊 Your week in DevSnip Pro: ${parts.join(' · ')}${trend}`, 'See progress');
     if (choice === 'See progress') {
-        track('weekly_recap', { action: 'opened' });
         await executeQueuedCommand(MILESTONE_COMMAND);
     }
 }

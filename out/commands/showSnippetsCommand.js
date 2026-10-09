@@ -28,7 +28,6 @@ const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const command_registry_1 = require("../utils/command-registry");
-const analytics_1 = require("../analytics");
 const webview_ui_1 = require("../utils/webview-ui");
 const snippet_utils_1 = require("../utils/snippet-utils");
 const service_1 = require("../theme/service");
@@ -93,7 +92,6 @@ function registerShowSnippetsCommand(context, snippetsFolderPath) {
                     return;
                 delete file.snippets[snippetKey];
                 await (0, snippet_utils_1.saveSnippets)(path.join(snippetsFolderPath, `custom_${language}.json`), file.snippets);
-                (0, analytics_1.track)("snippet_deleted", { language });
                 render(`Deleted "${snippetKey}". Reload the window to remove it from IntelliSense.`);
                 const action = await vscode.window.showInformationMessage(`Deleted snippet "${snippetKey}".`, "Reload Window", "Later");
                 if (action === "Reload Window") {

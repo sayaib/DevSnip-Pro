@@ -249,7 +249,7 @@ Remote and WSL work, except the OpenCode hub, which needs a local process. vscod
 
 - **No backend, no account.** Requests go only to the URLs and databases you enter.
 - **Your secrets stay put.** API keys you type aren't written to history or disk, credential-looking URL values are redacted from history, and connection strings stay in your OS keychain.
-- **Anonymous analytics only:** which features run, whether they succeed, session length and which first steps you complete. Never code, snippets, file names, paths, search queries, URLs, package names, error messages or anything that identifies you.
+- **Anonymous analytics only:** which DevSnip Pro tools you open and use, a once-a-day "active" ping, and the country PostHog derives from the connection. Each computer gets one anonymous ID (a salted hash, so it can't be traced back). Never code, file contents or names, paths, keystrokes, anything you type into a tool, URLs, credentials or anything that identifies you.
 - **You're in control:** nothing is sent unless VS Code's `telemetry.telemetryLevel` is `all`. Set `devsnip.analytics.enabled` to `false` to opt out, or `devsnip.analytics.debug` to see every event. Full list: [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
 Of the toolbox tools, only the LLM API Tester uses the network, and it's marked "Uses network".

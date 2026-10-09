@@ -54,7 +54,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full map. The short ver
 - New behaviour has tests; user-visible changes have a line in `CHANGELOG.md`.
 - Webviews keep their Content-Security-Policy (scripts by nonce only) and send commands through `isKnownCommand`.
 - Credentials never reach logs, error messages, history or analytics.
-- A new analytics event or property is added to the allow-list in `src/analytics/events.ts` **and** documented in `docs/ANALYTICS.md`; a unit test keeps them in sync. Events never contain code, inputs, URLs, file names or anything personal.
+- Analytics stays minimal: three events (`extension_active`, `tool_opened`, `tool_used`), described in `docs/ANALYTICS.md`. To count a tool as used, call `trackToolUsed("<command id>")` where it produces a result. Events never contain code, inputs, URLs, file names or anything personal.
 - Nothing heavy is imported during activation. Large modules load on first use (see `registerLazyCommands`).
 - UI text is plain and accurate, and does not promise features that do not exist.
 

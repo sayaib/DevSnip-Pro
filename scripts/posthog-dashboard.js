@@ -28,7 +28,7 @@ const trend = (series, extra = {}) => ({
     series: series.map(([event, math, name, extraSeries]) => ({ kind: "EventsNode", event, name: name || event || "All events", math, ...(extraSeries || {}) })),
     interval: extra.interval || "day",
     dateRange: { date_from: extra.from || DAYS },
-    ...(extra.breakdown ? { breakdownFilter: { breakdown: extra.breakdown, breakdown_type: "event", breakdown_limit: extra.limit || 25 } } : {}),
+    ...(extra.breakdown ? { breakdownFilter: { breakdown: extra.breakdown, breakdown_type: extra.breakdownType || "event", breakdown_limit: extra.limit || 25 } } : {}),
     ...(extra.properties ? { properties: extra.properties } : {}),
     // Excludes test / staging / development builds via the project's test account filter.
     filterTestAccounts: true,
@@ -36,95 +36,85 @@ const trend = (series, extra = {}) => ({
   }
 });
 
-/** Production events only: builds made for verification are tagged environment=test/staging/development. */
-const PROD = "ifNull(properties.environment, 'production') = 'production'";
-
-const hogql = (query, display = "ActionsTable") => ({
+/**
+ * HogQL tables. `{filters}` applies the dashboard's date range and the project's
+ * test account filter (environment test / staging / development, internal users),
+ * the same exclusions the charts use.
+ *
+ * Users are counted by person_id, not distinct_id: PostHog merges every id one
+ * person reported under (one per VS Code profile in versions before 11.76.5) into
+ * one person, so nobody is counted, or listed, twice.
+ */
+const hogql = (query, display = "ActionsTable", from = DAYS) => ({
   kind: "DataVisualizationNode",
-  source: { kind: "HogQLQuery", query: query.replace(/\bWHERE\b/, `WHERE ${PROD} AND`) },
+  source: { kind: "HogQLQuery", query, filters: { filterTestAccounts: true, dateRange: { date_from: from } } },
   display
 });
 
-const eq = (key, value) => [{ type: "event", key, operator: "exact", value }];
+const EVENTS = "event IN ('extension_active', 'tool_opened', 'tool_used')";
 
 /** [name, description, query] - the order is the dashboard layout order. */
 const INSIGHTS = [
-  ["Users active right now (last 5 min)", "Distinct installations with any DevSnip Pro event in the last 5 minutes.",
-    hogql("SELECT count(DISTINCT distinct_id) AS active_now FROM events WHERE timestamp > now() - INTERVAL 5 MINUTE", "BoldNumber")],
-  ["Users active in the last hour", "Distinct installations with any event in the last 60 minutes.",
-    hogql("SELECT count(DISTINCT distinct_id) AS active_last_hour FROM events WHERE timestamp > now() - INTERVAL 1 HOUR", "BoldNumber")],
-  ["Active users - DAU / WAU / MAU", "Daily, weekly and monthly active installations (any event).",
-    trend([[null, "dau", "DAU"], [null, "weekly_active", "WAU"], [null, "monthly_active", "MAU"]], { from: "-90d" })],
-  ["Active users by hour (last 48h)", "Distinct installations per hour - the real-time activity pattern.",
-    trend([[null, "dau", "Active users"]], { interval: "hour", from: "-48h" })],
-  ["Stickiness - DAU / MAU", "Share of monthly users who use DevSnip Pro on a given day.",
-    trend([[null, "dau", "DAU"], [null, "monthly_active", "MAU"]], { formula: "A / B", from: "-90d" })],
-  ["Installs, updates and activations", "New installations, updates to a new version, and all activations per day.",
-    trend([["extension_activated", "total", "Activations"],
-      ["extension_activated", "total", "New installs", { properties: eq("install_type", ["new"]) }],
-      ["extension_updated", "total", "Updates"]])],
-  ["Updates by version", "Installations moving to each new version.",
-    trend([["extension_updated", "total", "Updates"]], { breakdown: "extension_version", limit: 10 })],
-  ["Most used features (runs, 30d)", "Command runs per feature, most used first.",
-    trend([["feature_used", "total", "Runs"]], { breakdown: "feature", display: "ActionsBarValue" })],
-  ["Features by unique users (30d)", "How many installations used each feature - the breadth of value.",
-    trend([["feature_used", "dau", "Users"]], { breakdown: "feature", display: "ActionsBarValue" })],
-  ["Feature usage table - most and least used (30d)", "Runs, users, runs per user and error rate for every feature that was used. Features missing here were not used at all.",
-    hogql(`SELECT properties.feature AS feature, properties.category AS category, count() AS runs, count(DISTINCT distinct_id) AS users,
-  round(count() / count(DISTINCT distinct_id), 1) AS runs_per_user,
-  round(countIf(properties.outcome = 'error') * 100 / count(), 1) AS error_pct,
-  round(avg(toFloat(properties.duration_ms))) AS avg_ms
-FROM events WHERE event = 'feature_used' AND timestamp > now() - INTERVAL 30 DAY
-GROUP BY feature, category ORDER BY runs DESC`)],
-  ["Least used features (30d)", "Bottom 15 features by runs - candidates for better discovery or removal.",
-    hogql(`SELECT properties.feature AS feature, count() AS runs, count(DISTINCT distinct_id) AS users
-FROM events WHERE event = 'feature_used' AND timestamp > now() - INTERVAL 30 DAY
-GROUP BY feature ORDER BY runs ASC LIMIT 15`)],
-  ["Usage by feature area over time", "Command runs per category (snippets, api, ai, security...).",
-    trend([["feature_used", "total", "Runs"]], { breakdown: "category", limit: 12 })],
-  ["Feature adoption - first uses (30d)", "Installations using a feature for the first time.",
-    trend([["feature_used", "total", "First uses", { properties: eq("first_use", ["true"]) }]], { breakdown: "feature", display: "ActionsBarValue" })],
-  ["Feature errors", "Command runs that threw, by feature.",
-    trend([["feature_used", "total", "Errors", { properties: eq("outcome", ["error"]) }]], { breakdown: "feature" })],
-  ["Sessions per day", "Usage sessions started (a session ends after 30 minutes idle).",
-    trend([["session_started", "total", "Sessions"], ["session_started", "dau", "Users with a session"]])],
-  ["Session length and engaged time (avg, seconds)", "Average session duration and time actively using DevSnip Pro features.",
-    trend([["session_ended", "avg", "Avg duration (s)", { math_property: "duration_s" }], ["session_ended", "avg", "Avg engaged time (s)", { math_property: "engaged_s" }]])],
-  ["Session engagement distribution (30d)", "Median and 90th percentile session duration, engaged time and features per session.",
-    hogql(`SELECT round(quantile(0.5)(toFloat(properties.duration_s))) AS median_duration_s,
-  round(quantile(0.9)(toFloat(properties.duration_s))) AS p90_duration_s,
-  round(quantile(0.5)(toFloat(properties.engaged_s))) AS median_engaged_s,
-  round(avg(toFloat(properties.feature_count)), 1) AS avg_features_per_session,
-  count() AS sessions
-FROM events WHERE event = 'session_ended' AND timestamp > now() - INTERVAL 30 DAY`)],
-  ["Weekly retention", "Of installations first activated in a week, how many used a feature in following weeks.",
+  // 1. Unique and returning users -----------------------------------------
+  ["Unique users (30d)", "People who used DevSnip Pro in the last 30 days, each counted once however many VS Code profiles they use.",
+    hogql(`SELECT count(DISTINCT person_id) AS unique_users FROM events WHERE ${EVENTS} AND {filters}`, "BoldNumber")],
+  ["Unique users - DAU / WAU / MAU", "Unique people active per day, week and month.",
+    trend([["extension_active", "dau", "Daily users"], ["extension_active", "weekly_active", "Weekly users"], ["extension_active", "monthly_active", "Monthly users"]], { from: "-90d" })],
+  ["New vs returning users (weekly)", "PostHog lifecycle: new, returning, resurrecting and dormant users each week.",
+    { kind: "InsightVizNode", source: { kind: "LifecycleQuery", filterTestAccounts: true, interval: "week", dateRange: { date_from: "-90d" },
+      series: [{ kind: "EventsNode", event: "extension_active", name: "extension_active" }] } }],
+  ["Weekly retention", "Of users first active in a week, how many came back in the following weeks.",
     { kind: "InsightVizNode", source: { kind: "RetentionQuery", filterTestAccounts: true, dateRange: { date_from: "-56d" }, retentionFilter: {
       period: "Week", totalIntervals: 8, retentionType: "retention_first_time",
-      targetEntity: { id: "extension_activated", name: "extension_activated", type: "events" },
-      returningEntity: { id: "feature_used", name: "feature_used", type: "events" } } } }],
-  ["Activation: first use of core features (30d)", "Installations reaching each first (request sent, scan finished, database connected...) and the median days after install it took.",
-    hogql(`SELECT properties.milestone AS milestone,
-  count(DISTINCT distinct_id) AS installations,
-  round(quantile(0.5)(toFloat(properties.days_since_install)), 1) AS median_days_since_install
-FROM events WHERE event = 'activation_milestone' AND timestamp > now() - INTERVAL 30 DAY
-GROUP BY milestone ORDER BY installations DESC`)],
-  ["Onboarding cards", "Get started steps opened, guide dismissed, walkthrough opened, What's new opened or dismissed.",
-    trend([["onboarding_action", "total", "Actions"]], { breakdown: "action", display: "ActionsBarValue" })],
-  ["Snippets, search, copy, save and delete", "Feature-specific actions over time.",
-    trend([["snippet_created", "total"], ["snippet_deleted", "total"], ["tool_search_performed", "total"], ["tool_search_selected", "total"],
-      ["content_copied", "total"], ["request_saved", "total"], ["request_deleted", "total"], ["readme_saved", "total"]])],
-  ["Snippets created by language", "Which languages people build snippets for.",
-    trend([["snippet_created", "total", "Snippets"]], { breakdown: "language", display: "ActionsBarValue" })],
-  ["Tool search effectiveness", "Searches, searches with no match, and searches that led to opening a tool.",
-    trend([["tool_search_performed", "total", "Searches"], ["tool_search_performed", "total", "No results", { properties: eq("match_count", ["0"]) }], ["tool_search_selected", "total", "Opened a tool"]])],
-  ["Dependency jobs by outcome", "Install / update runs from the Dependencies panel and how they ended.",
-    trend([["dependency_job_finished", "total", "Jobs"]], { breakdown: "outcome" })],
-  ["Milestones and levels", "Milestones unlocked and levels reached.",
-    trend([["milestone_unlocked", "total"], ["level_reached", "total"], ["points_spent", "sum", "Points spent", { math_property: "amount" }]])],
-  ["Active users by extension version", "Adoption of new releases.",
-    trend([[null, "dau", "Active users"]], { breakdown: "extension_version", limit: 10 })],
-  ["Platform and VS Code flavour (30d)", "Operating system and desktop / web split.",
-    trend([["extension_activated", "dau", "Users"]], { breakdown: "platform", display: "ActionsPie" })]
+      targetEntity: { id: "extension_active", name: "extension_active", type: "events" },
+      returningEntity: { id: "extension_active", name: "extension_active", type: "events" } } } }],
+
+  // 2. Geography ----------------------------------------------------------
+  ["Users by country (map, 30d)", "Unique users per country, each user in their latest country only (PostHog GeoIP; no location permission is asked for).",
+    trend([["extension_active", "dau", "Users"]], { breakdown: "$geoip_country_code", breakdownType: "person", display: "WorldMap", limit: 250 })],
+  ["Users by country (30d)", "Unique users per country, most first. Each user is counted once, in the country they were last seen in.",
+    hogql(`SELECT country, count() AS users
+FROM (SELECT person_id, argMax(properties.$geoip_country_name, timestamp) AS country FROM events WHERE ${EVENTS} AND {filters} GROUP BY person_id)
+GROUP BY country ORDER BY users DESC LIMIT 250`)],
+
+  // 3. Most-used tools across all users -----------------------------------
+  ["Most-used tools (opens, 30d)", "Times each tool was opened, most used first.",
+    trend([["tool_opened", "total", "Opens"]], { breakdown: "tool", display: "ActionsBarValue", limit: 30 })],
+  ["Tools by unique users (30d)", "How many unique users opened each tool.",
+    trend([["tool_opened", "dau", "Users"]], { breakdown: "tool", display: "ActionsBarValue", limit: 30 })],
+  ["Tool ranking (30d)", "Every tool used in the last 30 days: opens, uses (it produced a result), unique users and opens per user.",
+    hogql(`SELECT properties.tool AS tool, any(properties.section) AS section,
+  countIf(event = 'tool_opened') AS opens, countIf(event = 'tool_used') AS uses,
+  count(DISTINCT person_id) AS users, round(countIf(event = 'tool_opened') / count(DISTINCT person_id), 1) AS opens_per_user
+FROM events WHERE event IN ('tool_opened', 'tool_used') AND {filters}
+GROUP BY tool ORDER BY opens DESC`)],
+
+  // 4. Per-user tool usage: one row per user ------------------------------
+  ["Users (one row each, 30d)", "Every user once: country, first and last seen, active days, how many tools they use, their favourite tool and their top ten tools with open counts.",
+    hogql(`SELECT a.user AS user, a.country AS country, a.first_seen AS first_seen, a.last_seen AS last_seen, a.active_days AS active_days,
+  ifNull(t.tools_used, 0) AS tools_used, ifNull(t.opens, 0) AS opens, t.favourite_tool AS favourite_tool, t.top_tools AS top_tools
+FROM (
+  SELECT person_id AS user, argMax(properties.$geoip_country_name, timestamp) AS country,
+    min(timestamp) AS first_seen, max(timestamp) AS last_seen, count(DISTINCT toDate(timestamp)) AS active_days
+  FROM events WHERE ${EVENTS} AND {filters} GROUP BY user
+) AS a
+LEFT JOIN (
+  SELECT user, count() AS tools_used, sum(n) AS opens, argMax(tool, n) AS favourite_tool,
+    arrayStringConcat(arraySlice(arrayMap(x -> concat(x.1, ' (', toString(x.2), ')'), arrayReverseSort(x -> x.2, groupArray(tuple(tool, n)))), 1, 10), ', ') AS top_tools
+  FROM (SELECT person_id AS user, properties.tool AS tool, count() AS n FROM events WHERE event = 'tool_opened' AND {filters} GROUP BY user, tool)
+  GROUP BY user
+) AS t ON a.user = t.user
+ORDER BY opens DESC, last_seen DESC LIMIT 1000`)],
+
+  // 5. Usage frequency and trends -----------------------------------------
+  ["Daily tool usage", "Tool opens and uses per day, with the number of unique users.",
+    trend([["tool_opened", "total", "Opens"], ["tool_used", "total", "Uses"], ["tool_opened", "dau", "Users"]])],
+  ["Monthly tool usage", "Tool opens and uses per month, with unique users per month.",
+    trend([["tool_opened", "total", "Opens"], ["tool_used", "total", "Uses"], ["tool_opened", "dau", "Users"]], { interval: "month", from: "-365d" })],
+  ["Top tools over time (daily)", "Daily opens of the ten most-used tools.",
+    trend([["tool_opened", "total", "Opens"]], { breakdown: "tool", limit: 10 })],
+  ["Usage by section (30d)", "Tool opens per section of the Tools sidebar.",
+    trend([["tool_opened", "total", "Opens"]], { breakdown: "section", limit: 13 })]
 ];
 
 async function main() {
@@ -169,7 +159,7 @@ async function main() {
   if (!dashboard) {
     dashboard = await api("POST", "/dashboards/", {
       name: DASHBOARD,
-      description: "Active users, real-time activity, feature usage, sessions and engagement for the DevSnip Pro VS Code extension. Created by scripts/posthog-dashboard.js; event definitions in docs/ANALYTICS.md.",
+      description: "Users, countries and tool usage for the DevSnip Pro VS Code extension. Created by scripts/posthog-dashboard.js; event definitions in docs/ANALYTICS.md.",
       pinned: true
     });
     console.log(`Created dashboard "${DASHBOARD}" (id ${dashboard.id}).`);
@@ -193,11 +183,12 @@ async function main() {
     created++;
     console.log(`  + created: ${name}`);
   }
-  // Insights this script used to create under a name it no longer uses (soft delete; restorable in PostHog).
-  const RETIRED = ["New installs vs activations"];
-  for (const name of RETIRED) {
-    if (!present.has(name)) continue;
-    await api("PATCH", `/insights/${present.get(name)}/`, { deleted: true });
+  // Insights on the dashboard that this file no longer defines, such as the ones
+  // for events DevSnip Pro stopped sending (soft delete; restorable in PostHog).
+  const wanted = new Set(INSIGHTS.map(([name]) => name));
+  for (const [name, id] of present) {
+    if (wanted.has(name)) continue;
+    await api("PATCH", `/insights/${id}/`, { deleted: true });
     console.log(`  - retired: ${name}`);
   }
   // The API also answers on the ingestion host (us.i.posthog.com); the web app lives on us.posthog.com.

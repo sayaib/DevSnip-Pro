@@ -46,8 +46,7 @@ const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets"].map(id => `saya
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 function activate(context) {
-    const activationStart = Date.now();
-    // Before anything writes state, so an existing user is never reported as a new install.
+    // Before anything writes state, so an existing user is never treated as a new install.
     const installSnapshot = (0, analytics_1.snapshotInstall)(context);
     const snippetsFolderPath = path.join(context.extensionPath, "custom");
     // The milestone store needs its context before any command can record usage.
@@ -143,8 +142,8 @@ function activate(context) {
             vscode.window.showErrorMessage(`DevSnip Pro could not load its ${name} commands: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-    // Last, so activation_ms covers the whole activation and nothing waits on it.
-    (0, analytics_1.initAnalytics)(context, activationStart, installSnapshot);
+    // Last, so nothing waits on it.
+    (0, analytics_1.initAnalytics)(context, installSnapshot);
 }
 exports.activate = activate;
 /** Puts back snippets an update removed, and tells the user when it did. Never throws. */
@@ -196,33 +195,25 @@ function registerUniversalToolSearch(context) {
             matcher = new RegExp(pattern || ".*", "i");
         }
         catch (error) {
-            (0, analytics_1.track)("tool_search_performed", { query_length: pattern.length, match_count: 0, invalid_pattern: true });
             vscode.window.showErrorMessage(`Invalid regular expression: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
         const tools = await searchableTools();
         const matches = tools.filter(tool => matcher.test(`${tool.label} ${tool.description} ${tool.command}`));
-        // The query itself is never sent - only its length and how many tools matched.
-        (0, analytics_1.track)("tool_search_performed", { query_length: pattern.length, match_count: matches.length, invalid_pattern: false });
         if (!matches.length) {
             vscode.window.showInformationMessage("No DevSnip Pro tools matched that regular expression.");
             return;
         }
         const selected = await vscode.window.showQuickPick(matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })), { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true });
-        if (selected) {
-            (0, analytics_1.track)("tool_search_selected", {
-                feature: selected.command.replace("sayaib.hue-console.", ""),
-                rank: matches.findIndex(tool => tool.command === selected.command) + 1
-            });
+        if (selected)
             await (0, command_dispatch_1.executeQueuedCommand)(selected.command);
-        }
     });
     context.subscriptions.push(searchCommand);
 }
 async function deactivate() {
     // Panels opened through the shared registry are not in context.subscriptions.
     (0, webview_ui_1.disposeAllToolPanels)();
-    // Ends the session and makes one bounded (2s) attempt to send queued events.
+    // Saves undelivered events and makes one bounded (1s) attempt to send them.
     await (0, analytics_1.shutdownAnalytics)();
 }
 exports.deactivate = deactivate;

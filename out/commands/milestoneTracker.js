@@ -32,7 +32,6 @@ const command_dispatch_1 = require("../utils/command-dispatch");
 const webview_ui_1 = require("../utils/webview-ui");
 const feature_registry_1 = require("../premium/feature-registry");
 const milestone_view_1 = require("../services/milestone-view");
-const analytics_1 = require("../analytics");
 const service_1 = require("../theme/service");
 const themes_1 = require("../theme/themes");
 const profile_style_1 = require("../services/profile-style");
@@ -525,13 +524,11 @@ function mutateStats(context, mutate) {
         const levelAfter = (0, milestone_view_1.levelIndexFor)(stats.lifetimePoints, exports.LEVELS);
         if (levelAfter > levelBefore) {
             const level = exports.LEVELS[levelAfter];
-            (0, analytics_1.track)('level_reached', { level: level.name, level_index: levelAfter });
             celebrations.push({ kind: 'level', icon: level.badge, text: `Rank up! You are now ${level.name}: ${level.rank}` });
         }
         for (const id of stats.completedMilestones) {
             if (milestonesBefore.has(id))
                 continue;
-            (0, analytics_1.track)('milestone_unlocked', { milestone: id });
             const milestone = exports.MILESTONES.find(m => m.id === id);
             if (milestone)
                 celebrations.push({ kind: 'milestone', icon: milestone.icon, text: `Milestone unlocked: ${milestone.title} (+${milestone.points} pts)` });
@@ -539,16 +536,13 @@ function mutateStats(context, mutate) {
         for (const item of stats.quests.items) {
             if (!item.done || questsBefore.has(item.id))
                 continue;
-            (0, analytics_1.track)('quest_completed', { quest: item.id });
             const quest = (0, quests_1.findQuest)(item.id);
             if (quest)
                 celebrations.push({ kind: 'quest', icon: quest.icon, text: `Quest complete: ${quest.title} (+${quest.points} pts)` });
         }
         if (!chestBefore && stats.quests.chestClaimed) {
-            (0, analytics_1.track)('quests_all_done', {});
             celebrations.push({ kind: 'chest', icon: '🎁', text: `All of today's quests done: +${quests_1.QUEST_CHEST_POINTS} bonus pts` });
         }
-        const earnedNow = new Set((0, rewards_1.earnedRewardIds)(levelAfter, stats.completedMilestones));
         for (const id of stats.unlocked) {
             if (unlockedBefore.has(id))
                 continue;
@@ -557,14 +551,11 @@ function mutateStats(context, mutate) {
                 continue;
             if (keptRewards.delete(id)) {
                 // A theme in use when themes became paid: kept free, and already applied.
-                (0, analytics_1.track)('reward_unlocked', { reward: id, via: 'kept' });
                 celebrations.push({ kind: 'reward', icon: reward.icon, text: `Themes now unlock with points. You keep ${reward.name} for free` });
                 continue;
             }
             const gift = giftSources.get(id);
             giftSources.delete(id);
-            const via = gift ?? (!earnedNow.has(id) || !reward.unlock ? 'points' : 'level' in reward.unlock ? 'level' : 'milestone');
-            (0, analytics_1.track)('reward_unlocked', { reward: id, via });
             celebrations.push({
                 kind: 'reward',
                 icon: reward.icon,
@@ -575,20 +566,16 @@ function mutateStats(context, mutate) {
         }
         if (!eventBefore && stats.event.done) {
             const event = (0, activities_1.findEvent)(stats.event.id);
-            (0, analytics_1.track)('activity_played', { activity: 'event', points: event?.points ?? 0 });
             if (event)
                 celebrations.push({ kind: 'event', icon: event.icon, text: `${event.title} complete! +${event.points} pts` });
         }
         if (!luckyBefore && stats.play.lucky) {
-            (0, analytics_1.track)('activity_played', { activity: 'lucky', points: activities_1.LUCKY_POINTS });
             celebrations.push({ kind: 'lucky', icon: '🍀', text: `Lucky find! +${activities_1.LUCKY_POINTS} bonus pts` });
         }
         if (rollover.freezesUsed > 0) {
-            (0, analytics_1.track)('streak_freeze', { action: 'used', count: rollover.freezesUsed });
             celebrations.push({ kind: 'freeze', icon: '❄️', text: `A streak freeze saved your ${stats.streakDays - 1}-day streak` });
         }
         if (rollover.freezeEarned) {
-            (0, analytics_1.track)('streak_freeze', { action: 'earned', count: 1 });
             celebrations.push({ kind: 'freeze', icon: '❄️', text: `${stats.streakDays}-day streak! You earned a streak freeze` });
         }
         if (refreshCallback)
@@ -613,8 +600,6 @@ async function redeemPoints(context, cost, reason) {
         if (stats.totalPoints < amount)
             return false;
         stats.totalPoints -= amount;
-        if (amount > 0)
-            (0, analytics_1.track)('points_spent', { amount });
         pushActivity(stats, {
             id: `redeem_${Date.now()}`,
             title: `Redeemed Points: ${reason} (-${amount} pts)`,
@@ -896,8 +881,6 @@ async function buyStreakFreeze(context) {
             return 'short';
         stats.totalPoints -= exports.STREAK_FREEZE_COST;
         stats.streakFreezes += 1;
-        (0, analytics_1.track)('points_spent', { amount: exports.STREAK_FREEZE_COST });
-        (0, analytics_1.track)('streak_freeze', { action: 'bought', count: 1 });
         pushActivity(stats, {
             id: `redeem_freeze_${Date.now()}`,
             title: `Bought a streak freeze (-${exports.STREAK_FREEZE_COST} pts)`,
@@ -926,7 +909,6 @@ async function buyReward(context, rewardId) {
         // Something bought is something the user wants to see straight away.
         if ((0, rewards_1.isCosmetic)(reward))
             stats.equipped[reward.kind] = reward.id;
-        (0, analytics_1.track)('points_spent', { amount: cost });
         pushActivity(stats, {
             id: `redeem_reward_${Date.now()}`,
             title: `Unlocked the ${reward.name} ${exports.REWARD_KIND_LABEL[reward.kind]} (-${cost} pts)`,
@@ -950,7 +932,6 @@ async function equipReward(context, slot, rewardId) {
         if (reward && !effectiveUnlocked(stats).includes(reward.id))
             return 'locked';
         stats.equipped[slot] = reward ? reward.id : null;
-        (0, analytics_1.track)('reward_equipped', { slot, reward: reward ? reward.id : 'none' });
         return 'ok';
     });
     return result;
@@ -971,7 +952,6 @@ async function openMysteryBox(context, random = Math.random) {
         // Fill an empty slot, but never replace something the user chose.
         if ((0, rewards_1.isCosmetic)(reward) && !stats.equipped[reward.kind])
             stats.equipped[reward.kind] = reward.id;
-        (0, analytics_1.track)('points_spent', { amount: rewards_1.MYSTERY_BOX_COST });
         pushActivity(stats, {
             id: `redeem_box_${Date.now()}`,
             title: `Mystery box: the ${reward.name} ${exports.REWARD_KIND_LABEL[reward.kind]} (-${rewards_1.MYSTERY_BOX_COST} pts)`,
@@ -1000,8 +980,6 @@ async function rerollDailyQuest(context, questId, random = Math.random) {
         if (!next)
             return { outcome: 'unknown' };
         stats.totalPoints -= quests_1.QUEST_REROLL_COST;
-        (0, analytics_1.track)('points_spent', { amount: quests_1.QUEST_REROLL_COST });
-        (0, analytics_1.track)('quest_rerolled', { quest: next.id });
         pushActivity(stats, {
             id: `redeem_reroll_${Date.now()}`,
             title: `Swapped a quest for ${next.title} (-${quests_1.QUEST_REROLL_COST} pts)`,
@@ -1063,7 +1041,6 @@ async function spinDailyWheel(context, random = Math.random) {
         if (points)
             addUncappedPoints(stats, points);
         stats.play.prize = { text, points, ...(rewardId ? { rewardId } : {}) };
-        (0, analytics_1.track)('activity_played', { activity: 'spin', points });
         pushActivity(stats, { id: 'play_spin', title: `Daily spin: ${text}`, points, timestamp: Date.now(), category: 'Play' });
         return { outcome: 'ok', index, segment, text };
     });
@@ -1091,7 +1068,6 @@ async function answerDailyQuiz(context, choice) {
         else {
             stats.quizStreak = 0;
         }
-        (0, analytics_1.track)('activity_played', { activity: 'quiz', points });
         pushActivity(stats, {
             id: 'play_quiz',
             title: `Daily challenge (${question.category}): ${correct ? 'correct' : 'tried'} (+${points} pts)`,
@@ -1116,7 +1092,6 @@ async function finishBitSprint(context, rawScore) {
             stats.play.sprintScore = score;
             if (points)
                 addUncappedPoints(stats, points);
-            (0, analytics_1.track)('activity_played', { activity: 'sprint', points });
             pushActivity(stats, { id: 'play_sprint', title: `Bit Sprint: ${score} correct (+${points} pts)`, points, timestamp: Date.now(), category: 'Play' });
         }
         return { outcome: 'ok', points, score, best: stats.sprintBest, newBest, paid };
@@ -1132,7 +1107,6 @@ async function tryDailyTip(context) {
             return { command: tip.command, points: 0 };
         stats.play.tipTried = true;
         addUncappedPoints(stats, activities_1.TIP_POINTS);
-        (0, analytics_1.track)('activity_played', { activity: 'tip', points: activities_1.TIP_POINTS });
         pushActivity(stats, { id: 'play_tip', title: `Tip of the day: ${tip.title} (+${activities_1.TIP_POINTS} pts)`, points: activities_1.TIP_POINTS, timestamp: Date.now(), category: 'Play' });
         return { command: tip.command, points: activities_1.TIP_POINTS };
     });
@@ -1259,7 +1233,6 @@ async function openCheckinChest(context, streak) {
         const points = reward ? 0 : activities_1.CHECKIN_CHEST_POINTS;
         if (points)
             addUncappedPoints(stats, points);
-        (0, analytics_1.track)('activity_played', { activity: 'checkin', points });
         pushActivity(stats, {
             id: 'play_checkin',
             title: `Weekly check-in chest (${streak}-day streak): ${reward ? reward.name : `+${points} pts`}`,
@@ -1277,7 +1250,6 @@ async function claimDailyBonus(context) {
         return true;
     });
     if (result) {
-        (0, analytics_1.track)('daily_bonus_claimed', {});
         await recordActivity(context, 'daily_bonus', 'Claimed Daily Activity Bonus', exports.DAILY_BONUS_POINTS, 'Activity');
     }
     return result;
@@ -1388,7 +1360,6 @@ async function maybeShowWeeklyRecap(context) {
     if (!recap)
         return;
     await markRecapShown(context, recap.weekStart);
-    (0, analytics_1.track)('weekly_recap', { action: 'shown' });
     const streak = getUserStats(context).streakDays;
     const parts = [
         `${recap.points.toLocaleString('en-US')} pts`,
@@ -1400,7 +1371,6 @@ async function maybeShowWeeklyRecap(context) {
     const trend = recap.previousPoints ? (recap.points >= recap.previousPoints ? ' 📈' : '') : '';
     const choice = await vscode.window.showInformationMessage(`📊 Your week in DevSnip Pro: ${parts.join(' · ')}${trend}`, 'See progress');
     if (choice === 'See progress') {
-        (0, analytics_1.track)('weekly_recap', { action: 'opened' });
         await (0, command_dispatch_1.executeQueuedCommand)(MILESTONE_COMMAND);
     }
 }

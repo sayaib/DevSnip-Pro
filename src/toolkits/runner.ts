@@ -7,7 +7,7 @@ import { TOOLKIT_COMMANDS } from "./commands";
 import { renderToolPage } from "./page";
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 import { confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
-import { track } from "../analytics";
+import { trackToolUsed } from "../analytics";
 import { setWebviewHtml } from "../theme/service";
 import { noteToolRun } from "../onboarding/activation";
 
@@ -77,7 +77,6 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
     platform: process.platform
   }));
 
-  let liveTracked = false;
   let latestRequest = 0;
   const feature = tool.command;
   const subscription = panel.webview.onDidReceiveMessage(async message => {
@@ -104,10 +103,8 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
         if (requestId < latestRequest && trigger === "live") return;
         safePostMessage(panel, { type: "result", requestId, durationMs, ...outcome });
         if (action) safePostMessage(panel, { type: "examples", examples: await allExamples(tool, ctx) });
-        if (trigger !== "live" || !liveTracked) {
-          if (trigger === "live") liveTracked = true;
-          track("tool_run_completed", { feature, section: tool.section, outcome: outcome.outcome, trigger, duration_ms: durationMs });
-        }
+        // Live results re-run on every edit; analytics counts a tool once per few minutes.
+        if (outcome.outcome === "success") trackToolUsed(feature);
         noteToolRun(tool.section, outcome.outcome);
         return;
       }
@@ -128,24 +125,20 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
       case "copy":
         await vscode.env.clipboard.writeText(String(message.text ?? ""));
         safePostMessage(panel, { type: "notice", kind: "success", text: "Copied to the clipboard." });
-        track("tool_output_used", { feature, action: "copy" });
         return;
       case "insert": {
         await insertAtCursor(String(message.text ?? ""), typeof message.language === "string" ? message.language : undefined);
-        track("tool_output_used", { feature, action: "insert" });
         return;
       }
       case "open": {
         const document = await vscode.workspace.openTextDocument({ content: String(message.text ?? ""), language: editorLanguage(message.language) });
         await vscode.window.showTextDocument(document, { preview: false, viewColumn: vscode.ViewColumn.Beside });
-        track("tool_output_used", { feature, action: "open" });
         return;
       }
       case "download": {
         const saved = await saveAs(String(message.text ?? ""), typeof message.language === "string" ? message.language : undefined, typeof message.fileName === "string" ? message.fileName : "");
         if (saved) {
           safePostMessage(panel, { type: "notice", kind: "success", text: `Saved ${path.basename(saved)}.` });
-          track("tool_output_used", { feature, action: "save" });
         }
         return;
       }
@@ -155,7 +148,6 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
         if (!files.length) return;
         const result = await writeFiles(files);
         safePostMessage(panel, { type: "notice", kind: result.kind, text: result.text });
-        if (result.written) track("tool_output_used", { feature, action: message.type === "save" ? "save" : "write_all", file_count: result.written });
         return;
       }
     }

@@ -14,9 +14,8 @@
  *  3. Uses real DevSnip Pro features through a tiny driver extension, waits past
  *     the 30s flush interval, and closes VS Code (exercising the shutdown flush).
  *  4. Installs the higher version into the same profile and runs again, to
- *     verify the update path (same anonymous id, extension_updated, not a new install).
- *  5. Checks the extension's own logs for failed PostHog requests, dropped
- *     properties and errors.
+ *     verify the update path (same anonymous id, so not counted as a new user).
+ *  5. Checks the extension's own logs for failed PostHog requests and errors.
  *  6. Queries PostHog (needs a personal key with query:read) and checks that
  *     every expected event arrived, with only allowed properties.
  *
@@ -221,7 +220,6 @@ async function main() {
   fs.writeFileSync(path.join(WORK, "analytics-channel.log"), logs.analytics);
   check("analytics started in production mode with environment=test", /Analytics started \(environment: test/.test(logs.analytics));
   check("no failed PostHog deliveries", !/Delivery failed|answered HTTP/.test(logs.analytics), (logs.analytics.match(/.*(Delivery failed|answered HTTP).*/g) || []).join(" | ").slice(0, 300));
-  check("no properties dropped by validation", !/Dropped:/.test(logs.analytics), (logs.analytics.match(/Dropped:.*/g) || []).join(" | ").slice(0, 300));
   const extErrors = (logs.exthost.match(/.*\[error\].*/g) || []).filter(line => /hue-console|devsnip|analytics|posthog/i.test(line));
   check("no DevSnip Pro errors in the extension host log", extErrors.length === 0, extErrors.slice(0, 3).join(" | ").slice(0, 400));
 
@@ -230,59 +228,49 @@ async function main() {
   } else {
     console.log("\n== Waiting for PostHog to ingest the events");
     const where = `properties.environment = 'test' AND timestamp >= toDateTime('${since}')`;
+    // Which of the commands the driver ran are tools (hubs, search and progress pages are not reported).
+    require(path.join(ROOT, "out", "test", "unit", "vscode-stub.js")).installVscodeStub();
+    const { toolSection } = require(path.join(ROOT, "out", "analytics", "index.js"));
+    const toolsRan = [run1, run2, run3].reduce((sum, run) => sum + run.commands.filter(c => c.ok && toolSection(c.id)).length, 0);
     let rows = [];
     for (let attempt = 0; attempt < 24; attempt++) {
-      const data = await queryPostHog(`SELECT event, count() AS n, count(DISTINCT distinct_id) AS ids, count(DISTINCT properties.$session_id) AS sessions FROM events WHERE ${where} GROUP BY event ORDER BY event`);
+      const data = await queryPostHog(`SELECT event, count() AS n, count(DISTINCT distinct_id) AS ids FROM events WHERE ${where} GROUP BY event ORDER BY event`);
       rows = data.results || [];
-      const names = new Set(rows.map(r => r[0]));
-      const activations = rows.find(r => r[0] === "extension_activated");
-      const ended = rows.find(r => r[0] === "session_ended");
-      if (names.has("extension_updated") && activations && activations[1] >= 3 && ended && ended[1] >= 2 && names.has("dependency_scan_completed")) break;
+      const opened = rows.find(r => r[0] === "tool_opened");
+      if (opened && opened[1] >= toolsRan && rows.some(r => r[0] === "tool_used") && rows.some(r => r[0] === "extension_active")) break;
       await new Promise(r => setTimeout(r, 10000));
     }
-    const byEvent = Object.fromEntries(rows.map(([event, n, ids, sessions]) => [event, { n, ids, sessions }]));
+    const byEvent = Object.fromEntries(rows.map(([event, n, ids]) => [event, { n, ids }]));
     results.posthog = byEvent;
     console.table(byEvent);
     const n = e => (byEvent[e] ? byEvent[e].n : 0);
-    check("PostHog received extension_activated for all three launches", n("extension_activated") === 3, `${n("extension_activated")}`);
-    const ranTotal = [run1, run2, run3].reduce((sum, run) => sum + run.commands.filter(c => c.ok).length, 0);
-    check("PostHog received a feature_used for every command that ran", n("feature_used") === ranTotal, `${n("feature_used")} received, ${ranTotal} ran`);
-    const sessions = await queryPostHog(`SELECT properties.$session_id, countIf(event = 'session_started') AS started, countIf(event = 'session_ended') AS ended, min(timestamp) AS t FROM events WHERE ${where} AND event IN ('session_started','session_ended') GROUP BY properties.$session_id ORDER BY t`);
-    const perSession = sessions.results || [];
-    results.sessions = perSession;
-    const closedBeforeLast = perSession.slice(0, -1).every(r => Number(r[1]) === 1 && Number(r[2]) === 1);
-    check("every session before the last one has exactly one start and one end", perSession.length === 3 && closedBeforeLast,
-      perSession.map(r => `${String(r[0]).slice(-6)}: ${r[1]} start / ${r[2]} end`).join(", "));
-    check("the update was reported", n("extension_updated") === 1);
-    check("dependency scan events arrived", n("dependency_scan_completed") >= 1, `${n("dependency_scan_completed")}`);
-    check("one anonymous id across install and update", Object.values(byEvent).every(v => v.ids === 1));
+    // A fresh profile has no older id to merge, so not even the one-time $identify is expected here.
+    check("only the three analytics events were sent", Object.keys(byEvent).every(e => ["extension_active", "tool_opened", "tool_used"].includes(e)), Object.keys(byEvent).join(", "));
+    check("one extension_active for the day, across install, update and restart", n("extension_active") === 1, `${n("extension_active")}`);
+    check("a tool_opened for every tool that ran", n("tool_opened") === toolsRan, `${n("tool_opened")} received, ${toolsRan} tools ran`);
+    check("tool_used arrived (the dependency scan)", n("tool_used") >= 1, `${n("tool_used")}`);
+    check("one anonymous id across install, update and restart", Object.values(byEvent).every(v => v.ids === 1));
+    const ids = await queryPostHog(`SELECT DISTINCT distinct_id FROM events WHERE ${where}`);
+    // Per machine: a salted hash of VS Code's machine id, in UUID form (or a random UUID when VS Code has none).
+    check("distinct_id is an anonymous UUID-shaped id", (ids.results || []).every(r => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(r[0])));
+    const top = await queryPostHog(`SELECT properties.tool, properties.section, count() FROM events WHERE ${where} AND event = 'tool_opened' GROUP BY properties.tool, properties.section ORDER BY count() DESC`);
+    results.tools = top.results;
+    check("tool events name the tool and its section", (top.results || []).every(r => typeof r[0] === "string" && typeof r[1] === "string"));
 
-    const detail = await queryPostHog(`SELECT properties.install_type, properties.first_run, properties.extension_version, properties.previous_version, distinct_id FROM events WHERE ${where} AND event IN ('extension_activated','extension_updated') ORDER BY timestamp`);
-    results.lifecycle = detail.results;
-    const activations = (detail.results || []).filter(r => r[0] !== null);
-    check("first run is a new install", activations[0] && activations[0][0] === "new" && activations[0][1] === true);
-    check("second run is an update, not a new install", activations[1] && activations[1][0] === "updated" && activations[1][1] === false);
-    check("third run (plain restart) is returning", activations[2] && activations[2][0] === "returning");
-    const updated = (detail.results || []).find(r => r[0] === null);
-    check("extension_updated carries the previous version", updated && updated[3] === pkg.version, updated ? String(updated[3]) : "missing");
-    check("distinct_id is a random UUID", activations.every(r => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(r[4])));
-
-    // Every property key PostHog stored for these events must be one we send on purpose,
-    // or one PostHog adds itself - nothing else (no paths, names, hostnames, emails).
+    // Every property key PostHog stored must be one we send on purpose, or one
+    // PostHog adds itself - nothing else (no paths, names, hostnames, emails).
     const keys = await queryPostHog(`SELECT DISTINCT arrayJoin(JSONExtractKeys(properties)) AS k FROM events WHERE ${where} ORDER BY k`);
-    const { EVENT_CATALOG } = require(path.join(ROOT, "out", "analytics", "events.js"));
-    const ours = new Set(["distinct_id", "$session_id", "$process_person_profile", "$geoip_disable", "$lib", "extension_version", "vscode_version", "platform", "arch", "environment"]);
-    for (const spec of Object.values(EVENT_CATALOG)) for (const k of Object.keys(spec.properties)) ours.add(k);
+    const ours = new Set(["distinct_id", "$lib", "extension_version", "environment", "tool", "section"]);
     const stored = (keys.results || []).map(r => r[0]);
     const unexpected = stored.filter(k => !ours.has(k) && !k.startsWith("$"));
     results.storedPropertyKeys = stored;
-    check("PostHog stored no unexpected (non-catalog) properties", unexpected.length === 0, unexpected.join(", "));
+    check("PostHog stored no unexpected properties", unexpected.length === 0, unexpected.join(", "));
     const valueScan = await queryPostHog(`SELECT count() FROM events WHERE ${where} AND (properties LIKE '%${os.userInfo().username}%' OR properties LIKE '%/Users/%' OR properties LIKE '%\\\\\\\\Users%' OR properties LIKE '%@%.%' OR properties LIKE '%${os.hostname().split(".")[0]}%')`);
     check("no username, home path, hostname or email in any stored event", Number(valueScan.results[0][0]) === 0);
-    const geo = await queryPostHog(`SELECT countIf(properties.$geoip_country_code IS NOT NULL), countIf(properties.$ip IS NOT NULL) FROM events WHERE ${where}`);
+    const geo = await queryPostHog(`SELECT countIf(properties.$geoip_country_code IS NOT NULL), countIf(properties.$ip IS NOT NULL), any(properties.$geoip_country_name) FROM events WHERE ${where}`);
     results.geo = geo.results[0];
-    check("no GeoIP location stored", Number(geo.results[0][0]) === 0);
-    if (Number(geo.results[0][1]) > 0) console.log("NOTE  PostHog stored $ip for these events. Enable Project settings > Discard client IP data.");
+    check("PostHog added the country (GeoIP) to the events", Number(geo.results[0][0]) > 0, String(geo.results[0][2] || "none"));
+    if (Number(geo.results[0][1]) > 0) console.log("NOTE  PostHog stored $ip for these events. See docs/ANALYTICS.md, \"IP addresses\".");
   }
 
   const failed = results.checks.filter(c => !c.ok);

@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, MongoDB and Redis, LLM token and cost tools, and a secret scanner.",
-  "version": "11.76.3",
+  "version": "11.76.5",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -815,7 +815,7 @@
             "telemetry",
             "usage"
           ],
-          "markdownDescription": "Send anonymous usage analytics (which DevSnip Pro features are used, how often, and session length) to help improve the extension. No code, file names, paths, snippet contents, search queries, URLs or personal data are ever sent. Also respects VS Code's `#telemetry.telemetryLevel#`: nothing is sent unless it is `all`. See the event list in docs/ANALYTICS.md."
+          "markdownDescription": "Send anonymous usage analytics (which DevSnip Pro tools are opened and used, and a once-a-day active ping, under one anonymous id per computer) to help improve the extension. No code, file contents or names, paths, keystrokes, tool input or output, URLs, credentials or personal data are ever sent. Also respects VS Code's `#telemetry.telemetryLevel#`: nothing is sent unless it is `all`. See docs/ANALYTICS.md."
         },
         "devsnip.analytics.debug": {
           "type": "boolean",

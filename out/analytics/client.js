@@ -1,76 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AnalyticsClient = exports.uuidv7 = exports.sanitizeProperties = exports.coerceProperty = void 0;
+exports.AnalyticsClient = exports.localDay = void 0;
 const crypto_1 = require("crypto");
-const events_1 = require("./events");
-const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
-const VERSION = /^[0-9][0-9A-Za-z.+-]{0,31}$/;
-/** Returns the value if it is valid for `kind`, else undefined. */
-function coerceProperty(kind, value) {
-    switch (kind) {
-        case "bool":
-            return typeof value === "boolean" ? value : undefined;
-        case "count":
-            return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.min(Math.round(value), 1e9) : undefined;
-        case "ms":
-        case "seconds":
-            return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined;
-        case "id":
-            return typeof value === "string" && ID.test(value) ? value : undefined;
-        case "version":
-            return typeof value === "string" && VERSION.test(value) ? value : undefined;
-        case "id_list": {
-            if (!Array.isArray(value))
-                return undefined;
-            if (!value.length)
-                return [];
-            const ids = [...new Set(value.filter((entry) => typeof entry === "string" && ID.test(entry)))].slice(0, 12);
-            return ids.length ? ids.sort() : undefined;
-        }
-        default: {
-            const allowed = kind.slice("enum:".length).split("|");
-            return typeof value === "string" && allowed.includes(value) ? value : undefined;
-        }
-    }
+const TOOL_ID = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+const SECTION_ID = /^[a-z][a-z0-9_-]{0,31}$/;
+/** Local calendar day, so "daily" matches the user's own day. */
+function localDay(time) {
+    const date = new Date(time);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
-exports.coerceProperty = coerceProperty;
-/** Keeps only catalogued properties with valid values. */
-function sanitizeProperties(event, properties, onInvalid) {
-    const spec = events_1.EVENT_CATALOG[event].properties;
-    const clean = {};
-    for (const [key, value] of Object.entries(properties)) {
-        if (value === undefined)
-            continue;
-        const field = spec[key];
-        if (!field) {
-            onInvalid?.(`${event}: property "${key}" is not in the event catalog and was dropped.`);
-            continue;
-        }
-        const coerced = coerceProperty(field.kind, value);
-        if (coerced === undefined) {
-            onInvalid?.(`${event}: property "${key}" is not a valid ${field.kind} and was dropped.`);
-            continue;
-        }
-        clean[key] = coerced;
-    }
-    return clean;
-}
-exports.sanitizeProperties = sanitizeProperties;
-/**
- * UUIDv7 (time-ordered). PostHog requires `$session_id` values to be UUIDv7
- * to build its sessions table (session duration, pages per session...).
- */
-function uuidv7(now = Date.now()) {
-    const bytes = (0, crypto_1.randomBytes)(16);
-    const ms = BigInt(Math.max(0, Math.floor(now)));
-    for (let i = 0; i < 6; i++)
-        bytes[i] = Number((ms >> BigInt(8 * (5 - i))) & BigInt(0xff));
-    bytes[6] = (bytes[6] & 0x0f) | 0x70;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = bytes.toString("hex");
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-exports.uuidv7 = uuidv7;
+exports.localDay = localDay;
 class AnalyticsClient {
     constructor(options) {
         this.options = options;
@@ -78,13 +18,16 @@ class AnalyticsClient {
         this.enabled = false;
         this.failures = 0;
         this.retryAt = 0;
-        this.revisionCounter = 0;
+        this.lastOpened = new Map();
+        this.lastUsed = new Map();
         this.now = options.now ?? Date.now;
         this.flushAt = options.flushAt ?? 20;
-        this.flushIntervalMs = options.flushIntervalMs ?? 30000;
-        this.maxQueue = options.maxQueue ?? 500;
-        this.sessionIdleMs = options.sessionIdleMs ?? 30 * 60000;
-        this.engagedGapMs = options.engagedGapMs ?? 5 * 60000;
+        this.flushIntervalMs = options.flushIntervalMs ?? 60000;
+        this.maxQueue = options.maxQueue ?? 200;
+        this.usedCooldownMs = options.usedCooldownMs ?? 5 * 60000;
+        this.openedDedupeMs = options.openedDedupeMs ?? 2000;
+        this.lastActiveDay = options.lastActiveDay;
+        this.previousId = options.previousId;
     }
     get isEnabled() {
         return this.enabled;
@@ -97,78 +40,64 @@ class AnalyticsClient {
         if (enabled) {
             this.timer = setInterval(() => void this.flush(), this.flushIntervalMs);
             this.timer.unref?.();
+            this.mergePrevious();
+            this.markActive();
         }
         else {
             if (this.timer)
                 clearInterval(this.timer);
             this.timer = undefined;
             this.queue = [];
-            this.session = undefined;
         }
     }
-    track(event, properties = {}) {
+    /** Merges the previous id into this one, once, before anything else is sent under the new id. */
+    mergePrevious() {
+        const previous = this.previousId;
+        if (!previous || previous === this.options.distinctId)
+            return;
+        this.previousId = undefined;
+        this.options.onMerged?.(previous);
+        this.enqueue("$identify", { $anon_distinct_id: previous });
+    }
+    /** Records today as an active day, once per local day. */
+    markActive() {
         if (!this.enabled)
             return;
-        try {
-            if (!Object.prototype.hasOwnProperty.call(events_1.EVENT_CATALOG, event)) {
-                this.options.onInvalid?.(`"${event}" is not in the event catalog and was dropped.`);
-                return;
-            }
-            const now = this.now();
-            if (!events_1.NON_INTERACTION_EVENTS.has(event))
-                this.touchSession(now, event === "extension_activated" ? "activation" : "resumed", properties);
-            this.enqueue(event, sanitizeProperties(event, properties, this.options.onInvalid), now);
-        }
-        catch (error) {
-            // Analytics must never break a feature.
-            this.options.onInvalid?.(`tracking ${event} failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-    touchSession(now, reason, properties) {
-        const session = this.session;
-        if (session && now - session.lastInteraction > this.sessionIdleMs) {
-            this.endSession("idle", session.lastInteraction);
-        }
-        if (!this.session) {
-            this.session = { id: uuidv7(now), startedAt: now, lastInteraction: now, engagedMs: 0, interactions: 0, features: new Set() };
-            this.enqueue("session_started", { reason }, now);
-        }
-        const current = this.session;
-        const gap = now - current.lastInteraction;
-        if (current.interactions > 0 && gap <= this.engagedGapMs)
-            current.engagedMs += gap;
-        current.lastInteraction = now;
-        current.interactions++;
-        if (typeof properties.feature === "string")
-            current.features.add(properties.feature);
-    }
-    endSession(reason, at) {
-        const session = this.session;
-        if (!session)
+        const day = localDay(this.now());
+        if (day === this.lastActiveDay)
             return;
-        this.enqueue("session_ended", {
-            reason,
-            duration_s: (session.lastInteraction - session.startedAt) / 1000,
-            engaged_s: session.engagedMs / 1000,
-            interaction_count: session.interactions,
-            feature_count: session.features.size
-        }, at);
-        this.session = undefined;
+        this.lastActiveDay = day;
+        this.options.onActiveDay?.(day);
+        this.enqueue("extension_active", {});
     }
-    enqueue(event, properties, at, sessionId = this.session?.id) {
-        this.revisionCounter++;
+    toolOpened(tool, section) {
+        this.toolEvent("tool_opened", tool, section, this.lastOpened, this.openedDedupeMs);
+    }
+    toolUsed(tool, section) {
+        this.toolEvent("tool_used", tool, section, this.lastUsed, this.usedCooldownMs);
+    }
+    toolEvent(event, tool, section, seen, windowMs) {
+        if (!this.enabled || !TOOL_ID.test(tool))
+            return;
+        const now = this.now();
+        const last = seen.get(tool);
+        if (last !== undefined && now - last < windowMs)
+            return;
+        seen.set(tool, now);
+        // VS Code may stay open past midnight: the new day still counts as active.
+        this.markActive();
+        this.enqueue(event, { tool, section: SECTION_ID.test(section) ? section : "other" });
+    }
+    enqueue(event, properties) {
+        const now = this.now();
         const captured = {
-            uuid: uuidv7(at),
+            uuid: (0, crypto_1.randomUUID)(),
             event,
-            timestamp: new Date(at).toISOString(),
+            timestamp: new Date(now).toISOString(),
             properties: {
                 ...this.options.commonProperties,
                 ...properties,
                 distinct_id: this.options.distinctId,
-                ...(sessionId ? { $session_id: sessionId } : {}),
-                // Anonymous events: no person profile, no GeoIP enrichment.
-                $process_person_profile: false,
-                $geoip_disable: true,
                 $lib: "devsnip-pro-vscode"
             }
         };
@@ -180,13 +109,13 @@ class AnalyticsClient {
         if (this.queue.length >= this.flushAt)
             void this.flush();
     }
-    /** Sends queued events. Concurrent calls share one in-flight delivery. */
+    /** Sends queued events in batches. Concurrent calls share one in-flight delivery. */
     flush(force = false) {
         if (this.flushing)
             return this.flushing;
         if (!this.queue.length)
             return Promise.resolve();
-        // After a failure, back off exponentially (30s, 1m, 2m ... 10m) instead of retrying every tick.
+        // After a failure, back off (1m, 2m, 4m ... 10m) instead of retrying every tick.
         if (!force && this.now() < this.retryAt)
             return Promise.resolve();
         this.flushing = (async () => {
@@ -208,7 +137,6 @@ class AnalyticsClient {
                     this.failures = 0;
                     this.retryAt = 0;
                     this.queue.splice(0, batch.length); // "ok", or "drop" for a batch the server rejected
-                    this.revisionCounter++;
                 }
             }
             finally {
@@ -217,87 +145,33 @@ class AnalyticsClient {
         })();
         return this.flushing;
     }
-    /** Ends the session and makes one bounded attempt to deliver what is queued. */
-    async shutdown(timeoutMs = 2000) {
-        if (!this.enabled)
-            return;
-        this.endSession("shutdown", this.session?.lastInteraction ?? this.now());
+    /** Stops the timer and makes one bounded attempt to deliver what is queued. */
+    async shutdown(timeoutMs = 1000) {
         if (this.timer)
             clearInterval(this.timer);
         this.timer = undefined;
-        await Promise.race([this.flush(true), new Promise(resolve => setTimeout(resolve, timeoutMs).unref?.())]);
-    }
-    /** Changes whenever the queue or session changes, so a checkpoint is only written when needed. */
-    get revision() {
-        return this.revisionCounter;
-    }
-    /** Ends the session now (for shutdown) without waiting for delivery. */
-    endSessionNow() {
         if (!this.enabled)
             return;
-        this.endSession("shutdown", this.session?.lastInteraction ?? this.now());
+        await Promise.race([this.flush(true), new Promise(resolve => setTimeout(resolve, timeoutMs).unref?.())]);
     }
-    /** Undelivered events plus the open session, for the checkpoint file. */
-    snapshotState() {
-        const session = this.session;
-        return {
-            pending: this.queue.slice(),
-            ...(session ? { session: { id: session.id, startedAt: session.startedAt, lastInteraction: session.lastInteraction, engagedMs: session.engagedMs, interactions: session.interactions, features: [...session.features] } } : {})
-        };
-    }
-    /**
-     * Applies a checkpoint from the previous VS Code run: re-queues undelivered
-     * events, and closes a session that never ended (a crash or force-quit) as
-     * "interrupted", stamped at its last interaction.
-     */
-    recover(state) {
-        if (!this.enabled || !state || typeof state !== "object")
-            return { events: 0, interrupted: false };
-        const { pending, session } = state;
-        const events = this.restore(pending ?? []);
-        let interrupted = false;
-        if (session && typeof session.id === "string" && [session.startedAt, session.lastInteraction, session.engagedMs, session.interactions].every(n => typeof n === "number" && Number.isFinite(n))) {
-            this.enqueue("session_ended", {
-                reason: "interrupted",
-                duration_s: (session.lastInteraction - session.startedAt) / 1000,
-                engaged_s: session.engagedMs / 1000,
-                interaction_count: session.interactions,
-                feature_count: Array.isArray(session.features) ? session.features.length : 0
-            }, session.lastInteraction, session.id);
-            interrupted = true;
-        }
-        return { events, interrupted };
-    }
-    /**
-     * Removes and returns everything not yet delivered. Used at shutdown: VS Code
-     * tears down networking while the extension host exits, so undelivered
-     * events are persisted and sent on the next start instead of being lost.
-     */
-    takePending() {
-        const pending = this.queue;
-        this.queue = [];
-        return pending;
-    }
-    /** Re-queues events persisted by a previous session (only ones for this installation). */
-    restore(events) {
-        if (!this.enabled || !Array.isArray(events))
-            return 0;
-        const valid = events.filter((entry) => !!entry && typeof entry === "object" &&
-            typeof entry.uuid === "string" && typeof entry.timestamp === "string" &&
-            typeof entry.event === "string" && Object.prototype.hasOwnProperty.call(events_1.EVENT_CATALOG, entry.event) &&
-            !!entry.properties && typeof entry.properties === "object" &&
-            entry.properties.distinct_id === this.options.distinctId).slice(-this.maxQueue);
-        this.queue = [...valid, ...this.queue].slice(-this.maxQueue);
-        if (valid.length)
-            this.revisionCounter++;
-        return valid.length;
-    }
-    /** For tests and the debug view. */
+    /** Events not yet delivered, to keep across a VS Code restart. */
     pending() {
         return this.queue;
     }
-    consecutiveFailures() {
-        return this.failures;
+    /** Re-queues events saved by the previous VS Code run (only this user's, only known events). */
+    restore(events, previousIds = []) {
+        if (!this.enabled || !Array.isArray(events))
+            return 0;
+        const known = ["extension_active", "tool_opened", "tool_used", "$identify"];
+        // Events saved under the previous id are still this user's: PostHog maps that id to the merged person.
+        const ids = new Set([this.options.distinctId, ...previousIds]);
+        const valid = events.filter((entry) => !!entry && typeof entry === "object" &&
+            typeof entry.uuid === "string" && typeof entry.timestamp === "string" &&
+            known.includes(entry.event) &&
+            !!entry.properties && typeof entry.properties === "object" &&
+            ids.has(entry.properties.distinct_id)).slice(-this.maxQueue);
+        this.queue = [...valid, ...this.queue].slice(-this.maxQueue);
+        return valid.length;
     }
 }
 exports.AnalyticsClient = AnalyticsClient;

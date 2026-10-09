@@ -39,6 +39,7 @@ const api_client_features_1 = require("./api-client-features");
 const api_client_webview_1 = require("./api-client-webview");
 const service_1 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
+const analytics_1 = require("../analytics");
 const SENSITIVE_NAME = /(auth|token|secret|password|passwd|pwd|key|cookie|session|signature|credential)/i;
 const VARIABLE_ONLY = /^(Bearer\s+|Basic\s+)?\{\{\w+\}\}$/i;
 const HISTORY_BODY_LIMIT = 20000;
@@ -911,6 +912,7 @@ function apiTest(context, services) {
                             ...result
                         });
                         void (0, activation_1.reach)("first_api_request");
+                        (0, analytics_1.trackToolUsed)("openGUI");
                     }
                     catch (error) {
                         // A cancelled request is reported by the cancelRequest handler

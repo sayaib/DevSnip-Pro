@@ -33,6 +33,7 @@ const command_registry_1 = require("../utils/command-registry");
 const webview_ui_1 = require("../utils/webview-ui");
 const service_1 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
+const analytics_1 = require("../analytics");
 const execFileAsync = util.promisify(child_process_1.execFile);
 /** Official OpenCode distribution: npm package `opencode-ai` exposing the `opencode` binary. */
 const OPENCODE_NPM_PACKAGE = "opencode-ai";
@@ -305,6 +306,7 @@ function registerOpenCodeIntegrationCommand(context) {
                         const terminal = vscode.window.createTerminal({ name: "OpenCode", cwd: workspacePath });
                         terminal.show();
                         void (0, activation_1.reach)("first_opencode");
+                        (0, analytics_1.trackToolUsed)("openCodeIntegration");
                         // Wait for shell initialisation before sending the command. On
                         // Windows, PowerShell may first show an execution-policy prompt and
                         // text sent too early would answer that prompt instead of running.

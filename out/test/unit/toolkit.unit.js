@@ -134,14 +134,14 @@ function python() {
         assert.strictEqual(registry_1.SECTIONS[0].entries[0].command, "openGUI");
     });
     (0, run_unit_tests_1.test)("analytics files toolkit tools under their section", () => {
-        assert.strictEqual((0, analytics_1.featureCategory)("dockerfileHelper"), "devops");
-        assert.strictEqual((0, analytics_1.featureCategory)("jwtDecoder"), "security");
-        assert.strictEqual((0, analytics_1.featureCategory)("dataConverter"), "convert");
-        assert.strictEqual((0, analytics_1.featureCategory)("ragPipeline"), "data");
-        assert.strictEqual((0, analytics_1.featureCategory)("llmClientSetup"), "ai");
+        assert.strictEqual((0, analytics_1.toolSection)("dockerfileHelper"), "devops");
+        assert.strictEqual((0, analytics_1.toolSection)("jwtDecoder"), "security");
+        assert.strictEqual((0, analytics_1.toolSection)("dataConverter"), "convert");
+        assert.strictEqual((0, analytics_1.toolSection)("ragPipeline"), "data");
+        assert.strictEqual((0, analytics_1.toolSection)("llmClientSetup"), "ai");
         // Aliases report under their tool's section.
-        assert.strictEqual((0, analytics_1.featureCategory)("modelComparison"), "ai");
-        assert.strictEqual((0, analytics_1.featureCategory)("yamlJsonTool"), "text");
+        assert.strictEqual((0, analytics_1.toolSection)("modelComparison"), "ai");
+        assert.strictEqual((0, analytics_1.toolSection)("yamlJsonTool"), "text");
     });
 });
 (0, run_unit_tests_1.suite)("toolkit tools", () => {

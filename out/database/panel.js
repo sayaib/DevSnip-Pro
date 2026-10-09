@@ -33,6 +33,7 @@ const page_1 = require("./page");
 const webview_ui_1 = require("../utils/webview-ui");
 const service_2 = require("../theme/service");
 const activation_1 = require("../onboarding/activation");
+const analytics_1 = require("../analytics");
 const VIEW_TYPE = "devsnip.databaseClient";
 const hostUi = {
     confirm: async (message, detail, action) => {
@@ -74,7 +75,7 @@ const hostUi = {
         await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Beside });
     },
     baseDir: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-    onConnected: () => { void (0, activation_1.reach)("first_database_connection"); }
+    onConnected: () => { void (0, activation_1.reach)("first_database_connection"); (0, analytics_1.trackToolUsed)("databaseClient"); }
 };
 /** Opens (or reveals) the Database Client panel. */
 function openDatabaseClient(context) {

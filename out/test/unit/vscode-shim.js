@@ -56,6 +56,7 @@ const api = {
         clipboard: { writeText: async () => undefined },
         openExternal: async () => true,
         isTelemetryEnabled: true,
+        machineId: undefined,
         uiKind: 1,
         language: "en",
         remoteName: undefined,

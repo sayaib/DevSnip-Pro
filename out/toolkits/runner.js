@@ -104,7 +104,6 @@ async function openTool(context, tool, initial) {
         initial: initial ?? {},
         platform: process.platform
     }));
-    let liveTracked = false;
     let latestRequest = 0;
     const feature = tool.command;
     const subscription = panel.webview.onDidReceiveMessage(async (message) => {
@@ -135,11 +134,9 @@ async function openTool(context, tool, initial) {
                 (0, webview_ui_1.safePostMessage)(panel, { type: "result", requestId, durationMs, ...outcome });
                 if (action)
                     (0, webview_ui_1.safePostMessage)(panel, { type: "examples", examples: await allExamples(tool, ctx) });
-                if (trigger !== "live" || !liveTracked) {
-                    if (trigger === "live")
-                        liveTracked = true;
-                    (0, analytics_1.track)("tool_run_completed", { feature, section: tool.section, outcome: outcome.outcome, trigger, duration_ms: durationMs });
-                }
+                // Live results re-run on every edit; analytics counts a tool once per few minutes.
+                if (outcome.outcome === "success")
+                    (0, analytics_1.trackToolUsed)(feature);
                 (0, activation_1.noteToolRun)(tool.section, outcome.outcome);
                 return;
             }
@@ -160,24 +157,20 @@ async function openTool(context, tool, initial) {
             case "copy":
                 await vscode.env.clipboard.writeText(String(message.text ?? ""));
                 (0, webview_ui_1.safePostMessage)(panel, { type: "notice", kind: "success", text: "Copied to the clipboard." });
-                (0, analytics_1.track)("tool_output_used", { feature, action: "copy" });
                 return;
             case "insert": {
                 await insertAtCursor(String(message.text ?? ""), typeof message.language === "string" ? message.language : undefined);
-                (0, analytics_1.track)("tool_output_used", { feature, action: "insert" });
                 return;
             }
             case "open": {
                 const document = await vscode.workspace.openTextDocument({ content: String(message.text ?? ""), language: editorLanguage(message.language) });
                 await vscode.window.showTextDocument(document, { preview: false, viewColumn: vscode.ViewColumn.Beside });
-                (0, analytics_1.track)("tool_output_used", { feature, action: "open" });
                 return;
             }
             case "download": {
                 const saved = await saveAs(String(message.text ?? ""), typeof message.language === "string" ? message.language : undefined, typeof message.fileName === "string" ? message.fileName : "");
                 if (saved) {
                     (0, webview_ui_1.safePostMessage)(panel, { type: "notice", kind: "success", text: `Saved ${path.basename(saved)}.` });
-                    (0, analytics_1.track)("tool_output_used", { feature, action: "save" });
                 }
                 return;
             }
@@ -188,8 +181,6 @@ async function openTool(context, tool, initial) {
                     return;
                 const result = await writeFiles(files);
                 (0, webview_ui_1.safePostMessage)(panel, { type: "notice", kind: result.kind, text: result.text });
-                if (result.written)
-                    (0, analytics_1.track)("tool_output_used", { feature, action: message.type === "save" ? "save" : "write_all", file_count: result.written });
                 return;
             }
         }

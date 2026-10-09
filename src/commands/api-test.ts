@@ -12,6 +12,7 @@ import { FeatureContext, buildCatalog, handleFeatureMessage } from "./api-client
 import { API_CLIENT_INIT_SCRIPT, API_CLIENT_SCRIPT, API_CLIENT_STYLES, apiClientMarkup } from "./api-client-webview";
 import { setWebviewHtml } from "../theme/service";
 import { reach } from "../onboarding/activation";
+import { trackToolUsed } from "../analytics";
 
 /**
  * What is needed to reopen a request from history. Values are the request's
@@ -1036,6 +1037,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
                   ...result
                 });
                 void reach("first_api_request");
+                trackToolUsed("openGUI");
               } catch (error: any) {
                 // A cancelled request is reported by the cancelRequest handler
                 // (or superseded by a newer request), not as a failure.
