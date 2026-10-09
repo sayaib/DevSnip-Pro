@@ -736,6 +736,28 @@ suite("daily activities", () => {
     assert.strictEqual(getUserStats(lucky).unlocked.length, 1);
   });
 
+  test("the page shows what a spin really paid, not just the slice it stopped on", async () => {
+    const freeze = WHEEL.findIndex(segment => "freeze" in segment.prize);
+    const item = WHEEL.findIndex(segment => "item" in segment.prize);
+    const full = seeded({ streakFreezes: MAX_STREAK_FREEZES });
+    await spinDailyWheel(full, landOn(freeze));
+    const paid = buildMilestoneView(full).play.wheel;
+    assert.strictEqual(paid.lastSpin, freeze);
+    assert.deepStrictEqual(paid.prize, { text: `+${WHEEL_FALLBACK_POINTS} points (your freezes are full)`, points: WHEEL_FALLBACK_POINTS, rewardId: null });
+    assert.strictEqual(paid.segments[freeze].kind, "freeze");
+    assert.strictEqual(paid.fallbackPoints, WHEEL_FALLBACK_POINTS);
+
+    const lucky = seeded({});
+    await spinDailyWheel(lucky, landOn(item));
+    const won = getUserStats(lucky).unlocked[0];
+    assert.strictEqual(buildMilestoneView(lucky).play.wheel.prize?.rewardId, won, "an item prize names the reward, so it can be worn");
+
+    // A stored prize survives a reload but loses anything it should not have.
+    const tampered = seeded({ play: { ...getUserStats(lucky).play, prize: { text: "x".repeat(200), points: 9999, rewardId: "not_a_reward" } } });
+    assert.deepStrictEqual(getUserStats(tampered).play.prize, { text: "x".repeat(80), points: 100 });
+    assert.strictEqual(buildMilestoneView(seeded({})).play.wheel.prize, null, "nothing before the first spin");
+  });
+
   test("the daily challenge pays once, more when right, and keeps its answer secret until then", async () => {
     const question = quizForDate(today);
     const context = seeded({});

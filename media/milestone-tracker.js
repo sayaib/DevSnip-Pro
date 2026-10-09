@@ -51,6 +51,7 @@
         ring: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
         image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 9h.01',
         play: 'M7 4.5v15l12-7.5z',
+        clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
         refresh: 'M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4',
         x: 'M6 6l12 12M18 6 6 18'
     };
@@ -71,6 +72,10 @@
         redeemView: saved.redeemView || 'play',
         spinning: false,
         wheelAngle: null,
+        // Play cards keep the order they had when the sheet opened, so nothing jumps after you play.
+        playOrder: null,
+        // Keeps the wheel on screen after a spin until the sheet closes.
+        justSpun: false,
         sprint: null,
         sprintTimer: null,
         redeemReturn: null,
@@ -207,6 +212,7 @@
         els.tabsRow = h('div', { className: 'tabs-row' }, [els.tabs]);
         // Redeem: the points shop opens as a sheet over the page, from the button on the rank card.
         els.redeemBalance = h('span', { className: 'num' });
+        els.redeemSub = h('p', { text: REDEEM_VIEWS[0].sub });
         els.redeemBody = h('div', { className: 'redeem-body' });
         els.redeem = h('div', { className: 'redeem', id: 'redeem', hidden: true, onclick: function (event) { if (event.target === els.redeem) closeRedeem(); } }, [
             h('section', { className: 'redeem-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'redeemTitle' }, [
@@ -214,7 +220,7 @@
                     h('span', { className: 'redeem-icon', 'aria-hidden': 'true' }, [icon('gift')]),
                     h('div', { className: 'redeem-heading' }, [
                         h('h2', { id: 'redeemTitle', text: 'Redeem points' }),
-                        h('p', { text: 'Avatars, titles, frames, banners, effects, themes and power-ups.' })
+                        els.redeemSub
                     ]),
                     h('span', { className: 'chip pts redeem-balance' }, [icon('wallet'), els.redeemBalance, ' pts']),
                     h('button', { type: 'button', className: 'xbtn icon', id: 'redeemClose', 'aria-label': 'Close', title: 'Close (Esc)', onclick: function () { closeRedeem(); } }, [icon('x')])
@@ -258,6 +264,9 @@
         document.body.classList.add('redeem-open');
         ui.redeemOpen = true;
         persist();
+        // The sheet is only drawn while it is open (see renderRewards).
+        ui.keys.rewards = null;
+        if (ui.view) renderRewards(ui.view);
         if (focus !== false) document.getElementById('redeemClose').focus();
     }
 
@@ -266,6 +275,8 @@
         els.redeem.hidden = true;
         document.body.classList.remove('redeem-open');
         ui.redeemOpen = false;
+        ui.playOrder = null;
+        ui.justSpun = false;
         persist();
         var back = ui.redeemReturn && ui.redeemReturn !== document.body && document.contains(ui.redeemReturn) ? ui.redeemReturn : document.getElementById('redeemBtn');
         ui.redeemReturn = null;
@@ -1053,19 +1064,27 @@
     // ------------------------------------------------------------------
 
     var REDEEM_VIEWS = [
-        { id: 'play', label: 'Play & earn', icon: 'play' },
-        { id: 'profile', label: 'Profile', icon: 'smile' },
-        { id: 'shop', label: 'Shop', icon: 'wallet' }
+        { id: 'play', label: 'Play & earn', icon: 'play', sub: 'Daily games and a weekly event that pay points.' },
+        { id: 'profile', label: 'Profile', icon: 'smile', sub: 'Dress up your rank card with what you own.' },
+        { id: 'shop', label: 'Shop', icon: 'wallet', sub: 'Avatars, titles, frames, banners, effects, themes and power-ups.' }
     ];
     var SEG = 360 / 8;
 
-    /** The daily wheel, drawn as SVG so the browser can rotate it smoothly. */
-    function wheelSvg(segments, angle) {
+    /**
+     * The daily wheel, drawn as SVG so the browser can rotate it smoothly.
+     * Labels that would rest upside down are turned the right way up, and
+     * `win` highlights the slice the pointer stopped on.
+     */
+    function wheelSvg(segments, angle, win) {
         var NS = 'http://www.w3.org/2000/svg';
         var svg = document.createElementNS(NS, 'svg');
         svg.setAttribute('viewBox', '-100 -100 200 200');
         svg.setAttribute('class', 'wheel-svg');
         svg.setAttribute('aria-hidden', 'true');
+        var rim = document.createElementNS(NS, 'circle');
+        rim.setAttribute('r', '99');
+        rim.setAttribute('class', 'wheel-rim');
+        svg.appendChild(rim);
         var group = document.createElementNS(NS, 'g');
         group.setAttribute('class', 'wheel-rotor');
         group.style.transform = 'rotate(' + angle + 'deg)';
@@ -1074,66 +1093,179 @@
             var a0 = (i * seg - 90) * Math.PI / 180;
             var a1 = ((i + 1) * seg - 90) * Math.PI / 180;
             var path = document.createElementNS(NS, 'path');
-            path.setAttribute('d', 'M0 0 L' + (96 * Math.cos(a0)).toFixed(2) + ' ' + (96 * Math.sin(a0)).toFixed(2) + ' A96 96 0 0 1 ' + (96 * Math.cos(a1)).toFixed(2) + ' ' + (96 * Math.sin(a1)).toFixed(2) + ' Z');
+            path.setAttribute('d', 'M0 0 L' + (92 * Math.cos(a0)).toFixed(2) + ' ' + (92 * Math.sin(a0)).toFixed(2) + ' A92 92 0 0 1 ' + (92 * Math.cos(a1)).toFixed(2) + ' ' + (92 * Math.sin(a1)).toFixed(2) + ' Z');
             path.setAttribute('fill', segment.color);
-            path.setAttribute('class', 'wheel-slice');
+            path.setAttribute('class', 'wheel-slice' + (win === null || win === undefined ? '' : i === win ? ' win' : ' dim'));
             group.appendChild(path);
             var mid = (i + 0.5) * seg;
+            // Where this label ends up once the wheel rests at `angle`: flip the ones in the bottom half.
+            var rest = (((mid + angle) % 360) + 360) % 360;
+            var flip = rest > 90 && rest < 270;
             var label = document.createElementNS(NS, 'g');
-            label.setAttribute('transform', 'rotate(' + mid + ') translate(0 -62)');
+            label.setAttribute('transform', 'rotate(' + mid + ') translate(0 -58)' + (flip ? ' rotate(180)' : ''));
             var emoji = document.createElementNS(NS, 'text');
             emoji.setAttribute('class', 'wheel-icon');
-            emoji.setAttribute('y', '-4');
+            emoji.setAttribute('y', flip ? '12' : '-12');
             emoji.textContent = segment.icon;
             var text = document.createElementNS(NS, 'text');
-            text.setAttribute('class', 'wheel-label');
-            text.setAttribute('y', '16');
+            text.setAttribute('class', 'wheel-label' + (segment.label.length > 4 ? ' long' : ''));
+            text.setAttribute('y', flip ? '-8' : '9');
             text.textContent = segment.label;
             label.appendChild(emoji);
             label.appendChild(text);
             group.appendChild(label);
         });
+        // Pegs around the rim, for a little more of a real wheel.
+        for (var p = 0; p < segments.length; p++) {
+            var a = (p * seg - 90) * Math.PI / 180;
+            var peg = document.createElementNS(NS, 'circle');
+            peg.setAttribute('cx', (95.5 * Math.cos(a)).toFixed(2));
+            peg.setAttribute('cy', (95.5 * Math.sin(a)).toFixed(2));
+            peg.setAttribute('r', '2.4');
+            peg.setAttribute('class', 'wheel-peg');
+            group.appendChild(peg);
+        }
         var hub = document.createElementNS(NS, 'circle');
-        hub.setAttribute('r', '16');
+        hub.setAttribute('r', '17');
         hub.setAttribute('class', 'wheel-hub');
+        var hubText = document.createElementNS(NS, 'text');
+        hubText.setAttribute('class', 'wheel-hub-text');
+        hubText.textContent = 'SPIN';
         svg.appendChild(group);
         svg.appendChild(hub);
+        svg.appendChild(hubText);
         return svg;
     }
 
     /** Wheel angle that puts segment `index` under the pointer at the top. */
     function restAngle(index) { return index === null || index === undefined ? -SEG / 2 : -(index + 0.5) * SEG; }
 
+    /** The prizes with their real odds; the two +10 slices are one row. Freeze and item rows say what they pay when they cannot be given. */
+    function prizeRows(v, won) {
+        var w = v.play.wheel;
+        var freezesFull = v.streak && v.streak.freezes >= v.streak.maxFreezes;
+        var noItems = v.shop && v.shop.box && v.shop.box.left === 0;
+        var rows = [];
+        w.segments.forEach(function (seg, i) {
+            var name = seg.kind === 'freeze' ? 'Streak freeze' : seg.kind === 'item' ? 'Mystery item' : seg.label + ' pts';
+            var row = rows.filter(function (r) { return r.name === name; })[0];
+            if (!row) {
+                row = { name: name, icon: seg.icon, color: seg.color, chance: 0, indexes: [], note: null };
+                if (seg.kind === 'freeze') row.note = freezesFull ? 'Your freezes are full, so this pays +' + w.fallbackPoints + ' pts' : 'Saves your streak on a day you miss';
+                if (seg.kind === 'item') row.note = noItems ? 'You own every item, so this pays +' + w.fallbackPoints + ' pts' : 'An avatar, title, frame, banner or effect you don’t own';
+                rows.push(row);
+            }
+            row.chance += seg.chance;
+            row.indexes.push(i);
+            row.rank = seg.kind === 'points' ? Number((/\d+/.exec(seg.label) || [0])[0]) : seg.kind === 'freeze' ? 1000 : 1001;
+        });
+        // Points from small to big, then the freeze and the mystery item.
+        rows.sort(function (a, b) { return a.rank - b.rank; });
+        return h('ul', { className: 'prize-list', 'aria-label': 'Prizes and odds' }, rows.map(function (r) {
+            var isWon = won !== null && won !== undefined && r.indexes.indexOf(won) >= 0;
+            return h('li', { className: 'prize-row' + (isWon ? ' won' : '') }, [
+                h('span', { className: 'prize-icon', 'aria-hidden': 'true', vars: { '--tint': r.color }, text: r.icon }),
+                h('span', { className: 'prize-name' }, [h('span', { text: r.name }), r.note ? h('small', { text: r.note }) : null]),
+                h('span', { className: 'prize-odds' }, [
+                    h('b', { className: 'num', text: r.chance + '%' }),
+                    h('span', { className: 'prize-bar', 'aria-hidden': 'true' }, [h('i', { vars: { width: Math.min(100, r.chance * 2.5) + '%', '--tint': r.color } })])
+                ])
+            ]);
+        }));
+    }
+
+    /** What today's prize was, with a way to wear it when it was a profile item. */
+    function prizePanel(v, landed) {
+        var w = v.play.wheel;
+        var seg = w.lastSpin !== null && w.lastSpin !== undefined ? w.segments[w.lastSpin] : null;
+        var prize = w.prize;
+        var reward = prize && prize.rewardId ? (v.rewards || []).filter(function (r) { return r.id === prize.rewardId; })[0] : null;
+        var title = prize ? prize.text.replace(/^the /, '') : seg ? seg.label : 'Spun today';
+        title = title.charAt(0).toUpperCase() + title.slice(1);
+        var actions = [];
+        if (reward && !reward.active) actions.push(h('button', { type: 'button', className: 'xbtn sm primary', onclick: function (event) { event.currentTarget.disabled = true; post('equipReward', { slot: reward.kind, id: reward.id }); } }, [icon('check'), h('span', { text: 'Wear it' })]));
+        if (reward && reward.active) actions.push(chip('Wearing it', 'ok', 'check'));
+        if (reward) actions.push(h('button', { type: 'button', className: 'xbtn sm', onclick: function () { ui.redeemView = 'profile'; persist(); renderRewards(ui.view); els.redeem.scrollTop = 0; } }, [h('span', { text: 'See your profile' })]));
+        var detail = reward ? 'Added to your collection.'
+            : seg && seg.kind === 'freeze' && prize && !prize.points ? 'It is used up automatically on a day you miss, so your streak survives.'
+            : prize && prize.points ? 'Added to your balance.' : '';
+        return h('div', { className: 'spin-result' + (landed ? ' landed' : ''), role: landed ? 'status' : null }, [
+            h('span', { className: 'spin-prize', 'aria-hidden': 'true', vars: seg ? { '--tint': seg.color } : null, text: reward ? reward.icon : seg ? seg.icon : '🎡' }),
+            h('div', { className: 'spin-result-text' }, [
+                h('div', { className: 'eyebrow', text: landed ? 'You won' : 'Today’s prize' }),
+                h('div', { className: 'spin-prize-name', text: title }),
+                detail ? h('div', { className: 'act-note', text: detail }) : null,
+                actions.length ? h('div', { className: 'spin-actions' }, actions) : null
+            ])
+        ]);
+    }
+
+    /** Progress toward the bonus spin you get for finishing every quest. */
+    function bonusRow(v) {
+        var w = v.play.wheel;
+        var q = v.quests;
+        if (w.bonusSpins > 0) {
+            return h('div', { className: 'spin-bonus earned' }, [icon('check'), h('span', { text: w.spinsLeft ? 'Bonus spin earned for finishing today’s quests!' : 'You used today’s bonus spin too. Nice work.' })]);
+        }
+        if (!q || !q.total) return null;
+        return h('button', {
+            type: 'button', className: 'spin-bonus', title: 'Show today’s quests',
+            onclick: function () { closeRedeem(); els.quests.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }); els.quests.classList.remove('pulse'); void els.quests.offsetWidth; els.quests.classList.add('pulse'); }
+        }, [
+            h('span', { className: 'spin-bonus-label' }, [h('strong', { text: 'Bonus spin' }), ' — finish all ' + q.total + ' quests today']),
+            h('span', { className: 'spin-bonus-pips', 'aria-label': q.done + ' of ' + q.total + ' quests done' }, q.items.map(function (item) { return h('i', { className: item.done ? 'on' : '' }); })),
+            h('span', { className: 'num spin-bonus-count', text: q.done + '/' + q.total })
+        ]);
+    }
+
     function spinCard(v) {
         var w = v.play.wheel;
         if (ui.wheelAngle === null || ui.wheelAngle === undefined) ui.wheelAngle = restAngle(w.lastSpin);
-        var svg = wheelSvg(w.segments, ui.wheelAngle);
-        var odds = w.segments.reduce(function (acc, seg) {
-            var key = seg.icon + ' ' + seg.label;
-            acc[key] = (acc[key] || 0) + seg.chance;
-            return acc;
-        }, {});
-        var oddsList = h('div', { className: 'odds-list' }, Object.keys(odds).map(function (k) {
-            return h('span', { className: 'odds-item' }, [h('span', { text: k }), h('b', { className: 'num', text: odds[k] + '%' })]);
-        }));
+        var showWheel = w.spinsLeft > 0 || ui.justSpun || ui.spinning;
+        var landed = ui.justSpun && !ui.spinning && w.lastSpin !== null && w.lastSpin !== undefined;
+        function spin() {
+            var btn = document.getElementById('spinBtn');
+            if (!btn || btn.disabled) return;
+            btn.disabled = true;
+            btn.lastChild.textContent = 'Spinning…';
+            var wheel = document.getElementById('wheel');
+            if (wheel) wheel.classList.add('spinning');
+            ui.spinning = true;
+            post('spinWheel');
+        }
         var button = h('button', {
-            type: 'button', className: 'xbtn ' + (w.spinsLeft ? 'gold' : ''), id: 'spinBtn', disabled: !w.spinsLeft || ui.spinning,
-            onclick: function (event) {
-                event.currentTarget.disabled = true;
-                event.currentTarget.lastChild.textContent = 'Spinning…';
-                ui.spinning = true;
-                post('spinWheel');
-            }
+            type: 'button', className: 'xbtn spin-btn ' + (w.spinsLeft ? 'gold' : ''), id: 'spinBtn', disabled: !w.spinsLeft || ui.spinning,
+            onclick: spin
         }, [icon('refresh'), h('span', { text: w.spinsLeft ? (w.spinsLeft > 1 ? 'Spin (' + w.spinsLeft + ' left)' : 'Spin the wheel') : 'Spun today' })]);
-        return h('article', { className: 'card act-card spin-card' + (w.spinsLeft ? '' : ' done'), id: 'act-spin' }, [
-            h('div', { className: 'act-head' }, [
-                h('span', { className: 'act-emoji', 'aria-hidden': 'true', text: '🎡' }),
-                h('div', { className: 'act-heading' }, [h('div', { className: 'act-name', text: 'Daily spin' }), h('div', { className: 'act-sub', text: 'One free spin a day. Finish all of today’s quests for a bonus spin.' })]),
-                w.spinsLeft ? chip(w.spinsLeft + ' ready', 'accent') : chip('Done', 'ok', 'check')
+        var head = h('div', { className: 'act-head' }, [
+            h('span', { className: 'act-emoji', 'aria-hidden': 'true', text: '🎡' }),
+            h('div', { className: 'act-heading' }, [h('div', { className: 'act-name', text: 'Daily spin' }), h('div', { className: 'act-sub', text: w.spinsLeft ? 'One free spin a day. Every slice pays something.' : 'Your next free spin is in ' + hoursToMidnight() + 'h.' })]),
+            w.spinsLeft ? chip(w.spinsLeft + ' ready', 'accent') : chip('Done', 'ok', 'check')
+        ]);
+        if (!showWheel) {
+            return h('article', { className: 'card act-card spin-card done', id: 'act-spin' }, [
+                head,
+                prizePanel(v, false),
+                bonusRow(v),
+                h('details', { className: 'odds' }, [h('summary', { text: 'See the prizes and odds' }), prizeRows(v, w.lastSpin)])
+            ]);
+        }
+        var wheel = h('div', {
+            className: 'wheel' + (ui.spinning ? ' spinning' : '') + (w.spinsLeft && !ui.spinning ? ' can-spin' : ''), id: 'wheel',
+            title: w.spinsLeft && !ui.spinning ? 'Click to spin' : null,
+            onclick: function () { if (w.spinsLeft && !ui.spinning) spin(); }
+        }, [h('span', { className: 'wheel-pointer', 'aria-hidden': 'true' }), wheelSvg(w.segments, ui.wheelAngle, landed ? w.lastSpin : null)]);
+        return h('article', { className: 'card act-card spin-card featured' + (w.spinsLeft ? '' : ' done'), id: 'act-spin' }, [
+            head,
+            h('div', { className: 'spin-layout' }, [
+                h('div', { className: 'spin-stage' }, [wheel, button]),
+                h('div', { className: 'spin-side' }, [
+                    landed ? prizePanel(v, true) : null,
+                    h('div', { className: 'eyebrow', text: 'Prizes and odds' }),
+                    prizeRows(v, landed ? w.lastSpin : null)
+                ])
             ]),
-            h('div', { className: 'wheel', id: 'wheel' }, [h('span', { className: 'wheel-pointer', 'aria-hidden': 'true' }), svg]),
-            h('div', { className: 'act-foot' }, [button]),
-            h('details', { className: 'odds' }, [h('summary', { text: 'See the odds' }), oddsList])
+            bonusRow(v)
         ]);
     }
 
@@ -1169,7 +1301,7 @@
                     h('span', { text: q.explain })
                 ])
                 : h('div', { className: 'act-note', text: 'Right answer +' + q.correctPoints + ' pts · trying still earns +' + q.tryPoints + '. You get one answer.' }),
-            h('div', { className: 'act-note' }, [plural(q.correctTotal, 'correct answer') + ' so far' + (q.streak > 1 ? ' · 🔥 ' + q.streak + '-day answer streak' : '')])
+            q.correctTotal ? h('div', { className: 'act-note' }, [plural(q.correctTotal, 'correct answer') + ' so far' + (q.streak > 1 ? ' · 🔥 ' + q.streak + '-day answer streak' : '')]) : null
         ]);
     }
 
@@ -1223,10 +1355,13 @@
             ];
         } else {
             body = [
+                h('div', { className: 'sprint-demo', 'aria-hidden': 'true' }, [
+                    h('span', { className: 'num', text: '0x2A' }), h('span', { className: 'sprint-arrow', text: '→' }), h('span', { className: 'num', text: '42' })
+                ]),
                 h('div', { className: 'sprint-intro' }, [
-                    h('div', { className: 'sprint-stat' }, [h('span', { className: 'num', text: sp.best ? fmt(sp.best) : '–' }), h('small', { text: 'best' })]),
-                    h('div', { className: 'sprint-stat' }, [h('span', { className: 'num', text: sp.played ? fmt(sp.score) : '–' }), h('small', { text: 'today' })]),
-                    h('div', { className: 'sprint-stat' }, [h('span', { className: 'num', text: sp.seconds + 's' }), h('small', { text: 'per game' })])
+                    h('span', { className: 'sprint-stat' }, [icon('clock'), h('b', { className: 'num', text: sp.seconds + 's' }), ' a game']),
+                    sp.best ? h('span', { className: 'sprint-stat' }, [icon('trophy'), 'Best ', h('b', { className: 'num', text: fmt(sp.best) })]) : null,
+                    sp.played ? h('span', { className: 'sprint-stat' }, [icon('check'), 'Today ', h('b', { className: 'num', text: fmt(sp.score) })]) : null
                 ]),
                 h('div', { className: 'act-foot' }, [
                     h('button', { type: 'button', className: 'xbtn ' + (sp.played ? '' : 'primary'), onclick: startSprint }, [icon('play'), h('span', { text: sp.played ? 'Practice again' : 'Start' })]),
@@ -1397,37 +1532,71 @@
         return ui.view && ui.view.profile && ui.view.profile.effect && ui.view.profile.effect.value;
     }
 
-    /** Today's four daily activities at a glance: what is done and what is still worth playing. */
-    function playSummary(v) {
+    /** The most a wheel spin can pay, read from its "+N" labels. */
+    function wheelBest(w) {
+        return w.segments.reduce(function (best, seg) { var m = /\+(\d+)/.exec(seg.label); return m ? Math.max(best, Number(m[1])) : best; }, 0);
+    }
+
+    /** Today's four activities: which are done, and the points each one can still pay. */
+    function playItems(v) {
         var p = v.play;
-        var items = [
-            { id: 'act-spin', icon: '🎡', label: 'Spin', done: !p.wheel.spinsLeft, reward: 'up to +50' },
-            { id: 'act-quiz', icon: '🧩', label: 'Challenge', done: p.quiz.choice !== null, reward: '+' + p.quiz.correctPoints },
-            { id: 'sprintCard', icon: '⚡', label: 'Bit Sprint', done: p.sprint.played, reward: 'up to +' + p.sprint.maxPoints },
-            { id: 'act-tip', icon: '💡', label: 'Tip', done: p.tip.tried, reward: '+' + p.tip.points }
+        var spinBest = wheelBest(p.wheel);
+        return [
+            { key: 'spin', id: 'act-spin', icon: '🎡', label: 'Daily spin', done: !p.wheel.spinsLeft, points: spinBest, reward: 'up to +' + spinBest, card: spinCard },
+            { key: 'quiz', id: 'act-quiz', icon: '🧩', label: 'Dev challenge', done: p.quiz.choice !== null, points: p.quiz.correctPoints, reward: '+' + p.quiz.correctPoints, card: quizCard },
+            { key: 'sprint', id: 'sprintCard', icon: '⚡', label: 'Bit Sprint', done: p.sprint.played, points: p.sprint.maxPoints, reward: 'up to +' + p.sprint.maxPoints, card: sprintCard },
+            { key: 'tip', id: 'act-tip', icon: '💡', label: 'Tip of the day', done: p.tip.tried, points: p.tip.points, reward: '+' + p.tip.points, card: tipCard }
         ];
+    }
+
+    /** Scrolls an activity card into view, highlights it and focuses its main button. */
+    function jumpTo(id) {
+        var card = document.getElementById(id);
+        if (!card) return;
+        card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+        card.classList.remove('pulse'); void card.offsetWidth; card.classList.add('pulse');
+        var target = card.querySelector('.act-foot .xbtn:not([disabled]), .quiz-opt:not([disabled])');
+        if (target) target.focus({ preventScroll: true });
+    }
+
+    function playSummary(v, items) {
         var done = items.filter(function (item) { return item.done; }).length;
         var all = done === items.length;
+        var left = items.reduce(function (sum, item) { return sum + (item.done ? 0 : item.points); }, 0);
+        var next = items.filter(function (item) { return !item.done; })[0];
+        var R = 22, C = 2 * Math.PI * R;
+        var NS = 'http://www.w3.org/2000/svg';
+        var ring = document.createElementNS(NS, 'svg');
+        ring.setAttribute('viewBox', '0 0 56 56');
+        ring.setAttribute('class', 'ps-ring');
+        ring.setAttribute('aria-hidden', 'true');
+        [['ps-ring-track', 0], ['ps-ring-fill', C * (1 - done / items.length)]].forEach(function (part) {
+            var circle = document.createElementNS(NS, 'circle');
+            circle.setAttribute('cx', '28'); circle.setAttribute('cy', '28'); circle.setAttribute('r', String(R));
+            circle.setAttribute('class', part[0]);
+            circle.setAttribute('stroke-dasharray', String(C));
+            circle.setAttribute('stroke-dashoffset', String(part[1]));
+            ring.appendChild(circle);
+        });
         return h('section', { className: 'card play-summary' + (all ? ' all-done' : ''), 'aria-label': "Today's activities" }, [
             h('div', { className: 'ps-head' }, [
-                h('div', {}, [
-                    h('div', { className: 'card-label' }, [icon('play'), h('span', { text: "Today's activities" })]),
-                    h('div', { className: 'ps-title' }, [h('span', { className: 'num', text: done + '/' + items.length }), h('span', { className: 'muted', text: all ? ' · all done, back tomorrow' : ' done' })])
+                h('div', { className: 'ps-progress' }, [ring, h('span', { className: 'ps-count num', text: done + '/' + items.length })]),
+                h('div', { className: 'ps-copy' }, [
+                    h('div', { className: 'ps-title', text: all ? 'All done for today 🎉' : done ? 'Nice — ' + plural(items.length - done, 'activity', 'activities') + ' left' : plural(items.length, 'quick game', 'quick games') + ' today' }),
+                    h('div', { className: 'ps-sub' }, all
+                        ? ['New games in ' + hoursToMidnight() + 'h. The weekly event and check-in chest still count.']
+                        : [h('strong', { className: 'num', text: 'Up to +' + fmt(left) + ' pts' }), ' still to win · resets in ' + hoursToMidnight() + 'h'])
                 ]),
-                h('span', { className: 'chip', text: 'Resets in ' + hoursToMidnight() + 'h' })
+                next ? h('button', { type: 'button', className: 'xbtn primary ps-next', onclick: function () { jumpTo(next.id); } }, [h('span', { text: done ? 'Next: ' + next.label : 'Start with ' + next.label }), icon('arrow')]) : null
             ]),
-            h('div', { className: 'ps-segments', 'aria-hidden': 'true' }, items.map(function (item) { return h('i', { className: item.done ? 'on' : '' }); })),
             h('div', { className: 'ps-items' }, items.map(function (item) {
                 return h('button', {
                     type: 'button', className: 'ps-item' + (item.done ? ' done' : ''),
-                    title: item.done ? item.label + ': done for today' : item.label + ': ' + item.reward + ' waiting',
-                    onclick: function () {
-                        var card = document.getElementById(item.id);
-                        if (card) { card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }); card.classList.remove('pulse'); void card.offsetWidth; card.classList.add('pulse'); }
-                    }
+                    title: item.done ? item.label + ': done for today' : item.label + ': ' + item.reward + ' pts waiting',
+                    onclick: function () { jumpTo(item.id); }
                 }, [
                     h('span', { className: 'ps-icon', 'aria-hidden': 'true' }, [item.done ? icon('check') : item.icon]),
-                    h('span', { className: 'ps-text' }, [h('span', { className: 'ps-label', text: item.label }), h('small', { text: item.done ? 'Done' : item.reward })])
+                    h('span', { className: 'ps-text' }, [h('span', { className: 'ps-label', text: item.label }), h('small', { text: item.done ? 'Done' : item.reward + ' pts' })])
                 ]);
             }))
         ]);
@@ -1435,18 +1604,28 @@
 
     function renderPlay(v) {
         if (!v.play) return [];
+        var items = playItems(v);
+        // Unfinished activities first, in the order they had when the sheet opened.
+        if (!ui.playOrder) ui.playOrder = items.filter(function (i) { return !i.done; }).concat(items.filter(function (i) { return i.done; })).map(function (i) { return i.key; });
+        // While the wheel can spin (or has just landed) it gets a full-width card of its own.
+        var featured = v.play.wheel.spinsLeft > 0 || ui.justSpun || ui.spinning;
+        var cards = ui.playOrder.filter(function (key) { return !(featured && key === 'spin'); }).map(function (key) { return items.filter(function (i) { return i.key === key; })[0].card(v); });
         return [
-            playSummary(v),
+            playSummary(v, items),
+            featured ? spinCard(v) : null,
+            h('div', { className: 'act-grid' }, cards),
+            h('div', { className: 'play-section' }, [h('span', { className: 'eyebrow', text: 'This week' }), h('span', { className: 'act-note', text: 'Progress here comes from using DevSnip Pro and coming back each day.' })]),
             eventCard(v),
-            h('div', { className: 'act-grid' }, [spinCard(v), quizCard(v), sprintCard(v), tipCard(v)]),
             checkinCard(v),
-            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Each activity resets at midnight and the event every Monday, so there is something new whenever you come back. Points from activities never count against the daily tool-use limit.' })])
+            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Games reset at midnight and the event every Monday. Points from them never count against the daily tool-use limit.' })])
         ];
     }
 
     function renderRewards(v) {
         // Never redraw under a spinning wheel or a running game; they redraw when they finish.
         if (ui.spinning || ui.sprint) return;
+        // Nothing to draw while the sheet is closed; openRedeem draws it.
+        if (!els.redeem || els.redeem.hidden) { ui.keys.rewards = null; return; }
         if (!changed('rewards', [v.rewards, v.balance, v.level.badge, v.level.name, v.levelPercent, v.profile, v.shop, v.streak, v.quests && v.quests.total, v.play, ui.shopKind, ui.shopShow, ui.redeemView])) return;
         var view = REDEEM_VIEWS.some(function (r) { return r.id === ui.redeemView; }) ? ui.redeemView : 'play';
         var nav = h('div', { className: 'redeem-nav', role: 'tablist', 'aria-label': 'Redeem' }, REDEEM_VIEWS.map(function (r) {
@@ -1455,10 +1634,11 @@
                 : r.id === 'shop' ? (v.rewards || []).filter(function (x) { return !x.unlocked && x.affordable; }).length + ' affordable' : null;
             return h('button', {
                 type: 'button', role: 'tab', className: 'redeem-tab', 'aria-selected': view === r.id ? 'true' : 'false',
-                onclick: function () { ui.redeemView = r.id; persist(); renderRewards(ui.view); els.redeem.scrollTop = 0; }
+                onclick: function () { ui.redeemView = r.id; ui.playOrder = null; persist(); renderRewards(ui.view); els.redeem.scrollTop = 0; }
             }, [icon(r.icon), h('span', { text: r.label }), badge ? h('span', { className: 'redeem-badge', text: String(badge) }) : count ? h('span', { className: 'redeem-count num', text: count }) : null]);
         }));
         els.redeemBalance.textContent = fmt(v.balance);
+        els.redeemSub.textContent = REDEEM_VIEWS.filter(function (r) { return r.id === view; })[0].sub;
         if (view === 'play') { replace(els.redeemBody, [nav].concat(renderPlay(v))); return; }
         if (view === 'profile') {
             replace(els.redeemBody, [nav, renderStudio(v), h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Change any slot to browse what you own and what you can buy. Everything is cosmetic: every tool works at every rank.' })])]);
@@ -1784,6 +1964,7 @@
         } else if (message.type === 'result' && message.action === 'spinWheel') {
             var finishSpin = function () {
                 ui.spinning = false;
+                ui.justSpun = true;
                 ui.keys.rewards = null;
                 if (ui.view) renderRewards(ui.view);
             };

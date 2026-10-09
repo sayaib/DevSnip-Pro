@@ -1,5 +1,32 @@
 # Development Changelog of DevSnip Pro
 
+## 11.76.3 - A better daily spin and a smoother Play & earn
+
+Redeem's **Play & earn** shows what is left today and what each game can pay, and the daily spin shows every prize with its real odds. Points, prizes and odds are unchanged.
+
+### Improved
+
+- **Redeem → Play & earn:**
+  - The summary at the top now shows a progress ring, how many points today's games can still pay, and a **Next** button that jumps straight to the next unfinished game and focuses it.
+  - Unfinished games come first. Cards keep their place while the sheet is open, so nothing moves after you play.
+  - **Daily spin:**
+    - While you have a spin, the wheel gets a full-width card. Next to it, every prize is listed with its real odds.
+    - The Freeze and Mystery item rows say what they give. When your freezes are full, or you own every item, they say they pay +25 pts instead.
+    - Click the wheel or the button to spin. The pointer ticks while it turns, the winning slice lights up and the others fade.
+    - Labels that would stop upside down are turned the right way up.
+    - A "You won" panel shows what you actually got. An item can be worn straight away with **Wear it**.
+    - Afterwards the card shrinks to "Today's prize", which remembers the real prize, such as "+25 points (your freezes are full)" or "Code Cat avatar", instead of just the slice name.
+    - A bonus-spin row shows your progress on today's quests and takes you to them.
+  - Bit Sprint shows a quick example and small stat pills instead of empty boxes.
+  - The weekly event and check-in week now sit together under "This week", below today's games.
+  - The sheet's subtitle matches the open tab.
+- Redeem is only drawn while it is open, so the Milestones & Points page updates with less work in the background.
+
+### Docs
+
+- A cleaner, easier-to-scan README: a "What's inside" table, shorter feature sections, a plain comparison with Postman and Thunder Client, and a tidier FAQ.
+- README screenshots are about half the size and load directly from GitHub without a redirect, so they appear with the text.
+
 ## 11.76.2 - A cleaner, more rewarding Milestones & Points page and Redeem
 
 The same points, milestones, ranks, rewards and data, presented more clearly. Nothing about how points are earned or spent has changed.

@@ -89,6 +89,13 @@ export interface UserStats {
     sprintBest: number;
 }
 
+export interface SpinPrize {
+    text: string;
+    points: number;
+    /** The profile reward it gave, if any. */
+    rewardId?: string;
+}
+
 export interface DailyPlay {
     /** Local date (YYYY-MM-DD) these belong to. */
     date: string;
@@ -97,6 +104,8 @@ export interface DailyPlay {
     bonusSpins: number;
     /** WHEEL index of the last spin, so the page can show where it stopped. */
     lastSpin: number | null;
+    /** What the last spin actually paid (a full freeze or item slot pays points instead). */
+    prize?: SpinPrize | null;
     /** The option picked in today's challenge, or null before answering. */
     quizChoice: number | null;
     tipTried: boolean;
@@ -311,11 +320,17 @@ function sanitizePlay(raw: unknown, today: string): DailyPlay {
     const quizChoice = optional(source.quizChoice);
     const sprintScore = optional(source.sprintScore);
     const lastSpin = optional(source.lastSpin);
+    const prize = source.prize && typeof source.prize === 'object' && typeof source.prize.text === 'string' ? source.prize : null;
     return {
         date: today,
         spinsUsed: count(source.spinsUsed, 10),
         bonusSpins: count(source.bonusSpins, 5),
         lastSpin: lastSpin >= 0 && lastSpin < WHEEL.length ? lastSpin : null,
+        prize: prize ? {
+            text: prize.text.slice(0, 80),
+            points: count(prize.points, 100),
+            ...(typeof prize.rewardId === 'string' && findReward(prize.rewardId) ? { rewardId: prize.rewardId } : {})
+        } : null,
         quizChoice: quizChoice >= 0 && quizChoice < 4 ? quizChoice : null,
         tipTried: source.tipTried === true,
         sprintScore: Number.isFinite(sprintScore) ? Math.max(0, Math.min(SPRINT_MAX_SCORE, sprintScore)) : null,
@@ -1152,6 +1167,7 @@ export async function spinDailyWheel(context: vscode.ExtensionContext, random: (
         stats.play.lastSpin = index;
         let text: string;
         let points = 0;
+        let rewardId: string | undefined;
         if ('points' in segment.prize) {
             points = segment.prize.points;
             text = `+${points} points`;
@@ -1160,13 +1176,14 @@ export async function spinDailyWheel(context: vscode.ExtensionContext, random: (
             text = 'a streak freeze';
         } else if ('item' in segment.prize) {
             const reward = grantRandomItem(stats, 'wheel', random);
-            if (reward) text = `the ${reward.name} ${REWARD_KIND_LABEL[reward.kind]}`;
+            if (reward) { text = `the ${reward.name} ${REWARD_KIND_LABEL[reward.kind]}`; rewardId = reward.id; }
             else { points = WHEEL_FALLBACK_POINTS; text = `+${points} points`; }
         } else {
             points = WHEEL_FALLBACK_POINTS;
             text = `+${points} points (your freezes are full)`;
         }
         if (points) addUncappedPoints(stats, points);
+        stats.play.prize = { text, points, ...(rewardId ? { rewardId } : {}) };
         track('activity_played', { activity: 'spin', points });
         pushActivity(stats, { id: 'play_spin', title: `Daily spin: ${text}`, points, timestamp: Date.now(), category: 'Play' });
         return { outcome: 'ok', index, segment, text };
@@ -2225,17 +2242,27 @@ body.redeem-open { overflow: hidden; }
 .redeem-tab[aria-selected="true"] .redeem-count { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--fg-0); }
 
 /* Play: today's activities at a glance */
-.play-summary { margin-top: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 8%, var(--card)), var(--card) 70%); }
+.play-summary { margin-top: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 9%, var(--card)), var(--card) 70%); }
 .play-summary.all-done { background: linear-gradient(120deg, color-mix(in srgb, var(--success) 9%, var(--card)), var(--card) 70%); border-color: color-mix(in srgb, var(--success) 35%, var(--line)); }
-.ps-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ps-title { font-size: 18px; font-weight: 800; margin-top: 4px; }
-.ps-title .muted { font-size: 13px; font-weight: 600; }
-.ps-segments { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.ps-segments i { height: 6px; border-radius: 3px; background: var(--soft); transition: background-color .3s; }
-.ps-segments i.on { background: var(--success); }
+.ps-head { display: flex; align-items: center; gap: 14px; }
+.ps-progress { position: relative; width: 56px; height: 56px; flex: none; display: grid; place-items: center; }
+.ps-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ps-ring circle { fill: none; stroke-width: 5; }
+.ps-ring-track { stroke: var(--soft); }
+.ps-ring-fill { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .6s var(--ease); }
+.all-done .ps-ring-fill { stroke: var(--success); }
+.ps-count { position: relative; font-size: 14px; font-weight: 800; }
+.ps-copy { flex: 1; min-width: 0; }
+.ps-title { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.ps-sub { font-size: 12.5px; color: var(--fg-1); margin-top: 2px; }
+.ps-sub strong { color: var(--gold-text); font-weight: 800; }
+.ps-next { flex: none; height: 34px; padding: 0 14px; }
+.ps-next .ico { width: 14px; height: 14px; }
 .ps-items { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.ps-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg-0); text-align: left; cursor: pointer; transition: border-color .15s, transform .15s; min-width: 0; }
+.ps-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg-0); text-align: left; cursor: pointer; transition: border-color .15s, transform .15s, opacity .15s; min-width: 0; }
 .ps-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.ps-item.done { background: transparent; }
+.ps-item.done .ps-label { color: var(--fg-1); }
 .ps-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none; font-size: 15px; background: var(--soft); }
 .ps-item.done .ps-icon { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
 .ps-item.done .ps-icon .ico { width: 14px; height: 14px; stroke-width: 2.6; }
@@ -2243,6 +2270,8 @@ body.redeem-open { overflow: hidden; }
 .ps-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ps-text small { font-size: 11px; color: var(--gold-text); font-weight: 700; }
 .ps-item.done .ps-text small { color: var(--success); }
+.play-section { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 22px 2px 0; }
+.play-section + .event-card { margin-top: 10px; }
 
 /* Play: activity cards */
 .act-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
@@ -2259,9 +2288,6 @@ body.redeem-open { overflow: hidden; }
 .odds summary::after { content: " ▾"; }
 .odds[open] summary::after { content: " ▴"; }
 .odds summary:hover { color: var(--fg-0); background: var(--soft); }
-.odds-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-top: 8px; }
-.odds-item { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 999px; background: var(--soft); }
-.odds-item b { color: var(--fg-0); }
 .act-head { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .act-emoji { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: var(--soft); }
 .act-name { font-size: 14px; font-weight: 800; }
@@ -2288,15 +2314,58 @@ body.redeem-open { overflow: hidden; }
 .event-reward-name { font-size: 14px; font-weight: 800; }
 
 /* Daily spin */
-.wheel { position: relative; width: min(230px, 100%); aspect-ratio: 1; margin: 2px auto 0; }
-.wheel-svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 6px 14px var(--ds-shadow, rgba(0,0,0,.3))); }
-.wheel-slice { stroke: var(--card); stroke-width: 2; }
-.wheel-icon { font-size: 17px; text-anchor: middle; dominant-baseline: middle; }
-.wheel-label { font-size: 12px; font-weight: 800; text-anchor: middle; fill: #1b1b1f; }
+.spin-card.featured { margin-top: 12px; padding: 18px 20px; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--gold) 9%, var(--card)), var(--card) 60%); }
+/* An odd card out at the end of the grid takes the full row. */
+.act-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.spin-layout { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); gap: 24px; align-items: center; }
+.spin-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.spin-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wheel { position: relative; width: min(270px, 100%); aspect-ratio: 1; margin: 6px auto 0; }
+.wheel.can-spin { cursor: pointer; }
+.wheel-svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 8px 18px var(--ds-shadow, rgba(0,0,0,.3))); transition: transform .2s var(--ease); }
+.wheel.can-spin:hover .wheel-svg { transform: scale(1.02); }
+.wheel-rim { fill: color-mix(in srgb, var(--gold) 28%, var(--card)); stroke: color-mix(in srgb, var(--gold) 70%, transparent); stroke-width: 1.5; }
+.wheel-slice { stroke: color-mix(in srgb, var(--card) 70%, transparent); stroke-width: 1.5; transition: opacity .35s; }
+.wheel-slice.dim { opacity: .38; }
+.wheel-slice.win { stroke: #fff; stroke-width: 3; }
+.wheel-peg { fill: #fff; opacity: .9; }
+.wheel-icon { font-size: 16px; text-anchor: middle; dominant-baseline: middle; }
+.wheel-label { font-size: 12.5px; font-weight: 900; text-anchor: middle; dominant-baseline: middle; fill: #1b1b1f; }
+.wheel-label.long { font-size: 10px; }
 .wheel-hub { fill: var(--card); stroke: var(--gold); stroke-width: 3; }
-.wheel-pointer { position: absolute; left: 50%; top: -6px; z-index: 1; width: 0; height: 0; transform: translateX(-50%); border-left: 11px solid transparent; border-right: 11px solid transparent; border-top: 20px solid var(--gold); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
-.spin-card .act-foot { justify-content: center; text-align: center; }
-.spin-card .act-note { width: 100%; }
+.wheel-hub-text { font-size: 8.5px; font-weight: 900; letter-spacing: .06em; text-anchor: middle; dominant-baseline: central; fill: var(--gold-text); }
+.wheel-pointer { position: absolute; left: 50%; top: -8px; z-index: 1; width: 0; height: 0; transform: translateX(-50%); transform-origin: 50% 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 22px solid var(--gold); filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+.wheel.spinning .wheel-pointer { animation: tick .14s ease-in-out infinite alternate; }
+@keyframes tick { to { transform: translateX(-50%) rotate(-16deg); } }
+.spin-btn { min-width: 170px; justify-content: center; height: 36px; font-size: 13.5px; }
+.prize-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.prize-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 9px; transition: background-color .2s; }
+.prize-row.won { background: color-mix(in srgb, var(--gold) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 45%, transparent); }
+.prize-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; background: color-mix(in srgb, var(--tint) 24%, var(--card)); }
+.prize-name { display: flex; flex-direction: column; min-width: 0; font-size: 13px; font-weight: 700; }
+.prize-name small { font-size: 11.5px; font-weight: 500; color: var(--fg-1); line-height: 1.35; }
+.prize-odds { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.prize-odds b { min-width: 30px; text-align: right; }
+.prize-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--soft); overflow: hidden; }
+.prize-bar i { display: block; height: 100%; border-radius: 3px; background: var(--tint); }
+.spin-result { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); }
+.spin-result.landed { margin-bottom: 6px; border-color: color-mix(in srgb, var(--gold) 50%, var(--line)); background: color-mix(in srgb, var(--gold) 9%, var(--card-2)); animation: pop .45s var(--ease); }
+@keyframes pop { from { opacity: 0; transform: scale(.95); } }
+.spin-prize { width: 52px; height: 52px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: color-mix(in srgb, var(--tint, var(--gold)) 22%, var(--card)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tint, var(--gold)) 45%, transparent); }
+.spin-result-text { min-width: 0; }
+.spin-prize-name { font-size: 17px; font-weight: 800; margin: 1px 0 2px; }
+.spin-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.spin-bonus { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--line); background: transparent; color: var(--fg-1); font-size: 12.5px; text-align: left; cursor: pointer; transition: border-color .15s, color .15s; }
+.spin-bonus:hover { border-color: var(--accent); color: var(--fg-0); }
+.spin-bonus strong { color: var(--fg-0); }
+.spin-bonus-label { flex: 1; min-width: 0; }
+.spin-bonus-pips { display: inline-flex; gap: 4px; }
+.spin-bonus-pips i { width: 18px; height: 6px; border-radius: 3px; background: var(--soft); }
+.spin-bonus-pips i.on { background: var(--success); }
+.spin-bonus-count { font-weight: 800; color: var(--fg-0); }
+.spin-bonus.earned { cursor: default; border-style: solid; border-color: color-mix(in srgb, var(--success) 40%, var(--line)); background: color-mix(in srgb, var(--success) 8%, transparent); color: var(--fg-0); }
+.spin-bonus.earned .ico { width: 14px; height: 14px; color: var(--success); stroke-width: 2.6; }
+.odds .prize-list { margin-top: 8px; text-align: left; }
 
 /* Daily challenge */
 .quiz-q { font-size: 14px; font-weight: 700; line-height: 1.4; }
@@ -2318,10 +2387,12 @@ body.redeem-open { overflow: hidden; }
 .quiz-explain.wrong { border-left-color: var(--streak); background: color-mix(in srgb, var(--streak) 8%, transparent); }
 
 /* Bit Sprint */
-.sprint-intro { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.sprint-stat { padding: 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); text-align: center; }
-.sprint-stat span { display: block; font-size: 20px; font-weight: 800; }
-.sprint-stat small { font-size: 11px; color: var(--fg-1); }
+.sprint-demo { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; border-radius: 12px; background: var(--card-2); border: 1px dashed var(--line); font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 22px; font-weight: 800; }
+.sprint-arrow { color: var(--fg-1); font-size: 16px; }
+.sprint-intro { display: flex; flex-wrap: wrap; gap: 6px; }
+.sprint-stat { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: var(--soft); font-size: 12px; color: var(--fg-1); }
+.sprint-stat b { color: var(--fg-0); font-weight: 800; }
+.sprint-stat .ico { width: 13px; height: 13px; }
 .sprint-top { display: flex; justify-content: space-between; font-size: 13px; font-weight: 800; }
 .sprint-time { color: var(--streak-text); }
 .sprint-bar { height: 6px; }
@@ -2356,11 +2427,14 @@ body.redeem-open { overflow: hidden; }
 
 @media (max-width: 860px) {
     .act-grid { grid-template-columns: 1fr; }
+    .spin-layout { grid-template-columns: 1fr; gap: 16px; }
     .event-card { grid-template-columns: 1fr; }
     .event-prize { border-left: 0; border-top: 1px solid var(--line); }
 }
 @media (max-width: 640px) {
     .ps-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ps-head { flex-wrap: wrap; }
+    .ps-next { width: 100%; justify-content: center; }
     .redeem-count { display: none; }
 }
 @media (max-width: 420px) {

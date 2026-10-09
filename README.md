@@ -1,283 +1,269 @@
-## ☕ Support DevSnip Pro
-
-If DevSnip Pro helps you code faster, consider supporting the project with a coffee! ❤️
-
-<p align="center">
-  <a href="https://www.buymeacoffee.com/ssayaibj">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="217" height="60">
-  </a>
-</p>
-
 # DevSnip Pro — REST API Client & Database Client for VS Code
 
-**A free REST API client for VS Code: send HTTP and GraphQL requests with environments, collections, cURL import and code generation, then check the result in a built-in database client for PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis.** It also includes LLM token and cost tools, a security scan for hard-coded secrets, and 100+ everyday developer utilities.
+**Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
 
-No account, no backend: everything runs locally unless a tool says otherwise.
+Free · No account · Runs locally · 110 developer tools
 
-**[Install from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · or run `code --install-extension sayaib.hue-console`
+**[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://www.buymeacoffee.com/ssayaibj)
 
-![DevSnip Pro REST API Client in VS Code: a GET request with formatted JSON response, status, time and size](docs/images/rest-api-client.jpg)
+![DevSnip Pro REST API Client in VS Code: a GET request with formatted JSON response, status, time and size](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/rest-api-client.jpg)
+
+## What's inside
+
+|                                                                                        |                                                                          |
+| :------------------------------------------------------------------------------------- | :----------------------------------------------------------------------- |
+| 🚀 **[REST API client](#rest-api-client-in-vs-code)**                                   | HTTP, GraphQL, environments, collections, cURL import, code generation   |
+| 🗄️ **[Database client](#database-client-for-postgresql-mysql-mongodb-and-redis)**       | PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis                 |
+| 🤖 **[AI tools](#llm-token-counter-cost-estimates-and-ai-tools)**                       | Token and cost estimates for 18 models, prompt builder, RAG helpers      |
+| 🔒 **[Security scans](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)** | Hard-coded secrets, containers, dependencies and live endpoints  |
+| 🧰 **[100+ utilities](#json-formatter-jwt-decoder-curl-converter-and-100-utilities)**   | JSON, JWT, regex, Docker, Kubernetes, cron, UUIDs and more               |
+| ✂️ **[Snippets & cleanup](#code-snippets-cleanup-and-opencode)**                        | Custom snippets, console.log cleanup, unused imports, OpenCode           |
 
 ## Get started in 60 seconds
 
 1. Install DevSnip Pro and click its icon in the Activity Bar.
-2. Open **REST API Client** from the sidebar (or run **DevSnip Pro: REST API Client** from the Command Palette).
+2. Open **REST API Client** from the sidebar.
 3. Click **Send a sample request**, or paste any URL or cURL command and press <kbd>Enter</kbd>.
-4. Next, connect a database: open **Database Client**, paste a connection string such as `postgresql://user:pass@localhost:5432/app`, then **Test** and **Save & connect**.
+4. Then try the **Database Client**: paste a connection string such as `postgresql://user:pass@localhost:5432/app`, press **Test**, then **Save & connect**.
 
-The sidebar's **Get started** card lists five first steps and ticks each one off when you actually do it. **DevSnip Pro: Get Started** opens the guided walkthrough.
-
-## Contents
-
-- [REST API client in VS Code](#rest-api-client-in-vs-code)
-- [Database client for PostgreSQL, MySQL, MongoDB and Redis](#database-client-for-postgresql-mysql-mongodb-and-redis)
-- [LLM token counter, cost estimates and AI tools](#llm-token-counter-cost-estimates-and-ai-tools)
-- [Security scan: hard-coded secrets, containers, dependencies and endpoints](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)
-- [JSON formatter, JWT decoder, cURL converter and 100+ utilities](#json-formatter-jwt-decoder-curl-converter-and-100-utilities)
-- [Code snippets, cleanup and OpenCode](#code-snippets-cleanup-and-opencode)
-- [DevSnip Pro vs Postman and Thunder Client](#devsnip-pro-vs-postman-and-thunder-client)
-- [FAQ](#faq) · [Settings](#settings) · [Troubleshooting](#troubleshooting) · [Privacy](#privacy-and-analytics) · [Guides](docs/guides/README.md)
+> **Tip:** the sidebar's **Get started** card ticks off five first steps as you do them. Run **DevSnip Pro: Get Started** for the guided walkthrough.
 
 ## REST API client in VS Code
 
-**DevSnip Pro: REST API Client** is an HTTP client and API testing tool inside VS Code. It handles the whole request cycle: choose a method, enter a URL, set headers, query parameters, a body and authentication, then send and inspect the response.
+Build a request, send it and inspect the response — all in one panel.
 
-- All HTTP methods, plus **GraphQL** (query, variables and operation name) and **WebSocket**†.
-- **Auth:** Bearer, Basic and API keys, and an OAuth 2.0 token helper†.
-- **Environments** with `{{variable}}` substitution; **collections** in folders; request **history**.
-- **cURL:** paste a cURL command into the URL bar to import it, or export any request as cURL.
-- **Code generation** in JavaScript (fetch and Axios), Python, Go, Java or C#.
-- **Response viewer** with formatting, search, headers, cookies, copy and save.
-- **AI providers:** the correct request shape for OpenAI, Anthropic, Google Gemini, Azure OpenAI, Ollama and any OpenAI-compatible endpoint.
+- **Requests:** every HTTP method, plus **GraphQL** (query, variables, operation name) and **WebSocket**†.
+- **Auth:** Bearer, Basic, API keys, and an OAuth 2.0 token helper†.
+- **Organise:** environments with `{{variable}}` substitution, collections in folders, and request history.
+- **cURL:** paste a cURL command to import it, or export any request as cURL.
+- **Code generation:** JavaScript (fetch, Axios), Python, Go, Java and C#.
+- **Response viewer:** formatting, search, headers, cookies, copy and save.
+- **AI providers:** ready-made request shapes for OpenAI, Anthropic, Gemini, Azure OpenAI, Ollama and any OpenAI-compatible endpoint.
 - **Testing†:** assertions, request chaining, batch performance runs, response comparison, mock servers and typed SDK export.
 
-† Advanced tools, paid for with points you earn by using DevSnip Pro (see [Points & milestones](#points--milestones)). There is nothing to buy; everything else is free.
+<sub>† Advanced tools, paid for with points you earn by using DevSnip Pro — there is nothing to buy. See [Points & milestones](#points--milestones).</sub>
 
-Guides: [How to test REST APIs in VS Code](docs/guides/test-rest-apis-in-vscode.md) · [How to test a GraphQL API in VS Code](docs/guides/test-graphql-api-in-vscode.md)
+📖 [Test REST APIs in VS Code](docs/guides/test-rest-apis-in-vscode.md) · [Test a GraphQL API in VS Code](docs/guides/test-graphql-api-in-vscode.md)
 
 ## Database client for PostgreSQL, MySQL, MongoDB and Redis
 
-**DevSnip Pro: Database Client** is a SQL client for PostgreSQL, MySQL, SQL Server and SQLite, and a GUI for MongoDB and Redis. It connects with a connection string, detects the database and shows its databases, schemas, tables, collections or keys.
+Paste a connection string — DevSnip Pro detects the database and shows its schemas, tables, collections or keys.
 
-![DevSnip Pro Database Client in VS Code browsing a PostgreSQL table with pagination and filters](docs/images/database.jpg)
+![DevSnip Pro Database Client in VS Code browsing a PostgreSQL table with pagination and filters](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/database.jpg)
 
-| Database        | Connection string                                                      | What you can do                                                                                               |
-| :-------------- | :--------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
-| PostgreSQL      | `postgresql://user:pass@host:5432/db`                                  | Browse databases, schemas, tables and views; full CRUD; SQL console                                           |
-| MySQL / MariaDB | `mysql://user:pass@host:3306/db`                                       | Browse databases, tables and views; full CRUD; SQL console                                                    |
-| SQL Server      | `Server=host,1433;Database=db;User Id=…;Password=…` or `sqlserver://…` | Browse databases, schemas, tables and views; full CRUD; T-SQL console                                         |
-| SQLite          | `sqlite:///path/to/app.db` (or **Browse…**)                            | Browse tables and views; full CRUD; SQL console                                                               |
-| MongoDB         | `mongodb://…` or `mongodb+srv://…`                                     | Browse databases and collections; edit documents; mongosh-style console                                       |
-| Redis           | `redis://…` or `rediss://…`                                            | Browse keys by pattern and type; edit strings, hashes, lists, sets and sorted sets with TTLs; command console |
+| Database        | Connection string                                    | Console        |
+| :-------------- | :--------------------------------------------------- | :------------- |
+| PostgreSQL      | `postgresql://user:pass@host:5432/db`                | SQL            |
+| MySQL / MariaDB | `mysql://user:pass@host:3306/db`                     | SQL            |
+| SQL Server      | `Server=host,1433;Database=db;…` or `sqlserver://…`  | T-SQL          |
+| SQLite          | `sqlite:///path/to/app.db` (or **Browse…**)          | SQL            |
+| MongoDB         | `mongodb://…` or `mongodb+srv://…`                   | mongosh-style  |
+| Redis           | `redis://…` or `rediss://…`                          | Redis commands |
 
-- **Data grid** with pagination, sorting, search and filters; MongoDB filters such as `{ age: { $gt: 21 } }` and Redis key patterns such as `user:*`.
-- **Editing:** a type-aware row editor with NULL and DEFAULT, an Extended JSON document editor (`ObjectId()`, `ISODate()`), and a key editor per Redis type.
-- **Query console:** SQL, `db.users.find({ … }).limit(20)` or Redis commands; <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection; copy results as JSON or CSV.
-- **Safe by default:** connection strings live in your OS keychain (VS Code SecretStorage). Destructive statements ask first, dropping a table asks you to type its name, and a **read-only** connection refuses every write (on PostgreSQL and MySQL the session itself is read-only).
+- **Data grid:** pagination, sorting, search and filters — including MongoDB filters like `{ age: { $gt: 21 } }` and Redis patterns like `user:*`.
+- **Edit anything:** type-aware row editor (NULL, DEFAULT), Extended JSON documents (`ObjectId()`, `ISODate()`), and an editor for every Redis type with TTLs.
+- **Query console:** <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection; copy results as JSON or CSV.
+- **Safe by default:** connection strings live in your OS keychain. Destructive statements ask first, dropping a table asks you to type its name, and **read-only** connections refuse every write.
 
-Guide: [How to connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md)
+📖 [Connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md)
 
 ## LLM token counter, cost estimates and AI tools
 
-The AI tools run locally and need no API key.
+Runs locally — no API key needed.
 
-![LLM token and cost estimate for one prompt across 18 chat models](docs/images/ai-tokens.jpg)
+![LLM token and cost estimate for one prompt across 18 chat models](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/ai-tokens.jpg)
 
-- **LLM Models, Tokens & Cost:** estimate tokens and per-request, daily and monthly cost across 18 chat models, or compare context windows and prices.
+- **Tokens & cost:** estimate tokens and per-request, daily and monthly cost across 18 chat models; compare context windows and prices.
 - **Prompt Builder:** fill a prompt template and check it for common mistakes.
-- **LLM Output Cleaner & JSON Validator:** pull the JSON out of a model's reply, repair it and validate it.
-- **JSON → TOON** to shrink structured data in prompts; **LLM Client Setup** and **AI App Starter** for project boilerplate.
-- **RAG** (in **Data & RAG**): chunking tester, context window budget, vector store setup, retrieval evaluation, grounding checks and more.
-- **Call real models** from the REST client: send prompts, stream replies and validate output against a schema for free; compare models side by side, benchmark them and test embeddings, vector databases and RAG pipelines with points†.
+- **Output Cleaner:** pull the JSON out of a model's reply, repair it and validate it.
+- **RAG helpers:** chunking tester, context window budget, vector store setup, retrieval evaluation, grounding checks and more.
+- **Starters:** JSON → TOON to shrink prompts, LLM Client Setup and AI App Starter.
+- **Call real models** from the REST client: prompts, streaming and schema validation are free; model comparison, benchmarks, embeddings and RAG pipeline tests use points†.
 
-Guide: [How to count LLM tokens and estimate cost in VS Code](docs/guides/count-llm-tokens-and-cost-in-vscode.md)
+📖 [Count LLM tokens and estimate cost in VS Code](docs/guides/count-llm-tokens-and-cost-in-vscode.md)
 
 ## Security scan: hard-coded secrets, containers, dependencies and endpoints
 
-**DevSnip Pro: Security Hub** puts four scans in one panel. Each finding carries its evidence, a severity and the fix; results are filterable and export as Markdown or JSON.
+**Security Hub** puts four scans in one panel. Every finding shows its evidence, severity and fix, and results export as Markdown or JSON.
 
-![Workspace security audit in VS Code finding a hard-coded API key, with severity and fix](docs/images/security.jpg)
+![Workspace security audit in VS Code finding a hard-coded API key, with severity and fix](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/security.jpg)
 
-- **Workspace audit:** a secret scanner for hard-coded API keys, tokens and passwords, plus injection risks, weak cryptography and unsafe configuration in your source. Matched values are masked.
-- **Cloud & container audit:** Terraform, Kubernetes, Docker Compose, Dockerfiles and GitHub Actions.
-- **Dependencies & config:** lockfiles, unbounded ranges, abandoned or compromised packages, registry credentials, `.env` hygiene and CI security scanning.
-- **Endpoint scan** of a URL you are authorised to test: TLS, HSTS, security headers, CSP, CORS, cookies, authentication behaviour, information exposure and rate limiting. Two read-only active checks are opt-in.
+- **Workspace audit:** hard-coded API keys, tokens and passwords (values are masked), injection risks, weak cryptography and unsafe configuration.
+- **Cloud & containers:** Terraform, Kubernetes, Docker Compose, Dockerfiles and GitHub Actions.
+- **Dependencies & config:** lockfiles, unbounded ranges, abandoned or compromised packages, registry credentials and `.env` hygiene.
+- **Endpoint scan** of a URL you're authorised to test: TLS, HSTS, security headers, CSP, CORS, cookies, auth behaviour and rate limiting.
 
 Everything runs locally except the endpoint scan, which only contacts the URL you enter.
 
-Guide: [How to find hard-coded secrets and security issues in VS Code](docs/guides/find-hardcoded-secrets-in-vscode.md)
+📖 [Find hard-coded secrets and security issues in VS Code](docs/guides/find-hardcoded-secrets-in-vscode.md)
 
 ## JSON formatter, JWT decoder, cURL converter and 100+ utilities
 
-110 tools in 13 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Toolkit panels have presets, live results, and one-click **Copy**, **Insert at cursor**, **Open in editor** and **Save**.
+110 tools in 13 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
 
-![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](docs/images/all-tools.jpg)
+![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/all-tools.jpg)
 
-- **Text & data:** JSON / YAML / XML formatter, diff checker, regex tester, case converter, encode/decode, timestamps, UUIDs, JSON to TypeScript, Zod, Pydantic, Go, Kotlin, Swift and more.
-- **API helpers:** cURL converter, OpenAPI / Swagger toolkit, GraphQL formatter and types, CORS debugger, JWT decoder and signer, OAuth 2.0 & PKCE.
-- **DevOps & cloud:** Dockerfile, Docker Compose, Kubernetes & Helm, Terraform, CI pipeline and Nginx generators, plus a cron expression helper. Generated configuration is checked by the test suite.
+- **Text & data:** JSON / YAML / XML formatter, diff checker, regex tester, timestamps, UUIDs, and JSON to TypeScript, Zod, Pydantic, Go, Kotlin or Swift.
+- **API helpers:** cURL converter, OpenAPI / Swagger toolkit, GraphQL types, CORS debugger, JWT decoder and signer, OAuth 2.0 & PKCE.
+- **DevOps & cloud:** Dockerfile, Docker Compose, Kubernetes & Helm, Terraform, CI pipeline and Nginx generators, plus a cron helper.
 - **Web & mobile:** React / Next.js generator, HTML → JSX, SEO meta tags, adb & simctl commands, deep links, app signing and asset sizes.
 
-The [full list of tools by section](#all-tools-by-section) is below.
+See [all tools by section](#all-tools-by-section) below.
 
-Guide: [Format JSON, decode JWTs and other quick developer tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md)
+📖 [Format JSON, decode JWTs and other quick tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md)
 
 ## Code snippets, cleanup and OpenCode
 
-- **Snippets:** select code, run **DevSnip Pro: Create Snippet** and give it a prefix; it appears in IntelliSense. Ready-made snippets ship for 39 languages; **DevSnip Pro: Saved Snippets** lists yours.
-- **Clean up:** **Clean Console Logs** finds and removes `console.log` calls; **Remove Unused Imports** covers JavaScript, TypeScript, Python and Java.
-- **Dependencies & Installation:** every dependency with its declared range, installed version and newest allowed and stable versions for npm, yarn, pnpm, pip, Maven and Gradle; installs run only after you confirm the exact command.
-- **OpenCode Integration:** checks for Node.js and the OpenCode CLI, installs or repairs it via npm, and launches it in a terminal at your workspace. An install is only reported as successful once `opencode --version` actually runs.
+- **Snippets:** select code, run **DevSnip Pro: Create Snippet**, give it a prefix — it appears in IntelliSense. Ready-made snippets ship for 39 languages.
+- **Clean up:** remove `console.log` calls, and unused imports in JavaScript, TypeScript, Python and Java.
+- **Dependencies:** see declared, installed and newest versions for npm, yarn, pnpm, pip, Maven and Gradle; installs run only after you confirm the command.
+- **OpenCode:** checks for Node.js and the OpenCode CLI, installs or repairs it, and launches it in your workspace.
 
-![OpenCode Integration Hub in VS Code showing Node.js and OpenCode installed](docs/images/opencode.jpg)
+![OpenCode Integration Hub in VS Code showing Node.js and OpenCode installed](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/opencode.jpg)
 
-Guide: [How to install and use OpenCode in VS Code](docs/guides/opencode-in-vscode.md)
+📖 [Install and use OpenCode in VS Code](docs/guides/opencode-in-vscode.md)
 
 ## DevSnip Pro vs Postman and Thunder Client
 
-All three can send API requests from VS Code. They are built for different jobs, so pick by what you need.
+All three send API requests from VS Code, but they're built for different jobs.
 
-|                                                                         | DevSnip Pro                                                |
-| :---------------------------------------------------------------------- | :--------------------------------------------------------- |
-| Account required                                                        | No                                                         |
-| Where requests are stored                                               | Locally, in VS Code storage                                |
-| HTTP, GraphQL                                                           | Yes, free                                                  |
-| WebSocket, OAuth 2.0 helper, assertions, chaining, batch runs           | Yes, paid with points earned by use†                       |
-| Environments, collections, history, cURL import/export, code generation | Yes, free                                                  |
-| Import Postman or Insomnia collections                                  | No (cURL import only)                                      |
-| `.http` / `.rest` files                                                 | No                                                         |
-| Command-line runner for CI                                              | No                                                         |
-| gRPC, SOAP                                                              | No                                                         |
-| Team workspaces and sync                                                | No                                                         |
-| Also included                                                           | Database client, security scans, LLM tools, 100+ utilities |
+**DevSnip Pro is a good fit if you want:**
 
-**Choose DevSnip Pro** if you work alone or locally, want no account, and also want a database client and everyday tools in the same extension. **Choose Postman or Thunder Client** if you need team sharing, collection import or a CI runner. **Choose REST Client** if you want requests as `.http` files in your repository. Features and plans of other tools change; check their pages for current details.
+- ✅ No account — requests are stored locally in VS Code
+- ✅ HTTP, GraphQL, environments, collections, history, cURL import/export and code generation, free
+- ✅ A database client, security scans, LLM tools and 100+ utilities in the same extension
 
-More: [Free Postman alternative in VS Code: which API client to use](docs/guides/postman-alternative-in-vscode.md)
+**Not supported yet:**
 
-## FAQ
+- ❌ Importing Postman or Insomnia collections (paste requests as cURL instead)
+- ❌ `.http` / `.rest` files, a CLI runner for CI, gRPC or SOAP
+- ❌ Team workspaces and sync
 
-**Is there a free Postman alternative inside VS Code?** Yes. DevSnip Pro's REST API Client is free, needs no account and covers the everyday loop: requests, environments, collections, history, cURL import and code generation. It cannot import Postman collections; paste requests as cURL instead.
+Need team sharing or a CI runner? Postman or Thunder Client fit better. Want requests as `.http` files in your repo? Try REST Client. Other tools' features change, so check their pages for current details.
 
-**How do I test a GraphQL API in VS Code?** Open the REST API Client, switch the protocol from **HTTP** to **GraphQL**, set the method to `POST`, write the query and JSON variables, and send. See [the GraphQL guide](docs/guides/test-graphql-api-in-vscode.md).
-
-**How do I connect to PostgreSQL (or MySQL, MongoDB, Redis) in VS Code?** Run **DevSnip Pro: Database Client**, paste a connection string, press **Test**, then **Save & connect**.
-
-**How do I count tokens for an LLM prompt in VS Code?** Run **DevSnip Pro: LLM Models, Tokens & Cost** and paste the prompt. Counts are estimates; confirm prices with your provider.
-
-**Does it support `.http` files?** No. Requests are built in a form and saved to collections.
-
-**Is DevSnip Pro free?** Yes. Most features are free with no limits. A set of advanced REST API Client tools costs points, which you earn by using the extension; there is nothing to buy.
-
-**Does it send my code anywhere?** No. Tools run locally. Network requests go only to the URLs and databases you enter. Anonymous usage analytics never include code, file names, URLs, inputs or outputs.
-
-**Does it work offline?** Yes, except the parts that need a network by definition: API requests, database connections, the endpoint scan, AI provider calls and the OpenCode install.
-
-**Will it slow down VS Code?** It is designed not to. The REST client, security analysers and dependency manager load only when you first open them, and the Database Client's drivers load when you connect.
-
-**Where are my credentials stored?** Database connection strings are in your operating system's keychain via VS Code SecretStorage. API keys typed into a request are used for that request and are not written to history or disk.
-
-**Does it work in remote, WSL or vscode.dev?** Remote and WSL windows work, except the OpenCode hub, which needs a local process. Browser-only VS Code (vscode.dev) is not supported because several tools use Node APIs.
-
-**How do I turn off analytics?** Set VS Code's `telemetry.telemetryLevel` to anything below `all`, or set `devsnip.analytics.enabled` to `false`.
+📖 [Free Postman alternative in VS Code: which API client to use](docs/guides/postman-alternative-in-vscode.md)
 
 ## Points & milestones
 
-![Milestones and Points with rank, streak, daily boost and the Feature Explorer milestone](docs/images/milestones.jpg)
+![Milestones and Points with rank, streak, daily boost and the Feature Explorer milestone](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/milestones.jpg)
 
-Using DevSnip Pro earns points, which move you up the ranks (Bronze to Grandmaster) and pay for the advanced REST API Client tools marked †. There is no licence key, subscription, account or leaderboard: progress is personal and stored on your machine.
+Using DevSnip Pro earns points that move you from Bronze to Grandmaster. No licence key, subscription, account or leaderboard — progress stays on your machine.
 
-- **Earn:** any tool run (+3), creating a snippet (+10), a security audit (+8), an AI tool (+5), a daily login (+5, plus 1 for every day of your streak, up to +15) and a daily boost you claim (+10), plus one-time milestones such as Tool Explorer, Weekly Warrior, Monthly Marathon and Feature Explorer.
-- **Daily quests:** three new goals every day, such as "Try a tool you have never used" or "Run a security scan" (+10 to +20 each). Finish all three for a +15 bonus chest.
-- **Streak freezes:** earn one every 7 streak days (hold up to 2) or buy one for 50 points. A freeze is used up automatically so a missed day does not break your streak.
-- **Themes:** every theme except System Default is unlocked with points, from 25 points (Dark, Light, High Contrast) to 900 (Aurora). Solarized, Synthwave and Aurora also unlock free at Silver, Gold and Platinum, and Ember after a 14-day streak. Click a locked theme to preview it on every panel for 30 seconds before you spend anything.
-- **Your profile:** dress up your rank card in the Tools view with an **avatar** (Code Cat, Night Owl, Dragon, Unicorn…), a **title** (Regex Wizard, API Whisperer, 10x Developer…), a **badge frame** (Frost, Neon pulse, Rainbow halo, Orbit…), a **banner** (Sunset, Synth grid, Starfield…) and a **celebration effect** (confetti, fireworks, coin shower…) that plays when you finish a quest or rank up. Prices start at 40 points, every item is previewed on your own card first, and some are exclusive: Diamond, Master and Grandmaster avatars, and titles and frames for milestones such as Quest Master and a 100-day streak.
-- **Play & earn:** the **Redeem** button on your rank card opens a daily spin, a one-question dev challenge that explains its answer, the Bit Sprint hex/binary mini-game, a tip of the day that opens a tool worth knowing, a weekly event with an exclusive prize, and a check-in chest on every 7th streak day. Everything resets daily (the event weekly), and none of it counts against the daily tool-use limit.
-- **Power-ups:** swap a daily quest you do not like (25 points, twice a day) or open a **mystery box** (100 points) for a random profile reward you do not own yet.
-- **Fair by design:** tool use earns up to 120 points a day, and repeated runs of the same tool earn less. Quests and milestones are one-time bonuses outside that limit.
-- **Spend:** each premium tool costs 8 to 35 points per run, charged **only after a run succeeds**.
-- **Notifications:** rank-ups, rewards, milestones and finished quests show a short VS Code notification, plus a weekly recap. Set `devsnip.rewards.notifications` to `levelsOnly` or `off` to quieten them.
+- **Earn:** run tools, log in daily and keep your streak, finish three daily quests, claim a daily boost, and unlock one-time milestones. Tool use earns up to 120 points a day.
+- **Play:** the **Redeem** button on your rank card opens a daily spin, a dev challenge, the Bit Sprint mini-game, a weekly event and a streak check-in chest.
+- **Spend:** advanced REST tools marked † cost 8–35 points per run, charged **only after a run succeeds**. Points also unlock themes, streak freezes, and profile items — avatars, titles, badge frames, banners and celebration effects.
+- **Quieter notifications:** set `devsnip.rewards.notifications` to `levelsOnly` or `off`.
 
-Free tools include the full REST and GraphQL workflow, response inspection, history, environments, unlimited collections, cURL import and export, code generation, JWT decoding, JSON tools, and single AI requests with prompt testing, token costing, streaming and schema validation (capped at 25 AI requests, 25 prompt runs and 10 streamed responses a day).
+Free without points: the full REST and GraphQL workflow, history, environments, unlimited collections, cURL, code generation, JSON and JWT tools, and single AI requests with streaming and schema validation (up to 25 AI requests, 25 prompt runs and 10 streamed responses a day).
 
 ## Appearance themes
 
-![Switching appearance themes: Dracula, Nord, Light, Cyberpunk and Monokai](docs/images/themes.gif)
+![Switching appearance themes: Dracula, Nord, Light, Cyberpunk and Monokai](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/themes.gif)
 
-Twelve themes restyle every DevSnip Pro panel in one click from the **Theme** selector at the top of the sidebar. System Default, which follows your VS Code theme (including VS Code's own high-contrast themes), is free; the others are unlocked with points you earn by using DevSnip Pro. The VS Code window itself keeps your own theme.
+Twelve themes restyle every DevSnip Pro panel from the **Theme** selector at the top of the sidebar. **System Default** follows your VS Code theme and is free; the others unlock with points, and you can preview any locked theme for 30 seconds first. Your VS Code window keeps its own theme.
 
 ## All tools by section
 
-| Section                   | Tools                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| :------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Backend & API**         | REST API Client, cURL Converter, API Response Inspector, URL & Query String Tool, CORS Builder & Debugger, OpenAPI / Swagger Toolkit, GraphQL Formatter & Types, API Resource Scaffolder                                                                                                                                                                                                                                                                                                    |
-| **Web & Frontend**        | React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder                                                                                                                                                                                                                                                                                                                                                     |
-| **Mobile Development**    | adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes                                                                                                                                                                                                                                                                        |
-| **Code & Productivity**   | Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration                                                                                                                                                                                                                                                                                                                                       |
-| **Text & Formatters**     | JSON / YAML / XML Formatter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Encoders & Converters** | Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Database**              | Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB                                                                                                                                                                                                                                                                                                                                                                                       |
-| **Testing & Debugging**   | Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit                                                                                                                                                                                                                                                                                                                                                                         |
-| **Git & Version Control** | Git Command Recipes, .gitignore Generator, Semver & App Versions                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **DevOps & Cloud**        | Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter                                                                                                                                                                                                                                                                         |
-| **Security & Auth**       | JWT Decoder & Signer, Workspace Security Audit, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit                                                                                                                                                                                                                                                   |
-| **AI & ML**               | Prompt Builder, LLM Models / Tokens & Cost, LLM Client Setup, LLM Output Cleaner & JSON Validator, LLM API Tester, JSON → TOON, AI App Starter, AI/ML Code Snippets, GPU Memory & Speed, Model Serving Starter, Model Metrics, Dataset Split Planner, Learning-Rate Schedule, Model Card                                                                                                                                                                                                    |
-| **Data & RAG**            | Chunking Tester, RAG Pipeline Generator, Vector Store Setup, Embedding Model Guide, Retrieval Configuration, Context Window Budget, Grounded Prompt Assembler, Chunk & Index Size Calculator, Retrieval Evaluation, Answer Grounding Checker, Vector Similarity, Near-Duplicate Chunk Finder, Hybrid Search Fusion, Chunk Metadata Validator, Data Transformer, Data Profiler, JSON Lines Inspector, Schema Viewer & Diff, Partition Planner, Spark Cluster & Cost, Delta Lake Log Analyzer |
+- **Backend & API** — REST API Client, cURL Converter, API Response Inspector, URL & Query String Tool, CORS Builder & Debugger, OpenAPI / Swagger Toolkit, GraphQL Formatter & Types, API Resource Scaffolder
+- **Web & Frontend** — React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder
+- **Mobile Development** — adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes
+- **Code & Productivity** — Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration
+- **Text & Formatters** — JSON / YAML / XML Formatter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools
+- **Encoders & Converters** — Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter
+- **Database** — Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB
+- **Testing & Debugging** — Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit
+- **Git & Version Control** — Git Command Recipes, .gitignore Generator, Semver & App Versions
+- **DevOps & Cloud** — Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter
+- **Security & Auth** — JWT Decoder & Signer, Workspace Security Audit, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit
+- **AI & ML** — Prompt Builder, LLM Models / Tokens & Cost, LLM Client Setup, LLM Output Cleaner & JSON Validator, LLM API Tester, JSON → TOON, AI App Starter, AI/ML Code Snippets, GPU Memory & Speed, Model Serving Starter, Model Metrics, Dataset Split Planner, Learning-Rate Schedule, Model Card
+- **Data & RAG** — Chunking Tester, RAG Pipeline Generator, Vector Store Setup, Embedding Model Guide, Retrieval Configuration, Context Window Budget, Grounded Prompt Assembler, Chunk & Index Size Calculator, Retrieval Evaluation, Answer Grounding Checker, Vector Similarity, Near-Duplicate Chunk Finder, Hybrid Search Fusion, Chunk Metadata Validator, Data Transformer, Data Profiler, JSON Lines Inspector, Schema Viewer & Diff, Partition Planner, Spark Cluster & Cost, Delta Lake Log Analyzer
 
-Generated configuration is checked by the test suite: YAML and JSON are parsed, TypeScript and JavaScript are compiled, Python is byte-compiled, and Compose files are validated with `docker compose config`.
+Generated configuration is checked by the test suite: YAML and JSON are parsed, TypeScript and JavaScript compiled, Python byte-compiled, and Compose files validated with `docker compose config`.
 
 ## Installation
 
-- **From VS Code:** open the Extensions view (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>), search for **DevSnip Pro** and click **Install**.
-- **From the Marketplace:** [DevSnip Pro on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console).
-- **From the command line:** `code --install-extension sayaib.hue-console`
+- **In VS Code:** open Extensions (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>), search **DevSnip Pro** and click **Install**.
+- **Marketplace:** [DevSnip Pro on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
+- **Command line:** `code --install-extension sayaib.hue-console`
 
-Requires VS Code 1.93 or newer, on Windows, macOS or Linux. After an update, the sidebar shows a short **What's new** card once; **DevSnip Pro: What's New** opens the full release notes any time.
+Requires VS Code 1.93+ on Windows, macOS or Linux. After an update, run **DevSnip Pro: What's New** for the release notes.
 
-![The DevSnip Pro Get started walkthrough on the VS Code Welcome page](docs/images/get-started.jpg)
+![The DevSnip Pro Get started walkthrough on the VS Code Welcome page](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/get-started.jpg)
+
+## FAQ
+
+**Is DevSnip Pro free?**
+Yes. Almost everything is free with no limits. A few advanced REST API Client tools cost points, which you earn by using the extension — there is nothing to buy.
+
+**Is it a free Postman alternative?**
+For the everyday loop, yes: requests, environments, collections, history, cURL import and code generation, with no account. It can't import Postman collections; paste requests as cURL instead.
+
+**How do I test a GraphQL API?**
+In the REST API Client, switch **HTTP** to **GraphQL**, set the method to `POST`, write the query and variables, and send. See [the GraphQL guide](docs/guides/test-graphql-api-in-vscode.md).
+
+**Does it support `.http` files?**
+No. Requests are built in a form and saved to collections.
+
+**Does it send my code anywhere?**
+No. Tools run locally, and network requests go only to the URLs and databases you enter. See [Privacy](#privacy-and-analytics).
+
+**Does it work offline?**
+Yes, except for things that need a network by definition: API requests, database connections, the endpoint scan, AI provider calls and the OpenCode install.
+
+**Will it slow down VS Code?**
+No. Heavy features load only when you first open them, and database drivers load when you connect.
+
+**Does it work in Remote, WSL or vscode.dev?**
+Remote and WSL work, except the OpenCode hub, which needs a local process. vscode.dev isn't supported because several tools use Node APIs.
 
 ## Settings
 
-| Setting                                         | Default | What it does                                                                                  |
-| :---------------------------------------------- | :------ | :-------------------------------------------------------------------------------------------- |
-| `devsnip.apiTimeout`                            | `30000` | Request timeout in milliseconds for the REST API Client. A per-request timeout overrides it.  |
-| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before removing `console.log` statements.                                                 |
-| `devsnip.securityAudit.maxFiles`                | `2000`  | How many files each workspace, cloud or dependency security scan reads.                       |
-| `devsnip.security.endpointTimeout`              | `15000` | Default per-request timeout in milliseconds for the endpoint security scanner.                |
-| `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks.                                              |
-| `devsnip.analytics.enabled`                     | `true`  | Send anonymous usage analytics. See [Privacy and analytics](#privacy-and-analytics).          |
-| `devsnip.analytics.debug`                       | `false` | Log every analytics event, exactly as sent, to the **DevSnip Pro: Analytics** output channel. |
+| Setting                                         | Default | What it does                                                               |
+| :---------------------------------------------- | :------ | :------------------------------------------------------------------------- |
+| `devsnip.apiTimeout`                            | `30000` | REST request timeout (ms). A per-request timeout overrides it.             |
+| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before removing `console.log` statements.                              |
+| `devsnip.securityAudit.maxFiles`                | `2000`  | Files read by each workspace, cloud or dependency scan.                    |
+| `devsnip.security.endpointTimeout`              | `15000` | Per-request timeout (ms) for the endpoint scanner.                         |
+| `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks.                           |
+| `devsnip.rewards.notifications`                 | `all`   | Progress notifications: `all`, `levelsOnly` or `off`.                      |
+| `devsnip.analytics.enabled`                     | `true`  | Send anonymous usage analytics.                                            |
+| `devsnip.analytics.debug`                       | `false` | Log every analytics event to the **DevSnip Pro: Analytics** output channel. |
 
-**Keyboard shortcuts:** none are set by default, so nothing conflicts with your bindings. Add your own in **Preferences: Open Keyboard Shortcuts (JSON)**, for example `{ "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" }`.
+**Keyboard shortcuts:** none are set by default, so nothing conflicts. Add your own, for example `{ "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" }`.
 
 ## Troubleshooting
 
-**A new snippet does not appear in IntelliSense.** VS Code loads snippets at startup; reload the window when the extension offers it.
+**A new snippet doesn't appear in IntelliSense.** VS Code loads snippets at startup — reload the window when prompted.
 
-**OpenCode is installed but not detected.** A VS Code window launched from the Dock or a desktop shortcut inherits a minimal `PATH`. Start VS Code from a terminal or add the directory to `PATH`, then press **Recheck System**. On Windows, if PowerShell blocks the launch, use the **Launch in Command Prompt** fallback.
+**OpenCode is installed but not detected.** VS Code launched from the Dock or a shortcut gets a minimal `PATH`. Start it from a terminal or fix `PATH`, then press **Recheck System**. On Windows, use **Launch in Command Prompt** if PowerShell blocks it.
 
-**A security audit finds nothing in a large repository.** It reads up to `devsnip.securityAudit.maxFiles` files and skips dependency, build and cache folders. Raise the setting for very large repositories.
+**The Database Client can't connect.** The error says why (refused, host not found, auth failed or TLS). For a local self-signed certificate add `sslmode=no-verify` (PostgreSQL), `TrustServerCertificate=true` (SQL Server) or `tlsAllowInvalidCertificates=true` (MongoDB). SQL Server needs a SQL login.
 
-**The Database Client cannot connect.** The message says why: connection refused, host not found, authentication failed, or a TLS problem. For a local server with a self-signed certificate add `sslmode=no-verify` (PostgreSQL), `TrustServerCertificate=true` (SQL Server) or `tlsAllowInvalidCertificates=true` (MongoDB). SQL Server needs a SQL login; Windows authentication is not supported.
+**A security audit finds nothing in a large repo.** It reads up to `devsnip.securityAudit.maxFiles` files and skips dependency, build and cache folders — raise the setting.
 
-**A request never finishes.** Requests time out after `devsnip.apiTimeout`; use **Cancel** to stop one that is running.
+**A request never finishes.** Requests time out after `devsnip.apiTimeout`; press **Cancel** to stop one early.
 
-**Points look wrong.** Progress is stored per machine. Corrupted data is repaired automatically when read, and **Reset progress** in Milestones & Points (under ⋯) clears it.
+**Points look wrong.** Progress is stored per machine and repaired automatically if corrupted. **Reset progress** (under ⋯ in Milestones & Points) clears it.
 
 ## Privacy and analytics
 
-DevSnip Pro has no backend and no account. Requests go only to the URLs you enter; API keys you type are used for that request and are not written to history or disk; credential-looking values in a URL are redacted before a request is stored in history; database connection strings stay in the OS keychain. Of the toolbox tools, only the LLM API Tester uses the network, and it is marked "Uses network".
+- **No backend, no account.** Requests go only to the URLs and databases you enter.
+- **Your secrets stay put.** API keys you type aren't written to history or disk, credential-looking URL values are redacted from history, and connection strings stay in your OS keychain.
+- **Anonymous analytics only:** which features run, whether they succeed, session length and which first steps you complete. Never code, snippets, file names, paths, search queries, URLs, package names, error messages or anything that identifies you.
+- **You're in control:** nothing is sent unless VS Code's `telemetry.telemetryLevel` is `all`. Set `devsnip.analytics.enabled` to `false` to opt out, or `devsnip.analytics.debug` to see every event. Full list: [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
-DevSnip Pro collects **anonymous** usage analytics — which features run, whether they succeed, how long sessions last, and which first steps new users complete — to learn what to improve. It never includes code, snippet contents, file names or paths, search queries, URLs, package names, error messages or anything that identifies you; each installation is a random ID. Nothing is sent unless VS Code's `telemetry.telemetryLevel` is `all`, and `devsnip.analytics.enabled` switches it off for DevSnip Pro only. Set `devsnip.analytics.debug` to see every event before it is sent. The complete event list is in [docs/ANALYTICS.md](docs/ANALYTICS.md).
+Of the toolbox tools, only the LLM API Tester uses the network, and it's marked "Uses network".
 
-## Documentation, source and feedback
+## Support & feedback
 
-- **Guides:** [docs/guides](docs/guides/README.md) — REST and GraphQL APIs, databases, LLM tokens, security scans, OpenCode and everyday tools.
-- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md) · **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Source:** [github.com/sayaib/DevSnip-Pro](https://github.com/sayaib/DevSnip-Pro)
-- **Report a bug or request a feature:** [GitHub issues](https://github.com/sayaib/DevSnip-Pro/issues/new/choose)
-- **Release notes:** [CHANGELOG.md](CHANGELOG.md), or run **DevSnip Pro: What's New**
+- 🐛 [Report a bug or request a feature](https://github.com/sayaib/DevSnip-Pro/issues/new/choose)
+- 📖 [Guides](docs/guides/README.md) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
+- ⭐ A rating or review on the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) helps other developers find DevSnip Pro.
 
-If DevSnip Pro saves you time, a rating or review on the Marketplace helps other developers find it.
+If DevSnip Pro saves you time, consider buying me a coffee ❤️
 
-Made by Sayaib Sarkar — [LinkedIn](https://www.linkedin.com/in/sayaib/)
+<a href="https://www.buymeacoffee.com/ssayaibj">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="217" height="60">
+</a>
+
+Made by Sayaib Sarkar — [LinkedIn](https://www.linkedin.com/in/sayaib/) · [GitHub](https://github.com/sayaib/DevSnip-Pro)

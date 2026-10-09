@@ -2,7 +2,7 @@ import type { LevelInfo, Milestone, UserStats } from "../commands/milestoneTrack
 import { QUEST_CHEST_POINTS, findQuest } from "./quests";
 import type { CosmeticSlot, RewardDefinition, RewardKind } from "./rewards";
 import {
-  CHECKIN_CHEST_EVERY, LUCKY_POINTS, QUIZ_CORRECT_POINTS, QUIZ_TRY_POINTS, SPRINT_MAX_POINTS, SPRINT_SECONDS, TIP_POINTS, WHEEL,
+  CHECKIN_CHEST_EVERY, LUCKY_POINTS, QUIZ_CORRECT_POINTS, QUIZ_TRY_POINTS, SPRINT_MAX_POINTS, SPRINT_SECONDS, TIP_POINTS, WHEEL, WHEEL_FALLBACK_POINTS,
   eventForWeek, quizForDate, tipForDate
 } from "./activities";
 
@@ -58,10 +58,14 @@ export interface PlayView {
   /** Daily activities still waiting today (spins, challenge, Bit Sprint, tip). */
   waiting: number;
   wheel: {
-    segments: Array<{ label: string; icon: string; color: string; chance: number }>;
+    segments: Array<{ label: string; icon: string; color: string; chance: number; kind: "points" | "freeze" | "item" }>;
     spinsLeft: number;
     bonusSpins: number;
     lastSpin: number | null;
+    /** What today's last spin paid, in words. */
+    prize: { text: string; points: number; rewardId: string | null } | null;
+    /** Points a freeze or item slice pays when it cannot be given. */
+    fallbackPoints: number;
   };
   quiz: {
     id: string;
@@ -352,10 +356,15 @@ export function buildPlayView(stats: UserStats, today: string, findReward?: (id:
   return {
     waiting,
     wheel: {
-      segments: WHEEL.map(segment => ({ label: segment.label, icon: segment.icon, color: segment.color, chance: Math.round((segment.weight / totalWeight) * 100) })),
+      segments: WHEEL.map(segment => ({
+        label: segment.label, icon: segment.icon, color: segment.color, chance: Math.round((segment.weight / totalWeight) * 100),
+        kind: "freeze" in segment.prize ? "freeze" as const : "item" in segment.prize ? "item" as const : "points" as const
+      })),
       spinsLeft,
       bonusSpins: play.bonusSpins,
-      lastSpin: play.lastSpin
+      lastSpin: play.lastSpin,
+      prize: play.prize ? { text: play.prize.text, points: play.prize.points, rewardId: play.prize.rewardId ?? null } : null,
+      fallbackPoints: WHEEL_FALLBACK_POINTS
     },
     quiz: {
       id: question.id,
