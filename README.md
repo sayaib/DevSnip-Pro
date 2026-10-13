@@ -1,10 +1,12 @@
 # DevSnip Pro — REST API Client & Database Client for VS Code
 
+<a href="https://buymeacoffee.com/ssayaibj"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="42"></a>
+
 **Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
 
 Free · No account · Runs locally · 110 developer tools
 
-**[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://www.buymeacoffee.com/ssayaibj)
+**[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://buymeacoffee.com/ssayaibj)
 
 ![DevSnip Pro REST API Client in VS Code: a GET request with formatted JSON response, status, time and size](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/rest-api-client.jpg)
 

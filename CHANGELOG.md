@@ -1,5 +1,28 @@
 # Development Changelog of DevSnip Pro
 
+## 11.76.6 - Every user counted once, with their country
+
+An analytics fix, plus a Buy me a coffee button in the README. No tools, UI or features change.
+
+### Fixed
+
+- **Users stay merged.** The one-time `$identify` that merges an older anonymous id into the per-machine id (11.76.5) was recorded as done as soon as it was queued. If analytics or telemetry was turned off before the first delivery, the merge was discarded and never sent again, so that person kept counting as two users. It now counts as done only once PostHog has received it. Otherwise it is sent again on the next start, and only once, even if a copy was saved at shutdown.
+- **No pointless merge on new installs.** A new install creates a local id for onboarding that is never sent, but on its second start 11.76.5 treated that id as an old one and sent an unneeded `$identify`. New installs now send none.
+
+### Privacy and analytics
+
+- Nothing new is collected: the same three events, the same properties and the same opt-outs.
+
+### Dashboard
+
+- `scripts/posthog-dashboard.js`: the user, retention and geography insights now count users on **every version**, including older ones that sent `session_started`, `feature_used` and similar events. Country and city come from each person's current profile, so users of older versions show where they are too.
+- **Users by city (30d)** is a new table. **Users (one row each, 30d)** adds each user's city and extension version.
+- **New script:** `scripts/posthog-backfill-geo.js` gives users of versions before 11.76.4 a location. Those versions disabled GeoIP and had no person profile. The script sends one `$set` per user with the IP of their latest event. It is a dry run unless you pass `--send`, and re-running it skips users already done. See [docs/ANALYTICS.md](docs/ANALYTICS.md).
+
+### Docs
+
+- The README has a **Buy me a coffee** button at the top.
+
 ## 11.76.5 - Each user counted once in analytics
 
 Anonymous analytics now count each person once. No tools, UI or features change.

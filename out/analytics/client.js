@@ -47,16 +47,23 @@ class AnalyticsClient {
             if (this.timer)
                 clearInterval(this.timer);
             this.timer = undefined;
+            // A merge that was never delivered is queued again when analytics is turned back on.
+            const merge = this.queue.find(event => event.event === "$identify");
+            if (merge && !this.previousId)
+                this.previousId = String(merge.properties.$anon_distinct_id);
             this.queue = [];
         }
     }
-    /** Merges the previous id into this one, once, before anything else is sent under the new id. */
+    /**
+     * Merges the previous id into this one, before anything else is sent under the new id.
+     * It counts as done (`onMerged`) only once PostHog has it: a merge lost to a quick
+     * opt-out or a failed delivery is sent again, so nobody stays counted twice.
+     */
     mergePrevious() {
         const previous = this.previousId;
         if (!previous || previous === this.options.distinctId)
             return;
         this.previousId = undefined;
-        this.options.onMerged?.(previous);
         this.enqueue("$identify", { $anon_distinct_id: previous });
     }
     /** Records today as an active day, once per local day. */
@@ -137,6 +144,10 @@ class AnalyticsClient {
                     this.failures = 0;
                     this.retryAt = 0;
                     this.queue.splice(0, batch.length); // "ok", or "drop" for a batch the server rejected
+                    for (const event of batch) {
+                        if (event.event === "$identify")
+                            this.options.onMerged?.(String(event.properties.$anon_distinct_id));
+                    }
                 }
             }
             finally {
@@ -169,7 +180,9 @@ class AnalyticsClient {
             typeof entry.uuid === "string" && typeof entry.timestamp === "string" &&
             known.includes(entry.event) &&
             !!entry.properties && typeof entry.properties === "object" &&
-            ids.has(entry.properties.distinct_id)).slice(-this.maxQueue);
+            ids.has(entry.properties.distinct_id) &&
+            // A saved merge that this run has already queued again is sent once.
+            !(entry.event === "$identify" && this.queue.some(queued => queued.event === "$identify" && queued.properties.$anon_distinct_id === entry.properties.$anon_distinct_id))).slice(-this.maxQueue);
         this.queue = [...valid, ...this.queue].slice(-this.maxQueue);
         return valid.length;
     }

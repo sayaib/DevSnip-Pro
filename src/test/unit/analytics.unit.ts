@@ -184,17 +184,32 @@ suite("analytics client", () => {
     assert.strictEqual(client.restore("not a list"), 0);
   });
 
-  test("an older id is merged into the current one once, before anything else, and its saved events are still accepted", () => {
+  test("an older id is merged into the current one once, before anything else, and its saved events are still accepted", async () => {
     const merged: string[] = [];
-    const { client, advance } = makeClient({ previousId: "old-profile-id", onMerged: id => merged.push(id) });
+    const { client, fake, advance } = makeClient({ previousId: "old-profile-id", onMerged: id => { merged.push(id); } });
     client.setEnabled(true);
+    client.setEnabled(false);
+    assert.strictEqual(merged.length, 0, "a merge discarded before delivery is not done");
+    client.setEnabled(true);
+    assert.deepStrictEqual(names(client.pending()), ["$identify"], "so it is queued again (the day was already recorded as active)");
+    await client.flush(true);
+    assert.deepStrictEqual(merged, ["old-profile-id"], "done once PostHog has it");
     client.setEnabled(false);
     client.setEnabled(true);
     advance(24 * 60 * MIN);
     client.toolOpened("jsonFormatter", "text");
-    const [identify] = client.pending().filter(event => event.event === "$identify");
-    assert.deepStrictEqual(merged, ["old-profile-id"]);
-    assert.strictEqual(identify, undefined, "already sent before the client was disabled; never sent twice");
+    assert.strictEqual(client.pending().filter(event => event.event === "$identify").length, 0, "never sent twice");
+    assert.strictEqual(fake.batches.flat().filter(event => event.event === "$identify").length, 1);
+
+    const failing = makeClient({ previousId: "old-profile-id", results: ["retry"], onMerged: id => { merged.push(id); } });
+    failing.client.setEnabled(true);
+    await failing.client.flush(true);
+    assert.deepStrictEqual(merged, ["old-profile-id"], "a failed delivery is not a merge");
+    const unsent = failing.client.pending().slice();
+    const restarted = makeClient({ previousId: "old-profile-id" });
+    restarted.client.setEnabled(true);
+    restarted.client.restore(unsent, ["old-profile-id"]);
+    assert.strictEqual(restarted.client.pending().filter(event => event.event === "$identify").length, 1, "a saved merge and a new one are sent once");
 
     const fresh = makeClient({ previousId: "old-profile-id" });
     fresh.client.setEnabled(true);
@@ -359,6 +374,8 @@ suite("analytics wiring", () => {
 
       const fresh = production();
       assert.deepStrictEqual(names(await run(fresh)), ["extension_active"], "a new install has no earlier id to merge");
+      await fresh.globalState.update("devsnip.analytics.lastActiveDay", undefined);
+      assert.deepStrictEqual(names(await run(fresh)), ["extension_active"], "nor on its next start: its local id was never sent");
       assert.ok(fresh.globalState.get("devsnip.analytics.anonymousId"), "the local id is still created for onboarding");
 
       vscode.env.machineId = undefined;

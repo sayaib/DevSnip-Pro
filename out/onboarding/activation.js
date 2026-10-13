@@ -60,6 +60,7 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     // Analytics-only patches: no items, so updating from 11.76.3 shows no What's New card.
+    { version: "11.76.6", items: [] },
     { version: "11.76.5", items: [] },
     { version: "11.76.4", items: [] },
     {

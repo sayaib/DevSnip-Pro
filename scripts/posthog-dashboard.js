@@ -25,14 +25,15 @@ const trend = (series, extra = {}) => ({
   kind: "InsightVizNode",
   source: {
     kind: "TrendsQuery",
-    series: series.map(([event, math, name, extraSeries]) => ({ kind: "EventsNode", event, name: name || event || "All events", math, ...(extraSeries || {}) })),
+    series: series.map(([event, math, name, extraSeries]) => ({ kind: "EventsNode", event, name: name || event || "All events", math, ...(event === null ? { properties: NOT_BACKFILL } : {}), ...(extraSeries || {}) })),
     interval: extra.interval || "day",
     dateRange: { date_from: extra.from || DAYS },
     ...(extra.breakdown ? { breakdownFilter: { breakdown: extra.breakdown, breakdown_type: extra.breakdownType || "event", breakdown_limit: extra.limit || 25 } } : {}),
     ...(extra.properties ? { properties: extra.properties } : {}),
     // Excludes test / staging / development builds via the project's test account filter.
     filterTestAccounts: true,
-    trendsFilter: { display: extra.display || "ActionsLineGraph", ...(extra.formula ? { formula: extra.formula } : {}) }
+    trendsFilter: { display: extra.display || "ActionsLineGraph", ...(extra.formula ? { formula: extra.formula } : {}) },
+    modifiers: CURRENT_PERSON
   }
 });
 
@@ -47,35 +48,56 @@ const trend = (series, extra = {}) => ({
  */
 const hogql = (query, display = "ActionsTable", from = DAYS) => ({
   kind: "DataVisualizationNode",
-  source: { kind: "HogQLQuery", query, filters: { filterTestAccounts: true, dateRange: { date_from: from } } },
+  source: { kind: "HogQLQuery", query, filters: { filterTestAccounts: true, dateRange: { date_from: from } }, modifiers: CURRENT_PERSON },
   display
 });
 
-const EVENTS = "event IN ('extension_active', 'tool_opened', 'tool_used')";
+/**
+ * Person properties (country, city) are read from each person's current profile,
+ * not from the event: versions before 11.76.4 sent events without a person
+ * profile, and their users only got a location from scripts/posthog-backfill-geo.js.
+ */
+const CURRENT_PERSON = { personsOnEventsMode: "person_id_override_properties_joined" };
+
+/**
+ * Activity that makes someone a user: every DevSnip Pro event, from current versions
+ * (extension_active, tool_opened, tool_used) and from older ones (session_started,
+ * feature_used, ...), so users who have not updated yet are counted and listed too.
+ * PostHog's own events ($identify, $set) are not activity.
+ */
+const ACTIVE = "event NOT LIKE '$%'";
+/** "All events" series: everything except the location backfill's $set events. */
+const NOT_BACKFILL = [{ key: "$lib", type: "event", operator: "is_not", value: ["devsnip-geo-backfill"] }];
+const COUNTRY = "any(person.properties.$geoip_country_name)";
+const CITY = "any(person.properties.$geoip_city_name)";
 
 /** [name, description, query] - the order is the dashboard layout order. */
 const INSIGHTS = [
   // 1. Unique and returning users -----------------------------------------
   ["Unique users (30d)", "People who used DevSnip Pro in the last 30 days, each counted once however many VS Code profiles they use.",
-    hogql(`SELECT count(DISTINCT person_id) AS unique_users FROM events WHERE ${EVENTS} AND {filters}`, "BoldNumber")],
-  ["Unique users - DAU / WAU / MAU", "Unique people active per day, week and month.",
-    trend([["extension_active", "dau", "Daily users"], ["extension_active", "weekly_active", "Weekly users"], ["extension_active", "monthly_active", "Monthly users"]], { from: "-90d" })],
+    hogql(`SELECT count(DISTINCT person_id) AS unique_users FROM events WHERE ${ACTIVE} AND {filters}`, "BoldNumber")],
+  ["Unique users - DAU / WAU / MAU", "Unique people active per day, week and month, on any version.",
+    trend([[null, "dau", "Daily users"], [null, "weekly_active", "Weekly users"], [null, "monthly_active", "Monthly users"]], { from: "-90d" })],
   ["New vs returning users (weekly)", "PostHog lifecycle: new, returning, resurrecting and dormant users each week.",
     { kind: "InsightVizNode", source: { kind: "LifecycleQuery", filterTestAccounts: true, interval: "week", dateRange: { date_from: "-90d" },
-      series: [{ kind: "EventsNode", event: "extension_active", name: "extension_active" }] } }],
+      series: [{ kind: "EventsNode", event: null, name: "All events", properties: NOT_BACKFILL }] } }],
   ["Weekly retention", "Of users first active in a week, how many came back in the following weeks.",
     { kind: "InsightVizNode", source: { kind: "RetentionQuery", filterTestAccounts: true, dateRange: { date_from: "-56d" }, retentionFilter: {
       period: "Week", totalIntervals: 8, retentionType: "retention_first_time",
-      targetEntity: { id: "extension_active", name: "extension_active", type: "events" },
-      returningEntity: { id: "extension_active", name: "extension_active", type: "events" } } } }],
+      targetEntity: { id: null, name: "All events", type: "events" },
+      returningEntity: { id: null, name: "All events", type: "events" } }, properties: NOT_BACKFILL } }],
 
   // 2. Geography ----------------------------------------------------------
   ["Users by country (map, 30d)", "Unique users per country, each user in their latest country only (PostHog GeoIP; no location permission is asked for).",
-    trend([["extension_active", "dau", "Users"]], { breakdown: "$geoip_country_code", breakdownType: "person", display: "WorldMap", limit: 250 })],
+    trend([[null, "dau", "Users"]], { breakdown: "$geoip_country_code", breakdownType: "person", display: "WorldMap", limit: 250 })],
   ["Users by country (30d)", "Unique users per country, most first. Each user is counted once, in the country they were last seen in.",
     hogql(`SELECT country, count() AS users
-FROM (SELECT person_id, argMax(properties.$geoip_country_name, timestamp) AS country FROM events WHERE ${EVENTS} AND {filters} GROUP BY person_id)
+FROM (SELECT person_id, ${COUNTRY} AS country FROM events WHERE ${ACTIVE} AND {filters} GROUP BY person_id)
 GROUP BY country ORDER BY users DESC LIMIT 250`)],
+  ["Users by city (30d)", "Unique users per city and country, most first. Each user is counted once, where they were last seen.",
+    hogql(`SELECT city, country, count() AS users
+FROM (SELECT person_id, ${CITY} AS city, ${COUNTRY} AS country FROM events WHERE ${ACTIVE} AND {filters} GROUP BY person_id)
+GROUP BY city, country ORDER BY users DESC LIMIT 500`)],
 
   // 3. Most-used tools across all users -----------------------------------
   ["Most-used tools (opens, 30d)", "Times each tool was opened, most used first.",
@@ -90,13 +112,13 @@ FROM events WHERE event IN ('tool_opened', 'tool_used') AND {filters}
 GROUP BY tool ORDER BY opens DESC`)],
 
   // 4. Per-user tool usage: one row per user ------------------------------
-  ["Users (one row each, 30d)", "Every user once: country, first and last seen, active days, how many tools they use, their favourite tool and their top ten tools with open counts.",
-    hogql(`SELECT a.user AS user, a.country AS country, a.first_seen AS first_seen, a.last_seen AS last_seen, a.active_days AS active_days,
+  ["Users (one row each, 30d)", "Every user once, on any version: country, city, version, first and last seen, active days, how many tools they use, their favourite tool and their top ten tools with open counts.",
+    hogql(`SELECT a.user AS user, a.country AS country, a.city AS city, a.version AS version, a.first_seen AS first_seen, a.last_seen AS last_seen, a.active_days AS active_days,
   ifNull(t.tools_used, 0) AS tools_used, ifNull(t.opens, 0) AS opens, t.favourite_tool AS favourite_tool, t.top_tools AS top_tools
 FROM (
-  SELECT person_id AS user, argMax(properties.$geoip_country_name, timestamp) AS country,
+  SELECT person_id AS user, ${COUNTRY} AS country, ${CITY} AS city, argMax(properties.extension_version, timestamp) AS version,
     min(timestamp) AS first_seen, max(timestamp) AS last_seen, count(DISTINCT toDate(timestamp)) AS active_days
-  FROM events WHERE ${EVENTS} AND {filters} GROUP BY user
+  FROM events WHERE ${ACTIVE} AND {filters} GROUP BY user
 ) AS a
 LEFT JOIN (
   SELECT user, count() AS tools_used, sum(n) AS opens, argMax(tool, n) AS favourite_tool,

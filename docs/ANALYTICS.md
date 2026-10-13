@@ -46,7 +46,7 @@ Turning analytics off also discards anything queued or saved for later. `devsnip
 - Events are sent in batches to PostHog's `/batch/` endpoint every minute, or sooner when 20 are queued. A failed delivery backs off up to 10 minutes. The queue holds at most 200 events, and each event has a unique id, so PostHog never counts a resent event twice.
 - When VS Code closes, undelivered events are written to a small file in the extension's storage and sent on the next start, so restarts lose nothing.
 - Person profiles are on (PostHog's default), keyed only by the anonymous id, so PostHog can count unique, new and returning users.
-- Versions before 11.76.5 used a random id per VS Code profile, so one person could appear as several users. On the first start of 11.76.5 or later, DevSnip Pro sends PostHog's own `$identify` event once, with the old id as `$anon_distinct_id`. PostHog then merges the old and new ids into one person, and earlier data is counted under that person too. A brand-new install has no old id and sends no `$identify`.
+- Versions before 11.76.5 used a random id per VS Code profile, so one person could appear as several users. On the first start of 11.76.5 or later, DevSnip Pro sends PostHog's own `$identify` event once, with the old id as `$anon_distinct_id`. It counts as sent only once PostHog has received it, so a merge lost to a quick opt-out, a closed VS Code or a network failure is sent again later. PostHog then merges the old and new ids into one person, and earlier data is counted under that person too. A brand-new install has no old id and never sends `$identify`, on its first start or later ones.
 
 ## Configuring the PostHog key
 
@@ -144,9 +144,9 @@ PostHog sees the IP address of each request, like any web service. Two project s
 | Question | Insights |
 | :--- | :--- |
 | Unique and returning users | Unique users (30 days, one number); unique users (DAU / WAU / MAU); new vs returning users (weekly lifecycle); weekly retention |
-| Geography | Users by country, as a world map and as a table; each user counts once, in their latest country |
+| Geography | Users by country, as a world map and as a table, and users by city; each user counts once, in their latest location |
 | Most-used tools | Opens per tool; unique users per tool; a ranking of every tool with opens, uses, users and opens per user |
-| Per-user tool usage | One row per user: country, first and last seen, active days, tools used, opens, favourite tool and top ten tools |
+| Per-user tool usage | One row per user: country, city, version, first and last seen, active days, tools used, opens, favourite tool and top ten tools |
 | Usage frequency and trends | Daily and monthly opens, uses and users; the top ten tools over time; usage by section |
 
 ```bash
@@ -158,6 +158,19 @@ It reads `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID` and `POSTHOG_APP_HOST`
 Tools that never appear in the ranking were **not used** in the period.
 
 Every table counts **people** (`person_id`), not raw ids, so ids merged by `$identify` count once, and every insight applies the project's test account filter (test, staging and development builds, and internal users).
+
+The user, retention and geography insights count **any** DevSnip Pro event as activity, so users of older versions (which sent `session_started`, `feature_used` and so on) are counted and listed until they update. Country and city come from each person's current profile, not from the event.
+
+### Locations for users of older versions
+
+Versions before 11.76.4 sent events with `$geoip_disable` and without a person profile, so those users had no country. `scripts/posthog-backfill-geo.js` sends one `$set` event per such user, with the IP PostHog stored on their latest event, so GeoIP gives them a profile with country, region and city. When they update, the 11.76.5 `$identify` merge folds that profile into their per-machine id, so they still count once.
+
+```bash
+node scripts/posthog-backfill-geo.js          # list the users it would update; sends nothing
+node scripts/posthog-backfill-geo.js --send   # send the $set events
+```
+
+It needs `POSTHOG_PERSONAL_API_KEY` (query read) and `POSTHOG_PROJECT_ID` to find the users, and `POSTHOG_PROJECT_API_KEY` and `POSTHOG_HOST` to send. Re-running is safe: users who already have a profile or a backfill event are skipped.
 
 ## Changing what is collected
 

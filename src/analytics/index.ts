@@ -279,8 +279,12 @@ export function initAnalytics(context: vscode.ExtensionContext, snapshot: Instal
     // An id that existed before this run may already have been sent, so it is merged; a new one never was.
     const storedId = snapshot.anonymousId ?? context.globalState.get<string>(ID_KEY);
     const profileId = storedId ?? randomUUID();
-    if (!storedId) void context.globalState.update(ID_KEY, profileId);
     const distinctId = analyticsId(vscode.env.machineId) ?? profileId;
+    if (!storedId) {
+      void context.globalState.update(ID_KEY, profileId);
+      // Never reported under (the machine id is), so there is nothing to merge on later starts.
+      if (profileId !== distinctId) void context.globalState.update(MERGED_KEY, profileId);
+    }
     const previousId = storedId && storedId !== distinctId && context.globalState.get<string>(MERGED_KEY) !== storedId ? storedId : undefined;
 
     client = new AnalyticsClient({
