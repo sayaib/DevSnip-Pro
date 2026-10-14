@@ -372,9 +372,11 @@ class ViewerSession {
             case "deleteRows":
                 edit = editor.deleteRows(sheet, numbers(params.rows));
                 break;
-            case "insertColumns":
-                edit = editor.insertColumns(sheet, Number(params.at), Number(params.count ?? 1));
+            case "insertColumns": {
+                const names = Array.isArray(params.names) && params.names.every(n => typeof n === "string" && n.length <= 32767) ? params.names : undefined;
+                edit = editor.insertColumns(sheet, Number(params.at), Number(params.count ?? 1), names);
                 break;
+            }
             case "deleteColumns":
                 edit = editor.deleteColumns(sheet, numbers(params.cols));
                 break;
@@ -445,6 +447,7 @@ function attach(context, panel, doc) {
     (0, service_1.setWebviewHtml)(panel.webview, (0, page_1.renderSpreadsheetPage)({
         cspSource: panel.webview.cspSource,
         scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "spreadsheet-viewer.js")).toString(),
+        editingUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "spreadsheet-editing.js")).toString(),
         codiconsUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(codiconsRoot, "codicon.css")).toString(),
         platform: process.platform
     }));

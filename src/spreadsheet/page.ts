@@ -1,7 +1,7 @@
 import { escapeHtml, getNonce, THEME_TOKENS } from "../utils/webview-ui";
 
 /** The HTML shell of the CSV & Excel Viewer. media/spreadsheet-viewer.js renders everything inside it. */
-export function renderSpreadsheetPage(o: { cspSource: string; scriptUri: string; codiconsUri: string; platform: string }): string {
+export function renderSpreadsheetPage(o: { cspSource: string; scriptUri: string; editingUri: string; codiconsUri: string; platform: string }): string {
   const nonce = getNonce();
   return `<!DOCTYPE html>
 <html lang="en">
@@ -18,6 +18,7 @@ export function renderSpreadsheetPage(o: { cspSource: string; scriptUri: string;
   <div class="boot"><span class="codicon codicon-loading codicon-modifier-spin"></span> Opening…</div>
 </div>
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<script nonce="${nonce}" src="${escapeHtml(o.editingUri)}"></script>
 <script nonce="${nonce}" src="${escapeHtml(o.scriptUri)}"></script>
 </body>
 </html>`;
@@ -135,6 +136,8 @@ input, select, textarea { font: inherit; color: var(--input-fg); }
 .editbar .sep { width: 1px; height: 18px; background: var(--hairline); margin: 0 4px; }
 .edit-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12px; color: var(--focus); margin-right: 4px; }
 .edit-badge .codicon { font-size: 14px; }
+.edit-badge.dirty { color: var(--warning); }
+.edit-badge.dirty::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
 .edit-hint { flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn.edit-toggle:not(.primary):not(:disabled) { border-color: color-mix(in srgb, var(--focus) 55%, transparent); }
 .btn.edit-toggle:not(.primary):not(:disabled) .codicon { color: var(--focus); }
@@ -143,7 +146,7 @@ input, select, textarea { font: inherit; color: var(--input-fg); }
 .legend-edit .codicon { color: var(--focus); }
 .legend-locked .codicon { color: var(--warning); }
 .legend-changed i { display: inline-block; width: 3px; height: 12px; border-radius: 1px; background: var(--warning); }
-.editor-chip { position: fixed; z-index: 51; display: flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--focus); border-bottom: 0; border-radius: 4px 4px 0 0; background: var(--vscode-editorWidget-background, var(--surface-2)); color: var(--muted); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.editor-chip { position: fixed; z-index: 51; display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 8px); padding: 2px 8px; border: 1px solid var(--focus); border-bottom: 0; border-radius: 4px 4px 0 0; background: var(--vscode-editorWidget-background, var(--surface-2)); color: var(--muted); font-size: 11px; white-space: nowrap; pointer-events: none; }
 .editor-chip .codicon { font-size: 12px; color: var(--focus); }
 .editor-chip b { color: var(--text); font-weight: 600; }
 
@@ -160,6 +163,8 @@ body.editing .cell.ro:hover::before, body.editing .cell.ro.active::before {
   background: var(--bg); color: var(--focus); pointer-events: none; z-index: 1;
 }
 body.editing .cell.ro:hover::before, body.editing .cell.ro.active::before { content: "\\ea75"; color: var(--warning); }
+/* Right-aligned numbers move left of the pencil instead of hiding under it */
+body.editing .cell.num:hover, body.editing .cell.num.active { padding-right: 24px; }
 body.editing .cell.active:not(.ro) { box-shadow: inset 0 0 0 2px var(--focus), inset 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
 body.editing .cell.ro { cursor: not-allowed; color: var(--muted); background-image: repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--text) 6%, transparent) 5px 6px); }
 body.editing .cell.ro.active { box-shadow: none; outline: 2px dashed color-mix(in srgb, var(--warning) 80%, transparent); outline-offset: -2px; }
@@ -189,7 +194,15 @@ button.access.view:hover { color: var(--text); border-color: var(--focus); }
 .cell-hint-text { color: var(--muted); line-height: 1.45; }
 .cell-hint-actions { display: flex; gap: 6px; margin-top: 8px; }
 .cell-hint .btn { height: 24px; padding: 0 8px; font-size: 12px; }
-.cell-editor { position: fixed; z-index: 50; margin: 0; padding: 3px 7px; border: 2px solid var(--focus); border-radius: 0; background: var(--input-bg); color: var(--input-fg); font-size: 12.5px; line-height: 16px; resize: none; overflow: auto; outline: none; box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0,0,0,.35)); white-space: pre-wrap; }
+/* The cell editor: the cell's own font and text position, so nothing jumps when editing starts, and a steady caret */
+.cell-editor { position: fixed; z-index: 50; margin: 0; padding: 0 5px; border: 2px solid var(--focus); border-radius: 0; background: var(--input-bg); color: var(--input-fg); font-family: var(--font); font-size: 13px; line-height: 20px; resize: none; overflow: hidden; outline: none; box-shadow: 0 4px 16px var(--vscode-widget-shadow, rgba(0,0,0,.35)); white-space: pre-wrap; overflow-wrap: anywhere; caret-color: var(--input-fg); }
+.cell-editor::selection { background: var(--vscode-editor-selectionBackground, color-mix(in srgb, var(--focus) 40%, transparent)); }
+.cell-editor.head-editor { font-weight: 600; background: var(--vscode-editorWidget-background, var(--surface-2)); }
+.cell-editor.head-editor::placeholder { color: var(--muted); font-weight: 400; }
+.cell-editor.invalid { border-color: var(--danger); }
+.editor-error { position: fixed; z-index: 52; padding: 6px 9px; border: 1px solid var(--danger); border-top: 0; border-radius: 0 0 4px 4px; background: color-mix(in srgb, var(--danger) 18%, var(--bg)); color: var(--text); font-size: 12px; line-height: 1.4; }
+.editor-chip .chip-mode { padding: 0 5px; border-radius: 3px; background: color-mix(in srgb, var(--focus) 18%, transparent); color: var(--text); }
+.editor-chip .chip-keys { overflow: hidden; text-overflow: ellipsis; }
 
 /* Grid */
 .grid { position: relative; flex: 1; min-height: 0; }
@@ -203,6 +216,8 @@ button.access.view:hover { color: var(--text); border-color: var(--focus); }
 .hcell { position: absolute; top: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 18px 0 8px; border-right: 1px solid var(--gridline); cursor: pointer; user-select: none; overflow: hidden; }
 .hcell:hover { background: var(--surface-3); }
 .hcell.sel { background: var(--sel-head); }
+.hcell.active { box-shadow: inset 0 0 0 2px var(--focus); background: var(--sel-head); z-index: 1; }
+.hcell.active .name { color: var(--text); }
 .hcell .letter { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted); letter-spacing: .02em; }
 .hcell .kind { font-size: 9.5px; padding: 0 4px; border-radius: 3px; background: var(--surface-3); font-family: var(--mono); }
 .hcell .kind-number { color: var(--num); }
@@ -215,6 +230,8 @@ button.access.view:hover { color: var(--text); border-color: var(--focus); }
 .row { position: absolute; left: 0; height: 24px; }
 .row.odd { background: color-mix(in srgb, var(--text) 2.5%, transparent); }
 .row:hover { background: var(--hover); }
+.row.current { background: color-mix(in srgb, var(--focus) 7%, transparent); }
+.row.current > .rn { color: var(--text); font-weight: 600; box-shadow: inset -2px 0 0 var(--focus); }
 .rn { position: sticky; left: 0; z-index: 2; height: 24px; line-height: 24px; padding-right: 8px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; background: var(--surface-2); border-right: 1px solid var(--hairline); border-bottom: 1px solid var(--gridline); cursor: pointer; user-select: none; }
 .rn.sel { background: var(--sel-head); color: var(--text); }
 .cell { position: absolute; top: 0; height: 24px; line-height: 23px; padding: 0 7px; white-space: pre; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--gridline); border-bottom: 1px solid var(--gridline); cursor: cell; user-select: none; }
@@ -276,5 +293,14 @@ button.access.view:hover { color: var(--text); border-color: var(--focus); }
 @media (max-width: 720px) {
   .search-input { width: 120px; }
   .status-stats { display: none; }
+  .edit-hint { display: none; }
+}
+/* Narrow sidebars: the edit bar wraps (its buttons keep their labels) and the editor label is short */
+@media (max-width: 480px) {
+  .editor-chip .chip-keys { display: none; }
+  .editbar .btn { padding: 0 7px; }
+  .editbar .sep { display: none; }
+  .toolbar { gap: 6px; }
+  .search-input { width: 90px; }
 }
 `;

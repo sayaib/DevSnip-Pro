@@ -114,7 +114,7 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 - **Search, sort and filter** hundreds of thousands of rows; the separator and encoding of a CSV are detected.
 - **Column stats** (filled, empty, distinct, min, max, sum, average) and Excel-style sum and average for a selection.
 - **Export** what you see as CSV, JSON or a Markdown table, or copy cells straight into Excel.
-- **Edit** cells, rows and columns: press **Edit**, then type, paste from Excel, or right-click to insert and delete. Save with <kbd>Ctrl/Cmd</kbd>+<kbd>S</kbd>; undo works as in any editor. Rows you didn't touch are saved exactly as they were, and in workbooks every untouched cell, style, chart and macro is kept.
+- **Edit** cells, rows and columns: press **Edit**, then click a cell to edit its text, type over it, paste from Excel, or right-click to insert and delete. New columns are named as you add them. Save with <kbd>Ctrl/Cmd</kbd>+<kbd>S</kbd>; undo works as in any editor. Rows you didn't touch are saved exactly as they were, and in workbooks every untouched cell, style, chart and macro is kept.
 - Nothing changes until you press **Edit**, no macro runs, and nothing leaves your machine. Old binary `.xls` files need saving as `.xlsx` first.
 
 ## JSON formatter, JWT decoder, cURL converter and 100+ utilities

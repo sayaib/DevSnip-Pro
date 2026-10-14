@@ -60,6 +60,12 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     {
+        version: "11.78.2",
+        items: [
+            { title: "CSV & Excel editing: click a cell to edit its text with a caret, and name new columns as you add them", command: "csvViewer" }
+        ]
+    },
+    {
         version: "11.78.1",
         items: [
             { title: "Excel Viewer: open and edit .xlsx workbooks, keeping every sheet, style and formula", command: "excelViewer" },

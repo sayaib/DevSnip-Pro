@@ -339,7 +339,11 @@ class ViewerSession {
       }
       case "insertRows": edit = editor.insertRows(sheet, Number(params.at), Number(params.count ?? 1)); break;
       case "deleteRows": edit = editor.deleteRows(sheet, numbers(params.rows)); break;
-      case "insertColumns": edit = editor.insertColumns(sheet, Number(params.at), Number(params.count ?? 1)); break;
+      case "insertColumns": {
+        const names = Array.isArray(params.names) && params.names.every(n => typeof n === "string" && n.length <= 32767) ? params.names as string[] : undefined;
+        edit = editor.insertColumns(sheet, Number(params.at), Number(params.count ?? 1), names);
+        break;
+      }
       case "deleteColumns": edit = editor.deleteColumns(sheet, numbers(params.cols)); break;
       default: throw new SpreadsheetError("Unknown edit.");
     }
@@ -411,6 +415,7 @@ function attach(context: vscode.ExtensionContext, panel: vscode.WebviewPanel, do
   setWebviewHtml(panel.webview, renderSpreadsheetPage({
     cspSource: panel.webview.cspSource,
     scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "spreadsheet-viewer.js")).toString(),
+    editingUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "spreadsheet-editing.js")).toString(),
     codiconsUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(codiconsRoot, "codicon.css")).toString(),
     platform: process.platform
   }));

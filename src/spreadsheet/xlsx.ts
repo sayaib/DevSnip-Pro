@@ -309,6 +309,12 @@ const BUILT_IN_FORMATS: Record<number, string> = {
 };
 export const GENERAL: CellStyle = { format: "General", kind: "general" };
 
+/** The format code of a built-in number format id (the same in .xlsx and .xls). */
+export function numberFormatById(id: number): string {
+  // Ids 27-36 and 50-58 are locale-specific (CJK) date formats.
+  return BUILT_IN_FORMATS[id] ?? ((id >= 27 && id <= 36) || (id >= 50 && id <= 58) ? "yyyy-mm-dd" : "General");
+}
+
 function readStyles(zip: ZipReader): CellStyle[] {
   const path = zip.names().find(n => /(^|\/)styles\.xml$/i.test(n));
   const xml = path ? stripPrefixes(zip.text(path) ?? "") : "";
@@ -322,8 +328,7 @@ function readStyles(zip: ZipReader): CellStyle[] {
   return [...xfs.matchAll(/<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g)].map(match => {
     const id = Number(attr(match[1], "numFmtId") ?? 0);
     const locked = !/<protection\b[^>]*\blocked="(?:0|false)"/.test(match[2] ?? "");
-    // Ids 27-36 and 50-58 are locale-specific (CJK) date formats.
-    const format = custom.get(id) ?? BUILT_IN_FORMATS[id] ?? ((id >= 27 && id <= 36) || (id >= 50 && id <= 58) ? "yyyy-mm-dd" : "General");
+    const format = custom.get(id) ?? numberFormatById(id);
     return { format, kind: classifyFormat(format), locked };
   });
 }

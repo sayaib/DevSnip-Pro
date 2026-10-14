@@ -151,20 +151,35 @@ export class WorkbookEditor {
     });
   }
 
-  /** Inserts empty columns; adding them after the last one works even where inserting can't. */
-  insertColumns(index: number, at: number, count: number): Edit {
+  /**
+   * Inserts empty columns; adding them after the last one works even where
+   * inserting can't. With names, the new columns' cells in the first row (the
+   * header row) get them, in the same undo step, so a new column never shows
+   * up nameless.
+   */
+  insertColumns(index: number, at: number, count: number, names?: string[]): Edit {
     const edits = this.track(index);
     const sheet = edits.sheet;
     if (!Number.isInteger(at) || at < 0 || at > sheet.columnCount || !Number.isInteger(count) || count < 1 || sheet.columnCount + count > 16384) throw new SpreadsheetError("Columns can't be inserted there.");
+    if (names && names.length !== count) throw new SpreadsheetError("Give one name for each new column.");
     const atEnd = at === sheet.columnCount;
     if (!atEnd || sheet.protection) this.checkStructure(sheet);
-    return this.structural(index, edits, count === 1 ? (atEnd ? "Add column" : "Insert column") : `Insert ${count} columns`, () => {
-      if (atEnd && !edits.colOrigin) { sheet.columnCount += count; return; }
-      edits.colOrigin ??= identity(sheet.columnCount);
-      for (const row of sheet.rows) if (row.length > at) row.splice(at, 0, ...Array(count).fill(null));
-      edits.colOrigin.splice(at, 0, ...Array(count).fill(-1));
-      sheet.columnCount += count;
-      shiftKeys(sheet, edits, "col", at, count);
+    const label = count === 1 ? (atEnd ? "Add column" : "Insert column") : `Insert ${count} columns`;
+    return this.structural(index, edits, label, () => {
+      if (atEnd && !edits.colOrigin) sheet.columnCount += count;
+      else {
+        edits.colOrigin ??= identity(sheet.columnCount);
+        for (const row of sheet.rows) if (row.length > at) row.splice(at, 0, ...Array(count).fill(null));
+        edits.colOrigin.splice(at, 0, ...Array(count).fill(-1));
+        sheet.columnCount += count;
+        shiftKeys(sheet, edits, "col", at, count);
+      }
+      // Column names are text, whatever the row's number format would make of "2024" or "TRUE".
+      names?.forEach((name, i) => {
+        if (!name) return;
+        writeCell(sheet, { r: 0, c: at + i, v: name });
+        edits.dirty.add(`0:${at + i}`);
+      });
     });
   }
 

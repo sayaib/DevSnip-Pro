@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.typeCellText = exports.dirOf = exports.relsPathOf = exports.decodeXml = exports.attr = exports.formatNumber = exports.formatDate = exports.classifyFormat = exports.GENERAL = exports.XlsxWorkbook = void 0;
+exports.typeCellText = exports.dirOf = exports.relsPathOf = exports.decodeXml = exports.attr = exports.formatNumber = exports.formatDate = exports.classifyFormat = exports.numberFormatById = exports.GENERAL = exports.XlsxWorkbook = void 0;
 const zip_1 = require("./zip");
 const xlsx_write_1 = require("./xlsx-write");
 const types_1 = require("./types");
@@ -326,6 +326,12 @@ const BUILT_IN_FORMATS = {
     45: "mm:ss", 46: "[h]:mm:ss", 47: "mm:ss.0", 48: "##0.0E+0", 49: "@"
 };
 exports.GENERAL = { format: "General", kind: "general" };
+/** The format code of a built-in number format id (the same in .xlsx and .xls). */
+function numberFormatById(id) {
+    // Ids 27-36 and 50-58 are locale-specific (CJK) date formats.
+    return BUILT_IN_FORMATS[id] ?? ((id >= 27 && id <= 36) || (id >= 50 && id <= 58) ? "yyyy-mm-dd" : "General");
+}
+exports.numberFormatById = numberFormatById;
 function readStyles(zip) {
     const path = zip.names().find(n => /(^|\/)styles\.xml$/i.test(n));
     const xml = path ? stripPrefixes(zip.text(path) ?? "") : "";
@@ -340,8 +346,7 @@ function readStyles(zip) {
     return [...xfs.matchAll(/<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g)].map(match => {
         const id = Number(attr(match[1], "numFmtId") ?? 0);
         const locked = !/<protection\b[^>]*\blocked="(?:0|false)"/.test(match[2] ?? "");
-        // Ids 27-36 and 50-58 are locale-specific (CJK) date formats.
-        const format = custom.get(id) ?? BUILT_IN_FORMATS[id] ?? ((id >= 27 && id <= 36) || (id >= 50 && id <= 58) ? "yyyy-mm-dd" : "General");
+        const format = custom.get(id) ?? numberFormatById(id);
         return { format, kind: classifyFormat(format), locked };
     });
 }

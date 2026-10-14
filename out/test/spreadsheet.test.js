@@ -154,5 +154,34 @@ suite("CSV & Excel Viewer", () => {
         assert.deepStrictEqual(again.loaded.sheet(0).rows, [["changed"], [null, 42]]);
         again.dispose();
     });
+    test("a column added with its name is one undo step, saves through VS Code, and keeps the separator", async () => {
+        fs.writeFileSync(csv.fsPath, "name;age\nAda;36\n");
+        const events = new vscode.EventEmitter();
+        const fired = [];
+        events.event(e => fired.push(e));
+        const provider = (0, viewer_1.createEditorProvider)({}, events);
+        const token = new vscode.CancellationTokenSource().token;
+        const doc = (await provider.openCustomDocument(csv, { backupId: undefined, untitledDocumentData: undefined }, token));
+        doc.loaded.sheet(0);
+        doc.push(doc.editor.insertColumns(0, 2, 1, ["email"]));
+        doc.push(doc.editor.set(0, [{ r: 0, c: 1, text: "years" }]));
+        assert.strictEqual(fired.length, 2, "adding and naming is one step; renaming is another");
+        await provider.saveCustomDocument(doc, token);
+        assert.strictEqual(fs.readFileSync(csv.fsPath, "utf8"), "name;years;email\nAda;36;\n");
+        await fired[1].undo();
+        await fired[0].undo();
+        await provider.saveCustomDocument(doc, token);
+        assert.strictEqual(fs.readFileSync(csv.fsPath, "utf8"), "name;age\nAda;36\n", "undoing both restores the file exactly");
+        doc.dispose();
+        fs.writeFileSync(xlsx.fsPath, tinyWorkbook());
+        const book = (await provider.openCustomDocument(xlsx, { backupId: undefined, untitledDocumentData: undefined }, token));
+        book.loaded.sheet(0);
+        book.push(book.editor.insertColumns(0, 1, 1, ["notes"]));
+        await provider.saveCustomDocument(book, token);
+        book.dispose();
+        const again = (await provider.openCustomDocument(xlsx, { backupId: undefined, untitledDocumentData: undefined }, token));
+        assert.deepStrictEqual(again.loaded.sheet(0).rows, [["hello", "notes"]]);
+        again.dispose();
+    });
 });
 //# sourceMappingURL=spreadsheet.test.js.map

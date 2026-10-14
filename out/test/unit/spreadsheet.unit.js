@@ -387,14 +387,18 @@ function editorFor(bytes, name) {
 });
 (0, run_unit_tests_1.suite)("spreadsheet: page and wiring", () => {
     (0, run_unit_tests_1.test)("renders a CSP-locked shell whose script parses and never builds markup from strings", () => {
-        const html = (0, page_1.renderSpreadsheetPage)({ cspSource: "vscode-resource:", scriptUri: "vscode-resource:/media/spreadsheet-viewer.js", codiconsUri: "vscode-resource:/codicon.css", platform: "darwin" });
+        const html = (0, page_1.renderSpreadsheetPage)({ cspSource: "vscode-resource:", scriptUri: "vscode-resource:/media/spreadsheet-viewer.js", editingUri: "vscode-resource:/media/spreadsheet-editing.js", codiconsUri: "vscode-resource:/codicon.css", platform: "darwin" });
         const nonce = /script-src 'nonce-([A-Za-z0-9]+)'/.exec(html)?.[1];
         assert.ok(nonce, "scripts need a nonce");
         assert.ok(html.includes(`<script nonce="${nonce}" src=`));
         assert.ok(!/ on[a-z]+="/i.test(html), "no inline event handlers");
-        const source = fs.readFileSync(path.join(ROOT, "media", "spreadsheet-viewer.js"), "utf8");
-        assert.doesNotThrow(() => new vm.Script(source, { filename: "spreadsheet-viewer.js" }));
-        assert.ok(!/innerHTML|insertAdjacentHTML|eval\(|new Function/.test(source));
+        // The editing rules load first: the viewer reads window.SheetEditing when it starts.
+        assert.ok(html.indexOf("spreadsheet-editing.js") < html.indexOf("spreadsheet-viewer.js"), "editing rules load before the viewer");
+        for (const file of ["spreadsheet-viewer.js", "spreadsheet-editing.js"]) {
+            const source = fs.readFileSync(path.join(ROOT, "media", file), "utf8");
+            assert.doesNotThrow(() => new vm.Script(source, { filename: file }));
+            assert.ok(!/innerHTML|insertAdjacentHTML|eval\(|new Function/.test(source), file);
+        }
     });
     (0, run_unit_tests_1.test)("the viewer has its own section, commands and custom editors", () => {
         const section = layout_1.NAV.find(s => s.id === "spreadsheets");
@@ -415,6 +419,169 @@ function editorFor(bytes, name) {
             assert.ok(command.includes(`"${editor.viewType}"`), `${editor.viewType} is registered`);
         for (const icon of ["spreadsheet-light.svg", "spreadsheet-dark.svg"])
             assert.ok(fs.existsSync(path.join(ROOT, "media", icon)), icon);
+    });
+});
+/* eslint-disable @typescript-eslint/no-var-requires */
+const editing = require(path.join(ROOT, "media", "spreadsheet-editing.js"));
+/* eslint-enable @typescript-eslint/no-var-requires */
+(0, run_unit_tests_1.suite)("spreadsheet: cell editor keys", () => {
+    const mac = { mac: true, mode: "enter", header: false };
+    const act = (key, context = {}) => editing.editorKeyAction(key, { ...mac, ...context });
+    (0, run_unit_tests_1.test)("Enter and Tab finish the cell and move, Shift goes back, Esc cancels", () => {
+        assert.deepStrictEqual(act({ key: "Enter" }), { type: "commit", move: "down" });
+        assert.deepStrictEqual(act({ key: "Enter", shiftKey: true }), { type: "commit", move: "up" });
+        assert.deepStrictEqual(act({ key: "Tab" }), { type: "commit", move: "right" });
+        assert.deepStrictEqual(act({ key: "Tab", shiftKey: true }), { type: "commit", move: "left" });
+        assert.deepStrictEqual(act({ key: "Escape" }), { type: "cancel" });
+    });
+    (0, run_unit_tests_1.test)("arrow keys move between cells after typing over a cell, and move the caret when editing in place", () => {
+        for (const [key, move] of [["ArrowDown", "down"], ["ArrowUp", "up"], ["ArrowLeft", "left"], ["ArrowRight", "right"]]) {
+            assert.deepStrictEqual(act({ key }, { mode: "enter" }), { type: "commit", move }, key);
+            assert.strictEqual(act({ key }, { mode: "edit" }), null, `${key} belongs to the text box in edit mode`);
+        }
+        assert.deepStrictEqual(act({ key: "F2" }), { type: "toggleMode" }, "F2 switches between the two");
+        assert.strictEqual(act({ key: "ArrowLeft", metaKey: true }, { mode: "enter" }), null, "⌘← jumps to the line start, as in any text box");
+    });
+    (0, run_unit_tests_1.test)("Alt+Enter breaks the line in a cell, but a column name stays on one line", () => {
+        assert.deepStrictEqual(act({ key: "Enter", altKey: true }), { type: "newline" });
+        assert.deepStrictEqual(act({ key: "Enter", ctrlKey: true }), { type: "newline" });
+        assert.deepStrictEqual(act({ key: "Enter", altKey: true }, { header: true }), { type: "commit", move: null });
+    });
+    (0, run_unit_tests_1.test)("undo, redo and select-all stay inside the editor, with each platform's keys", () => {
+        assert.deepStrictEqual(act({ key: "z", metaKey: true }), { type: "undo" });
+        assert.deepStrictEqual(act({ key: "Z", metaKey: true, shiftKey: true }), { type: "redo" });
+        assert.deepStrictEqual(act({ key: "a", metaKey: true }), { type: "selectAll" });
+        assert.strictEqual(act({ key: "z", ctrlKey: true }), null, "Ctrl+Z is not undo on a Mac");
+        const win = { mac: false };
+        assert.deepStrictEqual(act({ key: "z", ctrlKey: true }, win), { type: "undo" });
+        assert.deepStrictEqual(act({ key: "y", ctrlKey: true }, win), { type: "redo" });
+        assert.deepStrictEqual(act({ key: "Z", ctrlKey: true, shiftKey: true }, win), { type: "redo" });
+        assert.strictEqual(act({ key: "y", metaKey: true }), null, "⌘Y is not redo on a Mac");
+        assert.deepStrictEqual(act({ key: "s", metaKey: true }), { type: "save" });
+    });
+    (0, run_unit_tests_1.test)("characters, clipboard keys and input-method keys are left to the text box", () => {
+        for (const key of ["a", "Backspace", "Delete", "Home", "End"])
+            assert.strictEqual(act({ key }), null, key);
+        for (const key of ["c", "v", "x"])
+            assert.strictEqual(act({ key, metaKey: true }), null, `⌘${key} reaches VS Code's clipboard`);
+        assert.strictEqual(act({ key: "Enter", isComposing: true }), null, "Enter that picks a Japanese candidate doesn't finish the cell");
+        assert.strictEqual(act({ key: "Process", keyCode: 229 }), null);
+    });
+    (0, run_unit_tests_1.test)("the caret goes where a cell was double-clicked", () => {
+        const measure = (t) => t.length * 10;
+        assert.strictEqual(editing.caretIndexAt("London", 24, measure), 2, "closer to the boundary after the second letter");
+        assert.strictEqual(editing.caretIndexAt("London", 26, measure), 3);
+        assert.strictEqual(editing.caretIndexAt("London", -5, measure), 0);
+        assert.strictEqual(editing.caretIndexAt("London", 500, measure), 6);
+        assert.strictEqual(editing.caretIndexAt("two\nlines", 12, measure), 9, "multi-line text puts the caret at the end");
+        assert.strictEqual(editing.caretIndexAt("", 12, measure), 0);
+    });
+});
+(0, run_unit_tests_1.suite)("spreadsheet: column names", () => {
+    (0, run_unit_tests_1.test)("new columns get a numbered default name that no other column has", () => {
+        assert.strictEqual(editing.defaultColumnName(["id", "name", ""], 2), "Column 3");
+        assert.strictEqual(editing.defaultColumnName(["id", "Column 2", ""], 1), "Column 2", "a column's own name doesn't count against it");
+        assert.strictEqual(editing.defaultColumnName(["Column 2", "", ""], 1), "Column 2 (2)", "another column's does");
+        assert.strictEqual(editing.defaultColumnName(["column 3", "x", ""], 2), "Column 3 (2)", "names compare without case");
+        assert.deepStrictEqual(editing.defaultColumnNames(["id", "", "", "name"], 1, 2), ["Column 2", "Column 3"]);
+        assert.deepStrictEqual(editing.defaultColumnNames(["Column 3", "", ""], 1, 2), ["Column 2", "Column 3 (2)"], "several new columns don't clash with each other");
+    });
+    (0, run_unit_tests_1.test)("a typed name is checked against the other columns", () => {
+        const names = ["id", "name", "city", "Column 4"];
+        assert.deepStrictEqual(editing.checkColumnName(names, 3, "email"), { ok: true, name: "email" });
+        assert.deepStrictEqual(editing.checkColumnName(names, 3, " Name "), { ok: false, name: " Name ", clash: 1 }, "a clash ignores case and spaces");
+        assert.deepStrictEqual(editing.checkColumnName(names, 1, "NAME"), { ok: true, name: "NAME" }, "changing only the case of a name is fine");
+        assert.deepStrictEqual(editing.checkColumnName(names, 3, "   "), { ok: true, name: "Column 4", defaulted: true }, "an empty name takes the default");
+        assert.deepStrictEqual(editing.checkColumnName(names, 2, "two\nlines"), { ok: true, name: "two lines" }, "names stay on one line");
+        assert.deepStrictEqual(editing.checkColumnName(["a", "a", "b"], 1, "a"), { ok: true, name: "a" }, "keeping a name the file already repeats is not a new clash");
+    });
+});
+(0, run_unit_tests_1.suite)("spreadsheet: adding and naming columns", () => {
+    (0, run_unit_tests_1.test)("a CSV column added at the end is named in the same undo step, and every full row gets its separator", () => {
+        const source = "id;name\n1;Ada\nshort\n2;Linus\n";
+        const { loaded, editor, save } = editorFor(Buffer.from(source), "people.csv");
+        loaded.sheet(0);
+        const add = editor.insertColumns(0, 2, 1, ["email"]);
+        assert.strictEqual(add.label, "Add column");
+        assert.deepStrictEqual(loaded.sheet(0).rows[0], ["id", "name", "email"]);
+        assert.strictEqual(save().bytes.toString(), "id;name;email\n1;Ada;\nshort\n2;Linus;\n", "the separator is kept; a row that was already short stays as it was");
+        editor.set(0, [{ r: 1, c: 2, text: "ada@example.com" }]);
+        assert.strictEqual(save().bytes.toString(), "id;name;email\n1;Ada;ada@example.com\nshort\n2;Linus;\n");
+        assert.deepStrictEqual((0, csv_1.parseCsv)(save().bytes.toString()).rows.map(r => r.length), [3, 3, 1, 3], "the saved file reads back with the new column");
+    });
+    (0, run_unit_tests_1.test)("undoing an added column takes its name with it, and the file saves as it was", () => {
+        const source = "id,name\r\n1,Ada\r\n";
+        const { loaded, editor, save } = editorFor(Buffer.from(source), "people.csv");
+        loaded.sheet(0);
+        const add = editor.insertColumns(0, 1, 1, ["Column 2"]);
+        assert.deepStrictEqual(loaded.sheet(0).rows[0], ["id", "Column 2", "name"], "inserted mid-sheet, the other columns move right");
+        add.undo();
+        assert.strictEqual(save().bytes.toString(), source);
+        add.redo();
+        assert.strictEqual(save().bytes.toString(), "id,Column 2,name\r\n1,,Ada\r\n");
+        assert.throws(() => editor.insertColumns(0, 0, 2, ["only one"]), /one name for each/);
+    });
+    (0, run_unit_tests_1.test)("renaming a header changes only that cell", () => {
+        const source = 'id,"full name",city\n1,Ada,London\n';
+        const { loaded, editor, save } = editorFor(Buffer.from(source), "people.csv");
+        loaded.sheet(0);
+        editor.set(0, [{ r: 0, c: 2, text: "town, region" }]);
+        assert.strictEqual(save().bytes.toString(), 'id,full name,"town, region"\n1,Ada,London\n', "the header row is rewritten, quoting what needs it");
+    });
+    (0, run_unit_tests_1.test)("an Excel column added at the end is named on its sheet, and the other sheets are saved byte for byte", () => {
+        const original = workbook();
+        const { loaded, editor, save } = editorFor(original, "book.xlsx");
+        loaded.sheet(0);
+        editor.insertColumns(0, loaded.sheet(0).columnCount, 1, ["2024"]);
+        const saved = save().bytes;
+        const reread = new xlsx_1.XlsxWorkbook(saved).sheet(0);
+        assert.strictEqual(reread.rows[0][4], "2024", "a name stays text even when it looks like a number");
+        assert.strictEqual(reread.columnCount, 5);
+        assert.deepStrictEqual(reread.rows[1], loaded.sheet(0).rows[1], "the cells under it are unchanged");
+        const before = new zip_1.ZipReader(original), after = new zip_1.ZipReader(saved);
+        assert.deepStrictEqual(after.read("xl/worksheets/sheet2.xml"), before.read("xl/worksheets/sheet2.xml"), "other worksheets are untouched");
+        assert.ok(after.text("xl/worksheets/sheet1.xml").includes('<c r="E1" t="inlineStr"><is><t xml:space="preserve">2024</t></is></c>'));
+    });
+    (0, run_unit_tests_1.test)("a named column can't be inserted mid-sheet where formulas would move, but can be added at the end", () => {
+        const { loaded, editor } = editorFor(workbook(), "book.xlsx");
+        loaded.sheet(0);
+        assert.throws(() => editor.insertColumns(0, 1, 1, ["x"]), /formulas/);
+        assert.doesNotThrow(() => editor.insertColumns(0, loaded.sheet(0).columnCount, 1, ["x"]));
+    });
+});
+(0, run_unit_tests_1.suite)("spreadsheet: CSV repairs", () => {
+    (0, run_unit_tests_1.test)("a quote that is never closed is kept as a character, and the rows after it are still read", () => {
+        const sheet = (0, csv_1.parseCsv)('id,size,note\n1,12",ok\n2,"broken,x\n3,5,fine\n');
+        assert.deepStrictEqual(sheet.rows, [["id", "size", "note"], ["1", '12"', "ok"], ["2", '"broken', "x"], ["3", "5", "fine"]]);
+        assert.deepStrictEqual(sheet.issues, [{ row: 2, line: 3, message: 'A quote opens a field here and is never closed; it was kept as a literal " character.' }]);
+        assert.strictEqual((0, csv_1.parseCsv)('a,"ok ""quoted"""\n').issues, undefined, "well-formed quotes report nothing");
+    });
+    (0, run_unit_tests_1.test)("Excel's sep= line picks the separator, isn't a row, and is written back on save", () => {
+        const sheet = (0, csv_1.parseCsv)("sep=;\r\nx;y\r\n1;2\r\n");
+        assert.strictEqual(sheet.delimiter, ";");
+        assert.deepStrictEqual(sheet.rows, [["x", "y"], ["1", "2"]]);
+        assert.strictEqual(sheet.preamble, "sep=;\r\n");
+        const { loaded, editor, save } = editorFor(Buffer.from("sep=;\r\nx;y\r\n1;2\r\n"), "excel.csv");
+        loaded.sheet(0);
+        editor.set(0, [{ r: 1, c: 0, text: "9" }]);
+        assert.strictEqual(save().bytes.toString(), "sep=;\r\nx;y\r\n9;2\r\n");
+    });
+    (0, run_unit_tests_1.test)("UTF-16 without a byte-order mark is recognised, and saved the same way", () => {
+        const le = (0, csv_1.decodeText)(Buffer.from("name,city\nZoë,Köln\n", "utf16le"));
+        assert.deepStrictEqual(le, { text: "name,city\nZoë,Köln\n", encoding: "UTF-16 LE without BOM" });
+        const be = Buffer.from("a,b\n", "utf16le");
+        for (let i = 0; i < be.length; i += 2)
+            [be[i], be[i + 1]] = [be[i + 1], be[i]];
+        assert.strictEqual((0, csv_1.decodeText)(be).encoding, "UTF-16 BE without BOM");
+        assert.deepStrictEqual([...(0, csv_2.encodeText)("a", "UTF-16 LE without BOM").bytes], [0x61, 0x00], "no byte-order mark is added");
+        const { loaded, editor, save } = editorFor(Buffer.from("a,b\n1,2\n", "utf16le"), "wide.csv");
+        loaded.sheet(0);
+        editor.set(0, [{ r: 1, c: 1, text: "3" }]);
+        assert.strictEqual(save().bytes.toString("utf16le"), "a,b\n1,3\n");
+    });
+    (0, run_unit_tests_1.test)("a binary file is refused with a clear message instead of shown as garbage", () => {
+        assert.throws(() => (0, csv_1.decodeText)(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52])), (e) => e instanceof types_1.SpreadsheetError && /isn't text/.test(e.message));
+        assert.strictEqual((0, csv_1.decodeText)(Buffer.from("plain,text\n")).encoding, "UTF-8", "ordinary text is unaffected");
     });
 });
 //# sourceMappingURL=spreadsheet.unit.js.map

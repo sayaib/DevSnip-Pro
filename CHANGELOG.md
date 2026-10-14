@@ -1,5 +1,54 @@
 # Development Changelog of DevSnip Pro
 
+## 11.78.2 - Smoother CSV & Excel editing, and named columns
+
+Editing in the CSV & Excel Viewer now behaves like a text box inside a spreadsheet: click a cell and a steady caret appears in its text. New columns are named as you add them, and CSV files with common defects open without losing rows. Nothing outside the CSV & Excel Viewer changes, and no dependency is added.
+
+### Improved
+
+#### Editing cells
+
+- **Click a cell to edit it.** While editing, a click opens the cell with a blinking caret where you clicked and keeps its text, so typing inserts instead of replacing. Click again inside the cell to move the caret.
+  - Dragging across cells, <kbd>Shift</kbd>-click and <kbd>Ctrl/Cmd</kbd>-click still select without editing.
+  - Selecting a cell with the arrow keys and typing still replaces its contents, as in Excel.
+- **A steady caret.** The cell editor uses the cell's own font and position, so text no longer jumps when editing starts. The editor is sized to fit its text, so the text no longer scrolls inside it and the caret no longer jumps while you type. Long values widen the editor.
+- **The editor stays open** when the grid scrolls a little or the panel is resized; it follows its cell, and finishes only when the cell scrolls out of sight.
+- **Two editing modes, as in Excel.** After typing over a cell, the arrow keys finish it and move to the next cell. After clicking, <kbd>Enter</kbd>, <kbd>F2</kbd> or double-click, they move the caret. <kbd>F2</kbd> switches between the two, and the label above the cell shows which mode is on.
+- **Keyboard shortcuts while typing in a cell:**
+  - <kbd>Ctrl/Cmd</kbd>+<kbd>Z</kbd> and <kbd>Shift</kbd>+<kbd>Ctrl/Cmd</kbd>+<kbd>Z</kbd> (and <kbd>Ctrl</kbd>+<kbd>Y</kbd> on Windows and Linux) undo and redo the typing. They used to undo the last saved cell edit instead.
+  - <kbd>Ctrl/Cmd</kbd>+<kbd>A</kbd> selects the cell's text.
+  - <kbd>Ctrl/Cmd</kbd>+<kbd>S</kbd> saves, including the text you were typing.
+  - <kbd>Enter</kbd> that confirms a Japanese, Chinese or Korean input-method candidate no longer finishes the cell.
+- **Nothing typed is lost** while a new row is being added: keys pressed right after <kbd>Enter</kbd> on the last row go into the new row.
+
+#### Column names
+
+- **New columns are named as you add them.** **+ Column**, and **Insert column left/right** in the right-click menu, add the column with a default name such as "Column 4", in the same undo step. The name then opens for typing with the caret ready. <kbd>Enter</kbd> keeps what you typed; <kbd>Esc</kbd> or an empty name keeps the default.
+- **Rename any column** by double-clicking its header, with **Rename column…** in the right-click menu, or from the keyboard: <kbd>↑</kbd> from the first row moves to the header row, where the arrow keys move between headers and <kbd>Enter</kbd> or <kbd>F2</kbd> renames. <kbd>Tab</kbd> saves a name and moves to the next column's.
+- **Duplicate names are explained, not saved.** A name another column already has (ignoring case and spaces) keeps the editor open with a note naming that column, because JSON exports and column mapping need unique names. Changing only the case of a name is fine.
+- In Excel workbooks only the edited sheet changes, and a name such as "2024" stays text. In CSV files the new column uses the file's separator, and every full-width row gets it too, so the file stays rectangular.
+
+#### Clearer editing
+
+- The current row and a focused column header are highlighted, and right-aligned numbers no longer hide under the pencil icon of the active cell.
+- The edit bar shows **Unsaved changes** with a dot until you save, and the **Save** tooltip says how many cells changed.
+- In narrow sidebars the edit bar wraps instead of overflowing, and the editor's label is shortened.
+
+### Fixed
+
+- **A quote that is never closed no longer swallows the rest of a CSV file into one cell.** It is kept as a literal `"` character, the rows after it are read normally, and a banner names the line and row.
+- Excel's `sep=;` first line now sets the separator instead of showing as a row, and it is kept when saving.
+- UTF-16 CSV files without a byte-order mark are read correctly (they showed as garbage) and saved in the same encoding.
+- A binary file opened as CSV gets a clear message instead of a grid of garbage.
+- Saving large Windows-1252 CSV files is faster.
+
+### Tests
+
+- `media/spreadsheet-editing.js` holds the editing rules (keys in each mode, default names, duplicate checks, caret placement), and `spreadsheet.unit.ts` tests them as the page runs them.
+- New unit tests cover named column inserts for CSV and Excel (undo, separators, other sheets byte for byte) and the CSV repairs above. 670 unit tests pass.
+- A new integration test in `spreadsheet.test.ts` adds and names a column through VS Code's undo stack and save; all 63 integration tests pass.
+- A 41-step browser test of the real page and host drove clicking, typing, both modes, undo, header naming and renaming, duplicate names, type-ahead, saving and export, on CSV and `.xlsx` files at 360, 900 and 1280 pixels wide. Saved workbooks were checked with openpyxl.
+
 ## 11.78.1 - CSV & Excel Viewer and editor, and an XML → JSON Converter
 
 A new **Spreadsheets & CSV** section opens `.csv`, `.tsv` and `.xlsx` files as a fast grid you can search, sort and export, and, after pressing **Edit**, change and save. **Text & Formatters** gains an **XML → JSON Converter** with strict validation, a lossless mode and conversion of large files. Neither adds a dependency.

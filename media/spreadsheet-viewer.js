@@ -14,6 +14,8 @@
   var root = document.getElementById("app");
   var MAC = document.body.getAttribute("data-platform") === "darwin";
   var MOD = MAC ? "⌘" : "Ctrl+";
+  // Key handling and column naming rules (media/spreadsheet-editing.js).
+  var E = window.SheetEditing;
   var ROW_H = 24;
   var HEAD_H_NAMES = 44;
   var HEAD_H_LETTERS = 26;
@@ -159,7 +161,12 @@
     lock: undefined,
     afterReload: null,
     // "row:col" of cells changed since the last save, marked in the grid.
-    changed: new Set()
+    changed: new Set(),
+    // Column whose header cell has keyboard focus (-1: a data cell has it).
+    headFocus: -1,
+    // A row or column edit is on its way; keys typed meanwhile wait in typeAhead instead of being lost.
+    structurePending: false,
+    typeAhead: ""
   };
   ["sheetIndex", "header", "headerChosen", "showFormulas", "query", "queryCol", "sort", "editing", "toldEditing"].forEach(function (k) { if (saved[k] !== undefined) state[k] = saved[k]; });
   function persist() {
@@ -195,10 +202,11 @@
     return 0;
   }
 
-  function loadSheet(index, keepPosition) {
+  /** quiet: a reload after a row or column edit, which keeps the grid usable instead of greying it out. */
+  function loadSheet(index, keepPosition, quiet) {
     state.sheetIndex = index;
     persist();
-    showLoading("Reading " + (state.file.sheets[index] ? state.file.sheets[index].name : "sheet") + "…");
+    if (!quiet) showLoading("Reading " + (state.file.sheets[index] ? state.file.sheets[index].name : "sheet") + "…");
     renderTabs();
     return call("sheet", { index: index }).then(function (sheet) {
       var scroll = keepPosition && ui.scroller ? { top: ui.scroller.scrollTop, left: ui.scroller.scrollLeft } : null;
@@ -208,8 +216,10 @@
       var after = state.afterReload;
       state.afterReload = null;
       if (after) after();
+      finishStructure();
     }, function (error) {
       hideLoading();
+      finishStructure();
       renderGridError(error);
     });
   }
@@ -575,7 +585,8 @@
     root.appendChild(h("div", { class: "viewer" }, bar, editbar.el, banner, grid, tabs, status, live));
     ui = { editBtn: editBtn, editbar: editbar, search: search, scope: scope, count: count, headerToggle: headerToggle.firstChild, formulaToggle: formulaToggle.firstChild, delimiter: delimiter, meta: meta, scroller: scroller, sizer: sizer, head: head, body: body, banner: banner, empty: empty, loading: loading, tabs: tabs, status: status, live: live };
 
-    scroller.addEventListener("scroll", function () { scheduleRender(false); closeMenu(); if (editor) commitEdit(null); }, { passive: true });
+    // The editor follows its cell while the grid scrolls; it finishes only when the cell scrolls out of sight.
+    scroller.addEventListener("scroll", function () { scheduleRender(false); closeMenu(); }, { passive: true });
     scroller.addEventListener("keydown", onGridKey);
     scroller.addEventListener("mousedown", onGridMouseDown);
     scroller.addEventListener("dblclick", onGridDblClick);
@@ -615,6 +626,10 @@
     var sheet = state.sheet;
     var notes = [];
     if (sheet.truncatedRows) notes.push(plural(sheet.truncatedRows, "more row") + " left out: the viewer loads up to 3 million cells so VS Code stays responsive.");
+    // Quotes the CSV opens and never closes: read as literal characters so no rows vanish, and listed here.
+    var issues = sheet.issues || [];
+    issues.slice(0, 3).forEach(function (issue) { notes.push("Line " + fmtNum(issue.line) + " (row " + fmtNum(issue.row + 1) + "): " + issue.message); });
+    if (issues.length > 3) notes.push(plural(issues.length - 3, "more line") + " with the same problem.");
     ui.banner.classList.toggle("hidden", !notes.length);
     clear(ui.banner);
     notes.forEach(function (n) { ui.banner.appendChild(h("div", null, icon("warning"), n)); });
@@ -663,7 +678,7 @@
   function scheduleRender(force) {
     if (force) rendered.key = "";
     if (frame) return;
-    frame = requestAnimationFrame(function () { frame = 0; renderGrid(); });
+    frame = requestAnimationFrame(function () { frame = 0; renderGrid(); if (editor) repositionEditor(); });
   }
 
   function layoutGrid() {
@@ -719,7 +734,7 @@
       var headHint = state.editing
         ? (renamable ? "\nClick to select the column · double-click the name to rename it" : "\nClick to select the column" + (nameAccess && nameAccess.kind === "locked" ? " · the name is locked" : ""))
         : "\nClick to sort";
-      var cell = h("div", { class: "hcell" + (colSelected ? " sel" : "") + (kinds[c] === "number" ? " num" : "") + (renamable ? " renamable" : "") + (state.editing && nameAccess && !nameAccess.editable ? " ro" : "") + (state.changed.has("0:" + c) && state.header ? " changed" : ""), role: "columnheader", "aria-colindex": String(c + 1), "aria-sort": sorted ? (sorted === "asc" ? "ascending" : "descending") : "none", "data-col": String(c), title: (name ? name + " · " : "") + "Column " + columnName(c) + " · " + kindLabel(kinds[c]) + headHint,
+      var cell = h("div", { class: "hcell" + (colSelected ? " sel" : "") + (state.headFocus === c ? " active" : "") + (kinds[c] === "number" ? " num" : "") + (renamable ? " renamable" : "") + (state.editing && nameAccess && !nameAccess.editable ? " ro" : "") + (state.changed.has("0:" + c) && state.header ? " changed" : ""), role: "columnheader", "aria-colindex": String(c + 1), "aria-sort": sorted ? (sorted === "asc" ? "ascending" : "descending") : "none", "data-col": String(c), title: (name ? name + " · " : "") + "Column " + columnName(c) + " · " + kindLabel(kinds[c]) + headHint,
         style: { left: geo.rn + geo.lefts[c] + "px", width: (w[c] || 120) + "px", height: geo.head + "px" } },
         h("span", { class: "letter" }, columnName(c), kinds[c] && kinds[c] !== "empty" ? h("span", { class: "kind kind-" + kinds[c], text: kindBadge(kinds[c]) }) : null),
         state.header ? h("span", { class: "name", text: name || "—" }) : null,
@@ -734,7 +749,7 @@
     for (var vr = r0; vr < r1; vr++) {
       var src = state.view[vr];
       var rowSelected = vr >= sel.r0 && vr <= sel.r1;
-      var row = h("div", { class: "row" + (vr % 2 ? " odd" : ""), role: "row", "aria-rowindex": String(vr + 2), style: { top: vr * ROW_H + "px", width: geo.rn + geo.total + "px" } },
+      var row = h("div", { class: "row" + (vr % 2 ? " odd" : "") + (vr === state.sel.r && state.headFocus < 0 ? " current" : ""), role: "row", "aria-rowindex": String(vr + 2), style: { top: vr * ROW_H + "px", width: geo.rn + geo.total + "px" } },
         h("div", { class: "rn" + (rowSelected ? " sel" : ""), style: { width: geo.rn + "px" }, "data-row": String(vr), text: String(src + 1) }));
       for (var col = c0; col <= c1; col++) {
         var text = cellText(src, col);
@@ -794,6 +809,7 @@
   }
 
   function select(r, c, extend) {
+    state.headFocus = -1;
     state.sel.r = r; state.sel.c = c;
     if (!extend) { state.sel.ar = r; state.sel.ac = c; }
     clampSelection();
@@ -806,6 +822,12 @@
     var y = r * ROW_H, viewH = sc.clientHeight - geo.head;
     if (y < sc.scrollTop) sc.scrollTop = y;
     else if (y + ROW_H > sc.scrollTop + viewH) sc.scrollTop = y + ROW_H - viewH;
+    scrollColumnIntoView(c);
+  }
+
+  function scrollColumnIntoView(c) {
+    var sc = ui.scroller;
+    if (!sc || geo.lefts[c] === undefined) return;
     var x = geo.lefts[c], cw = geo.lefts[c + 1] - x, viewW = sc.clientWidth - geo.rn;
     if (x < sc.scrollLeft) sc.scrollLeft = x;
     else if (x + cw > sc.scrollLeft + viewW) sc.scrollLeft = Math.min(x, x + cw - viewW);
@@ -830,24 +852,36 @@
     if (!hit) return;
     if (hit.grip !== undefined) { startResize(e, hit.grip); return; }
     ui.scroller.focus({ preventScroll: true });
-    if (hit.corner) { selectAll(); return; }
+    if (hit.corner) { state.headFocus = -1; selectAll(); return; }
     if (hit.header !== undefined) {
       // While editing, a header click selects the column (Excel-style); sorting is in the right-click menu.
-      if (state.editing) { state.sel = { r: Math.max(0, state.view.length - 1), c: hit.header, ar: 0, ac: e.shiftKey ? state.sel.ac : hit.header }; scheduleRender(true); renderStatus(); }
-      else cycleSort(hit.header);
+      if (state.editing) { state.sel = { r: Math.max(0, state.view.length - 1), c: hit.header, ar: 0, ac: e.shiftKey ? state.sel.ac : hit.header }; state.headFocus = state.header && !e.shiftKey ? hit.header : -1; scheduleRender(true); renderStatus(); }
+      else { cycleSort(hit.header); if (state.header) { state.headFocus = hit.header; scheduleRender(true); } }
       return;
     }
     if (hit.rowHeader !== undefined) {
       if (e.shiftKey) select(hit.rowHeader, 0, true);
-      else { state.sel = { r: hit.rowHeader, c: 0, ar: hit.rowHeader, ac: columnCount() - 1 }; scheduleRender(true); renderStatus(); }
+      else { state.headFocus = -1; state.sel = { r: hit.rowHeader, c: 0, ar: hit.rowHeader, ac: columnCount() - 1 }; scheduleRender(true); renderStatus(); }
       return;
     }
     select(hit.r, hit.c, e.shiftKey);
+    var dragged = false;
     var move = function (ev) {
       var over = cellFromEvent(ev);
-      if (over && over.r !== undefined && (over.r !== state.sel.r || over.c !== state.sel.c)) select(over.r, over.c, true);
+      if (over && over.r !== undefined && (over.r !== state.sel.r || over.c !== state.sel.c)) { dragged = true; select(over.r, over.c, true); }
     };
-    var up = function () { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
+    var up = function (ev) {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+      // While editing, a plain click on a cell opens it with a caret where you clicked, keeping its text;
+      // dragging, Shift-click and ⌘/Ctrl-click still select. Opened on release, so a drag never starts an edit.
+      if (!state.editing || dragged || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey || ev.button !== 0) return;
+      var over = cellFromEvent(ev);
+      if (!over || over.r !== hit.r || over.c !== hit.c) return;
+      var src = state.view[hit.r];
+      if (src === undefined || !access(src, hit.c).editable) return;
+      beginEdit(null, caretFromClick(ev, hit));
+    };
     document.addEventListener("mousemove", move);
     document.addEventListener("mouseup", up);
   }
@@ -870,7 +904,21 @@
     if (hit.grip !== undefined) { autoSizeColumns(true, hit.grip); layoutGrid(); return; }
     if (state.editing && hit.header !== undefined && state.header) { beginHeaderEdit(hit.header); return; }
     if (hit.header !== undefined) return;
-    if (hit.r !== undefined) tryEdit(null, true);
+    if (hit.r !== undefined) tryEdit(null, true, caretFromClick(e, hit));
+  }
+
+  /** The character a double-click landed on, so editing starts with the caret there. */
+  function caretFromClick(e, hit) {
+    var el = cellEl(hit.r, hit.c);
+    var src = state.view[hit.r];
+    if (!el || src === undefined) return undefined;
+    var text = editText(src, hit.c);
+    if (text !== cellText(src, hit.c)) return text.length;
+    var rect = el.getBoundingClientRect();
+    var width = measureEditor(text);
+    // Numbers are right-aligned in the cell; the editor shows them from the left.
+    var start = el.classList.contains("num") ? rect.right - 7 - width : rect.left + 7;
+    return E.caretIndexAt(text, e.clientX - start, measureEditor);
   }
 
   function selectAll() {
@@ -900,8 +948,20 @@
 
   function onGridKey(e) {
     if (ui.scroller.classList.contains("busy")) return;
-    if (state.editing && onEditKey(e)) return;
     var mod = e.metaKey || e.ctrlKey;
+    if (state.structurePending && state.editing && !mod && !e.altKey && e.key.length === 1) {
+      // The new row or column is on its way; what is typed goes into it once it arrives.
+      e.preventDefault();
+      state.typeAhead += e.key;
+      return;
+    }
+    if (state.headFocus >= 0 && onHeadKey(e)) return;
+    if (e.key === "ArrowUp" && !mod && !e.shiftKey && state.sel.r === 0 && state.header && state.sheet && state.sheet.rows.length) {
+      e.preventDefault();
+      focusHeader(state.sel.c);
+      return;
+    }
+    if (state.editing && onEditKey(e)) return;
     var s = state.sel;
     var maxR = state.view.length - 1, maxC = columnCount() - 1;
     var page = Math.max(1, Math.floor((ui.scroller.clientHeight - geo.head) / ROW_H) - 1);
@@ -1047,7 +1107,7 @@
   /** Editable / Read-only / Locked, for the active cell; in the read-only view it also turns editing on. */
   function accessChip(a) {
     var iconName = a.editable ? "edit" : a.kind === "locked" ? "lock" : a.kind === "view" ? "eye" : "circle-slash";
-    var title = a.editable ? "Editable: type, or press Enter or F2, or double-click" : a.reason;
+    var title = a.editable ? "Editable: click the cell, or select it and type, press Enter or F2" : a.reason;
     if (a.kind === "view") {
       var b = h("button", { class: "access view", type: "button", title: title + " (click to start editing)" }, icon(iconName), "Read-only", h("span", { class: "access-action" }, "· Edit"));
       b.addEventListener("click", function () { setEditing(true); });
@@ -1154,6 +1214,13 @@
     var colsLabel = sel2.c1 > sel2.c0 ? (sel2.c1 - sel2.c0 + 1) + " columns" : "column";
     var blocked = state.sheet && state.sheet.protection ? "the sheet is protected" : state.lock;
     var structure = blocked ? "Locked: " + blocked : "";
+    var named = state.header && state.sheet && state.sheet.rows.length > 0;
+    var renameItem = named && state.file && state.file.editable ? {
+      label: "Rename column" + (headerLabel(c) ? " “" + (headerLabel(c).length > 24 ? headerLabel(c).slice(0, 23) + "…" : headerLabel(c)) + "”" : "") + "…",
+      icon: "edit", hint: "F2 on the header",
+      disabled: cellLocked(0, c),
+      run: function () { if (!state.editing) setEditing(true); beginHeaderEdit(c); }
+    } : null;
     var editItems = state.editing ? [
       { label: "Edit cell", icon: "edit", hint: "Enter", run: function () { tryEdit(null, false); }, disabled: src === undefined || !access(src, c).editable },
       { label: "Cut", icon: "clippy", hint: MOD + "X", run: cutSelection },
@@ -1171,6 +1238,9 @@
       { label: "Edit cell", icon: "edit", hint: "turns on editing", run: function () { setEditing(true); tryEdit(null, false); } },
       "-"
     ] : [];
+    // On a column header, renaming comes first.
+    if (hit.header !== undefined && renameItem) editItems = [renameItem, "-"].concat(editItems.filter(function (item, i) { return !(i === 0 && item && item.label === "Edit cell"); }));
+    else if (renameItem && state.editing) editItems = editItems.concat([renameItem, "-"]);
     openMenu(null, editItems.concat([
       { label: "Copy", icon: "copy", hint: MOD + "C", run: function () { copyText(selectionTsv(), "Copied.") } },
       { label: "Copy row", icon: "list-flat", run: function () { copyText(state.view.slice(selection().r0, selection().r1 + 1).map(function (r) { return rowTexts(r).join("\t"); }).join("\n"), "Copied.") } },
@@ -1204,18 +1274,19 @@
     var undo = iconBtn("discard", "Undo (" + MOD + "Z)", function () { call("undo").catch(fail); });
     var redo = iconBtn("redo", "Redo (" + (MAC ? "⇧⌘Z" : "Ctrl+Y") + ")", function () { call("redo").catch(fail); });
     var addRow = btn("Row", "add", addRowAtEnd, "", { title: "Add a row at the end", "data-title": "Add a row at the end" });
-    var addCol = btn("Column", "add", addColumnAtEnd, "", { title: "Add a column at the end", "data-title": "Add a column at the end" });
+    var addCol = btn("Column", "add", addColumnAtEnd, "", { title: "Add a column at the end and name it", "data-title": "Add a column at the end and name it" });
     var delRow = btn("Delete rows", "trash", deleteRows, "", { title: "Delete the selected rows", "data-title": "Delete the selected rows" });
     var delCol = btn("Delete columns", "trash", deleteColumns, "", { title: "Delete the selected columns", "data-title": "Delete the selected columns" });
     var hint = h("span", { class: "edit-hint muted small" },
-      h("span", { class: "legend legend-edit", title: "Cells you can change: type, press Enter or double-click" }, icon("edit"), "Editable"),
+      h("span", { class: "legend legend-edit", title: "Cells you can change: click one to edit its text, or select it and type to replace it" }, icon("edit"), "Editable"),
       h("span", { class: "legend legend-locked hidden", title: "Locked by the sheet's protection in Excel" }, icon("lock"), "Locked"),
       h("span", { class: "legend legend-changed", title: "Changed since the last save" }, h("i"), "Unsaved"),
-      h("span", { class: "legend-keys" }, "Enter edits · Esc cancels · right-click for more"));
+      h("span", { class: "legend-keys" }, "Click a cell to edit · Esc cancels · right-click for more"));
     var save = btn("Save", "save", function () { commitEdit(null); call("saveFile").catch(fail); }, "primary", { title: "Save (" + MOD + "S)" });
+    var badge = h("span", { class: "edit-badge", role: "status" }, icon("edit"), h("span", { text: "Editing" }));
     var el = h("div", { class: "editbar hidden", role: "toolbar", "aria-label": "Editing" },
-      h("span", { class: "edit-badge" }, icon("edit"), "Editing"), undo, redo, h("span", { class: "sep" }), addRow, addCol, delRow, delCol, hint, save);
-    return { el: el, save: save, delRow: delRow, delCol: delCol, addRow: addRow, addCol: addCol, hint: hint };
+      badge, undo, redo, h("span", { class: "sep" }), addRow, addCol, delRow, delCol, hint, save);
+    return { el: el, save: save, badge: badge, delRow: delRow, delCol: delCol, addRow: addRow, addCol: addCol, hint: hint };
   }
 
   function renderEditState() {
@@ -1232,6 +1303,11 @@
     clear(ui.editbar.save);
     append(ui.editbar.save, [icon(state.dirty ? "save" : "check"), state.dirty ? "Save" : "Saved"]);
     ui.editbar.save.disabled = !state.dirty;
+    var changedCount = state.changed.size;
+    ui.editbar.save.title = state.dirty ? "Save " + (changedCount ? plural(changedCount, "changed cell") + " " : "your changes ") + "(" + MOD + "S)" : "Everything is saved";
+    ui.editbar.badge.classList.toggle("dirty", state.dirty);
+    ui.editbar.badge.lastChild.textContent = state.dirty ? "Unsaved changes" : "Editing";
+    ui.editbar.badge.title = state.dirty ? "Changed cells have a yellow mark. Save with " + MOD + "S, or undo with " + MOD + "Z." : "Every change is saved";
     var protectedSheet = !!(state.sheet && state.sheet.protection);
     var locked = protectedSheet ? "Rows and columns can't be added or deleted: this sheet is protected in Excel."
       : state.lock ? "Rows and columns can't be inserted or deleted here: " + state.lock + ". You can still edit cells and add rows or columns at the end." : "";
@@ -1261,14 +1337,35 @@
     renderStatus();
     if (on) {
       // The edit bar and the cell marks show the mode; the save and undo keys are worth saying once.
-      if (!state.toldEditing) { state.toldEditing = true; persist(); toast("info", "Editing " + state.file.name + ".", "Save with " + MOD + "S, undo with " + MOD + "Z. Locked and read-only cells are hatched."); }
+      if (!state.toldEditing) { state.toldEditing = true; persist(); toast("info", "Editing " + state.file.name + ".", "Click a cell to edit its text. Save with " + MOD + "S, undo with " + MOD + "Z. Locked and read-only cells are hatched."); }
       ui.scroller.focus({ preventScroll: true });
     }
   }
 
+  /** Sends an edit to the host; resolves true when it was applied, false (after saying why) when not. */
   function edit(params) {
     params.sheet = state.sheetIndex;
-    return call("edit", params).catch(fail);
+    return call("edit", params).then(function () { return true; }, function (error) { fail(error); return false; });
+  }
+
+  /** A row or column edit: keys typed until the sheet reloads are kept, and nothing waits forever if it fails. */
+  function structuralEdit(params, after) {
+    state.structurePending = true;
+    state.afterReload = after || null;
+    return edit(params).then(function (ok) {
+      if (!ok) { state.afterReload = null; finishStructure(); }
+      return ok;
+    });
+  }
+
+  function finishStructure() {
+    if (!state.structurePending) return;
+    state.structurePending = false;
+    var typed = state.typeAhead;
+    state.typeAhead = "";
+    if (!typed || !state.editing || editor) return;
+    if (state.headFocus >= 0) beginHeaderEdit(state.headFocus, { initial: typed });
+    else tryEdit(typed, false);
   }
 
   /** The text a cell is edited as: its formula, or its value as typed (not as formatted). */
@@ -1282,100 +1379,362 @@
     return String(v);
   }
 
+  /*
+   * The cell editor is one textarea laid over the cell. It is created when
+   * editing starts and removed when it ends; re-rendering the grid never
+   * touches it (it lives outside the grid), so the caret, the selection and
+   * the native undo history stay put while patches and redraws come in.
+   */
   var editor = null;
 
-  function beginEdit(initial) {
+  function cellEl(vr, c) { return ui.body ? ui.body.querySelector('.cell[data-row="' + vr + '"][data-col="' + c + '"]') : null; }
+  function headEl(c) { return ui.head ? ui.head.querySelector('.hcell[data-col="' + c + '"]') : null; }
+
+  /** The column names as typed (the header row's raw text), "" where there is no header row. */
+  function headerNames() {
+    var out = [];
+    var named = state.header && state.sheet && state.sheet.rows.length;
+    for (var c = 0; c < columnCount(); c++) out.push(named ? editText(0, c) : "");
+    return out;
+  }
+
+  /**
+   * Opens the editor on the active cell. initial is text typed over the cell
+   * (Excel's Enter mode: arrows finish the cell); without it the cell's own
+   * text is edited (Edit mode: arrows move the caret), with the caret at
+   * caretAt or at the end.
+   */
+  function beginEdit(initial, caretAt) {
     var src = state.view[state.sel.r];
     if (src === undefined || !state.editing) return;
     var r = state.sel.r, c = state.sel.c;
     state.sel.ar = r; state.sel.ac = c;
+    state.headFocus = -1;
     scrollIntoView(r, c);
     rendered.key = "";
     renderGrid();
-    var cell = ui.body.querySelector('.cell[data-row="' + r + '"][data-col="' + c + '"]');
+    var cell = cellEl(r, c);
     if (!cell) return;
-    openEditor(cell.getBoundingClientRect(), src, c, initial, columnName(c) + (src + 1));
+    var typed = initial !== null && initial !== undefined;
+    openEditor({ el: cell, vr: r, src: src, c: c, initial: initial, caretAt: caretAt, label: columnName(c) + (src + 1), mode: typed ? "enter" : "edit" });
   }
 
-  function beginHeaderEdit(c) {
-    var cell = ui.head.querySelector('.hcell[data-col="' + c + '"]');
-    if (!cell || !state.sheet.rows.length) return;
+  /** Renames a column in its header cell. isNew: the column was just added and already has its default name. */
+  function beginHeaderEdit(c, opts) {
+    opts = opts || {};
+    if (!state.sheet || !state.sheet.rows.length || !state.header || !state.editing) return;
     var a = access(0, c);
-    if (!a.editable) { toast("info", "This column name can't be changed.", a.reason); return; }
-    openEditor(cell.getBoundingClientRect(), 0, c, null, "Column name");
+    if (!a.editable) { if (!opts.quiet) toast("info", "This column name can't be changed.", a.reason); return; }
+    state.headFocus = c;
+    scrollColumnIntoView(c);
+    rendered.key = "";
+    renderGrid();
+    var cell = headEl(c);
+    if (!cell) return;
+    var typed = opts.initial !== null && opts.initial !== undefined;
+    openEditor({ el: cell, src: 0, c: c, initial: opts.initial, header: true, isNew: !!opts.isNew, selectAll: !typed, label: (opts.isNew ? "New column " : "Column ") + columnName(c), mode: typed ? "enter" : "edit" });
   }
 
-  function openEditor(rect, src, c, initial, label) {
+  function openEditor(o) {
     commitEdit(null);
-    var original = editText(src, c);
-    var area = h("textarea", { class: "cell-editor mono", spellcheck: "false", "aria-label": "Edit " + label, rows: "1" });
-    area.value = initial !== null && initial !== undefined ? initial : original;
-    var width = Math.max(rect.width, 140);
-    area.style.left = Math.max(0, Math.min(rect.left, window.innerWidth - width - 4)) + "px";
-    area.style.top = rect.top + "px";
-    area.style.width = width + "px";
-    area.style.minHeight = rect.height + "px";
+    // A column name that clashes keeps its editor open until it is fixed.
+    if (editor) return;
+    var original = editText(o.src, o.c);
+    var area = h("textarea", { class: "cell-editor" + (o.header ? " head-editor" : ""), spellcheck: "false", autocomplete: "off", rows: "1", "aria-label": o.header ? "Name of column " + columnName(o.c) : "Edit cell " + o.label });
+    area.value = original;
+    if (o.header) area.placeholder = E.defaultColumnName(headerNames(), o.c);
+    var chip = h("div", { class: "editor-chip" }, icon("edit"), h("b", { text: o.label }), h("span", { class: "chip-mode" }), h("span", { class: "chip-keys" }));
+    var error = h("div", { class: "editor-error hidden", role: "alert", id: "editor-error" });
     document.body.appendChild(area);
-    // Says what is being edited and how to finish, right above the cell.
-    var chip = h("div", { class: "editor-chip" }, icon("edit"), h("b", { text: label }), h("span", { text: "Enter saves · Esc cancels · " + (MAC ? "⌥" : "Alt+") + "Enter new line" }));
     document.body.appendChild(chip);
-    chip.style.left = area.style.left;
-    chip.style.top = Math.max(0, rect.top - chip.offsetHeight - 2) + "px";
-    editor = { area: area, chip: chip, src: src, c: c, original: original };
-    var grow = function () { area.style.height = "auto"; area.style.height = Math.min(area.scrollHeight, 180) + "px"; };
-    area.addEventListener("input", grow);
-    area.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancelEdit(); return; }
-      if (e.key === "Enter" && (e.altKey || e.ctrlKey || e.metaKey)) {
-        // Alt+Enter adds a line break inside the cell, as in Excel.
-        e.preventDefault();
-        var at = area.selectionStart;
-        area.value = area.value.slice(0, at) + "\n" + area.value.slice(area.selectionEnd);
-        area.selectionStart = area.selectionEnd = at + 1;
-        grow();
-        return;
-      }
-      if (e.key === "Enter") { e.preventDefault(); commitEdit(e.shiftKey ? "up" : "down"); return; }
-      if (e.key === "Tab") { e.preventDefault(); commitEdit(e.shiftKey ? "left" : "right"); return; }
-      if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) commitEdit(null);
-    });
-    area.addEventListener("blur", function () { if (editor && editor.area === area) commitEdit(null); });
-    area.focus();
-    if (initial !== null && initial !== undefined) area.selectionStart = area.selectionEnd = area.value.length;
-    else area.select();
-    grow();
+    document.body.appendChild(error);
+    editor = { area: area, chip: chip, error: error, vr: o.vr, src: o.src, c: o.c, original: original, header: !!o.header, isNew: !!o.isNew, mode: o.mode, rectH: 24, maxW: 480 };
+    area.addEventListener("input", function () { growEditor(); if (editor && editor.area === area && editor.header) showEditorError(""); });
+    area.addEventListener("keydown", onEditorKey);
+    area.addEventListener("blur", function () { if (editor && editor.area === area) commitEdit(null, true); });
+    positionEditor(o.el.getBoundingClientRect());
+    area.focus({ preventScroll: true });
+    if (o.initial !== null && o.initial !== undefined) {
+      // Typing over a cell replaces it. Inserted as typing, so the editor's own undo can take it back.
+      area.select();
+      insertText(o.initial);
+    } else if (o.selectAll) {
+      area.select();
+    } else {
+      var at = o.caretAt !== undefined && o.caretAt !== null ? Math.max(0, Math.min(original.length, o.caretAt)) : original.length;
+      area.setSelectionRange(at, at);
+    }
+    renderEditorChip();
+    growEditor();
   }
 
-  function commitEdit(move) {
-    if (!editor) return;
-    var current = editor;
-    editor = null;
-    var text = current.area.value;
-    current.chip.remove();
-    current.area.remove();
-    if (text !== current.original) edit({ kind: "set", cells: [{ r: current.src, c: current.c, text: text }] });
+  /** Puts text at the caret the way typing would, keeping the text box's undo history. */
+  function insertText(text) {
+    var area = editor && editor.area;
+    if (!area) return;
+    var ok = false;
+    try { ok = document.execCommand("insertText", false, text); } catch (e) { ok = false; }
+    if (!ok) {
+      var at = area.selectionStart;
+      area.value = area.value.slice(0, at) + text + area.value.slice(area.selectionEnd);
+      area.selectionStart = area.selectionEnd = at + text.length;
+    }
+    growEditor();
+  }
+
+  /** Lays the editor over the cell (rect), with its label above and any error below. */
+  function positionEditor(rect) {
+    var e = editor;
+    if (!e) return;
+    var area = e.area;
+    e.rectH = Math.round(rect.height);
+    e.minW = Math.max(Math.round(rect.width), e.header ? 160 : 90);
+    var left = Math.max(0, Math.min(rect.left, window.innerWidth - e.minW - 4));
+    e.maxW = Math.max(e.minW, Math.min(480, window.innerWidth - left - 6));
+    area.style.left = left + "px";
+    area.style.top = rect.top + "px";
+    // Text sits where the cell showed it: centred in a tall header, on the row in a cell.
+    var pad = Math.max(0, Math.floor((e.rectH - 4 - 20) / 2));
+    area.style.paddingTop = area.style.paddingBottom = pad + "px";
+    growEditor();
+    placeEditorChrome();
+  }
+
+  function placeEditorChrome() {
+    var e = editor;
+    if (!e) return;
+    var box = e.area.getBoundingClientRect();
+    e.chip.style.left = box.left + "px";
+    var above = box.top - e.chip.offsetHeight - 2;
+    e.chip.style.top = (above >= 0 ? above : box.bottom + 2) + "px";
+    e.error.style.left = box.left + "px";
+    e.error.style.top = box.bottom + (above >= 0 ? 0 : e.chip.offsetHeight + 4) + "px";
+    e.error.style.maxWidth = Math.max(220, Math.min(380, window.innerWidth - box.left - 8)) + "px";
+  }
+
+  /**
+   * Sizes the editor to its text: wider up to a limit, then taller. The
+   * height includes the borders, so the text never scrolls inside the box
+   * (a box one pixel too short scrolls, and the caret jumps as you type).
+   */
+  function growEditor() {
+    var e = editor;
+    if (!e) return;
+    var area = e.area;
+    var lines = area.value.slice(0, 4000).split("\n");
+    var widest = 0;
+    for (var i = 0; i < lines.length && i < 200; i++) widest = Math.max(widest, measureEditor(lines[i]));
+    area.style.width = Math.max(e.minW || 90, Math.min(e.maxW || 480, Math.ceil(widest) + 18)) + "px";
+    area.style.height = "auto";
+    var border = area.offsetHeight - area.clientHeight;
+    var want = area.scrollHeight + border;
+    var max = Math.max(e.rectH, 220);
+    area.style.height = Math.max(e.rectH, Math.min(want, max)) + "px";
+    area.style.overflowY = want > max ? "auto" : "hidden";
+  }
+
+  var editorMeasure = null;
+  function measureEditor(text) {
+    if (!editorMeasure) {
+      editorMeasure = document.createElement("canvas").getContext("2d");
+      var cs = getComputedStyle(editor ? editor.area : document.body);
+      editorMeasure.font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+    }
+    return editorMeasure.measureText(text).width;
+  }
+
+  /** Follows the cell when the grid scrolls or resizes; finishes editing once the cell scrolls out of sight. */
+  function repositionEditor() {
+    var e = editor;
+    if (!e || !ui.scroller) return;
+    var el = e.header ? headEl(e.c) : cellEl(e.vr, e.c);
+    var view = ui.scroller.getBoundingClientRect();
+    var rect = el ? el.getBoundingClientRect() : null;
+    if (!rect || rect.right <= view.left + geo.rn || rect.left >= view.right || rect.bottom <= view.top + (e.header ? 0 : geo.head) || rect.top >= view.bottom) { commitEdit(null, true); return; }
+    positionEditor(rect);
+  }
+  window.addEventListener("resize", function () { if (editor) repositionEditor(); });
+
+  function renderEditorChip() {
+    var e = editor;
+    if (!e) return;
+    var mode = e.chip.querySelector(".chip-mode");
+    var keys = e.chip.querySelector(".chip-keys");
+    mode.textContent = e.header ? "" : e.mode === "enter" ? "Typing" : "Editing";
+    mode.title = e.header ? "" : e.mode === "enter" ? "Arrow keys finish the cell and move. F2 switches to moving the caret." : "Arrow keys move the caret. F2 switches to moving between cells.";
+    mode.classList.toggle("hidden", e.header);
+    keys.textContent = e.header
+      ? "Enter saves · Tab next column · Esc " + (e.isNew ? "keeps the default" : "cancels")
+      : "Enter saves · Esc cancels · " + (MAC ? "⌥" : "Alt+") + "Enter new line · F2 mode";
+  }
+
+  /** Shows (or with "" hides) why a column name was refused, under the editor; the editor stays open. */
+  function showEditorError(text) {
+    var e = editor;
+    if (!e) return;
+    e.error.textContent = text;
+    e.error.classList.toggle("hidden", !text);
+    e.area.classList.toggle("invalid", !!text);
+    if (text) { e.area.setAttribute("aria-invalid", "true"); e.area.setAttribute("aria-describedby", "editor-error"); }
+    else { e.area.removeAttribute("aria-invalid"); e.area.removeAttribute("aria-describedby"); }
+    placeEditorChrome();
+    if (text) announce(text);
+  }
+
+  function onEditorKey(e) {
+    var cur = editor;
+    if (!cur || e.target !== cur.area) return;
+    var action = E.editorKeyAction(e, { mac: MAC, mode: cur.mode, header: cur.header });
+    // Characters, Backspace, clipboard keys and the like belong to the text box (and to VS Code for copy and paste).
+    if (!action) return;
+    // Keys the editor handles go no further: VS Code's own undo would otherwise undo the last saved edit instead of the typing.
+    e.preventDefault();
+    e.stopPropagation();
+    switch (action.type) {
+      case "cancel": cancelEdit(); break;
+      case "newline": insertText("\n"); break;
+      case "commit": commitEdit(action.move); break;
+      case "toggleMode": cur.mode = cur.mode === "enter" ? "edit" : "enter"; renderEditorChip(); announce(cur.mode === "enter" ? "Arrow keys move between cells" : "Arrow keys move the caret"); break;
+      case "undo":
+      case "redo":
+        try { document.execCommand(action.type); } catch (err) { /* nothing to undo */ }
+        growEditor();
+        break;
+      case "selectAll": cur.area.select(); break;
+      case "save": {
+        // Saved once the cell's edit has reached the host, so the file holds what was just typed.
+        var done = commitEdit(null);
+        done.then(function () { return call("saveFile"); }).catch(fail);
+        break;
+      }
+    }
+  }
+
+  function closeEditor(cur) {
+    // Clear it first: removing the focused textarea fires blur, which would commit it again.
+    if (editor === cur) editor = null;
+    cur.chip.remove();
+    cur.error.remove();
+    cur.area.remove();
+  }
+
+  /**
+   * Finishes editing: sends the text to the host (which applies it and
+   * patches the grid) and moves the active cell. A column name another
+   * column already has is refused and the editor stays open, unless focus
+   * left it (fromBlur), which keeps the old name and says why.
+   */
+  function commitEdit(move, fromBlur) {
+    if (!editor) return Promise.resolve(true);
+    var cur = editor;
+    var text = cur.area.value;
+    if (cur.header) {
+      var check = E.checkColumnName(headerNames(), cur.c, text);
+      if (!check.ok) {
+        var message = "“" + check.name.trim() + "” is already the name of column " + columnName(check.clash) + ". Column names must be unique, so exports and column mapping can tell them apart.";
+        if (!fromBlur) { showEditorError(message + " Type another name, or press Esc."); return Promise.resolve(false); }
+        closeEditor(cur);
+        toast("error", "Column " + columnName(cur.c) + " was not renamed.", message);
+        state.headFocus = -1;
+        return Promise.resolve(false);
+      }
+      text = check.name;
+    }
+    closeEditor(cur);
+    var pending = text !== cur.original ? edit({ kind: "set", cells: [{ r: cur.src, c: cur.c, text: text }] }) : Promise.resolve(true);
+    if (cur.header) {
+      if (!fromBlur) headerMove(cur.c, move);
+      return pending;
+    }
     if (move) {
       var r = state.sel.r + (move === "down" ? 1 : move === "up" ? -1 : 0);
       var c = state.sel.c + (move === "right" ? 1 : move === "left" ? -1 : 0);
       if (move === "down" && r >= state.view.length) {
         // Enter on the last row adds one, so a table can be typed in row by row.
         addRowAtEnd();
-        return;
+        return pending;
+      }
+      if (move === "up" && r < 0 && state.header && state.sheet && state.sheet.rows.length) {
+        if (!fromBlur) focusHeader(state.sel.c);
+        return pending;
       }
       select(Math.max(0, Math.min(state.view.length - 1, r)), Math.max(0, Math.min(columnCount() - 1, c)), false);
       scrollIntoView(state.sel.r, state.sel.c);
     }
-    if (ui.scroller) ui.scroller.focus({ preventScroll: true });
+    if (ui.scroller && !fromBlur) ui.scroller.focus({ preventScroll: true });
+    return pending;
+  }
+
+  /** After a column name is saved: Tab goes on to the next column's name, Enter down into the column. */
+  function headerMove(c, move) {
+    if (move === "right" || move === "left") {
+      var next = c + (move === "right" ? 1 : -1);
+      if (next >= 0 && next < columnCount()) { beginHeaderEdit(next, { quiet: true }); if (editor) return; }
+      focusHeader(Math.max(0, Math.min(columnCount() - 1, next)));
+      return;
+    }
+    if (move === "down" && state.view.length) {
+      state.headFocus = -1;
+      select(0, c, false);
+      scrollIntoView(0, c);
+      ui.scroller.focus({ preventScroll: true });
+      return;
+    }
+    focusHeader(c);
   }
 
   function cancelEdit() {
     if (!editor) return;
-    // Clear it first: removing the focused textarea fires blur, which would commit it.
-    var area = editor.area;
-    editor.chip.remove();
-    editor = null;
-    area.remove();
+    var cur = editor;
+    closeEditor(cur);
+    if (cur.header) {
+      if (cur.isNew) announce("Column " + columnName(cur.c) + " keeps the name " + cur.original);
+      focusHeader(cur.c);
+    } else if (ui.scroller) ui.scroller.focus({ preventScroll: true });
+  }
+
+  /** Moves keyboard focus to a column's header cell, where Enter or F2 renames it (or sorts, when not editing). */
+  function focusHeader(c) {
+    if (!state.header || !state.sheet || !state.sheet.rows.length) return;
+    state.headFocus = Math.max(0, Math.min(columnCount() - 1, c));
+    state.sel.c = state.sel.ac = state.headFocus;
+    scrollColumnIntoView(state.headFocus);
+    scheduleRender(true);
+    renderStatus();
     if (ui.scroller) ui.scroller.focus({ preventScroll: true });
+    var name = headerLabel(state.headFocus);
+    announce("Column " + columnName(state.headFocus) + " header" + (name ? ", " + name : "") + (state.editing ? ". Enter or F2 renames it." : ". Enter sorts by it."));
+  }
+
+  /** Keys while a header cell has focus; true when handled. */
+  function onHeadKey(e) {
+    var c = state.headFocus;
+    var mod = e.metaKey || e.ctrlKey;
+    var last = columnCount() - 1;
+    switch (e.key) {
+      case "ArrowLeft": e.preventDefault(); focusHeader(mod ? 0 : c - 1); return true;
+      case "ArrowRight": e.preventDefault(); focusHeader(mod ? last : c + 1); return true;
+      case "Tab": e.preventDefault(); focusHeader(e.shiftKey ? c - 1 : c + 1); return true;
+      case "ArrowUp": e.preventDefault(); return true;
+      case "ArrowDown":
+      case "Escape":
+        e.preventDefault();
+        state.headFocus = -1;
+        if (state.view.length) { select(0, c, false); scrollIntoView(0, c); announceCell(); } else scheduleRender(true);
+        return true;
+      case "Enter":
+      case "F2":
+        e.preventDefault();
+        if (state.editing) beginHeaderEdit(c);
+        else if (e.key === "Enter") cycleSort(c);
+        return true;
+      case "Delete":
+      case "Backspace":
+        e.preventDefault();
+        return true;
+    }
+    if (!mod && !e.altKey && e.key.length === 1 && state.editing) { e.preventDefault(); beginHeaderEdit(c, { initial: e.key }); return true; }
+    return false;
   }
 
   /** Keys in the grid while editing; true when handled. */
@@ -1413,13 +1772,13 @@
   }
 
   /** Starts editing the active cell, or explains (next to the cell) why it can't be edited. */
-  function tryEdit(initial, fromDoubleClick) {
+  function tryEdit(initial, fromDoubleClick, caretAt) {
     var src = state.view[state.sel.r];
     if (src === undefined) return;
     var a = access(src, state.sel.c);
-    if (a.editable) { beginEdit(initial); return; }
+    if (a.editable) { beginEdit(initial, caretAt); return; }
     var actions = [];
-    if (a.kind === "view") actions.push({ label: "Edit cell", icon: "edit", primary: true, run: function () { setEditing(true); beginEdit(initial); } });
+    if (a.kind === "view") actions.push({ label: "Edit cell", icon: "edit", primary: true, run: function () { setEditing(true); beginEdit(initial, caretAt); } });
     if (fromDoubleClick || a.kind !== "view") actions.push({ label: "Inspect", icon: "eye", run: openInspector });
     showCellHint(a.kind === "locked" ? "lock" : a.kind === "view" ? "eye" : "circle-slash", a.kind === "view" ? "Read-only view" : a.label, a.reason, actions);
   }
@@ -1543,52 +1902,77 @@
     if (!rows.length) return;
     var at = below ? Math.max.apply(null, rows) + 1 : Math.min.apply(null, rows);
     var count = rows.length;
-    state.afterReload = function () { var vr = state.view.indexOf(at); if (vr !== -1) { select(vr, state.sel.c, false); scrollIntoView(vr, state.sel.c); } };
-    edit({ kind: "insertRows", at: at, count: count });
+    structuralEdit({ kind: "insertRows", at: at, count: count }, function () { var vr = state.view.indexOf(at); if (vr !== -1) { select(vr, state.sel.c, false); scrollIntoView(vr, state.sel.c); } });
   }
 
   function addRowAtEnd() {
     if (!state.sheet) return;
     var at = state.sheet.rows.length;
     var c = state.sel.c;
-    state.afterReload = function () {
+    structuralEdit({ kind: "insertRows", at: at, count: 1 }, function () {
       var vr = state.view.indexOf(at);
       if (vr === -1) return;
       select(vr, c, false);
       scrollIntoView(vr, c);
       ui.scroller.focus({ preventScroll: true });
-    };
-    edit({ kind: "insertRows", at: at, count: 1 });
+    });
   }
 
   function deleteRows() {
     var rows = selectedSourceRows();
-    if (rows.length) edit({ kind: "deleteRows", rows: rows });
+    if (rows.length) structuralEdit({ kind: "deleteRows", rows: rows });
   }
 
   function insertColumns(right) {
     var sel = selection();
-    edit({ kind: "insertColumns", at: right ? sel.c1 + 1 : sel.c0, count: sel.c1 - sel.c0 + 1 });
+    addColumns(right ? sel.c1 + 1 : sel.c0, sel.c1 - sel.c0 + 1);
   }
 
   function addColumnAtEnd() {
     if (!state.sheet) return;
-    var at = columnCount();
-    state.afterReload = function () { select(state.sel.r, Math.min(at, columnCount() - 1), false); scrollIntoView(state.sel.r, state.sel.c); };
-    edit({ kind: "insertColumns", at: at, count: 1 });
+    addColumns(columnCount(), 1);
+  }
+
+  /** Default names for new columns, when the sheet has a header row whose cells there can be written. */
+  function newColumnNames(at, count) {
+    if (!state.header || !state.sheet || !state.sheet.rows.length || cellLocked(0, at)) return undefined;
+    var names = headerNames();
+    names.splice.apply(names, [at, 0].concat(new Array(count).join(",").split(",")));
+    return E.defaultColumnNames(names, at, count);
+  }
+
+  /**
+   * Inserts columns. With a header row they arrive already named ("Column 4"),
+   * in the same undo step, and the first one's name opens for typing: Enter
+   * keeps what was typed, Esc or an empty name keeps the default.
+   */
+  function addColumns(at, count) {
+    var names = newColumnNames(at, count);
+    var row = state.sel.r;
+    structuralEdit({ kind: "insertColumns", at: at, count: count, names: names }, function () {
+      select(Math.max(0, Math.min(row, state.view.length - 1)), Math.min(at, columnCount() - 1), false);
+      scrollIntoView(state.sel.r, state.sel.c);
+      if (names) beginHeaderEdit(at, { isNew: true, quiet: true });
+      if (!editor) ui.scroller.focus({ preventScroll: true });
+    }).then(function (ok) {
+      // Widths belong to columns, so they move with them.
+      if (ok) { var w = widths(); w.splice.apply(w, [Math.min(at, w.length), 0].concat(new Array(count))); }
+    });
   }
 
   function deleteColumns() {
     var sel = selection(), cols = [];
     for (var c = sel.c0; c <= sel.c1; c++) cols.push(c);
-    edit({ kind: "deleteColumns", cols: cols });
+    structuralEdit({ kind: "deleteColumns", cols: cols }).then(function (ok) {
+      if (ok) { var w = widths(); for (var i = cols.length - 1; i >= 0; i--) if (cols[i] < w.length) w.splice(cols[i], 1); }
+    });
   }
 
   /** Applies a patch from the host: changed cells in place, or a reload after rows or columns moved. */
   function applyPatch(patch) {
     if (!patch || !state.sheet || patch.sheet !== state.sheetIndex) return;
     // Moved rows and columns change every address, so the unsaved-change marks start over.
-    if (patch.kind === "structure") { state.changed.clear(); loadSheet(state.sheetIndex, true); return; }
+    if (patch.kind === "structure") { state.changed.clear(); loadSheet(state.sheetIndex, true, true); return; }
     var sheet = state.sheet;
     var headerChanged = false;
     patch.cells.forEach(function (cell) {

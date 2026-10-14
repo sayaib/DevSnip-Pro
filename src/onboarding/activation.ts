@@ -48,6 +48,12 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
   {
+    version: "11.78.2",
+    items: [
+      { title: "CSV & Excel editing: click a cell to edit its text with a caret, and name new columns as you add them", command: "csvViewer" }
+    ]
+  },
+  {
     version: "11.78.1",
     items: [
       { title: "Excel Viewer: open and edit .xlsx workbooks, keeping every sheet, style and formula", command: "excelViewer" },

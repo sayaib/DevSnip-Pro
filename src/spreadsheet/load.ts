@@ -48,9 +48,13 @@ export function loadSpreadsheet(bytes: Uint8Array, name: string, format: SheetFo
 export function loadText(text: string, name: string, format: SheetFormat = "csv", delimiter?: string, extra: { size?: number; encoding?: string } = {}): LoadedSpreadsheet {
   if (/^\s*PK\u0003\u0004/.test(text)) throw new SpreadsheetError("This looks like an Excel workbook, not CSV text.", "Open the .xlsx file itself instead of pasting it.");
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-  const { spans, ...sheet } = parseCsv(text, { delimiter, spans: true });
+  // issues stay on the sheet: the grid lists them in its banner.
+  const { spans, preamble, ...sheet } = parseCsv(text, { delimiter, spans: true });
   sheet.name = name.replace(/\.[^.]+$/, "") || "Sheet1";
   const { eol, trailing } = lineEndings(text);
+  // Rows as wide as the file was keep that width when columns are added after the last one.
+  const loadedColumns = sheet.columnCount;
+  const loadedWidths = sheet.rows.map(row => row.length);
   return {
     summary: { name, format, size: extra.size ?? text.length, sheets: [{ name: sheet.name, hidden: false }], delimiter: sheet.delimiter, encoding: extra.encoding },
     sheet: () => sheet,
@@ -62,11 +66,16 @@ export function loadText(text: string, name: string, format: SheetFormat = "csv"
       // Rows nobody touched are written exactly as they were read: quoting, spacing and all.
       const lines = sheet.rows.map((row, r) => {
         const origin = edits?.rowOrigin ? edits.rowOrigin[r] : r;
-        if (!edits?.colOrigin && !dirtyRows.has(r) && origin >= 0 && spans && spans[origin * 2 + 1] !== undefined) return text.slice(spans[origin * 2], spans[origin * 2 + 1]);
+        if (!edits?.colOrigin && !dirtyRows.has(r) && origin >= 0 && spans && spans[origin * 2 + 1] !== undefined) {
+          const line = text.slice(spans[origin * 2], spans[origin * 2 + 1]);
+          const added = sheet.columnCount - loadedColumns;
+          return added > 0 && loadedWidths[origin] === loadedColumns ? line + sheet.delimiter.repeat(added) : line;
+        }
         // Edited and new rows get every column's separator, so the file stays rectangular.
         return csvLine(row.length < sheet.columnCount ? [...row, ...Array(sheet.columnCount - row.length).fill("")] : row, sheet.delimiter);
       });
-      const out = lines.join(eol) + (trailing && lines.length ? eol : "");
+      // The "sep=;" line Excel reads the separator from is not a row; keep it.
+      const out = (preamble ?? "") + lines.join(eol) + (trailing && lines.length ? eol : "");
       const encoded = encodeText(out, extra.encoding);
       return { bytes: encoded.bytes, note: extra.encoding && encoded.encoding !== extra.encoding ? `Saved as ${encoded.encoding}: the text has characters ${extra.encoding} can't hold.` : undefined };
     }
