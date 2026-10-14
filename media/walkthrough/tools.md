@@ -1,6 +1,6 @@
 # Every tool in one sidebar
 
-The **DevSnip Pro** icon in the Activity Bar opens the Tools sidebar. Tools are grouped into 13 sections, from **Backend & API** to **Data & RAG**, with the most-used first.
+The **DevSnip Pro** icon in the Activity Bar opens the Tools sidebar. Tools are grouped into 14 sections, from **Backend & API** to **Data & RAG**, with the most-used first.
 
 - **Search:** press `Ctrl+K` (`Cmd+K` on macOS) or `/` and type, for example, `jwt`, `curl` or `docker`.
 - **Favorites:** hover a tool and click the star; favorites stay at the top.

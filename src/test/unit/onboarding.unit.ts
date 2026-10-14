@@ -92,7 +92,8 @@ suite("activation and onboarding", () => {
     const titles = news!.items.map(item => item.title).join(" | ");
     assert.ok(news!.items.length <= 4, "at most four highlights");
     assert.strictEqual(news!.items[0].title, RELEASE_HIGHLIGHTS.find(release => release.items.length)!.items[0].title, "the newest highlights come first");
-    assert.ok(!/Database Client/.test(titles), "the version they already had is not repeated");
+    const had = RELEASE_HIGHLIGHTS.find(release => release.version === "11.71.1")!.items.map(item => item.title);
+    assert.ok(had.length && had.every(title => !titles.includes(title)), "the version they already had is not repeated");
     await dismissWhatsNew(VERSION, false);
     assert.strictEqual(whatsNew(VERSION), null, "shown once");
   });

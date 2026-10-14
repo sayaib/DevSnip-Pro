@@ -102,7 +102,7 @@ suite("toolkit registry", () => {
   });
 
   test("sections are ordered with the daily tools first", () => {
-    assert.deepStrictEqual(SECTIONS.map(s => s.title), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
+    assert.deepStrictEqual(SECTIONS.map(s => s.title), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Spreadsheets & CSV", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
     assert.strictEqual(SECTIONS[0].entries[0].command, "openGUI");
   });
 

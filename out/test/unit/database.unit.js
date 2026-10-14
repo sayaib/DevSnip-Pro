@@ -122,7 +122,9 @@ async function rejects(promise, pattern) {
         const cases = [
             ["postgres://u:p@h/db", "postgres"], ["postgresql://h", "postgres"], ["jdbc:postgresql://h:5432/db", "postgres"],
             ["DATABASE_URL=\"postgresql://u:p@h/db\"", "postgres"],
-            ["mysql://root@localhost/app", "mysql"], ["mariadb://h/db", "mysql"],
+            ["mysql://root@localhost/app", "mysql"], ["mariadb://h/db", "mariadb"], ["jdbc:mariadb://h:3306/db", "mariadb"],
+            ["cockroachdb://root@h:26257/defaultdb", "cockroachdb"], ["oracle://u:p@h:1521/FREEPDB1", "oracle"], ["jdbc:oracle:thin:@//h:1521/ORCLPDB1", "oracle"],
+            ["clickhouse://default@h:8123/default", "clickhouse"], ["valkey://h:6379/0", "redis"],
             ["Server=localhost,1433;Database=app;User Id=sa;Password=x", "sqlserver"], ["sqlserver://h:1433;database=a", "sqlserver"], ["mssql://u:p@h/db", "sqlserver"],
             ["sqlite:///tmp/x.db", "sqlite"], ["file:./dev.db", "sqlite"], ["/Users/me/app.sqlite3", "sqlite"],
             ["mongodb://h:27017/app", "mongodb"], ["mongodb+srv://u:p@cluster0.x.mongodb.net/app", "mongodb"],

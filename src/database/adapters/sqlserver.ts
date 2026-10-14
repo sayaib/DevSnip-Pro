@@ -1,7 +1,7 @@
 import type { ConnectionPool, IResult } from "mssql";
 import { ConnectionSpec } from "../connection-string";
 import { categorize } from "../sql-builder";
-import { DbError, DbTarget, LIMITS, ObjectInfo, QueryResult, Row, ServerInfo } from "../types";
+import { DbError, DbTarget, IndexInfo, LIMITS, ObjectInfo, QueryResult, Row, RunControl, ServerInfo } from "../types";
 import { ExecResult, SqlAdapter, TableMeta } from "./sql-base";
 
 const truthy = (v: string | undefined) => /^(true|yes|1)$/i.test(String(v ?? "").trim());
@@ -173,7 +173,27 @@ export class SqlServerAdapter extends SqlAdapter {
     };
   }
 
-  async runQuery(text: string, context: { database?: string }): Promise<QueryResult> {
+  override async indexes(target: DbTarget): Promise<IndexInfo[]> {
+    const result = await this.request(target.database,
+      `SELECT i.name, i.is_unique, i.is_primary_key, i.type_desc, i.filter_definition, c.name AS col, ic.is_descending_key AS descending
+         FROM sys.indexes i
+         JOIN sys.objects o ON o.object_id = i.object_id
+         JOIN sys.schemas s ON s.schema_id = o.schema_id
+         JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0
+         JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE s.name = @p1 AND o.name = @p2 AND i.name IS NOT NULL
+        ORDER BY i.is_primary_key DESC, i.name, ic.key_ordinal`, [target.schema || "dbo", target.object]);
+    const byName = new Map<string, IndexInfo>();
+    for (const r of result.recordset) {
+      const name = String(r.name);
+      const entry = byName.get(name) ?? { name, columns: [], unique: !!r.is_unique, primary: !!r.is_primary_key, type: String(r.type_desc ?? "").toLowerCase() || undefined, detail: r.filter_definition ? `WHERE ${r.filter_definition}` : undefined };
+      entry.columns.push(`${r.col}${r.descending ? " DESC" : ""}`);
+      byName.set(name, entry);
+    }
+    return [...byName.values()];
+  }
+
+  async runQuery(text: string, context: { database?: string }, control?: RunControl): Promise<QueryResult> {
     const start = Date.now();
     const statements = this.classify(text);
     if (statements.some(s => s.verb === "use")) throw new DbError("Pick the database from the selector instead of USE.");
@@ -184,18 +204,65 @@ export class SqlServerAdapter extends SqlAdapter {
     pool.on("error", () => undefined);
     try {
       await pool.connect();
-      const result = await pool.request().query(text);
-      const sets = ((result.recordsets ?? []) as unknown as Row[][]).filter(Array.isArray);
-      const affected = (result.rowsAffected ?? []).reduce((a, b) => a + b, 0);
-      const set = [...sets].reverse().find(s => s.length > 0) ?? sets[sets.length - 1];
-      if (set) {
-        const columns = Object.keys((set as unknown as { columns?: Record<string, unknown> }).columns ?? set[0] ?? {});
-        return this.queryResult(start, set, columns, affected || undefined, LIMITS.maxQueryRows);
+      const request = pool.request();
+      control?.onCancel(() => request.cancel());
+      const only = statements.length === 1 ? statements[0] : undefined;
+      try {
+        // A single SELECT streams, so a huge result never reaches memory.
+        if (only && !only.write && ["select", "with"].includes(only.verb)) {
+          const streamed = await streamRows(request, text, LIMITS.maxQueryRows);
+          return { ...this.queryResult(start, streamed.rows, streamed.columns, undefined, LIMITS.maxQueryRows), truncated: streamed.truncated };
+        }
+        const result = await request.query(text);
+        const sets = ((result.recordsets ?? []) as unknown as Row[][]).filter(Array.isArray);
+        const affected = (result.rowsAffected ?? []).reduce((a, b) => a + b, 0);
+        const set = [...sets].reverse().find(s => s.length > 0) ?? sets[sets.length - 1];
+        if (set) {
+          const columns = Object.keys((set as unknown as { columns?: Record<string, unknown> }).columns ?? set[0] ?? {});
+          return this.queryResult(start, set, columns, affected || undefined, LIMITS.maxQueryRows);
+        }
+        return this.queryResult(start, [], [], affected, LIMITS.maxQueryRows, `Completed, ${affected} row${affected === 1 ? "" : "s"} affected.`);
+      } catch (error) {
+        // SQL Server reports the line of the batch; point at the start of it.
+        const e = error as { lineNumber?: number; originalError?: { info?: { lineNumber?: number } }; devsnipPosition?: number };
+        const line = Number(e.lineNumber ?? e.originalError?.info?.lineNumber);
+        if (line > 0) e.devsnipPosition = text.split("\n").slice(0, line - 1).reduce((n, l) => n + l.length + 1, 0);
+        throw error;
       }
-      return this.queryResult(start, [], [], affected, LIMITS.maxQueryRows, `Completed, ${affected} row${affected === 1 ? "" : "s"} affected.`);
     } finally {
       await pool.close().catch(() => undefined);
       if (statements.some(s => s.write)) this.invalidate();
     }
   }
+}
+
+/** Streams a SELECT and cancels it after `limit` rows. */
+function streamRows(request: import("mssql").Request, sql: string, limit: number): Promise<{ rows: Row[]; columns: string[]; truncated: boolean }> {
+  return new Promise((resolve, reject) => {
+    const rows: Row[] = [];
+    let columns: string[] = [];
+    let settled = false;
+    let truncated = false;
+    request.stream = true;
+    request.on("recordset", (cols: Record<string, unknown>) => { if (!columns.length) columns = Object.keys(cols ?? {}); });
+    request.on("row", (row: Row) => {
+      if (settled || truncated) return;
+      if (rows.length >= limit) {
+        truncated = settled = true;
+        resolve({ rows, columns, truncated });
+        request.cancel();
+        return;
+      }
+      rows.push(row);
+    });
+    request.on("error", (error: Error) => {
+      // The cancel that stops an over-long result is not a failure.
+      if (truncated) return;
+      if (!settled) { settled = true; reject(error); }
+    });
+    request.on("done", () => { if (!settled) { settled = true; resolve({ rows, columns, truncated }); } });
+    const running = request.query(sql) as unknown as Promise<unknown> | undefined;
+    // In stream mode failures arrive as "error" events; the promise must not reject unhandled.
+    running?.catch?.(() => undefined);
+  });
 }

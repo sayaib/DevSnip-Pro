@@ -93,6 +93,12 @@ export interface ToolContext {
   network?: {
     isPortFree(port: number, host?: string): Promise<boolean>;
   };
+  /** Files the user picks, for inputs too large to paste (both ask the user; undefined when cancelled). */
+  files?: {
+    pick(options: { title: string; filters: Record<string, string[]>; maxBytes: number }): Promise<{ name: string; path: string; bytes: Uint8Array } | undefined>;
+    /** Asks where to save, suggesting `suggestedName` next to `near` (a picked file's path); returns the saved path. */
+    save(content: string, options: { suggestedName: string; near?: string }): Promise<string | undefined>;
+  };
   now?: () => Date;
 }
 

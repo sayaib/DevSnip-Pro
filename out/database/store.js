@@ -80,6 +80,16 @@ class ConnectionStore {
         await this.state.update(PROFILES_KEY, this.list().filter(p => p.id !== id));
         await this.secrets.delete(secretKey(id));
     }
+    /**
+     * Corrects the saved type when the connection string now parses as another
+     * kind (mariadb:// was saved as MySQL before MariaDB had its own entry).
+     */
+    async setKind(id, kind) {
+        const profiles = this.list();
+        if (!profiles.some(p => p.id === id && p.kind !== kind))
+            return;
+        await this.state.update(PROFILES_KEY, profiles.map(p => (p.id === id ? { ...p, kind } : p)));
+    }
     async touch(id) {
         const profiles = this.list();
         if (!profiles.some(p => p.id === id))

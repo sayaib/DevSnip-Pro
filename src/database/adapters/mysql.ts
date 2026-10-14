@@ -1,19 +1,59 @@
 import type { FieldPacket, Pool, PoolConnection, ResultSetHeader } from "mysql2/promise";
 import { ConnectionSpec } from "../connection-string";
 import { categorize, quoteIdent } from "../sql-builder";
-import { DbError, DbTarget, LIMITS, ObjectInfo, QueryResult, Row, ServerInfo } from "../types";
+import { DbError, DbTarget, IndexInfo, LIMITS, ObjectInfo, QueryResult, Row, RunControl, ServerInfo } from "../types";
 import { ExecResult, SqlAdapter, TableMeta } from "./sql-base";
 
 const SYSTEM_DATABASES = new Set(["information_schema", "performance_schema", "mysql", "sys"]);
 
+/**
+ * MySQL reports syntax errors as "... near 'rest of the text' at line N";
+ * finding that text in the statement gives the exact position.
+ */
+export function mysqlErrorPosition(message: string, statement: string): number | undefined {
+  const m = /near '([\s\S]*)' at line (\d+)/.exec(message);
+  if (!m) return undefined;
+  const lines = statement.split("\n");
+  const line = Math.min(Math.max(1, Number(m[2])), lines.length);
+  const lineStart = lines.slice(0, line - 1).reduce((n, l) => n + l.length + 1, 0);
+  if (!m[1]) return statement.trimEnd().length;
+  const at = statement.indexOf(m[1].slice(0, 60), lineStart);
+  return at >= 0 ? at : lineStart;
+}
+
+/**
+ * Streams one SELECT and stops after `limit` rows, so a huge result never
+ * reaches memory. The caller destroys the connection afterwards, which ends
+ * the rest of the query on the server.
+ */
+function streamRows(connection: PoolConnection, sql: string, limit: number): Promise<{ rows: Row[]; columns: string[]; truncated: boolean }> {
+  const core = (connection as unknown as { connection: { query(o: object): NodeJS.EventEmitter; pause(): void } }).connection;
+  return new Promise((resolve, reject) => {
+    const rows: Row[] = [];
+    let columns: string[] = [];
+    let settled = false;
+    const finish = (truncated: boolean) => { if (!settled) { settled = true; resolve({ rows, columns, truncated }); } };
+    const query = core.query({ sql, timeout: LIMITS.queryTimeoutMs });
+    query.on("fields", (fields: FieldPacket[]) => { if (!columns.length) columns = (fields ?? []).map(f => f.name); });
+    query.on("result", (row: Row) => {
+      if (settled) return;
+      if (rows.length >= limit) { core.pause(); finish(true); return; }
+      rows.push(row);
+    });
+    query.on("error", (error: Error) => { if (!settled) { settled = true; reject(error); } });
+    query.on("end", () => finish(false));
+  });
+}
+
 export class MysqlAdapter extends SqlAdapter {
-  readonly kind = "mysql" as const;
+  readonly kind: "mysql" | "mariadb";
   protected readonly dialect = "mysql" as const;
   private poolInstance?: Pool;
   private defaultDb?: string;
 
   constructor(private readonly spec: ConnectionSpec, private readonly readOnly = false) {
     super();
+    this.kind = spec.kind === "mariadb" ? "mariadb" : "mysql";
     this.defaultDb = spec.database || undefined;
   }
 
@@ -59,7 +99,7 @@ export class MysqlAdapter extends SqlAdapter {
     const [rows] = await this.pool().query("SELECT VERSION() AS version, DATABASE() AS db");
     const row = (rows as Row[])[0] ?? {};
     const version = String(row.version ?? "");
-    return { version: /mariadb/i.test(version) ? `MariaDB ${version.split("-")[0]}` : `MySQL ${version}`, defaultDatabase: row.db ? String(row.db) : undefined };
+    return { version: /mariadb/i.test(version) ? `MariaDB ${version.replace(/^5\.5\.5-/, "").split("-")[0]}` : `MySQL ${version}`, defaultDatabase: row.db ? String(row.db) : undefined };
   }
 
   async close(): Promise<void> {
@@ -122,7 +162,8 @@ export class MysqlAdapter extends SqlAdapter {
           nullable: r.nullable === "YES",
           primaryKey: r.ckey === "PRI",
           autoIncrement: /auto_increment/i.test(extra),
-          defaultValue: r.def === null || r.def === undefined ? null : String(r.def),
+          // MariaDB writes a missing default as the text NULL (and quotes string defaults).
+          defaultValue: r.def === null || r.def === undefined || (r.def === "NULL" && r.nullable === "YES") ? null : String(r.def),
           // "DEFAULT_GENERATED" only marks a CURRENT_TIMESTAMP default; computed columns say VIRTUAL/STORED GENERATED.
           editable: category !== "binary" && !/\b(VIRTUAL|STORED) GENERATED\b/i.test(extra)
         };
@@ -133,27 +174,80 @@ export class MysqlAdapter extends SqlAdapter {
     };
   }
 
-  async runQuery(text: string, context: { database?: string }): Promise<QueryResult> {
+  override async indexes(target: DbTarget): Promise<IndexInfo[]> {
+    const [rows] = await this.pool().query(
+      `SELECT INDEX_NAME AS name, NON_UNIQUE AS non_unique, INDEX_TYPE AS type, COLUMN_NAME AS col, EXPRESSION AS expr, SUB_PART AS sub
+         FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`,
+      [target.database ?? this.defaultDb, target.object]
+    ).catch(async error => {
+      // MariaDB and MySQL 5.7 have no EXPRESSION column.
+      if (!/EXPRESSION/i.test(String((error as Error).message))) throw error;
+      return this.pool().query(
+        `SELECT INDEX_NAME AS name, NON_UNIQUE AS non_unique, INDEX_TYPE AS type, COLUMN_NAME AS col, SUB_PART AS sub
+           FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY INDEX_NAME = 'PRIMARY' DESC, INDEX_NAME, SEQ_IN_INDEX`,
+        [target.database ?? this.defaultDb, target.object]
+      );
+    });
+    const byName = new Map<string, IndexInfo>();
+    for (const r of rows as Row[]) {
+      const name = String(r.name);
+      const entry = byName.get(name) ?? { name, columns: [], unique: Number(r.non_unique) === 0, primary: name === "PRIMARY", type: String(r.type ?? "").toLowerCase() || undefined };
+      entry.columns.push(r.col ? `${r.col}${r.sub ? `(${r.sub})` : ""}` : `(${r.expr ?? "expression"})`);
+      byName.set(name, entry);
+    }
+    return [...byName.values()];
+  }
+
+  async runQuery(text: string, context: { database?: string }, control?: RunControl): Promise<QueryResult> {
     const start = Date.now();
     const statements = this.classify(text);
-    if (statements.length > 1) throw new DbError("MySQL runs one statement at a time here.", "Run the statements one by one.");
     const connection: PoolConnection = await this.pool().getConnection();
+    const threadId = (connection as unknown as { threadId?: number }).threadId;
+    // KILL QUERY runs on another connection; the console's own session then reports "interrupted".
+    if (threadId) control?.onCancel(() => this.pool().query(`KILL QUERY ${Number(threadId)}`).catch(() => undefined));
     // The session may have changed (USE, SET, an open transaction): never hand it back to the pool.
+    let shown: { rows: Row[]; columns: string[] } | undefined;
+    let affected = 0;
+    let anyAffected = false;
+    let insertId: number | undefined;
     try {
       if (context.database) await connection.query(`USE ${quoteIdent(context.database, "mysql")}`);
-      const [result, fields] = await connection.query({ sql: text, timeout: LIMITS.queryTimeoutMs });
-      if (Array.isArray(result)) {
-        // A CALL returns several result sets; show the first one that has rows.
-        const sets = Array.isArray(result[0]) ? (result as unknown as Row[][]) : [result as Row[]];
-        const fieldSets = Array.isArray((fields as unknown[])?.[0]) ? (fields as unknown as FieldPacket[][]) : [fields as FieldPacket[]];
-        const index = Math.max(0, sets.findIndex(set => Array.isArray(set) && set.length > 0));
-        return this.queryResult(start, sets[index] ?? [], (fieldSets[index] ?? []).map(f => f?.name).filter(Boolean), undefined, LIMITS.maxQueryRows);
+      // Statements run one by one on the same session, so SET and temporary tables carry over.
+      for (const statement of statements) {
+        let result: unknown;
+        let fields: unknown;
+        const plainSelect = statements.length === 1 && !statement.write && ["select", "with", "table", "values"].includes(statement.verb);
+        try {
+          if (plainSelect) {
+            const streamed = await streamRows(connection, statement.text, LIMITS.maxQueryRows);
+            return { ...this.queryResult(start, streamed.rows, streamed.columns, undefined, LIMITS.maxQueryRows), truncated: streamed.truncated };
+          }
+          [result, fields] = await connection.query({ sql: statement.text, timeout: LIMITS.queryTimeoutMs });
+        } catch (error) {
+          const e = error as { message?: string; sqlMessage?: string; devsnipPosition?: number };
+          const at = mysqlErrorPosition(String(e.sqlMessage ?? e.message ?? ""), statement.text);
+          if (at !== undefined) e.devsnipPosition = statement.offset + at;
+          throw error;
+        }
+        if (Array.isArray(result)) {
+          // A CALL returns several result sets; show the first one that has rows.
+          const sets = Array.isArray(result[0]) ? (result as unknown as Row[][]) : [result as Row[]];
+          const fieldSets = Array.isArray((fields as unknown[])?.[0]) ? (fields as unknown as FieldPacket[][]) : [fields as FieldPacket[]];
+          const index = Math.max(0, sets.findIndex(set => Array.isArray(set) && set.length > 0));
+          shown = { rows: sets[index] ?? [], columns: (fieldSets[index] ?? []).map(f => f?.name).filter(Boolean) };
+        } else {
+          const header = result as ResultSetHeader;
+          affected += header.affectedRows ?? 0;
+          anyAffected = true;
+          if (header.insertId) insertId = header.insertId;
+        }
       }
-      const header = result as ResultSetHeader;
-      return this.queryResult(start, [], [], header.affectedRows, LIMITS.maxQueryRows, `${statements[0].verb.toUpperCase()} completed, ${header.affectedRows} row${header.affectedRows === 1 ? "" : "s"} affected${header.insertId ? `, insert id ${header.insertId}` : ""}.`);
     } finally {
       connection.destroy();
       if (statements.some(s => s.write)) this.invalidate();
     }
+    if (shown) return this.queryResult(start, shown.rows, shown.columns, anyAffected ? affected : undefined, LIMITS.maxQueryRows);
+    const verbs = [...new Set(statements.map(s => s.verb.toUpperCase()))].join(", ");
+    return this.queryResult(start, [], [], affected, LIMITS.maxQueryRows, `${verbs} completed, ${affected} row${affected === 1 ? "" : "s"} affected${insertId ? `, insert id ${insertId}` : ""}.`);
   }
 }

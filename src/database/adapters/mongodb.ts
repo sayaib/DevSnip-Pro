@@ -1,7 +1,7 @@
 import type { Collection, Document, FindCursor, MongoClient, AggregationCursor } from "mongodb";
 import { ConnectionSpec } from "../connection-string";
 import { classifyShellCommand, parseShellCommand, parseShellObject, parseShellValue } from "../mongo-shell";
-import { CellInput, ColumnInfo, DbAdapter, DbError, DbTarget, FilterRule, FILTER_OPS, KeyStrategy, LIMITS, ObjectInfo, PageRequest, PageResult, QueryResult, Row, ServerInfo, StatementCheck, ValueCategory } from "../types";
+import { CellInput, ColumnInfo, DbAdapter, DbError, DbTarget, FilterRule, FILTER_OPS, IndexInfo, KeyStrategy, LIMITS, ObjectInfo, PageRequest, PageResult, QueryResult, Row, RunControl, ServerInfo, StatementCheck, ValueCategory } from "../types";
 import { since } from "../values";
 
 type Ejson = { serialize(value: unknown, options?: { relaxed?: boolean }): any; deserialize(value: unknown, options?: { relaxed?: boolean }): any; stringify(value: unknown, options?: { relaxed?: boolean }): string };
@@ -261,6 +261,22 @@ export class MongoAdapter implements DbAdapter {
     return result.deletedCount;
   }
 
+  async indexes(target: DbTarget): Promise<IndexInfo[]> {
+    const list = await this.collection(target).indexes();
+    return list.map(ix => {
+      const keys = Object.entries((ix.key ?? {}) as Record<string, unknown>);
+      const special = keys.map(([, v]) => v).find(v => typeof v === "string");
+      return {
+        name: String(ix.name),
+        columns: keys.map(([field, dir]) => (dir === -1 ? `${field} DESC` : typeof dir === "string" ? `${field} (${dir})` : field)),
+        unique: !!ix.unique || ix.name === "_id_",
+        primary: ix.name === "_id_",
+        type: special ? String(special) : ix.expireAfterSeconds !== undefined ? "ttl" : undefined,
+        detail: ix.partialFilterExpression ? `partial: ${JSON.stringify(this.toEjson(ix.partialFilterExpression))}` : ix.expireAfterSeconds !== undefined ? `expires after ${ix.expireAfterSeconds}s` : ix.sparse ? "sparse" : undefined
+      };
+    });
+  }
+
   async drop(target: DbTarget): Promise<void> {
     await this.collection(target).drop();
     this.invalidate();
@@ -294,7 +310,9 @@ export class MongoAdapter implements DbAdapter {
     return { columns: [], rows: [], message: text, elapsedMs: since(start) };
   }
 
-  private async drain(cursor: FindCursor<Document> | AggregationCursor<Document>): Promise<{ docs: Document[]; truncated: boolean }> {
+  private async drain(cursor: FindCursor<Document> | AggregationCursor<Document>, control?: RunControl): Promise<{ docs: Document[]; truncated: boolean }> {
+    // Closing the cursor kills it on the server.
+    control?.onCancel(() => cursor.close());
     const docs: Document[] = [];
     let truncated = false;
     try {
@@ -308,7 +326,7 @@ export class MongoAdapter implements DbAdapter {
     return { docs, truncated };
   }
 
-  async runQuery(text: string, context: { database?: string }): Promise<QueryResult> {
+  async runQuery(text: string, context: { database?: string }, control?: RunControl): Promise<QueryResult> {
     const start = Date.now();
     const command = parseShellCommand(text);
     const check = classifyShellCommand(command);
@@ -349,7 +367,7 @@ export class MongoAdapter implements DbAdapter {
           if (chain.has("collation")) cursor.collation(chain.get("collation")![0]);
           const limit = chain.has("limit") ? Math.abs(Number(chain.get("limit")![0]) || 0) : 0;
           cursor.limit(limit && limit <= LIMITS.maxQueryRows ? limit : LIMITS.maxQueryRows + 1);
-          const { docs, truncated } = await this.drain(cursor);
+          const { docs, truncated } = await this.drain(cursor, control);
           return this.documentsResult(start, docs, truncated || (!limit && docs.length > LIMITS.maxQueryRows));
         }
         case "findOne": {
@@ -358,7 +376,7 @@ export class MongoAdapter implements DbAdapter {
         }
         case "aggregate": {
           if (!Array.isArray(args[0])) throw new DbError("aggregate() expects a pipeline array.");
-          const { docs, truncated } = await this.drain(coll.aggregate(args[0], { maxTimeMS, allowDiskUse: chain.has("allowDiskUse") || args[1]?.allowDiskUse }));
+          const { docs, truncated } = await this.drain(coll.aggregate(args[0], { maxTimeMS, allowDiskUse: chain.has("allowDiskUse") || args[1]?.allowDiskUse }), control);
           return this.documentsResult(start, docs, truncated, docs.length ? undefined : check.write ? "Pipeline completed." : "No documents.");
         }
         case "countDocuments":

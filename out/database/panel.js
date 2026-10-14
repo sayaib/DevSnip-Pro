@@ -112,7 +112,7 @@ function openDatabaseClient(context) {
         catch (error) {
             // service.handle only throws DbErrors that are already free of credentials.
             const safe = error instanceof types_1.DbError ? error : new types_1.DbError("Something went wrong.", "Try again, or reconnect.");
-            (0, webview_ui_1.safePostMessage)(panel, { type: "rpc", id, ok: false, error: { message: safe.message, hint: safe.hint } });
+            (0, webview_ui_1.safePostMessage)(panel, { type: "rpc", id, ok: false, error: { message: safe.message, hint: safe.hint, position: safe.position, code: safe.code === "CANCELLED" ? "CANCELLED" : undefined } });
         }
     });
     panel.onDidDispose(() => {

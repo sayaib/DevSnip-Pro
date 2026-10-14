@@ -47,6 +47,21 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  {
+    version: "11.78.1",
+    items: [
+      { title: "Excel Viewer: open and edit .xlsx workbooks, keeping every sheet, style and formula", command: "excelViewer" },
+      { title: "CSV / TSV Viewer: search, sort, stats, export, and edit and save in place", command: "csvViewer" },
+      { title: "XML → JSON Converter: strict validation, namespaces, CDATA, a lossless mode and large files", command: "xmlToJson" }
+    ]
+  },
+  {
+    version: "11.77.1",
+    items: [
+      { title: "Database Client: Oracle, MariaDB, CockroachDB and ClickHouse, plus a form to connect", command: "databaseClient" },
+      { title: "Query editor: highlighting, Format, cancel long queries, and errors underlined where they are", command: "databaseClient" }
+    ]
+  },
   // Analytics-only patches: no items, so updating from 11.76.3 shows no What's New card.
   { version: "11.76.6", items: [] },
   { version: "11.76.5", items: [] },

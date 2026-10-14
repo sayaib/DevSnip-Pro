@@ -10,7 +10,7 @@
 import { tokenize } from "../toolkits/engines/sql";
 import { CellInput, ColumnInfo, DbError, DbTarget, FilterRule, FILTER_OPS, KeyStrategy, PageRequest, Row, ValueCategory } from "./types";
 
-export type SqlDialect = "postgres" | "mysql" | "sqlserver" | "sqlite";
+export type SqlDialect = "postgres" | "mysql" | "sqlserver" | "sqlite" | "oracle" | "clickhouse";
 
 export interface BuiltSql {
   sql: string;
@@ -25,13 +25,15 @@ export function quoteIdent(name: string, d: SqlDialect): string {
   if (typeof name !== "string" || !name || name.length > 256 || name.includes("\u0000")) throw new DbError("Invalid identifier.");
   if (d === "mysql") return "`" + name.replace(/`/g, "``") + "`";
   if (d === "sqlserver") return "[" + name.replace(/]/g, "]]") + "]";
+  // ClickHouse escapes inside quoted identifiers with a backslash.
+  if (d === "clickhouse") return "`" + name.replace(/[\\`]/g, m => "\\" + m) + "`";
   return '"' + name.replace(/"/g, '""') + '"';
 }
 
 export function qualifiedName(target: DbTarget, d: SqlDialect): string {
   const table = quoteIdent(target.object, d);
-  if (d === "postgres" || d === "sqlserver") return target.schema ? `${quoteIdent(target.schema, d)}.${table}` : table;
-  if (d === "mysql") return target.database ? `${quoteIdent(target.database, d)}.${table}` : table;
+  if (d === "postgres" || d === "sqlserver" || d === "oracle") return target.schema ? `${quoteIdent(target.schema, d)}.${table}` : table;
+  if (d === "mysql" || d === "clickhouse") return target.database ? `${quoteIdent(target.database, d)}.${table}` : table;
   // SQLite: "main" is implicit; attached databases are addressed by name.
   return target.database && target.database !== "main" ? `${quoteIdent(target.database, d)}.${table}` : table;
 }
@@ -39,18 +41,25 @@ export function qualifiedName(target: DbTarget, d: SqlDialect): string {
 export function placeholder(n: number, d: SqlDialect): string {
   if (d === "postgres") return `$${n}`;
   if (d === "sqlserver") return `@p${n}`;
+  if (d === "oracle") return `:${n}`;
+  // ClickHouse binds typed parameters by name; values travel as text and are CAST by the caller.
+  if (d === "clickhouse") return `{p${n}:String}`;
   return "?";
 }
 
 /** Maps a server type name to the editor's value category. */
 export function categorize(dataType: string): ValueCategory {
-  const t = String(dataType ?? "").toLowerCase().trim();
+  let t = String(dataType ?? "").toLowerCase().trim();
+  // ClickHouse wrappers: Nullable(T), LowCardinality(T).
+  while (/^(nullable|lowcardinality)\((.*)\)$/.test(t)) t = t.replace(/^(nullable|lowcardinality)\((.*)\)$/, "$2");
   if (/^(bool|boolean|bit)$/.test(t) || /^tinyint\(1\)/.test(t)) return "boolean";
-  if (/json|hstore/.test(t)) return "json";
-  if (/bytea|blob|binary|image|rowversion/.test(t)) return "binary";
+  if (/json|hstore|^(array|map|tuple|nested|object)\(/.test(t)) return "json";
+  // Oracle BINARY_FLOAT/BINARY_DOUBLE are numbers, not bytes.
+  if (/^binary_(float|double)$/.test(t)) return "number";
+  if (/bytea|blob|binary|image|rowversion|^(long )?raw\b|^bfile$/.test(t)) return "binary";
   if (/date|time|year|interval/.test(t)) return "date";
-  if (/^(small|big|tiny|medium)?int(eger|\d)?\b|^(small|big)?serial|numeric|decimal|real|double|float|money|^number/.test(t)) return "number";
-  if (/char|text|clob|uuid|uniqueidentifier|enum|^set\b|citext|name|xml|inet|cidr|macaddr/.test(t)) return "text";
+  if (/^(small|big|tiny|medium)?int(eger|\d)?\b|^u?int(8|16|32|64|128|256)$|^(small|big)?serial|numeric|decimal|real|double|float|money|^number/.test(t)) return "number";
+  if (/char|text|clob|uuid|uniqueidentifier|enum|^set\b|citext|name|xml|inet|cidr|macaddr|^(fixed)?string\b/.test(t)) return "text";
   return "other";
 }
 
@@ -75,6 +84,7 @@ export function coerceInput(input: CellInput, column: ColumnInfo, d: SqlDialect)
       const text = raw.trim().toLowerCase();
       const value = ["true", "t", "1", "yes", "y", "on"].includes(text) ? true : ["false", "f", "0", "no", "n", "off"].includes(text) ? false : undefined;
       if (value === undefined) throw new DbError(`${column.name} expects true or false.`);
+      if (d === "clickhouse") return value ? "true" : "false";
       return d === "mysql" || d === "sqlite" ? (value ? 1 : 0) : value;
     }
     case "json": {
@@ -96,21 +106,35 @@ class Params {
   readonly values: unknown[] = [];
   constructor(private readonly d: SqlDialect) {}
   add(value: unknown): string {
-    this.values.push(value);
+    this.values.push(this.d === "clickhouse" && value !== null && value !== undefined ? String(value) : value);
     return placeholder(this.values.length, this.d);
+  }
+  /** A value compared with a column: ClickHouse parameters are text, so they are cast to the column's type. */
+  typed(value: unknown, column: ColumnInfo): string {
+    const ref = this.add(value);
+    return this.d === "clickhouse" ? `CAST(${ref}, '${column.dataType.replace(/[\\']/g, m => "\\" + m)}')` : ref;
   }
 }
 
-function textCast(column: string, d: SqlDialect): string {
-  const q = quoteIdent(column, d);
+/** Oracle LOBs and LONGs cannot be cast to text in a WHERE clause beyond 4000 characters. */
+const ORACLE_LOB = /^(n?clob|long)$/i;
+
+function textCast(column: ColumnInfo, d: SqlDialect): string {
+  const q = quoteIdent(column.name, d);
   if (d === "postgres") return `CAST(${q} AS TEXT)`;
   if (d === "mysql") return `CAST(${q} AS CHAR)`;
   if (d === "sqlserver") return `CAST(${q} AS NVARCHAR(MAX))`;
+  if (d === "oracle") return ORACLE_LOB.test(column.dataType) ? `DBMS_LOB.SUBSTR(${q}, 4000, 1)` : `TO_CHAR(${q})`;
+  if (d === "clickhouse") return `toString(${q})`;
   return `CAST(${q} AS TEXT)`;
 }
 
-function likeOp(d: SqlDialect): string {
-  return d === "postgres" ? "ILIKE" : "LIKE";
+/** A case-insensitive LIKE in every dialect. */
+function likeClause(column: ColumnInfo, pattern: string, params: Params, d: SqlDialect): string {
+  const p = params.add(pattern);
+  if (d === "postgres" || d === "clickhouse") return `${textCast(column, d)} ILIKE ${p}${d === "clickhouse" ? "" : LIKE_ESCAPE}`;
+  if (d === "oracle") return `UPPER(${textCast(column, d)}) LIKE UPPER(${p})${LIKE_ESCAPE}`;
+  return `${textCast(column, d)} LIKE ${p}${LIKE_ESCAPE}`;
 }
 
 /**
@@ -119,6 +143,8 @@ function likeOp(d: SqlDialect): string {
  * MySQL string literals (and not in the others), so no literal works everywhere.
  */
 export function escapeLike(text: string, d: SqlDialect): string {
+  // ClickHouse has no ESCAPE clause: a backslash escapes wildcards there.
+  if (d === "clickhouse") return text.replace(/[\\%_]/g, m => "\\" + m);
   return text.replace(d === "sqlserver" ? /[!%_[]/g : /[!%_]/g, m => "!" + m);
 }
 
@@ -127,6 +153,8 @@ const LIKE_ESCAPE = " ESCAPE '!'";
 function searchable(column: ColumnInfo, d: SqlDialect): boolean {
   if (column.category === "binary") return false;
   if (d === "sqlserver" && /^(image|geography|geometry|hierarchyid|sql_variant|timestamp|rowversion)/i.test(column.dataType)) return false;
+  // Oracle: TO_CHAR fails on JSON, XMLTYPE and object types.
+  if (d === "oracle" && !["text", "number", "date"].includes(column.category)) return false;
   return true;
 }
 
@@ -142,18 +170,18 @@ function filterClause(rule: FilterRule, column: ColumnInfo, params: Params, d: S
   switch (rule.op) {
     case "null": return `${q} IS NULL`;
     case "notnull": return `${q} IS NOT NULL`;
-    case "contains": return `${textCast(column.name, d)} ${likeOp(d)} ${params.add(`%${escapeLike(value, d)}%`)}${LIKE_ESCAPE}`;
-    case "starts": return `${textCast(column.name, d)} ${likeOp(d)} ${params.add(`${escapeLike(value, d)}%`)}${LIKE_ESCAPE}`;
-    case "ends": return `${textCast(column.name, d)} ${likeOp(d)} ${params.add(`%${escapeLike(value, d)}`)}${LIKE_ESCAPE}`;
+    case "contains": return likeClause(column, `%${escapeLike(value, d)}%`, params, d);
+    case "starts": return likeClause(column, `${escapeLike(value, d)}%`, params, d);
+    case "ends": return likeClause(column, `%${escapeLike(value, d)}`, params, d);
     case "in": {
       const items = value.split(",").map(s => s.trim()).filter(Boolean);
       if (!items.length) throw new DbError(`"in" on ${column.name} needs a comma-separated list.`);
       if (items.length > 500) throw new DbError("An \"in\" filter takes at most 500 values.");
-      return `${q} IN (${items.map(item => params.add(filterValue(column, item, d))).join(", ")})`;
+      return `${q} IN (${items.map(item => params.typed(filterValue(column, item, d), column)).join(", ")})`;
     }
     default: {
       const op = { eq: "=", neq: "<>", gt: ">", gte: ">=", lt: "<", lte: "<=" }[rule.op];
-      return `${q} ${op} ${params.add(filterValue(column, value, d))}`;
+      return `${q} ${op} ${params.typed(filterValue(column, value, d), column)}`;
     }
   }
 }
@@ -174,20 +202,31 @@ function whereFor(request: PageRequest, columns: ColumnInfo[], params: Params, d
     if (targets.length) {
       const pattern = `%${escapeLike(search, d)}%`;
       // SQL Server and MySQL need one parameter per use; Postgres could reuse $n but this keeps it uniform.
-      parts.push(`(${targets.map(c => `${textCast(c.name, d)} ${likeOp(d)} ${params.add(pattern)}${LIKE_ESCAPE}`).join(" OR ")})`);
+      parts.push(`(${targets.map(c => likeClause(c, pattern, params, d)).join(" OR ")})`);
     }
   }
   return parts.length ? ` WHERE ${parts.join(" AND ")}` : "";
 }
 
+export const CLICKHOUSE_READ_ONLY = "ClickHouse rows have no unique key, so they cannot be edited or deleted here. Insert works; use ALTER TABLE ... UPDATE or DELETE in the Query tab to change rows.";
+
+/**
+ * How rows are identified for updates and deletes. `hasRowid` means the table
+ * has a stable hidden row id: SQLite's rowid, Oracle's ROWID, or the hidden
+ * rowid column CockroachDB adds to tables without a primary key.
+ */
 export function keyStrategyFor(columns: ColumnInfo[], d: SqlDialect, isView: boolean, hasRowid: boolean): { strategy: KeyStrategy; keyColumns: string[]; readOnly?: string } {
   if (isView) return { strategy: "none", keyColumns: [], readOnly: "Views are read-only here. Change the underlying tables, or use the Query tab." };
+  if (d === "clickhouse") return { strategy: "none", keyColumns: [], readOnly: CLICKHOUSE_READ_ONLY };
   const pk = columns.filter(c => c.primaryKey).map(c => c.name);
   if (pk.length) return { strategy: "primary", keyColumns: pk };
-  if (d === "sqlite" && hasRowid) return { strategy: "rowid", keyColumns: [ROWID_COLUMN] };
+  if ((d === "sqlite" || d === "oracle" || d === "postgres") && hasRowid) return { strategy: "rowid", keyColumns: [ROWID_COLUMN] };
   if (d === "postgres") return { strategy: "ctid", keyColumns: [CTID_COLUMN] };
-  return { strategy: "none", keyColumns: [], readOnly: "This table has no primary key, so rows cannot be identified safely for editing. Add a primary key, or use the Query tab." };
+  return { strategy: "none", keyColumns: [], readOnly: "This table has no primary key, so rows cannot be identified safely for editing or deleting. Inserting works; add a primary key, or use the Query tab." };
 }
+
+/** Alias that lets Oracle select ROWID next to "t.*". */
+const ORACLE_ALIAS = "t__";
 
 export interface SelectPlan {
   select: BuiltSql;
@@ -204,10 +243,16 @@ export function buildSelect(request: PageRequest, columns: ColumnInfo[], strateg
   const offset = (page - 1) * pageSize;
 
   let extra = "";
-  if (strategy === "rowid") extra = `, rowid AS ${quoteIdent(ROWID_COLUMN, d)}`;
+  if (strategy === "rowid") {
+    if (d === "oracle") extra = `, ROWIDTOCHAR(${ORACLE_ALIAS}.ROWID) AS ${quoteIdent(ROWID_COLUMN, d)}`;
+    // CockroachDB's rowid is an INT8 beyond 2^53, so it travels as text.
+    else if (d === "postgres") extra = `, ${table}.rowid::STRING AS ${quoteIdent(ROWID_COLUMN, d)}`;
+    else extra = `, rowid AS ${quoteIdent(ROWID_COLUMN, d)}`;
+  }
   if (strategy === "ctid") extra = `, ctid::text AS ${quoteIdent(CTID_COLUMN, d)}`;
   // "t.*" rather than "*" so the extra column can follow it in every dialect.
-  const projection = d === "sqlite" || d === "postgres" ? `${table}.*${extra}` : "*";
+  const projection = d === "oracle" ? `${ORACLE_ALIAS}.*${extra}` : d === "sqlite" || d === "postgres" ? `${table}.*${extra}` : "*";
+  const from = d === "oracle" ? `${table} ${ORACLE_ALIAS}` : table;
 
   let order = "";
   if (request.sort) {
@@ -215,25 +260,36 @@ export function buildSelect(request: PageRequest, columns: ColumnInfo[], strateg
     order = ` ORDER BY ${quoteIdent(column.name, d)} ${request.sort.dir === "desc" ? "DESC" : "ASC"}`;
   } else {
     const pk = columns.filter(c => c.primaryKey);
-    if (pk.length) order = ` ORDER BY ${pk.map(c => quoteIdent(c.name, d)).join(", ")}`;
+    if (pk.length && d !== "clickhouse") order = ` ORDER BY ${pk.map(c => quoteIdent(c.name, d)).join(", ")}`;
     else if (d === "sqlserver") order = " ORDER BY (SELECT NULL)";
+    // Pages of a table without a key stay stable when ordered by the row id.
+    else if (d === "oracle" && strategy === "rowid") order = ` ORDER BY ${ORACLE_ALIAS}.ROWID`;
   }
 
-  const limit = d === "sqlserver"
+  const limit = d === "sqlserver" || d === "oracle"
     ? ` OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`
     : ` LIMIT ${pageSize} OFFSET ${offset}`;
 
   return {
-    select: { sql: `SELECT ${projection} FROM ${table}${where}${order}${limit}`, params: params.values },
-    count: { sql: `SELECT COUNT(*) AS ${quoteIdent("n", d)} FROM ${table}${where}`, params: countParams }
+    select: { sql: `SELECT ${projection} FROM ${from}${where}${order}${limit}`, params: params.values },
+    count: { sql: `SELECT COUNT(*) AS ${quoteIdent("n", d)} FROM ${from}${where}`, params: countParams }
   };
 }
 
 function keyClause(key: Row, strategy: KeyStrategy, columns: ColumnInfo[], params: Params, d: SqlDialect): string {
   if (!key || typeof key !== "object") throw new DbError("The row to change was not identified.");
   if (strategy === "rowid") {
-    const id = Number(key[ROWID_COLUMN]);
-    if (!Number.isSafeInteger(id)) throw new DbError("The row id is missing. Refresh and try again.");
+    const raw = String(key[ROWID_COLUMN] ?? "");
+    if (d === "oracle") {
+      if (!/^[A-Za-z0-9+/]{18}$/.test(raw)) throw new DbError("The row id is missing. Refresh and try again.");
+      return `ROWID = CHARTOROWID(${params.add(raw)})`;
+    }
+    if (d === "postgres") {
+      if (!/^\d{1,20}$/.test(raw)) throw new DbError("The row id is missing. Refresh and try again.");
+      return `rowid = ${params.add(raw)}::INT8`;
+    }
+    const id = Number(raw);
+    if (!raw || !Number.isSafeInteger(id)) throw new DbError("The row id is missing. Refresh and try again.");
     return `rowid = ${params.add(id)}`;
   }
   if (strategy === "ctid") {
@@ -266,7 +322,12 @@ export function buildInsert(target: DbTarget, columns: ColumnInfo[], values: Rec
   const table = qualifiedName(target, d);
   const params = new Params(d);
   const set = editableValues(values, columns).filter(([, input]) => input.mode !== "default");
-  if (!set.length) return { sql: d === "mysql" ? `INSERT INTO ${table} () VALUES ()` : `INSERT INTO ${table} DEFAULT VALUES`, params: [] };
+  if (!set.length) {
+    if (d === "mysql") return { sql: `INSERT INTO ${table} () VALUES ()`, params: [] };
+    // Oracle has no DEFAULT VALUES; one column set to DEFAULT does the same.
+    if (d === "oracle") return { sql: `INSERT INTO ${table} (${quoteIdent(columns[0].name, d)}) VALUES (DEFAULT)`, params: [] };
+    return { sql: `INSERT INTO ${table} DEFAULT VALUES`, params: [] };
+  }
   const names = set.map(([c]) => quoteIdent(c.name, d)).join(", ");
   const placeholders = set.map(([c, input]) => params.add(coerceInput(input, c, d))).join(", ");
   return { sql: `INSERT INTO ${table} (${names}) VALUES (${placeholders})`, params: params.values };
@@ -303,6 +364,8 @@ export function buildDelete(target: DbTarget, columns: ColumnInfo[], keys: Row[]
 
 export interface StatementInfo {
   text: string;
+  /** Where the statement starts in the text that was classified. */
+  offset: number;
   verb: string;
   write: boolean;
   /** Why the statement needs confirmation, if it destroys data. */
@@ -319,7 +382,7 @@ export function classifyStatements(text: string): StatementInfo[] {
     tokens = tokenize(text);
   } catch {
     // Unterminated quote: let the server report the syntax error, but treat it as a write.
-    return [{ text: text.trim(), verb: "unknown", write: true }];
+    return [{ text: text.trim(), offset: text.length - text.trimStart().length, verb: "unknown", write: true }];
   }
   const statements: Array<typeof tokens> = [[]];
   let depth = 0;
@@ -334,6 +397,7 @@ export function classifyStatements(text: string): StatementInfo[] {
     const words = statement.filter(t => t.type === "word").map(t => t.value.toLowerCase());
     if (!words.length) continue;
     const body = statement.map(t => t.value).join("").trim();
+    const offset = statement.find(t => t.type !== "space")?.offset ?? 0;
     const verb = words[0];
     const has = (w: string) => words.includes(w);
     const writesInside = words.some(w => ["insert", "update", "delete", "merge", "drop", "truncate", "alter", "create"].includes(w));
@@ -350,9 +414,10 @@ export function classifyStatements(text: string): StatementInfo[] {
     if (verb === "drop") danger = `DROP ${words[1]?.toUpperCase() ?? ""} ${target()}`.trim() + " permanently removes it and its data.";
     else if (verb === "truncate") danger = `TRUNCATE ${target()}`.trim() + " deletes every row.";
     else if (verb === "alter" && has("drop")) danger = "ALTER ... DROP removes a column or constraint, and the data in it.";
+    else if (verb === "alter" && has("delete")) danger = "ALTER ... DELETE removes the matching rows.";
     else if (verb === "delete" || (verb === "with" && has("delete"))) danger = has("where") ? "DELETE removes the matching rows." : "DELETE without WHERE removes every row in the table.";
     else if ((verb === "update" || (verb === "with" && has("update"))) && !has("where")) danger = "UPDATE without WHERE changes every row in the table.";
-    out.push({ text: body, verb, write, danger });
+    out.push({ text: body, offset, verb, write, danger });
   }
   return out;
 }

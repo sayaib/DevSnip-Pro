@@ -130,7 +130,7 @@ function python() {
             assert.ok(homes.has(t.command), `${t.id} has no home`);
     });
     (0, run_unit_tests_1.test)("sections are ordered with the daily tools first", () => {
-        assert.deepStrictEqual(registry_1.SECTIONS.map(s => s.title), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
+        assert.deepStrictEqual(registry_1.SECTIONS.map(s => s.title), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Spreadsheets & CSV", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
         assert.strictEqual(registry_1.SECTIONS[0].entries[0].command, "openGUI");
     });
     (0, run_unit_tests_1.test)("analytics files toolkit tools under their section", () => {

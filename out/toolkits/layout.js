@@ -73,9 +73,10 @@ exports.NAV = [
     },
     {
         id: "text", title: "Text & Formatters", emoji: "📝", codicon: "symbol-text", color: "terminal.ansiBrightWhite",
-        description: "Format and validate JSON, YAML and XML; compare text; test regular expressions; convert case.",
+        description: "Format and validate JSON, YAML and XML; convert XML to JSON; compare text; test regular expressions; convert case.",
         entries: [
             e("jsonFormatter", "JSON / YAML / XML Formatter", "json", "Format, minify and validate JSON, YAML and XML, and convert between them.", { tool: "text.format" }),
+            e("xmlToJson", "XML → JSON Converter", "arrow-swap", "Validate XML and convert it to JSON: attributes, namespaces, arrays, CDATA, comments; compact or lossless.", { tool: "text.xml-json" }),
             e("textDiff", "Diff Checker", "diff", "Compare two texts line by line, or two JSON documents structurally.", { tool: "dev.diff" }),
             e("regexLibrary", "Regex Tester & Library", "regex", "Test a regex with groups, start from tested patterns, copy code for 9 languages.", { tool: "dev.regex-library" }),
             e("caseConverter", "Case Converter & Text Tools", "case-sensitive", "camelCase, snake_case, kebab-case and more; sort, dedupe and count lines.", { tool: "dev.text" })
@@ -101,6 +102,14 @@ exports.NAV = [
             e("sqlQueryHelper", "SQL Query Helper", "list-ordered", "Parameterised SELECT, INSERT, UPDATE, UPSERT, DELETE and pagination queries.", { tool: "data.sql-helper" }),
             e("connectionString", "Database Connection Strings", "plug", "Build or fix Postgres, MySQL, MongoDB and Redis URLs with driver setup.", { tool: "web.db-url" }),
             e("sqlToMongo", "SQL → MongoDB Query", "symbol-namespace", "Translate SELECTs into MongoDB find() or aggregation pipelines.", { tool: "web.sql-mongo" })
+        ]
+    },
+    {
+        id: "spreadsheets", title: "Spreadsheets & CSV", emoji: "📊", codicon: "table", color: "terminal.ansiBrightGreen",
+        description: "View and edit CSV, TSV and Excel workbooks in a fast, searchable grid: sheets, sorting, column stats, export and save.",
+        entries: [
+            e("csvViewer", "CSV / TSV Viewer", "file", "View and edit .csv and .tsv files as a grid: search, sort, stats, export, and save.", { hubIcon: "table", keywords: ["csv", "tsv", "comma separated", "table", "grid", "viewer", "csv editor", "rainbow csv", "data preview"] }),
+            e("excelViewer", "Excel Viewer (.xlsx)", "table", "View and edit .xlsx workbooks: every sheet, formulas, dates and number formats. Macros never run.", { hubIcon: "grid", keywords: ["excel", "xlsx", "xlsm", "spreadsheet", "workbook", "sheet", "office", "viewer", "excel editor"] })
         ]
     },
     {

@@ -1,5 +1,182 @@
 # Development Changelog of DevSnip Pro
 
+## 11.78.1 - CSV & Excel Viewer and editor, and an XML → JSON Converter
+
+A new **Spreadsheets & CSV** section opens `.csv`, `.tsv` and `.xlsx` files as a fast grid you can search, sort and export, and, after pressing **Edit**, change and save. **Text & Formatters** gains an **XML → JSON Converter** with strict validation, a lossless mode and conversion of large files. Neither adds a dependency.
+
+### Added
+
+#### CSV & Excel Viewer and editor
+
+- **Excel Viewer (.xlsx, .xlsm).** Workbooks open in the viewer when you click them in the Explorer.
+  - Every worksheet is a tab at the bottom; hidden sheets are listed in italics, chart sheets are skipped.
+  - Values show the way Excel shows them: dates and times as ISO dates, percentages, fixed decimals, thousands separators, currencies and accounting negatives. Errors such as `#DIV/0!` are marked.
+  - Formula cells have a corner mark, the status bar shows the formula, and the **Formulas** switch shows them in the grid. Nothing is recalculated and no macro runs.
+  - Old binary `.xls` and password-protected workbooks get a clear message on how to open them.
+- **CSV / TSV Viewer.** CSV files still open as text. Open them in the viewer from the Explorer's right-click menu (**Open in CSV & Excel Viewer**), the table button in the editor title bar, or **Open With…**.
+  - The separator (comma, semicolon, tab or pipe; switchable) and the encoding (UTF-8, UTF-16 or Windows-1252) are detected.
+  - Quoted fields with separators, quotes and line breaks are read correctly, and values keep leading zeros.
+  - CSV or TSV text pasted on the start page opens as a table.
+- **The grid:**
+  - Hundreds of thousands of rows scroll smoothly: only what is on screen is drawn.
+  - Search all columns or one, with matches highlighted. Click a header to sort (numbers numerically, empty cells last).
+  - The first row becomes the column names when it looks like a header; one click switches it.
+  - Select cells with the mouse or keyboard and copy them as tab-separated text that pastes straight into Excel.
+  - The status bar shows the cell's address and value, column stats (filled, empty, distinct, min, max, sum, average), and count, sum and average for a selection.
+  - Right-click a cell to copy its row or column, filter by its value, or sort. Double-click shows a long value in full.
+  - Drag a column edge to resize it, or double-click it to fit.
+  - **Export** the rows you see (after search and sort) as CSV or JSON files, open them as JSON, CSV or a Markdown table, or copy them.
+  - The viewer reloads when the file changes on disk, and the start page lists recent files.
+- **Editing.** Files open read-only; **Edit** turns editing on for that file.
+  - Type over a cell, or press <kbd>Enter</kbd>, <kbd>F2</kbd> or double-click to change it. <kbd>Enter</kbd> and <kbd>Tab</kbd> confirm and move on, <kbd>Esc</kbd> cancels, <kbd>Alt</kbd>+<kbd>Enter</kbd> adds a line break, and <kbd>Enter</kbd> on the last row adds a row.
+  - <kbd>Delete</kbd> clears the selection and <kbd>Ctrl/Cmd</kbd>+<kbd>X</kbd> cuts. Pasting from Excel or Google Sheets fills cells; one value pasted into a range fills the range.
+  - Insert rows above or below and columns left or right, delete rows or columns, or add them at the end, from the right-click menu or the edit bar. Double-click a column name to rename it.
+  - It works like any VS Code editor: the tab shows unsaved changes, <kbd>Ctrl/Cmd</kbd>+<kbd>S</kbd> saves, <kbd>Ctrl/Cmd</kbd>+<kbd>Z</kbd> undoes, **Revert File** discards, and unsaved edits survive a restart. Saving asks first if the file changed on disk in the meantime.
+- **It is always clear what can be edited.**
+  - While editing, the cell under the pointer is highlighted with a pencil and a text cursor. Cells that can't be changed are hatched and greyed, with a lock and a "not allowed" cursor. The active cell is outlined solid when editable and dashed when it isn't.
+  - The status bar says what the active cell allows: **Editable**, **Locked** or **Read-only** (click it to start editing). The grid's corner shows a lock in the read-only view and a pencil while editing.
+  - An edit that isn't allowed (typing, <kbd>Enter</kbd>, <kbd>F2</kbd>, <kbd>Delete</kbd> or double-click) is explained next to the cell. In the read-only view it offers **Edit cell**, which turns editing on and opens that cell.
+  - Cells changed since the last save have a yellow bar, explained by a legend in the edit bar. The cell being edited is labelled with its address and the keys that finish it, and renamable column names show a pencil on hover.
+- **Protected Excel sheets are respected.** Only cells formatted as unlocked can be changed, as in Excel. Locked cells are marked, skipped by paste and Delete (with a count), and refused by the host as well. Rows and columns can't be added or deleted on a protected sheet, and the protection is kept when saving.
+- **Saving CSV** rewrites only the rows you edited. Every other line keeps its exact quoting, spacing, line endings and encoding (UTF-8, UTF-8 with BOM, UTF-16 or Windows-1252), so diffs stay small.
+- **Saving Excel workbooks** rewrites only the edited cells.
+  - Typed values become numbers, percentages, dates, TRUE/FALSE or text the way Excel reads them, and `=…` enters a formula.
+  - An edited cell keeps its style, and a new cell takes its row's or column's style, as in Excel.
+  - Shared strings, styles, other sheets, charts, pivot tables and macros are copied unchanged, and Excel recalculates formulas when it opens the file.
+  - Rows and columns can't be inserted or deleted in the middle of workbooks with formulas, merged cells, tables, charts, named ranges or validation, because those refer to cells by address. The edit bar says why; cells can still be edited, and rows and columns added at the end.
+
+#### XML → JSON Converter
+
+- **Converts XML to JSON** from pasted text, the active editor (or the editor's right-click menu on XML files), or a file of up to 200 MB with **Convert a file…**, which saves the JSON next to it.
+- **Compact JSON** by default:
+  - An element with only text becomes a string; otherwise an object of `"@attribute"` keys, child elements and `"#text"`.
+  - Repeated elements become arrays, in order. Empty and self-closing elements become `""`.
+  - The XML declaration (`"?xml"`), doctype, processing instructions and comments (`"#comment"`) are kept. Namespace prefixes and `xmlns` declarations are kept as written.
+- **Lossless mode** keeps every node in order (text around child elements, CDATA, comments, instructions) with each element's namespace URI, so the XML can be rebuilt exactly.
+- **Options:**
+  - formatted (2 spaces, 4 spaces or tab) or minified output;
+  - attribute prefix `@`, `-` or `$`;
+  - arrays everywhere, for a stable shape;
+  - numbers and booleans, only when they print back identically (so `007`, `1.50` and huge IDs stay text);
+  - trim whitespace (never inside CDATA or `xml:space="preserve"`);
+  - CDATA as `"#cdata"`;
+  - drop comments, the prolog or namespace prefixes.
+- **Strict validation.** The first problem is shown with its line and column, the lines around it, and the fix. It catches:
+  - mismatched or unclosed tags and a second root element;
+  - unquoted or duplicate attributes;
+  - a bare `&`, undefined entities (with the numeric reference for HTML ones such as `&nbsp;`) and bad character references;
+  - `--` in comments and a misplaced `<?xml`;
+  - undeclared namespace prefixes, malformed DOCTYPEs and binary files.
+- Entities declared in the DOCTYPE are expanded. UTF-8, UTF-16 and declared encodings such as ISO-8859-1 are read correctly.
+- Deep (5,000 levels) and large documents work: about 40 MB of XML converts in a few seconds. Copy, Insert, Open and Save as… always use the full JSON, even when the preview is shortened.
+
+### Improved
+
+- The JSON / YAML / XML Formatter's **Convert to JSON** and **Convert to YAML** now work for XML instead of saying it isn't supported.
+- Toolkit tools can now ask for a file to read and where to save their result, for inputs too large to paste.
+
+### Security
+
+- No macro ever runs, and nothing is recalculated or fetched: the viewer reads values Excel already calculated, and the converter never reads external DTDs.
+- Size guards: files up to 150 MB open in the viewer, a workbook part may expand to at most 256 MB (against ZIP bombs), and a sheet loads up to 3 million cells. The converter stops entity-expansion ("billion laughs") attacks and nesting deeper than 5,000 levels.
+- Element names such as `__proto__` stay ordinary JSON keys and can't change object prototypes.
+- The viewer never overwrites a file that changed on disk without asking, and **Export** refuses to replace the file being viewed.
+
+### Packaging
+
+- No new dependency: workbooks are read and written with Node's own zlib, and XML is parsed by DevSnip Pro's own parser.
+- Both features load on first use; activation only registers their commands and the two custom editors.
+
+### Docs
+
+- README: a new "CSV and Excel viewer" section, the converter in the tools overview, and 113 tools in 14 sections.
+- The architecture overview lists `src/spreadsheet`.
+
+### Tests
+
+- `spreadsheet.unit.ts` covers CSV and XLSX reading and writing, number formats, dates, encodings, editing and undo, sheet protection, and saving that keeps untouched rows and cells byte for byte.
+- `spreadsheet.test.ts` runs in VS Code: opening each file type, dirty state, save, undo past the save point, revert and hot-exit backups.
+- Saved workbooks were checked with openpyxl, an independent Excel reader.
+- `xml-json.unit.ts` covers both mappings, every option, 25 malformed documents with their exact line and column, entity attacks, encodings, deep nesting and a 10 MB document.
+- The XML parser was checked against 500 real files (SVG, plists, Office documents, schemas, project files). It accepted and rejected exactly what the expat parser did, and the lossless JSON rebuilt every file to identical canonical XML. 90,000 randomly corrupted documents found four parser bugs, all fixed before release.
+
+## 11.77.1 - Database Client: Oracle, MariaDB, CockroachDB, ClickHouse and a better query editor
+
+The Database Client now connects to ten kinds of databases, has a form for connecting, and its query editor highlights, formats and cancels queries. Every database listed is tested end to end against a real server. Nothing outside the Database Client changes.
+
+### Added
+
+- **Oracle Database** (12.1 or later) through node-oracledb Thin mode, so no Oracle Client install is needed.
+  - Connect with `oracle://user:pass@host:1521/SERVICE`, a SID (`?sid=XE`), TCPS (`?ssl=true`), or any `jdbc:oracle:thin:` URL, including connect descriptors.
+  - Schemas are the users that own tables; Oracle's own schemas are hidden.
+  - Tables without a primary key are edited through `ROWID`.
+  - PL/SQL blocks run whole (end them with a `/` line, as in SQL*Plus), and `DBMS_OUTPUT` lines are shown under the result.
+  - NUMBER values stay exact, and dates show and save in local wall-clock time.
+- **MariaDB** gets its own entry. `mariadb://` connections saved as "MySQL" by earlier versions are relabelled the next time they connect.
+- **CockroachDB**, through the PostgreSQL driver, also when you connect with a `postgresql://` URL. Tables without a primary key are edited through CockroachDB's hidden `rowid`.
+- **ClickHouse**, over its HTTP interface, with no new dependency. You can browse, filter, insert and query. Rows can't be edited or deleted from the grid because they have no unique key, and the grid says so; use `ALTER TABLE … UPDATE/DELETE` in a query tab.
+- **Connect with a form.** Pick the database, then fill in host, port, user, password, database (or Oracle service name), TLS and options. The form and the connection-string field stay in sync, and editing a connection keeps the saved password without showing it.
+- **Cancel a running query** on the server (PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, Oracle, ClickHouse, and MongoDB `find`/`aggregate`). A timer shows how long it has run. The connection stays usable afterwards.
+- **Query editor:**
+  - syntax highlighting for SQL, mongosh and Redis commands, and line numbers;
+  - **Format** (<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>);
+  - errors underlined at the position the server reports, with **Go to error**.
+  - <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> now works anywhere in the query tab.
+- **Query results:** sort by clicking a header, filter the rows, resize columns. Copying as JSON or CSV copies what is shown.
+- **Indexes** in the Structure view, for every SQL database and MongoDB.
+- **Resizable columns** in the data grid, remembered per tab.
+- **"What works with each database"** on the welcome page: edit rows, indexes, cancel, and server-side read-only, per database.
+- PostgreSQL and CockroachDB accept `sslrootcert`, `sslcert` and `sslkey` for a private CA and for client-certificate login.
+- `valkey://` and `valkeys://` URLs open Redis connections.
+
+### Improved
+
+- **Large results:** a console `SELECT` on MySQL, MariaDB and SQL Server now streams and stops at the 1,000-row limit, instead of loading the whole result first. PostgreSQL already used a cursor; Oracle and ClickHouse stop at the limit too.
+- **MySQL and MariaDB run multi-statement scripts**, one statement after another on the same session, instead of refusing them.
+- **Tables without a primary key** can still be inserted into on MySQL, MariaDB and SQL Server, and duplicated. Only editing and deleting existing rows needs a key.
+- **Error messages:** Oracle and ClickHouse errors are mapped to clear messages without their boilerplate. A user's cancel no longer reads as a timeout, and unknown-column errors get a matching hint.
+- The connection dialog never names an unnamed connection after a stale example; it uses the detected host and database, or asks for a name.
+- Connection rows in the explorer are taller, so the name and the version line no longer touch.
+
+### Fixed
+
+- **View icons covered their row in the explorer.** The icon's class collided with the tab panel's layout class.
+- **A PostgreSQL connection kept an idle pool** for the configured database name when the server reported a different current database.
+- **A failing status update could fail the action that caused it** (for example, while the panel was closing).
+- The Delete button no longer flashes up before a table's data has loaded.
+- CockroachDB tables no longer show a misleading row estimate of 0 before statistics exist.
+
+### Security
+
+- Read-only connections are now also enforced by the server on CockroachDB, MariaDB, Oracle (console statements run in a read-only transaction) and ClickHouse (`readonly=2`), in addition to PostgreSQL, MySQL and SQLite. Tests check each of them against a real server.
+- The connection form's option field never receives options that could hold a secret, such as `sslpassword`. ClickHouse credentials travel in HTTP headers, never in the URL.
+
+### Packaging
+
+- New dependency: `oracledb`. Only its JavaScript ships; its native Thick-mode binaries, examples and plugins are excluded in `.vscodeignore`, and a test checks that it loads with native modules blocked.
+
+### Docs
+
+- New [docs/DATABASE-CLIENT.md](docs/DATABASE-CLIENT.md) covers:
+  - supported databases and what works with each;
+  - connection examples, authentication and TLS for every database;
+  - how CRUD and the query console work, with examples;
+  - security and least-privilege users;
+  - limits and troubleshooting;
+  - how to run the live tests with Docker, and how to add a database.
+- README: the database table now lists all ten databases, with what you can do in each.
+
+### Tests
+
+- New `database-engines.unit.ts` covers:
+  - Oracle, ClickHouse and CockroachDB parsing and SQL generation;
+  - the Oracle script splitter;
+  - error positions and cancellation;
+  - the new service requests and the MariaDB relabelling;
+  - SQLite indexes and packaging.
+- The live suite now covers PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, Oracle, ClickHouse, MongoDB and Redis. It checks CRUD, tables without keys, indexes, error positions, cancel, the 1,000-row cap and server-side read-only.
+  - SQL Server is now live-tested too; it wasn't before.
+
 ## 11.76.6 - Every user counted once, with their country
 
 An analytics fix, plus a Buy me a coffee button in the README. No tools, UI or features change.

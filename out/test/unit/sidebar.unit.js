@@ -48,7 +48,7 @@ function render() {
 }
 (0, run_unit_tests_1.suite)("tools sidebar", () => {
     (0, run_unit_tests_1.test)("keeps every category, in order, with its icon and colour", () => {
-        assert.deepStrictEqual(tool_groups_1.SIDEBAR_GROUPS.map(g => g.name), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
+        assert.deepStrictEqual(tool_groups_1.SIDEBAR_GROUPS.map(g => g.name), ["Backend & API", "Web & Frontend", "Mobile Development", "Code & Productivity", "Text & Formatters", "Encoders & Converters", "Database", "Spreadsheets & CSV", "Testing & Debugging", "Git & Version Control", "DevOps & Cloud", "Security & Auth", "AI & ML", "Data & RAG"]);
         for (const group of tool_groups_1.SIDEBAR_GROUPS) {
             assert.ok(group.tools.length > 0, `${group.name} has no tools`);
             assert.ok(/^terminal\.ansiBright[A-Z][a-z]+$/.test(group.color), `${group.name} colour ${group.color}`);

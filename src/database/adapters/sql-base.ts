@@ -7,7 +7,7 @@
  */
 
 import { BuiltSql, buildDelete, buildInsert, buildSelect, buildUpdate, classifyStatements, keyStrategyFor, qualifiedName, SqlDialect, StatementInfo } from "../sql-builder";
-import { CellInput, ColumnInfo, DbAdapter, DbError, DbKind, DbTarget, KeyStrategy, ObjectInfo, PageRequest, PageResult, QueryResult, Row, ServerInfo } from "../types";
+import { CellInput, ColumnInfo, DbAdapter, DbError, DbKind, DbTarget, IndexInfo, KeyStrategy, ObjectInfo, PageRequest, PageResult, QueryResult, Row, RunControl, ServerInfo } from "../types";
 import { encodeRow, since } from "../values";
 
 export interface ExecResult {
@@ -19,7 +19,7 @@ export interface ExecResult {
 export interface TableMeta {
   columns: ColumnInfo[];
   isView: boolean;
-  /** SQLite: false for WITHOUT ROWID tables. */
+  /** A stable hidden row id identifies rows without a key: SQLite rowid, Oracle ROWID, CockroachDB rowid. */
   hasRowid: boolean;
   /** Keyword for DROP: TABLE, VIEW, MATERIALIZED VIEW or FOREIGN TABLE. */
   dropKeyword: string;
@@ -38,7 +38,8 @@ export abstract class SqlAdapter implements DbAdapter {
   abstract listDatabases(): Promise<string[]>;
   abstract listSchemas(database: string): Promise<string[]>;
   abstract listObjects(database: string, schema?: string): Promise<ObjectInfo[]>;
-  abstract runQuery(text: string, context: { database?: string; schema?: string }): Promise<QueryResult>;
+  abstract runQuery(text: string, context: { database?: string; schema?: string }, control?: RunControl): Promise<QueryResult>;
+  indexes?(target: DbTarget): Promise<IndexInfo[]>;
   protected abstract exec(database: string | undefined, sql: string, params: unknown[]): Promise<ExecResult>;
   /** Returns no columns when the object does not exist. */
   protected abstract introspect(target: DbTarget): Promise<TableMeta>;
@@ -91,6 +92,7 @@ export abstract class SqlAdapter implements DbAdapter {
       keyColumns,
       keyStrategy: strategy,
       readOnly,
+      canInsert: !meta.isView,
       elapsedMs: since(start)
     };
   }

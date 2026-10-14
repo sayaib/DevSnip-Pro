@@ -4,7 +4,7 @@
 
 ![All DevSnip Pro tools in one searchable grid in VS Code, grouped into 13 sections](../images/all-tools.jpg)
 
-Most lost time in a developer's day is not hard problems. It is dozens of small detours: a website to format JSON, another to decode a JWT, a search for the right `git` command, a script to convert a timestamp. Each takes a minute and pulls you out of the editor. There are 110 tools in 13 sections, all reachable from one sidebar.
+Most lost time in a developer's day is not hard problems. It is dozens of small detours: a website to format JSON, another to decode a JWT, a search for the right `git` command, a script to convert a timestamp. Each takes a minute and pulls you out of the editor. There are 113 tools in 14 sections, all reachable from one sidebar.
 
 ## Find any tool in two keystrokes
 

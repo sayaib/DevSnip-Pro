@@ -2,7 +2,7 @@
 
 <a href="https://buymeacoffee.com/ssayaibj"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="42"></a>
 
-**Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
+**Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and more, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
 
 Free · No account · Runs locally · 110 developer tools
 
@@ -15,9 +15,10 @@ Free · No account · Runs locally · 110 developer tools
 |                                                                                        |                                                                          |
 | :------------------------------------------------------------------------------------- | :----------------------------------------------------------------------- |
 | 🚀 **[REST API client](#rest-api-client-in-vs-code)**                                   | HTTP, GraphQL, environments, collections, cURL import, code generation   |
-| 🗄️ **[Database client](#database-client-for-postgresql-mysql-mongodb-and-redis)**       | PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis                 |
+| 🗄️ **[Database client](#database-client-for-postgresql-mysql-mongodb-and-redis)**       | PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and more |
 | 🤖 **[AI tools](#llm-token-counter-cost-estimates-and-ai-tools)**                       | Token and cost estimates for 18 models, prompt builder, RAG helpers      |
 | 🔒 **[Security scans](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)** | Hard-coded secrets, containers, dependencies and live endpoints  |
+| 📊 **[CSV & Excel viewer](#csv-and-excel-viewer)**                                     | View and edit .csv, .tsv and .xlsx files in a searchable, sortable grid |
 | 🧰 **[100+ utilities](#json-formatter-jwt-decoder-curl-converter-and-100-utilities)**   | JSON, JWT, regex, Docker, Kubernetes, cron, UUIDs and more               |
 | ✂️ **[Snippets & cleanup](#code-snippets-cleanup-and-opencode)**                        | Custom snippets, console.log cleanup, unused imports, OpenCode           |
 
@@ -26,7 +27,7 @@ Free · No account · Runs locally · 110 developer tools
 1. Install DevSnip Pro and click its icon in the Activity Bar.
 2. Open **REST API Client** from the sidebar.
 3. Click **Send a sample request**, or paste any URL or cURL command and press <kbd>Enter</kbd>.
-4. Then try the **Database Client**: paste a connection string such as `postgresql://user:pass@localhost:5432/app`, press **Test**, then **Save & connect**.
+4. Then try the **Database Client**: fill in host, user and password (or paste a connection string such as `postgresql://user:pass@localhost:5432/app`), press **Test connection**, then **Save & connect**.
 
 > **Tip:** the sidebar's **Get started** card ticks off five first steps as you do them. Run **DevSnip Pro: Get Started** for the guided walkthrough.
 
@@ -49,25 +50,31 @@ Build a request, send it and inspect the response — all in one panel.
 
 ## Database client for PostgreSQL, MySQL, MongoDB and Redis
 
-Paste a connection string — DevSnip Pro detects the database and shows its schemas, tables, collections or keys.
+Fill in a short form or paste a connection string — DevSnip Pro detects the database and shows its schemas, tables, views, collections or keys.
 
 ![DevSnip Pro Database Client in VS Code browsing a PostgreSQL table with pagination and filters](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/database.jpg)
 
-| Database        | Connection string                                    | Console        |
-| :-------------- | :--------------------------------------------------- | :------------- |
-| PostgreSQL      | `postgresql://user:pass@host:5432/db`                | SQL            |
-| MySQL / MariaDB | `mysql://user:pass@host:3306/db`                     | SQL            |
-| SQL Server      | `Server=host,1433;Database=db;…` or `sqlserver://…`  | T-SQL          |
-| SQLite          | `sqlite:///path/to/app.db` (or **Browse…**)          | SQL            |
-| MongoDB         | `mongodb://…` or `mongodb+srv://…`                   | mongosh-style  |
-| Redis           | `redis://…` or `rediss://…`                          | Redis commands |
+| Database          | Connection string                                         | Console        | Edit rows | Cancel queries |
+| :---------------- | :-------------------------------------------------------- | :------------- | :-------: | :------------: |
+| PostgreSQL        | `postgresql://user:pass@host:5432/db`                     | SQL            | ✓         | ✓              |
+| CockroachDB       | `cockroachdb://user@host:26257/db` (or `postgresql://…`)  | SQL            | ✓         | ✓              |
+| MySQL             | `mysql://user:pass@host:3306/db`                          | SQL            | ✓         | ✓              |
+| MariaDB           | `mariadb://user:pass@host:3306/db`                        | SQL            | ✓         | ✓              |
+| SQL Server        | `Server=host,1433;Database=db;…` or `sqlserver://…`       | T-SQL          | ✓         | ✓              |
+| Oracle            | `oracle://user:pass@host:1521/SERVICE` or `jdbc:oracle:thin:@…` | SQL, PL/SQL | ✓       | ✓              |
+| SQLite            | `sqlite:///path/to/app.db` (or **Browse…**)               | SQL            | ✓         | —              |
+| ClickHouse        | `clickhouse://user:pass@host:8123/db`                     | SQL            | insert only | ✓            |
+| MongoDB           | `mongodb://…` or `mongodb+srv://…`                        | mongosh-style  | ✓         | ✓ (find, aggregate) |
+| Redis / Valkey    | `redis://…` or `rediss://…`                               | Redis commands | ✓         | —              |
 
-- **Data grid:** pagination, sorting, search and filters — including MongoDB filters like `{ age: { $gt: 21 } }` and Redis patterns like `user:*`.
-- **Edit anything:** type-aware row editor (NULL, DEFAULT), Extended JSON documents (`ObjectId()`, `ISODate()`), and an editor for every Redis type with TTLs.
-- **Query console:** <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection; copy results as JSON or CSV.
-- **Safe by default:** connection strings live in your OS keychain. Destructive statements ask first, dropping a table asks you to type its name, and **read-only** connections refuse every write.
+- **Data grid:** pagination, sorting, search, filters and resizable columns — including MongoDB filters like `{ age: { $gt: 21 } }` and Redis patterns like `user:*`.
+- **Edit anything:** type-aware row editor (NULL, DEFAULT), Extended JSON documents (`ObjectId()`, `ISODate()`), and an editor for every Redis type with TTLs. Tables without a primary key are edited through PostgreSQL's `ctid`, Oracle's `ROWID`, CockroachDB's hidden `rowid` or SQLite's `rowid`.
+- **Query editor:** syntax highlighting, line numbers, **Format**, and errors underlined where the server found them. <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection; a long query can be **cancelled** on the server. Sort, filter and copy results as JSON or CSV.
+- **Structure:** columns with types, keys and defaults, plus the table's **indexes**.
+- **Safe by default:** passwords live in your OS keychain. Destructive statements ask first, dropping a table asks you to type its name, and **read-only** connections refuse every write — on most databases the server enforces it too.
+- **No extra installs:** every driver ships with the extension. Oracle uses node-oracledb Thin mode, so no Oracle Client is needed.
 
-📖 [Connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md)
+📖 [Database Client reference: setup, examples, security and troubleshooting](docs/DATABASE-CLIENT.md) · 📖 [Connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md)
 
 ## LLM token counter, cost estimates and AI tools
 
@@ -99,13 +106,24 @@ Everything runs locally except the endpoint scan, which only contacts the URL yo
 
 📖 [Find hard-coded secrets and security issues in VS Code](docs/guides/find-hardcoded-secrets-in-vscode.md)
 
+## CSV and Excel viewer
+
+Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and edit them. Excel workbooks open in the viewer when you click them; for a CSV, right-click it in the Explorer and choose **Open in CSV & Excel Viewer**, use the table button in the editor title bar, or **Open With…**.
+
+- **Every sheet** of a workbook, with dates, times, percentages, currencies and number formats shown the way Excel shows them, and formulas next to their values.
+- **Search, sort and filter** hundreds of thousands of rows; the separator and encoding of a CSV are detected.
+- **Column stats** (filled, empty, distinct, min, max, sum, average) and Excel-style sum and average for a selection.
+- **Export** what you see as CSV, JSON or a Markdown table, or copy cells straight into Excel.
+- **Edit** cells, rows and columns: press **Edit**, then type, paste from Excel, or right-click to insert and delete. Save with <kbd>Ctrl/Cmd</kbd>+<kbd>S</kbd>; undo works as in any editor. Rows you didn't touch are saved exactly as they were, and in workbooks every untouched cell, style, chart and macro is kept.
+- Nothing changes until you press **Edit**, no macro runs, and nothing leaves your machine. Old binary `.xls` files need saving as `.xlsx` first.
+
 ## JSON formatter, JWT decoder, cURL converter and 100+ utilities
 
-110 tools in 13 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
+113 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
 
 ![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/all-tools.jpg)
 
-- **Text & data:** JSON / YAML / XML formatter, diff checker, regex tester, timestamps, UUIDs, and JSON to TypeScript, Zod, Pydantic, Go, Kotlin or Swift.
+- **Text & data:** JSON / YAML / XML formatter, an XML → JSON converter (strict validation, namespaces, CDATA, lossless mode, large files), diff checker, regex tester, timestamps, UUIDs, and JSON to TypeScript, Zod, Pydantic, Go, Kotlin or Swift.
 - **API helpers:** cURL converter, OpenAPI / Swagger toolkit, GraphQL types, CORS debugger, JWT decoder and signer, OAuth 2.0 & PKCE.
 - **DevOps & cloud:** Dockerfile, Docker Compose, Kubernetes & Helm, Terraform, CI pipeline and Nginx generators, plus a cron helper.
 - **Web & mobile:** React / Next.js generator, HTML → JSX, SEO meta tags, adb & simctl commands, deep links, app signing and asset sizes.
@@ -170,9 +188,10 @@ Twelve themes restyle every DevSnip Pro panel from the **Theme** selector at the
 - **Web & Frontend** — React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder
 - **Mobile Development** — adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes
 - **Code & Productivity** — Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration
-- **Text & Formatters** — JSON / YAML / XML Formatter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools
+- **Text & Formatters** — JSON / YAML / XML Formatter, XML → JSON Converter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools
 - **Encoders & Converters** — Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter
 - **Database** — Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB
+- **Spreadsheets & CSV** — CSV / TSV Viewer, Excel Viewer (.xlsx)
 - **Testing & Debugging** — Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit
 - **Git & Version Control** — Git Command Recipes, .gitignore Generator, Semver & App Versions
 - **DevOps & Cloud** — Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter
@@ -239,7 +258,7 @@ Remote and WSL work, except the OpenCode hub, which needs a local process. vscod
 
 **OpenCode is installed but not detected.** VS Code launched from the Dock or a shortcut gets a minimal `PATH`. Start it from a terminal or fix `PATH`, then press **Recheck System**. On Windows, use **Launch in Command Prompt** if PowerShell blocks it.
 
-**The Database Client can't connect.** The error says why (refused, host not found, auth failed or TLS). For a local self-signed certificate add `sslmode=no-verify` (PostgreSQL), `TrustServerCertificate=true` (SQL Server) or `tlsAllowInvalidCertificates=true` (MongoDB). SQL Server needs a SQL login.
+**The Database Client can't connect.** The error says why (refused, host not found, auth failed, unknown Oracle service or TLS); see [Database Client troubleshooting](docs/DATABASE-CLIENT.md#troubleshooting). For a local self-signed certificate add `sslmode=no-verify` (PostgreSQL), `TrustServerCertificate=true` (SQL Server) or `tlsAllowInvalidCertificates=true` (MongoDB). SQL Server needs a SQL login.
 
 **A security audit finds nothing in a large repo.** It reads up to `devsnip.securityAudit.maxFiles` files and skips dependency, build and cache folders — raise the setting.
 

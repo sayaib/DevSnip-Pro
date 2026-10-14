@@ -310,6 +310,26 @@ function createToolContext(context) {
             set: async (key, value) => { await context.globalState.update(key, value); }
         },
         network: { isPortFree },
+        files: {
+            async pick({ title, filters, maxBytes }) {
+                const picked = await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: "Choose", title, filters, defaultUri: root });
+                const uri = picked?.[0];
+                if (!uri)
+                    return undefined;
+                const stat = await vscode.workspace.fs.stat(uri);
+                if (stat.size > maxBytes)
+                    throw new types_1.ToolInputError(`${path.basename(uri.fsPath)} is ${(stat.size / 1024 / 1024).toFixed(0)} MB; files up to ${Math.round(maxBytes / 1024 / 1024)} MB can be converted.`);
+                return { name: path.basename(uri.fsPath), path: uri.fsPath, bytes: await vscode.workspace.fs.readFile(uri) };
+            },
+            async save(content, { suggestedName, near }) {
+                const folder = near ? vscode.Uri.file(path.dirname(near)) : root ?? vscode.Uri.file(os.homedir());
+                const target = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.joinPath(folder, suggestedName.replace(/[\\/:*?"<>|]+/g, "-")), saveLabel: "Save" });
+                if (!target)
+                    return undefined;
+                await vscode.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
+                return target.fsPath;
+            }
+        },
         now: () => new Date()
     };
 }

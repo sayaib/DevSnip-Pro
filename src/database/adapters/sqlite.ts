@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConnectionSpec } from "../connection-string";
 import { categorize, quoteIdent } from "../sql-builder";
-import { DbError, DbTarget, LIMITS, ObjectInfo, QueryResult, Row, ServerInfo } from "../types";
+import { DbError, DbTarget, IndexInfo, LIMITS, ObjectInfo, QueryResult, Row, ServerInfo } from "../types";
 import { ExecResult, SqlAdapter, TableMeta } from "./sql-base";
 
 /** The few calls the adapter needs, implemented by node:sqlite or sql.js. */
@@ -241,6 +241,20 @@ export class SqliteAdapter extends SqlAdapter {
       hasRowid: !isView && !/without\s+rowid/i.test(String(master.sql ?? "")),
       dropKeyword: isView ? "VIEW" : "TABLE"
     };
+  }
+
+  override async indexes(target: DbTarget): Promise<IndexInfo[]> {
+    const schema = target.database || "main";
+    const out: IndexInfo[] = [];
+    // A lone INTEGER PRIMARY KEY is the rowid itself and has no separate index.
+    const pk = (await this.describe(target)).filter(c => c.primaryKey);
+    const list = this.db.all("SELECT name, \"unique\" AS uniq, origin, partial FROM pragma_index_list(?, ?)", [target.object, schema]).rows;
+    if (pk.length === 1 && pk[0].autoIncrement && !list.some(r => r.origin === "pk")) out.push({ name: "PRIMARY KEY", columns: [pk[0].name], unique: true, primary: true, type: "rowid" });
+    for (const r of list) {
+      const columns = this.db.all("SELECT name FROM pragma_index_info(?, ?) ORDER BY seqno", [String(r.name), schema]).rows.map(c => (c.name === null ? "(expression)" : String(c.name)));
+      out.push({ name: String(r.name), columns, unique: Number(r.uniq) === 1, primary: r.origin === "pk", type: r.origin === "u" ? "unique constraint" : undefined, detail: Number(r.partial) === 1 ? "partial" : undefined });
+    }
+    return out.sort((a, b) => Number(b.primary) - Number(a.primary) || a.name.localeCompare(b.name));
   }
 
   async runQuery(text: string): Promise<QueryResult> {

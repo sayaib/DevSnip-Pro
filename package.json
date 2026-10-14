@@ -1,8 +1,8 @@
 {
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
-  "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, MongoDB and Redis, LLM token and cost tools, and a secret scanner.",
-  "version": "11.76.6",
+  "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
+  "version": "11.78.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -423,6 +423,10 @@
         "title": "📝 DevSnip Pro: JSON / YAML / XML Formatter"
       },
       {
+        "command": "sayaib.hue-console.xmlToJson",
+        "title": "📝 DevSnip Pro: XML → JSON Converter"
+      },
+      {
         "command": "sayaib.hue-console.yamlJsonTool",
         "title": "📝 DevSnip Pro: YAML / JSON Validator"
       },
@@ -485,6 +489,20 @@
       {
         "command": "sayaib.hue-console.sqlToMongo",
         "title": "🗄️ DevSnip Pro: SQL → MongoDB Query"
+      },
+      {
+        "command": "sayaib.hue-console.csvViewer",
+        "title": "📊 DevSnip Pro: CSV / TSV Viewer"
+      },
+      {
+        "command": "sayaib.hue-console.excelViewer",
+        "title": "📊 DevSnip Pro: Excel Viewer (.xlsx)"
+      },
+      {
+        "command": "sayaib.hue-console.openInSpreadsheetViewer",
+        "title": "Open in CSV & Excel Viewer",
+        "category": "DevSnip Pro",
+        "icon": "$(table)"
       },
       {
         "command": "sayaib.hue-console.buildErrorExplainer",
@@ -779,6 +797,37 @@
         "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)"
       }
     ],
+    "customEditors": [
+      {
+        "viewType": "devsnip.spreadsheetViewer",
+        "displayName": "DevSnip Pro: Excel Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.xlsx"
+          },
+          {
+            "filenamePattern": "*.xlsm"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "devsnip.csvViewer",
+        "displayName": "DevSnip Pro: CSV & TSV Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.csv"
+          },
+          {
+            "filenamePattern": "*.tsv"
+          },
+          {
+            "filenamePattern": "*.tab"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "configuration": {
       "title": "DevSnip Pro",
       "properties": {
@@ -886,6 +935,11 @@
           "group": "2_tools@1"
         },
         {
+          "command": "sayaib.hue-console.xmlToJson",
+          "group": "2_tools@1",
+          "when": "editorLangId == xml"
+        },
+        {
           "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
           "group": "2_tools@2"
         },
@@ -952,6 +1006,20 @@
           "group": "3_search@1"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "sayaib.hue-console.openInSpreadsheetViewer",
+          "when": "resourceExtname =~ /^\\.(csv|tsv|tab|xlsx|xlsm)$/i && !explorerResourceIsFolder",
+          "group": "navigation@20"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "sayaib.hue-console.openInSpreadsheetViewer",
+          "when": "resourceExtname =~ /^\\.(csv|tsv|tab)$/i && activeEditor == workbench.editors.files.textFileEditor",
+          "group": "navigation@20"
+        }
+      ],
       "commandPalette": [
         {
           "command": "sayaib.hue-console.resetFeatureUsage",
@@ -988,6 +1056,10 @@
         {
           "command": "sayaib.hue-console.regexBuilder",
           "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.openInSpreadsheetViewer",
+          "when": "false"
         }
       ]
     },
@@ -1000,7 +1072,7 @@
           {
             "id": "tools",
             "title": "Find any tool in seconds",
-            "description": "Every tool lives in the DevSnip Pro sidebar, grouped into 13 sections. Search with Ctrl/Cmd+K and star the ones you use.\n[Open the Tools sidebar](command:workbench.view.extension.myActivityBar)",
+            "description": "Every tool lives in the DevSnip Pro sidebar, grouped into 14 sections. Search with Ctrl/Cmd+K and star the ones you use.\n[Open the Tools sidebar](command:workbench.view.extension.myActivityBar)",
             "media": {
               "markdown": "media/walkthrough/tools.md"
             },
@@ -1118,6 +1190,7 @@
     "mongodb": "^6.21.0",
     "mssql": "^12.7.2",
     "mysql2": "^3.24.5",
+    "oracledb": "^26.0.0",
     "pg": "^8.23.1",
     "sql.js": "^1.14.2",
     "yaml": "^2.9.1"

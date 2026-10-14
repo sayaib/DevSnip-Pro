@@ -266,6 +266,21 @@ class MongoAdapter {
         const result = await this.collection(target).deleteMany({ _id: { $in: ids } });
         return result.deletedCount;
     }
+    async indexes(target) {
+        const list = await this.collection(target).indexes();
+        return list.map(ix => {
+            const keys = Object.entries((ix.key ?? {}));
+            const special = keys.map(([, v]) => v).find(v => typeof v === "string");
+            return {
+                name: String(ix.name),
+                columns: keys.map(([field, dir]) => (dir === -1 ? `${field} DESC` : typeof dir === "string" ? `${field} (${dir})` : field)),
+                unique: !!ix.unique || ix.name === "_id_",
+                primary: ix.name === "_id_",
+                type: special ? String(special) : ix.expireAfterSeconds !== undefined ? "ttl" : undefined,
+                detail: ix.partialFilterExpression ? `partial: ${JSON.stringify(this.toEjson(ix.partialFilterExpression))}` : ix.expireAfterSeconds !== undefined ? `expires after ${ix.expireAfterSeconds}s` : ix.sparse ? "sparse" : undefined
+            };
+        });
+    }
     async drop(target) {
         await this.collection(target).drop();
         this.invalidate();
@@ -296,7 +311,9 @@ class MongoAdapter {
         const text = typeof value === "string" ? value : JSON.stringify(this.toEjson({ v: value }).v, null, 2);
         return { columns: [], rows: [], message: text, elapsedMs: (0, values_1.since)(start) };
     }
-    async drain(cursor) {
+    async drain(cursor, control) {
+        // Closing the cursor kills it on the server.
+        control?.onCancel(() => cursor.close());
         const docs = [];
         let truncated = false;
         try {
@@ -313,7 +330,7 @@ class MongoAdapter {
         }
         return { docs, truncated };
     }
-    async runQuery(text, context) {
+    async runQuery(text, context, control) {
         const start = Date.now();
         const command = (0, mongo_shell_1.parseShellCommand)(text);
         const check = (0, mongo_shell_1.classifyShellCommand)(command);
@@ -364,7 +381,7 @@ class MongoAdapter {
                         cursor.collation(chain.get("collation")[0]);
                     const limit = chain.has("limit") ? Math.abs(Number(chain.get("limit")[0]) || 0) : 0;
                     cursor.limit(limit && limit <= types_1.LIMITS.maxQueryRows ? limit : types_1.LIMITS.maxQueryRows + 1);
-                    const { docs, truncated } = await this.drain(cursor);
+                    const { docs, truncated } = await this.drain(cursor, control);
                     return this.documentsResult(start, docs, truncated || (!limit && docs.length > types_1.LIMITS.maxQueryRows));
                 }
                 case "findOne": {
@@ -374,7 +391,7 @@ class MongoAdapter {
                 case "aggregate": {
                     if (!Array.isArray(args[0]))
                         throw new types_1.DbError("aggregate() expects a pipeline array.");
-                    const { docs, truncated } = await this.drain(coll.aggregate(args[0], { maxTimeMS, allowDiskUse: chain.has("allowDiskUse") || args[1]?.allowDiskUse }));
+                    const { docs, truncated } = await this.drain(coll.aggregate(args[0], { maxTimeMS, allowDiskUse: chain.has("allowDiskUse") || args[1]?.allowDiskUse }), control);
                     return this.documentsResult(start, docs, truncated, docs.length ? undefined : check.write ? "Pipeline completed." : "No documents.");
                 }
                 case "countDocuments":

@@ -13,10 +13,12 @@
  *    native confirmation (drop/empty: typing the object's name).
  */
 
+import { randomUUID } from "crypto";
 import { connectionWarnings, friendlyError, maskConnectionString, parseConnection, secretsOf } from "./connection-string";
 import { createAdapter } from "./adapters";
 import { ConnectionStore } from "./store";
-import { CellInput, ConnectionProfile, DB_KINDS, DbAdapter, DbError, DbTarget, FILTER_OPS, FilterRule, LIMITS, PageRequest, Row } from "./types";
+import { CellInput, ConnectionProfile, DB_KINDS, DbAdapter, DbError, DbTarget, FILTER_OPS, FilterRule, LIMITS, PageRequest, Row, RunControl } from "./types";
+import { formatSql } from "../toolkits/engines/sql";
 
 export interface HostUi {
   /** Native modal; resolves true only when the user picks `action`. */
@@ -41,6 +43,7 @@ export interface ConnectionView {
   kindLabel: string;
   family: string;
   schemas: boolean;
+  features: (typeof DB_KINDS)[keyof typeof DB_KINDS]["features"];
   display: string;
   readOnly: boolean;
   color?: string;
@@ -142,8 +145,13 @@ const nounFor = (kind: string, n: number) => {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 };
 
+/** Option keys never echoed back to the webview, even though the password itself is masked. */
+const SECRET_OPTION = /pass|pwd|secret|token|credential|^key$/i;
+
 export class DatabaseService {
   private readonly sessions = new Map<string, Session>();
+  /** Console runs that can be cancelled, by the id the webview gave them. */
+  private readonly runs = new Map<string, { connId: string; control: RunControl }>();
   private disposed = false;
 
   constructor(
@@ -164,6 +172,7 @@ export class DatabaseService {
         kindLabel: meta?.label ?? profile.kind,
         family: meta?.family ?? "sql",
         schemas: meta?.schemas ?? false,
+        features: meta?.features ?? DB_KINDS.postgres.features,
         display: profile.display,
         readOnly: profile.readOnly,
         color: profile.color,
@@ -177,7 +186,9 @@ export class DatabaseService {
   }
 
   private changed(): void {
-    if (!this.disposed) this.onChange();
+    if (this.disposed) return;
+    // A failed status push (a closing panel) must never fail the operation that caused it.
+    try { this.onChange(); } catch { /* the next push carries the state */ }
   }
 
   private session(id: string): Session {
@@ -206,6 +217,7 @@ export class DatabaseService {
         const raw = await this.store.connectionString(id);
         const spec = parseConnection(raw, this.ui.baseDir());
         session.secrets = secretsOf(raw, spec);
+        if (spec.kind !== profile.kind) await this.store.setKind(id, spec.kind);
         adapter = this.factory(spec, { readOnly: profile.readOnly });
         const info = await withTimeout(adapter.connect(), LIMITS.connectTimeoutMs + 5_000, "Connecting");
         session.adapter = adapter;
@@ -231,6 +243,7 @@ export class DatabaseService {
   }
 
   private async closeSession(id: string, notify = true): Promise<void> {
+    for (const run of this.runs.values()) if (run.connId === id) await run.control.cancel().catch(() => undefined);
     const session = this.sessions.get(id);
     if (!session) return;
     const adapter = session.adapter;
@@ -243,12 +256,15 @@ export class DatabaseService {
   }
 
   /** Runs one operation on a connection, mapping failures to safe messages. */
-  private async op<T>(id: string, what: string, run: (adapter: DbAdapter) => Promise<T>, timeoutMs = LIMITS.queryTimeoutMs + 10_000): Promise<T> {
+  private async op<T>(id: string, what: string, run: (adapter: DbAdapter) => Promise<T>, timeoutMs = LIMITS.queryTimeoutMs + 10_000, control?: RunControl): Promise<T> {
     const adapter = await this.ensureConnected(id);
     const session = this.session(id);
     try {
-      return await withTimeout(run(adapter), timeoutMs, what);
+      const running = run(adapter);
+      return await withTimeout(control ? control.race(running) : running, timeoutMs, what);
     } catch (error) {
+      // A cancelled run may surface as a dropped socket; that is not a lost connection.
+      if (control?.cancelled) throw error instanceof DbError && error.code === "CANCELLED" ? error : friendlyError(new DbError("The query was cancelled.", "Statements that finished before the cancel are not rolled back.", "CANCELLED"), session.secrets);
       const safe = friendlyError(error, session.secrets);
       const raw = `${(error as { code?: string })?.code ?? ""} ${(error as Error)?.message ?? ""} ${(error as Error)?.name ?? ""}`;
       if (CONNECTION_LOST.test(raw) && !(error instanceof DbError)) {
@@ -288,6 +304,8 @@ export class DatabaseService {
             label: meta.label,
             family: meta.family,
             summary: { host: spec.host, port: spec.port, database: spec.database, user: spec.user, ssl: spec.ssl, file: spec.filePath, hasPassword: !!spec.password },
+            // Lets the form view show the remaining options; anything that could hold a secret stays on the host.
+            options: Object.fromEntries(Object.entries(spec.options).filter(([k]) => !SECRET_OPTION.test(k)).slice(0, 40)),
             warnings: connectionWarnings(spec),
             masked: maskConnectionString(raw)
           };
@@ -396,6 +414,29 @@ export class DatabaseService {
       case "describe":
         return this.op(str(p.id, "Connection"), "Reading the structure", a => a.describe(target(p.target)));
 
+      case "indexes":
+        return this.op(str(p.id, "Connection"), "Reading indexes", a => (a.indexes ? a.indexes(target(p.target)) : Promise.resolve([])));
+
+      case "formatQuery": {
+        const text = str(p.text, "Query", 200_000);
+        const kind = this.store.require(str(p.id, "Connection")).kind;
+        if (DB_KINDS[kind]?.family !== "sql") throw new DbError("Formatting is available for SQL.");
+        // A SQL*Plus "/" line or a PL/SQL block would not survive re-layout.
+        if (kind === "oracle" && (/^[ \t]*\/[ \t]*$/m.test(text) || /\b(begin|declare)\b/i.test(text))) throw new DbError("PL/SQL blocks are not reformatted.", "Formatting works on plain SQL statements.");
+        try {
+          return { text: formatSql(text, { keywordCase: "upper", indent: "  " }) };
+        } catch (error) {
+          throw new DbError(`Could not format: ${(error as Error).message}`, "Fix the highlighted problem, then format again.");
+        }
+      }
+
+      case "cancelQuery": {
+        const run = this.runs.get(str(p.runId, "Run", 64));
+        if (!run) return { cancelled: false };
+        await run.control.cancel();
+        return { cancelled: true };
+      }
+
       case "fetchPage":
         return this.op(str(p.id, "Connection"), "Loading rows", a => a.fetchPage(pageRequest(p.request)));
 
@@ -492,8 +533,15 @@ export class DatabaseService {
           );
           if (!ok) return { cancelled: true };
         }
-        const result = await this.op(id, "The query", a => a.runQuery(text, { database: optStr(p.database, "Database"), schema: optStr(p.schema, "Schema") }));
-        return { ...result, writes: checks.some(c => c.write) };
+        const runId = optStr(p.runId, "Run", 64) ?? randomUUID();
+        const control = new RunControl();
+        this.runs.set(runId, { connId: id, control });
+        try {
+          const result = await this.op(id, "The query", a => a.runQuery(text, { database: optStr(p.database, "Database"), schema: optStr(p.schema, "Schema") }, control), LIMITS.queryTimeoutMs + 10_000, control);
+          return { ...result, writes: checks.some(c => c.write) };
+        } finally {
+          this.runs.delete(runId);
+        }
       }
 
       case "copyText":
@@ -513,6 +561,8 @@ export class DatabaseService {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    await Promise.allSettled([...this.runs.values()].map(r => r.control.cancel()));
+    this.runs.clear();
     const ids = [...this.sessions.keys()];
     await Promise.allSettled(ids.map(id => this.closeSession(id, false)));
     this.sessions.clear();

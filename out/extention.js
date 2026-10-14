@@ -30,6 +30,7 @@ const snippet_utils_1 = require("./utils/snippet-utils");
 const hubCommands_1 = require("./commands/hubCommands");
 const runner_1 = require("./toolkits/runner");
 const command_1 = require("./database/command");
+const command_2 = require("./spreadsheet/command");
 const service_1 = require("./theme/service");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
 const command_registry_1 = require("./utils/command-registry");
@@ -128,6 +129,7 @@ function activate(context) {
                 (await Promise.resolve().then(() => __importStar(require("./commands/securityTools")))).registerSecurityToolsCommands(context);
             })],
         ["database client", () => (0, command_1.registerDatabaseClientCommand)(context)],
+        ["CSV & Excel viewer", () => (0, command_2.registerSpreadsheetViewer)(context)],
         ["appearance themes", () => (0, service_1.registerThemeCommand)(context)],
         ["onboarding", () => (0, commands_1.registerOnboardingCommands)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],

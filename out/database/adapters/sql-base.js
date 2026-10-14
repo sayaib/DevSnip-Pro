@@ -63,6 +63,7 @@ class SqlAdapter {
             keyColumns,
             keyStrategy: strategy,
             readOnly,
+            canInsert: !meta.isView,
             elapsedMs: (0, values_1.since)(start)
         };
     }

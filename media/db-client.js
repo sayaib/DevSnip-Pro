@@ -34,6 +34,8 @@
       else {
         var err = new Error((m.error && m.error.message) || "Request failed.");
         err.hint = m.error && m.error.hint;
+        err.position = m.error && m.error.position;
+        err.code = m.error && m.error.code;
         p.reject(err);
       }
     } else if (m.type === "connections") {
@@ -114,15 +116,17 @@
     sideWidth: saved.sideWidth || 280,
     sideFilter: "",
     history: saved.history || {},
-    queryCounter: saved.queryCounter || 0
+    queryCounter: saved.queryCounter || 0,
+    connMode: saved.connMode || "form"
   };
 
   var OPS = {
     eq: "=", neq: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤",
     contains: "contains", starts: "starts with", ends: "ends with", null: "is null", notnull: "is not null", in: "in list"
   };
-  var KIND_ABBR = { postgres: "PG", mysql: "MY", sqlserver: "MS", sqlite: "SL", mongodb: "MG", redis: "RD" };
-  var KIND_COLOR = { postgres: "#336791", mysql: "#00758f", sqlserver: "#a91d22", sqlite: "#0f80cc", mongodb: "#13aa52", redis: "#d82c20" };
+  var KIND_ABBR = { postgres: "PG", cockroachdb: "CR", mysql: "MY", mariadb: "MA", sqlserver: "MS", oracle: "OR", sqlite: "SL", clickhouse: "CH", mongodb: "MG", redis: "RD" };
+  var KIND_COLOR = { postgres: "#336791", cockroachdb: "#6933ff", mysql: "#00758f", mariadb: "#a5563b", sqlserver: "#a91d22", oracle: "#c74634", sqlite: "#0f80cc", clickhouse: "#8a7a00", mongodb: "#13aa52", redis: "#d82c20" };
+  var FEATURE_LABELS = [["editRows", "Edit rows"], ["indexes", "Indexes"], ["cancel", "Cancel queries"], ["serverReadOnly", "Server read-only"]];
   var COLORS = ["blue", "green", "orange", "red", "purple", "teal", "gray"];
   var REDIS_TYPES = ["string", "hash", "list", "set", "zset"];
   var HIDDEN_COLS = { __rowid: 1, __ctid: 1 };
@@ -138,10 +142,11 @@
         sideWidth: S.sideWidth,
         history: S.history,
         queryCounter: S.queryCounter,
+        connMode: S.connMode,
         active: S.active,
         tabs: S.tabs.map(function (t) {
           if (t.type === "query") return { id: t.id, type: t.type, connId: t.connId, database: t.database, schema: t.schema, text: t.editor ? t.editor.value : t.text, title: t.title, editorH: t.editorH };
-          return { id: t.id, type: t.type, connId: t.connId, target: t.target, objectType: t.objectType, title: t.title, mode: t.mode, pageSize: t.pageSize, sort: t.sort, filters: t.filters, search: t.search, query: t.query, keyType: t.keyType };
+          return { id: t.id, type: t.type, connId: t.connId, target: t.target, objectType: t.objectType, title: t.title, mode: t.mode, pageSize: t.pageSize, sort: t.sort, filters: t.filters, search: t.search, query: t.query, keyType: t.keyType, colWidths: t.colWidths };
         })
       });
     } catch (e) { /* state is a convenience only */ }
@@ -273,7 +278,7 @@
     if (!S.connections.length) {
       els.tree.append(h("div", { class: "empty-side" },
         h("div", { text: "No saved connections yet." }),
-        h("div", { text: "Paste a connection string for PostgreSQL, MySQL, SQL Server, SQLite, MongoDB or Redis." }),
+        h("div", { text: "Connect to PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, Oracle, SQLite, ClickHouse, MongoDB or Redis." }),
         btn("New connection", "add", function () { openConnectionModal(null); }, "primary")));
       return;
     }
@@ -441,7 +446,7 @@
       var iconName = o.type === "view" ? "eye" : o.type === "collection" ? "symbol-array" : "table";
       wrap.append(nodeEl(depth, {
         cls: isActive ? "active" : "",
-        lead: icon(iconName, "obj-icon " + o.type),
+        lead: icon(iconName, "obj-icon obj-" + o.type),
         label: h("span", { class: "label", text: o.name }),
         trail: typeof o.rows === "number" ? h("span", { class: "badge", title: "About " + fmtNum(o.rows) + (c.kind === "mongodb" ? " documents" : " rows"), text: compact(o.rows) }) : null,
         acts: [iconBtn("terminal", "Query " + o.name, function () { openQueryTab(c.id, { database: db.name, schema: target.schema, text: starterQuery(c, target) }); }),
@@ -771,13 +776,13 @@
     var kinds = h("div", { class: "kinds" });
     Object.keys(S.kinds).forEach(function (k) {
       var meta = S.kinds[k];
-      var b = h("button", { class: "kind-card", type: "button", title: meta.example },
+      var b = h("button", { class: "kind-card", type: "button", title: "New " + meta.label + " connection\n" + meta.example + (meta.notes ? "\n\n" + meta.notes : "") },
         h("span", { class: "kind-icon", style: { background: KIND_COLOR[k] } }, KIND_ABBR[k]),
         h("span", null, meta.label, h("small", { text: meta.family === "sql" ? "SQL" : meta.family === "document" ? "Documents" : "Key-value" })));
-      b.addEventListener("click", function () { openConnectionModal(null, { example: meta.example, kind: k }); });
+      b.addEventListener("click", function () { openConnectionModal(null, { kind: k }); });
       kinds.append(b);
     });
-    inner.append(kinds);
+    inner.append(kinds, capabilityTable());
     if (S.connections.length) {
       var recent = S.connections.slice().sort(function (a, b) { return (b.lastConnectedAt || 0) - (a.lastConnectedAt || 0); }).slice(0, 6);
       inner.append(h("div", { class: "section-title", text: "Your connections" }));
@@ -796,10 +801,26 @@
       h("div", { class: "tips" },
         h("div", { class: "tip" }, h("b", null, icon("lock"), "Secure by default"), "Connection strings live in your OS keychain. Passwords are never shown again or logged."),
         h("div", { class: "tip" }, h("b", null, icon("shield"), "Read-only mode"), "Mark a connection read-only to block every write, including from the query console."),
-        h("div", { class: "tip" }, h("b", null, icon("terminal"), "Query console"), "SQL, mongosh-style commands or Redis commands. " + MOD + (MAC ? "" : "") + "Enter runs the selection or everything."),
+        h("div", { class: "tip" }, h("b", null, icon("terminal"), "Query console"), "SQL, mongosh-style commands or Redis commands. " + MOD + "Enter runs the selection or everything; long queries can be cancelled."),
         h("div", { class: "tip" }, h("b", null, icon("warning"), "Safe deletes"), "Deleting rows, dropping tables and destructive statements always ask first.")));
     view.append(h("div", { class: "welcome" }, inner));
     return view;
+  }
+
+  /** What works with each kind of database, from the host's own capability list. */
+  function capabilityTable() {
+    var table = h("table");
+    table.append(h("thead", null, h("tr", null, h("th", { text: "Database" }), FEATURE_LABELS.map(function (f) { return h("th", { class: "feat", text: f[1] }); }))));
+    var body = h("tbody");
+    Object.keys(S.kinds).forEach(function (k) {
+      var meta = S.kinds[k];
+      var f = meta.features || {};
+      body.append(h("tr", null,
+        h("td", { class: "db" }, h("b", { text: meta.label }), h("span", { class: "muted", text: " · " + (meta.driver || "") }), meta.notes ? h("div", { class: "note", text: meta.notes }) : null),
+        FEATURE_LABELS.map(function (x) { return h("td", { class: "feat " + (f[x[0]] ? "yes" : "no"), title: x[1] + ": " + (f[x[0]] ? "supported" : "not available") }, icon(f[x[0]] ? "check" : "dash"), h("span", { class: "sr-only", text: f[x[0]] ? "yes" : "no" })); })));
+    });
+    table.append(body);
+    return h("details", { class: "caps" }, h("summary", null, icon("checklist"), "What works with each database"), h("div", { class: "caps-scroll" }, table));
   }
 
   // ------------------------------------------------------------------ Value formatting
@@ -890,9 +911,63 @@
     return view;
   }
 
-  function writableTab(t) {
+  /** Rows can be inserted: a writable connection and a table (views refuse inserts). */
+  function canInsertTab(t) {
     var c = conn(t.connId);
-    return c && !c.readOnly && !(t.result && t.result.readOnly) && t.objectType !== "view";
+    return !!c && !c.readOnly && t.objectType !== "view" && !(t.result && t.result.canInsert === false);
+  }
+  /** Existing rows can be edited and deleted: they also need a key that identifies them. */
+  function writableTab(t) {
+    return canInsertTab(t) && !!t.result && !t.result.readOnly && t.result.keyStrategy !== "none";
+  }
+
+  // ------------------------------------------------------------------ Column resizing
+  /** Lets each named column be dragged wider or narrower; a double-click resets it. */
+  function enableColumnResize(table, widths, onChange) {
+    if (!table.tHead) return;
+    Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th, index) {
+      var name = th.getAttribute("data-col");
+      if (!name) return;
+      if (widths[name]) applyWidth(table, index, widths[name]);
+      var grip = h("span", { class: "col-resize", title: "Drag to resize. Double-click to reset.", "aria-hidden": "true" });
+      grip.addEventListener("click", function (e) { e.stopPropagation(); });
+      grip.addEventListener("dblclick", function (e) {
+        e.stopPropagation();
+        delete widths[name];
+        applyWidth(table, index, null);
+        if (onChange) onChange();
+      });
+      grip.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var startX = e.clientX, startW = th.getBoundingClientRect().width, w = startW, frame = 0;
+        grip.classList.add("dragging");
+        document.body.classList.add("col-resizing");
+        function move(ev) {
+          w = Math.max(48, Math.min(1200, Math.round(startW + ev.clientX - startX)));
+          if (!frame) frame = requestAnimationFrame(function () { frame = 0; applyWidth(table, index, w); });
+        }
+        function up() {
+          document.removeEventListener("mousemove", move);
+          document.removeEventListener("mouseup", up);
+          grip.classList.remove("dragging");
+          document.body.classList.remove("col-resizing");
+          widths[name] = w;
+          applyWidth(table, index, w);
+          if (onChange) onChange();
+        }
+        document.addEventListener("mousemove", move);
+        document.addEventListener("mouseup", up);
+      });
+      th.append(grip);
+    });
+  }
+  function applyWidth(table, index, w) {
+    var v = w ? w + "px" : "";
+    Array.prototype.forEach.call(table.rows, function (row) {
+      var cell = row.cells[index];
+      if (cell) { cell.style.width = v; cell.style.minWidth = v; cell.style.maxWidth = v; }
+    });
   }
 
   function updateDataChrome(t) {
@@ -955,9 +1030,8 @@
       t.ui.toolbar.append(fbtn);
     }
     t.ui.toolbar.append(h("span", { class: "divider" }), btn("Refresh", "refresh", function () { loadTab(t); }, "ghost", { title: "Reload rows" }));
-    var writable = writableTab(t);
-    if (writable) {
-      t.ui.toolbar.append(btn(fam === "document" ? "Insert document" : fam === "keyvalue" ? "Add key" : "Insert row", "add", function () { openEditor(t, null); }, "primary"));
+    if (canInsertTab(t)) t.ui.toolbar.append(btn(fam === "document" ? "Insert document" : fam === "keyvalue" ? "Add key" : "Insert row", "add", function () { openEditor(t, null); }, "primary"));
+    if (writableTab(t)) {
       var n = t.selected.size;
       var del = btn(n ? "Delete (" + n + ")" : "Delete", "trash", function () { deleteSelected(t); }, "danger", { disabled: !n, title: n ? "Delete the selected " + (fam === "keyvalue" ? "keys" : fam === "document" ? "documents" : "rows") : "Select rows to delete" });
       t.ui.toolbar.append(del);
@@ -985,7 +1059,7 @@
       "-",
       c.kind === "redis"
         ? { label: "Empty database (FLUSHDB)…", icon: "trash", danger: true, disabled: c.readOnly, run: function () { destructive(t.connId, t.target, "dropObject"); } }
-        : { label: "Empty " + noun + "…", icon: "clear-all", danger: true, disabled: !writableTab(t), run: function () { destructive(t.connId, t.target, "truncateObject"); } },
+        : { label: "Empty " + noun + "…", icon: "clear-all", danger: true, disabled: c.readOnly || t.objectType === "view", run: function () { destructive(t.connId, t.target, "truncateObject"); } },
       c.kind !== "redis" ? { label: "Drop " + noun + "…", icon: "trash", danger: true, disabled: c.readOnly, run: function () { destructive(t.connId, t.target, "dropObject"); } } : null
     ];
   }
@@ -1048,9 +1122,14 @@
     showLoading(t, true);
     var c = conn(t.connId);
     if (t.mode === "structure" && c && c.kind !== "redis") {
-      call("describe", { id: t.connId, target: t.target }).then(function (columns) {
+      var wantIndexes = c.features && c.features.indexes;
+      Promise.all([
+        call("describe", { id: t.connId, target: t.target }),
+        // Index listing is a bonus: a failure (missing privileges) must not hide the columns.
+        wantIndexes ? call("indexes", { id: t.connId, target: t.target }).catch(function (err) { return { error: err }; }) : Promise.resolve(null)
+      ]).then(function (res) {
         if (t.loadToken !== token) return;
-        t.loading = false; t.structure = columns;
+        t.loading = false; t.structure = res[0]; t.indexes = res[1];
         clear(t.ui.banners);
         renderStructure(t);
       }).catch(function (err) { if (t.loadToken !== token) return; t.loading = false; showError(t, err); });
@@ -1133,13 +1212,13 @@
     clear(wrap);
     var c = conn(t.connId);
     var columns = res.columns.filter(function (col) { return !HIDDEN_COLS[col.name]; });
-    var canEdit = writableTab(t) && res.keyStrategy !== "none";
+    var canEdit = writableTab(t);
     var isRedis = c && c.kind === "redis";
     if (!res.rows.length) {
       var filtered = (t.filters && t.filters.length) || t.search || t.query || t.keyType;
       wrap.append(h("div", { class: "grid-empty" }, icon(filtered ? "search" : "inbox"),
         h("div", { text: filtered ? "No matching " + (isRedis ? "keys" : c.kind === "mongodb" ? "documents" : "rows") + "." : isRedis ? "This database has no keys." : c.kind === "mongodb" ? "This collection is empty." : "This table is empty." }),
-        canEdit && !filtered ? h("div", { style: { marginTop: "12px" } }, btn(isRedis ? "Add key" : c.kind === "mongodb" ? "Insert document" : "Insert row", "add", function () { openEditor(t, null); }, "primary")) : null));
+        canInsertTab(t) && !filtered ? h("div", { style: { marginTop: "12px" } }, btn(isRedis ? "Add key" : c.kind === "mongodb" ? "Insert document" : "Insert row", "add", function () { openEditor(t, null); }, "primary")) : null));
       return;
     }
     var table = h("table", { class: "grid", role: "grid", "aria-rowcount": String(res.rows.length) });
@@ -1160,7 +1239,7 @@
     columns.forEach(function (col) {
       var sortable = col.sortable !== false;
       var sorted = t.sort && t.sort.column === col.name ? t.sort.dir : null;
-      var th = h("th", { class: sortable ? "sortable" : "", title: col.name + " • " + col.dataType + (col.primaryKey ? " • primary key" : "") + (col.presence !== undefined ? " • in " + Math.round(col.presence * 100) + "% of sampled documents" : ""), "aria-sort": sorted ? (sorted === "asc" ? "ascending" : "descending") : null },
+      var th = h("th", { class: sortable ? "sortable" : "", "data-col": col.name, title: col.name + " • " + col.dataType + (col.primaryKey ? " • primary key" : "") + (col.presence !== undefined ? " • in " + Math.round(col.presence * 100) + "% of sampled documents" : ""), "aria-sort": sorted ? (sorted === "asc" ? "ascending" : "descending") : null },
         h("div", { class: "h" }, col.primaryKey ? icon("key", "pk") : null, h("span", { class: "name", text: col.name }), sorted ? icon(sorted === "asc" ? "arrow-up" : "arrow-down", "sort") : null),
         isRedis ? null : h("div", { class: "type", text: col.dataType }));
       if (sortable) th.addEventListener("click", function () {
@@ -1204,6 +1283,8 @@
     });
     table.append(body);
     wrap.append(table);
+    t.colWidths = t.colWidths || {};
+    enableColumnResize(table, t.colWidths, persistSoon);
     wrap.scrollTop = scrollTop;
     wrap.scrollLeft = scrollLeft;
   }
@@ -1221,7 +1302,7 @@
         t.filters = (t.filters || []).concat([rule]); t.draftFilters = null; t.page = 1; persistSoon(); updateDataChrome(t); loadTab(t);
       } } : null,
       { label: canEdit ? "Edit row" : "View row", icon: canEdit ? "edit" : "eye", run: function () { openEditor(t, row); } },
-      canEdit && c.kind !== "redis" ? { label: "Duplicate row", icon: "files", run: function () { openEditor(t, row, { duplicate: true }); } } : null,
+      canInsertTab(t) && c.kind !== "redis" ? { label: c.kind === "mongodb" ? "Duplicate document" : "Duplicate row", icon: "files", run: function () { openEditor(t, row, { duplicate: true }); } } : null,
       canEdit ? { label: "Delete row", icon: "trash", danger: true, run: function () { deleteRows(t, [row]); } } : null
     ];
   }
@@ -1282,8 +1363,35 @@
         notes));
     });
     table.append(body);
-    box.append(h("div", { class: "muted", style: { margin: "4px 0 10px", fontSize: "12px" }, text: isDoc ? "Inferred from a random sample of up to 200 documents." : plural(cols.length, "column") }), table);
+    box.append(h("h4", { class: "struct-title" }, icon("symbol-field"), isDoc ? "Fields" : "Columns", h("span", { class: "muted", text: isDoc ? " · inferred from a random sample of up to 200 documents" : " · " + cols.length })), table);
+    if (t.indexes) box.append(renderIndexes(t.indexes, isDoc));
     wrap.append(box);
+  }
+
+  function renderIndexes(list, isDoc) {
+    var section = h("div", { class: "struct-section" });
+    if (list.error) {
+      section.append(h("h4", { class: "struct-title" }, icon("list-tree"), "Indexes"), h("div", { class: "banner warn", style: { margin: 0 } }, icon("warning"), h("div", null, "Indexes could not be read: " + list.error.message)));
+      return section;
+    }
+    section.append(h("h4", { class: "struct-title" }, icon("list-tree"), "Indexes", h("span", { class: "muted", text: " · " + list.length })));
+    if (!list.length) { section.append(h("div", { class: "muted", style: { fontSize: "12px" }, text: isDoc ? "No indexes." : "No indexes. Lookups on this table scan every row." })); return section; }
+    var table = h("table", { class: "grid" });
+    table.append(h("thead", null, h("tr", null, h("th", { text: "Name" }), h("th", { text: isDoc ? "Keys" : "Columns" }), h("th", { text: "Type" }), h("th", { text: "Notes" }))));
+    var body = h("tbody");
+    list.forEach(function (ix) {
+      body.append(h("tr", null,
+        h("td", null, h("b", { text: ix.name })),
+        h("td", { class: "mono", text: ix.columns.join(", ") }),
+        h("td", { class: "mono muted", text: ix.type || "" }),
+        h("td", null,
+          ix.primary ? h("span", { class: "flag pk" }, icon("key"), "primary") : null,
+          ix.unique && !ix.primary ? h("span", { class: "flag" }, icon("lock"), "unique") : null,
+          ix.detail ? h("span", { class: "flag", text: ix.detail }) : null)));
+    });
+    table.append(body);
+    section.append(table);
+    return section;
   }
 
   function deleteSelected(t) { deleteRows(t, selectedRows(t)); }
@@ -1323,7 +1431,7 @@
     var c = conn(t.connId);
     if (!c || !t.result) return;
     var fam = family(c);
-    var canEdit = writableTab(t) && (t.result.keyStrategy !== "none" || !row);
+    var canEdit = row && !opts.duplicate ? writableTab(t) : canInsertTab(t);
     var isNew = !row || opts.duplicate;
     var readOnlyView = !canEdit;
     var title = readOnlyView ? "View " + (fam === "keyvalue" ? "key" : fam === "document" ? "document" : "row")
@@ -1577,33 +1685,164 @@
     };
   }
 
+  /** Replaces the selection, keeping the editor's undo history when the browser allows it. */
   function insertAtCursor(ta, text) {
-    var s = ta.selectionStart, e = ta.selectionEnd;
-    ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
-    ta.selectionStart = ta.selectionEnd = s + text.length;
-    ta.dispatchEvent(new Event("input"));
+    ta.focus();
+    var ok = false;
+    try { ok = document.execCommand("insertText", false, text); } catch (e) { ok = false; }
+    if (!ok) {
+      var s = ta.selectionStart, e2 = ta.selectionEnd;
+      ta.value = ta.value.slice(0, s) + text + ta.value.slice(e2);
+      ta.selectionStart = ta.selectionEnd = s + text.length;
+      ta.dispatchEvent(new Event("input"));
+    }
+  }
+  function replaceRange(ta, start, end, text) {
+    ta.focus();
+    ta.setSelectionRange(start, end);
+    insertAtCursor(ta, text);
   }
 
   // ------------------------------------------------------------------ Query view
   var PLACEHOLDERS = {
     sql: "SELECT *\nFROM users\nWHERE created_at > now() - interval '7 days'\nORDER BY id DESC\nLIMIT 100;",
+    oracle: "SELECT *\nFROM employees\nWHERE hire_date > SYSDATE - 7\nORDER BY employee_id DESC\nFETCH FIRST 100 ROWS ONLY;\n\n-- PL/SQL blocks run as one unit; end them with a line holding only /",
+    sqlserver: "SELECT TOP 100 *\nFROM dbo.users\nWHERE created_at > DATEADD(day, -7, SYSUTCDATETIME())\nORDER BY id DESC;",
+    clickhouse: "SELECT toStartOfDay(ts) AS day, count() AS events\nFROM events\nWHERE ts > now() - INTERVAL 7 DAY\nGROUP BY day\nORDER BY day;",
     document: "db.users.find({ active: true }).sort({ createdAt: -1 }).limit(20)\n\n// Also: aggregate([...]), countDocuments({}), insertOne({...}),\n// updateMany({...}, { $set: {...} }), deleteOne({ _id: ObjectId(\"...\") }), show collections",
     keyvalue: "SCAN 0 MATCH user:* COUNT 100\n\n# One command per line, e.g. HGETALL user:42, TTL session:abc, SET greeting \"hello world\""
   };
+
+  // ---- Syntax highlighting: tokens become spans under a transparent textarea.
+  function wordSet(text) { var o = {}; text.split(" ").forEach(function (w) { o[w] = 1; }); return o; }
+  var SQL_KEYWORDS = wordSet("select from where and or not in is null like ilike between exists as on join inner left right full outer cross natural using group by order having limit offset fetch first next rows row only union all intersect except minus distinct case when then else end with recursive insert into values update set delete merge matched create table view index drop alter add column primary key foreign references default unique check constraint if returning asc desc nulls over partition window lateral true false interval explain analyze materialized temporary temp truncate grant revoke begin commit rollback transaction declare cursor for procedure function trigger return returns language replace schema database use show describe top go exec execute call do loop while elsif raise exception sequence identity auto_increment engine format settings prewhere final sample collate cascade restrict vacuum pragma attach detach tablespace comment cluster to of by");
+  var SQL_TYPES = wordSet("int integer bigint smallint tinyint mediumint serial bigserial smallserial numeric decimal number real double precision float boolean bool bit char character varchar varchar2 nchar nvarchar nvarchar2 text clob nclob blob bytea json jsonb xml date time timestamp timestamptz datetime datetime2 datetime64 uuid string uint8 uint16 uint32 uint64 int8 int16 int32 int64 float32 float64 nullable lowcardinality array map tuple enum raw money");
+  var MONGO_WORDS = wordSet("db true false null new ObjectId ISODate Date NumberLong NumberInt NumberDecimal UUID Timestamp RegExp BinData MinKey MaxKey undefined show dbs collections");
+  var SQL_RE = /(--[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|('(?:[^']|'')*'?)|("(?:[^"]|"")*"?|`[^`]*`?)|(\$\d+|(?<!:):[A-Za-z_]\w*|@[A-Za-z_]\w*|\?)|(\b\d+(?:\.\d+)?(?:[eE][-+]?\d+)?\b|\.\d+\b)|([A-Za-z_][\w$#]*)/g;
+  var MONGO_RE = /(\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|("(?:[^"\\\n]|\\.)*"?|'(?:[^'\\\n]|\\.)*'?)|(\$[A-Za-z_]\w*)|(-?\b\d+(?:\.\d+)?(?:[eE][-+]?\d+)?\b)|([A-Za-z_$][\w$]*)/g;
+
+  function tokenize(text, mode) {
+    var out = [];
+    var last = 0;
+    function push(cls, value) { if (value) out.push({ c: cls, v: value }); }
+    if (mode === "keyvalue") {
+      text.split(/(\n)/).forEach(function (line) {
+        if (line === "\n") { push("", "\n"); return; }
+        if (/^\s*(#|\/\/)/.test(line)) { push("tk-com", line); return; }
+        var re = /("(?:[^"\\]|\\.)*"?|'[^']*'?)|(-?\b\d+(?:\.\d+)?\b)|(\S+)/g, m, first = true, at = 0;
+        while ((m = re.exec(line))) {
+          push("", line.slice(at, m.index));
+          push(m[1] ? "tk-str" : m[2] && !first ? "tk-num" : first ? "tk-kw" : "", m[0]);
+          first = false;
+          at = re.lastIndex;
+        }
+        push("", line.slice(at));
+      });
+      return out;
+    }
+    var re = mode === "document" ? MONGO_RE : SQL_RE;
+    re.lastIndex = 0;
+    var m;
+    while ((m = re.exec(text))) {
+      push("", text.slice(last, m.index));
+      var v = m[0], cls = "";
+      var next = text.slice(re.lastIndex, re.lastIndex + 40);
+      if (mode === "document") {
+        if (m[1]) cls = "tk-com";
+        else if (m[2]) cls = "tk-str";
+        else if (m[3]) cls = "tk-op";
+        else if (m[4]) cls = "tk-num";
+        else cls = MONGO_WORDS[v] ? "tk-kw" : text.charAt(m.index - 1) === "." ? "tk-fn" : /^\s*:/.test(next) ? "tk-key" : "";
+      } else {
+        if (m[1]) cls = "tk-com";
+        else if (m[2]) cls = "tk-str";
+        else if (m[3]) cls = "tk-id";
+        else if (m[4]) cls = "tk-param";
+        else if (m[5]) cls = "tk-num";
+        else {
+          var lower = v.toLowerCase();
+          cls = SQL_KEYWORDS[lower] ? "tk-kw" : SQL_TYPES[lower] ? "tk-type" : /^\s*\(/.test(next) ? "tk-fn" : "";
+        }
+      }
+      push(cls, v);
+      last = re.lastIndex;
+      if (v === "") re.lastIndex++;
+    }
+    push("", text.slice(last));
+    return out;
+  }
+
+  function editorMode(c) {
+    if (!c) return "sql";
+    return c.family === "document" ? "document" : c.family === "keyvalue" ? "keyvalue" : "sql";
+  }
+
+  /** Repaints the highlight layer and the line numbers; marks the error range, if any. */
+  function paintEditor(t) {
+    if (!t.ui || !t.ui.hl) return;
+    var text = t.editor.value;
+    var c = conn(t.connId);
+    var hl = clear(t.ui.hl);
+    var mark = t.errMark;
+    if (text.length > 120000) hl.append(document.createTextNode(text));
+    else {
+      var at = 0;
+      tokenize(text, editorMode(c)).forEach(function (tok) {
+        var start = at, end = at + tok.v.length;
+        at = end;
+        if (mark && mark.start < end && mark.end > start) {
+          var a = Math.max(mark.start, start) - start, b = Math.min(mark.end, end) - start;
+          if (a > 0) hl.append(span(tok.c, tok.v.slice(0, a)));
+          hl.append(span((tok.c ? tok.c + " " : "") + "err-mark", tok.v.slice(a, b)));
+          if (b < tok.v.length) hl.append(span(tok.c, tok.v.slice(b)));
+        } else hl.append(span(tok.c, tok.v));
+      });
+      if (mark && mark.start >= text.length) hl.append(span("err-mark", " "));
+    }
+    // A trailing newline needs a line of its own, or the layers drift apart at the end.
+    hl.append(document.createTextNode("\n "));
+    var lines = text.split("\n").length;
+    if (t.ui.gutterLines !== lines || t.ui.gutterMark !== (mark ? mark.line : 0)) {
+      t.ui.gutterLines = lines;
+      t.ui.gutterMark = mark ? mark.line : 0;
+      var g = clear(t.ui.gutter);
+      for (var i = 1; i <= lines; i++) g.append(h("div", { class: mark && mark.line === i ? "err" : "", text: String(i) }));
+    }
+    syncScroll(t);
+  }
+  function span(cls, text) { return cls ? h("span", { class: cls, text: text }) : document.createTextNode(text); }
+  function syncScroll(t) {
+    t.ui.hl.scrollTop = t.editor.scrollTop;
+    t.ui.hl.scrollLeft = t.editor.scrollLeft;
+    t.ui.gutter.scrollTop = t.editor.scrollTop;
+  }
 
   function buildQueryView(t) {
     var view = h("div", { class: "view" });
     t.ui = {};
     t.ui.bar = h("div", { class: "qbar" });
-    var editor = h("textarea", { class: "editor", spellcheck: "false", "aria-label": "Query editor", autocomplete: "off", autocapitalize: "off" });
+    var editor = h("textarea", { class: "editor", spellcheck: "false", "aria-label": "Query editor", autocomplete: "off", autocapitalize: "off", wrap: "off" });
     editor.value = t.text || "";
     t.editor = editor;
-    editor.addEventListener("input", function () { t.text = editor.value; persistSoon(); });
-    editor.addEventListener("keydown", function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runQuery(t); }
-      else if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); insertAtCursor(editor, "  "); }
+    t.ui.hl = h("pre", { class: "hl", "aria-hidden": "true" });
+    t.ui.gutter = h("div", { class: "gutter", "aria-hidden": "true" });
+    var frame = 0;
+    editor.addEventListener("input", function () {
+      t.text = editor.value;
+      persistSoon();
+      if (t.errMark) { t.errMark = null; }
+      if (!frame) frame = requestAnimationFrame(function () { frame = 0; paintEditor(t); });
     });
-    var editorWrap = h("div", { class: "editor-wrap", style: { "--editor-h": (t.editorH || 200) + "px" } }, editor);
+    editor.addEventListener("scroll", function () { syncScroll(t); });
+    editor.addEventListener("keydown", function (e) {
+      if (e.key === "Tab" && !e.shiftKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); insertAtCursor(editor, "  "); }
+    });
+    // Shortcuts work anywhere in the tab, not only while the editor has focus.
+    view.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runQuery(t); }
+      else if (e.shiftKey && e.altKey && e.code === "KeyF") { e.preventDefault(); formatQuery(t); }
+    });
+    var editorWrap = h("div", { class: "editor-wrap", style: { "--editor-h": (t.editorH || 200) + "px" } }, t.ui.gutter, h("div", { class: "code" }, t.ui.hl, editor));
     var split = h("div", { class: "hsplit", role: "separator", "aria-orientation": "horizontal", title: "Drag to resize" });
     t.ui.result = h("div", { class: "qresult" });
     view.append(t.ui.bar, h("div", { class: "qsplit" }, editorWrap, split, t.ui.result));
@@ -1612,6 +1851,7 @@
     function up() { split.classList.remove("dragging"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); persistSoon(); }
     split.addEventListener("mousedown", function (e) { startY = e.clientY; startH = editorWrap.offsetHeight; split.classList.add("dragging"); document.addEventListener("mousemove", move); document.addEventListener("mouseup", up); e.preventDefault(); });
     updateQueryBar(t);
+    paintEditor(t);
     renderQueryResult(t);
     return view;
   }
@@ -1619,15 +1859,15 @@
   function updateQueryBar(t) {
     var c = conn(t.connId);
     if (!c || !t.ui) return;
-    t.editor.placeholder = PLACEHOLDERS[family(c)] || "";
+    t.editor.placeholder = PLACEHOLDERS[c.kind] || PLACEHOLDERS[family(c)] || "";
     var bar = t.ui.bar;
     clear(bar);
     var connSel = h("select", { class: "select", "aria-label": "Connection" }, S.connections.map(function (x) { return h("option", { value: x.id, text: x.name, selected: x.id === t.connId }); }));
     connSel.addEventListener("change", function () {
-      t.connId = connSel.value; t.database = ""; t.schema = ""; t.databases = null; t.schemasList = null;
+      t.connId = connSel.value; t.database = ""; t.schema = ""; t.databases = null; t.schemasList = null; t.errMark = null;
       var nc = conn(t.connId);
       if (nc) t.database = nc.defaultDatabase || "";
-      persistSoon(); renderTabs(); updateQueryBar(t);
+      persistSoon(); renderTabs(); updateQueryBar(t); paintEditor(t);
     });
     bar.append(h("span", { class: "dot " + c.status, title: c.status }), connSel);
     if (c.kind !== "sqlite") {
@@ -1645,25 +1885,30 @@
           updateQueryBar(t);
         }).catch(function () { t.loadingDbs = false; t.databases = t.database ? [t.database] : []; });
       }
-      if (c.schemas && t.database) {
+      // The console can switch schema on PostgreSQL, CockroachDB and Oracle; SQL Server uses the login's default.
+      if (c.schemas && t.database && c.kind !== "sqlserver") {
         var schSel = h("select", { class: "select", "aria-label": "Schema" }, h("option", { value: "", text: "Default schema" }));
         (t.schemasList || (t.schema ? [t.schema] : [])).forEach(function (s) { schSel.append(h("option", { value: s, text: s, selected: s === t.schema })); });
         schSel.addEventListener("change", function () { t.schema = schSel.value; persistSoon(); });
         bar.append(schSel);
-        if (!t.schemasList && !t.loadingSchemas && c.kind === "postgres") {
+        if (!t.schemasList && !t.loadingSchemas) {
           t.loadingSchemas = true;
           call("listSchemas", { id: t.connId, database: t.database }).then(function (list) { t.loadingSchemas = false; t.schemasList = list; updateQueryBar(t); }).catch(function () { t.loadingSchemas = false; t.schemasList = []; });
         }
-        if (c.kind === "sqlserver") schSel.classList.add("hidden");
       }
     }
     t.ui.runBtn = btn(t.running ? "Running…" : "Run", t.running ? "loading" : "play", function () { runQuery(t); }, "primary", { disabled: t.running, title: "Run (" + MOD + "Enter). Runs the selection if there is one." });
     if (t.running) t.ui.runBtn.querySelector(".codicon").classList.add("codicon-modifier-spin");
-    bar.append(t.ui.runBtn,
+    bar.append(t.ui.runBtn);
+    if (t.running && c.features && c.features.cancel) {
+      bar.append(btn(t.cancelling ? "Cancelling…" : "Cancel", "debug-stop", function () { cancelQuery(t); }, "danger", { disabled: t.cancelling, title: "Stop the running query on the server" }));
+    }
+    if (c.family === "sql") bar.append(btn("Format", "list-flat", function () { formatQuery(t); }, "ghost", { title: "Format SQL (Shift+Alt+F). Formats the selection if there is one.", disabled: t.running }));
+    bar.append(
       btn("History", "history", function (e) { showHistory(t, e.currentTarget); }, "ghost"),
-      iconBtn("clear-all", "Clear editor", function () { t.editor.value = ""; t.text = ""; t.editor.focus(); persistSoon(); }));
+      iconBtn("clear-all", "Clear editor", function () { replaceRange(t.editor, 0, t.editor.value.length, ""); t.editor.focus(); }));
     if (c.readOnly) bar.append(h("span", { class: "chip warn", title: "Writes are blocked on this connection" }, icon("lock"), "read-only"));
-    bar.append(h("span", { class: "grow" }), h("span", { class: "muted", style: { fontSize: "11.5px" } }, h("span", { class: "hint-kbd", text: MOD + "Enter" }), " to run"));
+    bar.append(h("span", { class: "grow" }), h("span", { class: "muted kbd-hint" }, h("span", { class: "hint-kbd", text: MOD + "Enter" }), " to run"));
   }
 
   function showHistory(t, anchor) {
@@ -1671,114 +1916,350 @@
     if (!list.length) { showMenu([{ label: "No queries yet", icon: "history", disabled: true, run: function () {} }], anchor); return; }
     showMenu(list.slice(0, 20).map(function (q) {
       var line = q.replace(/\s+/g, " ").trim();
-      return { label: line.length > 70 ? line.slice(0, 70) + "…" : line, icon: "history", run: function () { t.editor.value = q; t.text = q; persistSoon(); t.editor.focus(); } };
+      return { label: line.length > 70 ? line.slice(0, 70) + "…" : line, icon: "history", run: function () { replaceRange(t.editor, 0, t.editor.value.length, q); t.editor.focus(); } };
     }).concat(["-", { label: "Clear history", icon: "clear-all", run: function () { S.history[t.connId] = []; persist(); } }]), anchor);
+  }
+
+  /** What would run: the selection, or everything, and where it starts in the editor. */
+  function queryScope(ed) {
+    var hasSel = ed.selectionEnd > ed.selectionStart;
+    var raw = hasSel ? ed.value.slice(ed.selectionStart, ed.selectionEnd) : ed.value;
+    if (!raw.trim()) return null;
+    var lead = raw.length - raw.replace(/^\s+/, "").length;
+    return { text: raw.trim(), start: (hasSel ? ed.selectionStart : 0) + lead, selection: hasSel };
+  }
+
+  function formatQuery(t) {
+    var ed = t.editor;
+    var scope = queryScope(ed);
+    if (!scope) { toast("info", "Type a query first."); return; }
+    call("formatQuery", { id: t.connId, text: scope.text }).then(function (res) {
+      if (!res || typeof res.text !== "string") return;
+      replaceRange(ed, scope.start, scope.start + scope.text.length, res.text);
+      if (scope.selection) ed.setSelectionRange(scope.start, scope.start + res.text.length);
+    }).catch(fail);
+  }
+
+  function cancelQuery(t) {
+    if (!t.running || !t.runId || t.cancelling) return;
+    t.cancelling = true;
+    updateQueryBar(t);
+    call("cancelQuery", { runId: t.runId }).catch(fail);
+  }
+
+  /** Line and column (1-based) of an offset in the editor. */
+  function lineCol(text, offset) {
+    var before = text.slice(0, offset).split("\n");
+    return { line: before.length, col: before[before.length - 1].length + 1 };
   }
 
   function runQuery(t) {
     if (t.running) return;
     var ed = t.editor;
-    var selected = ed.selectionEnd > ed.selectionStart ? ed.value.slice(ed.selectionStart, ed.selectionEnd) : "";
-    var text = (selected.trim() ? selected : ed.value).trim();
-    if (!text) { toast("info", "Type a query first."); ed.focus(); return; }
+    var scope = queryScope(ed);
+    if (!scope) { toast("info", "Type a query first."); ed.focus(); return; }
+    var text = scope.text;
     t.running = true;
+    t.cancelling = false;
+    t.runStarted = Date.now();
+    t.runId = uid() + uid();
     t.error = null;
+    t.errMark = null;
+    paintEditor(t);
     updateQueryBar(t);
     renderQueryResult(t);
-    call("runQuery", { id: t.connId, database: t.database || undefined, schema: t.schema || undefined, text: text }).then(function (res) {
-      t.running = false;
-      if (res && res.cancelled) { t.cancelled = true; t.result = null; }
-      else {
-        t.cancelled = false;
-        t.result = res;
-        var hist = S.history[t.connId] = (S.history[t.connId] || []).filter(function (q) { return q !== text; });
-        hist.unshift(text);
-        if (hist.length > 30) hist.length = 30;
-        persistSoon();
-        if (res.writes) {
-          if (/\b(create|drop|alter|rename|createCollection|drop\(|renameCollection)\b/i.test(text)) refreshDb(t.connId, t.database);
-          S.tabs.forEach(function (o) { if (o.type === "data" && o.connId === t.connId && o.result) o.needsLoad = true; });
-        }
+    var timer = setInterval(function () { var el = t.ui.result.querySelector(".run-elapsed"); if (el) el.textContent = fmtElapsed(Date.now() - t.runStarted); }, 100);
+    call("runQuery", { id: t.connId, database: t.database || undefined, schema: t.schema || undefined, text: text, runId: t.runId }).then(function (res) {
+      if (res && res.cancelled) { t.cancelled = { message: "Cancelled. Nothing was run." }; t.result = null; return; }
+      t.cancelled = null;
+      t.result = res;
+      t.resView = { sort: null, filter: "" };
+      t.resWidths = {};
+      var hist = S.history[t.connId] = (S.history[t.connId] || []).filter(function (q) { return q !== text; });
+      hist.unshift(text);
+      if (hist.length > 30) hist.length = 30;
+      persistSoon();
+      if (res.writes) {
+        if (/\b(create|drop|alter|rename|createCollection|drop\(|renameCollection)\b/i.test(text)) refreshDb(t.connId, t.database);
+        S.tabs.forEach(function (o) { if (o.type === "data" && o.connId === t.connId && o.result) o.needsLoad = true; });
       }
-      updateQueryBar(t);
-      renderQueryResult(t);
     }).catch(function (err) {
-      t.running = false;
-      t.error = err;
       t.result = null;
+      if (err.code === "CANCELLED") { t.cancelled = { message: err.message, hint: err.hint }; return; }
+      t.cancelled = null;
+      t.error = err;
+      if (typeof err.position === "number" && err.position >= 0 && err.position <= text.length) {
+        var at = scope.start + err.position;
+        var word = /^[\w$#.:"`]+/.exec(ed.value.slice(at, at + 200));
+        var lc = lineCol(ed.value, at);
+        t.errMark = { start: at, end: at + (word ? word[0].length : 1), line: lc.line, col: lc.col };
+      }
+    }).then(function () {
+      clearInterval(timer);
+      t.running = false;
+      t.cancelling = false;
+      t.lastElapsed = Date.now() - t.runStarted;
+      paintEditor(t);
       updateQueryBar(t);
       renderQueryResult(t);
     });
   }
 
+  function fmtElapsed(ms) { return ms < 1000 ? ms + " ms" : ms < 60000 ? (ms / 1000).toFixed(1) + " s" : Math.floor(ms / 60000) + " min " + Math.round((ms % 60000) / 1000) + " s"; }
+
+  function goToError(t) {
+    if (!t.errMark) return;
+    t.editor.focus();
+    t.editor.setSelectionRange(t.errMark.start, t.errMark.end);
+    // Scroll the marked line into view.
+    var lineH = parseFloat(getComputedStyle(t.editor).lineHeight) || 20;
+    t.editor.scrollTop = Math.max(0, (t.errMark.line - 3) * lineH);
+    syncScroll(t);
+  }
+
+  function compareValues(a, b) {
+    if (a === b) return 0;
+    if (a === null || a === undefined) return 1;
+    if (b === null || b === undefined) return -1;
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    var x = plainText(a), y = plainText(b);
+    var nx = Number(x), ny = Number(y);
+    if (x !== "" && y !== "" && !isNaN(nx) && !isNaN(ny)) return nx - ny;
+    return x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" });
+  }
+
   function renderQueryResult(t) {
     var box = t.ui.result;
     clear(box);
+    var c = conn(t.connId);
     if (t.running) {
-      box.append(h("div", { class: "qstatus" }, icon("loading", "codicon-modifier-spin"), "Running…"), h("div", { class: "qplaceholder" }));
+      box.append(h("div", { class: "qstatus" }, icon("loading", "codicon-modifier-spin"), t.cancelling ? "Cancelling…" : "Running…", h("span", { class: "run-elapsed", text: fmtElapsed(Date.now() - t.runStarted) }),
+        c && c.features && c.features.cancel ? btn(t.cancelling ? "Cancelling…" : "Cancel", "debug-stop", function () { cancelQuery(t); }, "ghost", { disabled: t.cancelling }) : null), h("div", { class: "qplaceholder" }));
       return;
     }
     if (t.error) {
-      box.append(h("div", { class: "banner error", style: { marginTop: "10px" } }, icon("error"), h("div", { class: "grow" }, t.error.message, t.error.hint ? h("span", { class: "hint", text: t.error.hint }) : null)));
+      var where = t.errMark ? "Line " + t.errMark.line + ", column " + t.errMark.col : null;
+      box.append(h("div", { class: "banner error", style: { marginTop: "10px" } }, icon("error"),
+        h("div", { class: "grow" }, t.error.message, t.error.hint ? h("span", { class: "hint", text: t.error.hint }) : null, where ? h("span", { class: "hint", text: where + " is underlined in the editor." }) : null),
+        where ? btn("Go to error", "go-to-file", function () { goToError(t); }, "", { title: where }) : null));
       return;
     }
     if (t.cancelled) {
-      box.append(h("div", { class: "qstatus" }, icon("circle-slash"), "Cancelled. Nothing was run."));
+      box.append(h("div", { class: "banner info", style: { marginTop: "10px" } }, icon("circle-slash"), h("div", { class: "grow" }, t.cancelled.message, t.cancelled.hint ? h("span", { class: "hint", text: t.cancelled.hint }) : null)));
       return;
     }
     var res = t.result;
     if (!res) {
-      var c = conn(t.connId);
       box.append(h("div", { class: "qplaceholder" }, h("div", null,
         h("div", { style: { marginBottom: "6px" } }, "Write a ", c && c.family === "document" ? "mongosh command" : c && c.family === "keyvalue" ? "Redis command" : "SQL query", " and press ", h("kbd", { text: MOD + "Enter" }), "."),
-        h("div", { text: "Destructive statements ask for confirmation first." }))));
+        h("div", { text: "Destructive statements ask for confirmation first." + (c && c.features && c.features.cancel ? " Long-running queries can be cancelled." : "") }))));
       return;
     }
+    var view = t.resView || (t.resView = { sort: null, filter: "" });
     var status = h("div", { class: "qstatus" }, icon("pass-filled", "ok"));
-    if (res.columns.length) status.append(plural(res.rows.length, "row") + (res.truncated ? " (first " + fmtNum(res.rows.length) + " shown)" : ""));
-    else if (typeof res.affected === "number") status.append(plural(res.affected, "row") + " affected");
-    else status.append("Done");
-    status.append(h("span", null, icon("watch"), " " + res.elapsedMs + " ms"));
+    var countEl = h("span");
+    status.append(countEl);
+    status.append(h("span", { title: "Server round trip" }, icon("watch"), " " + fmtElapsed(res.elapsedMs)));
     if (res.columns.length && res.rows.length) {
+      var filterInput = h("input", { class: "input", type: "search", placeholder: "Filter results…", value: view.filter, "aria-label": "Filter results" });
+      filterInput.addEventListener("input", debounce(function () { view.filter = filterInput.value; paintRows(); }, 120));
       status.append(h("span", { class: "acts" },
-        btn("JSON", "copy", function () { copy(toJson(res.rows)); }, "ghost", { title: "Copy as JSON" }),
-        btn("CSV", "copy", function () { copy(toCsv(res.columns, res.rows)); }, "ghost", { title: "Copy as CSV" }),
-        iconBtn("go-to-file", "Open in editor", function () { call("openInEditor", { content: toJson(res.rows), language: "json" }).catch(fail); })));
+        h("div", { class: "search result-filter" }, icon("filter"), filterInput),
+        btn("JSON", "copy", function () { copy(toJson(visibleRows())); }, "ghost", { title: "Copy the shown rows as JSON" }),
+        btn("CSV", "copy", function () { copy(toCsv(res.columns, visibleRows())); }, "ghost", { title: "Copy the shown rows as CSV" }),
+        iconBtn("go-to-file", "Open the shown rows in an editor", function () { call("openInEditor", { content: toJson(visibleRows()), language: "json" }).catch(fail); })));
     }
     box.append(status);
     if (res.message) box.append(h("div", { class: "qmessage", text: res.message }));
     if (res.truncated) box.append(h("div", { class: "banner warn" }, icon("warning"), h("div", { text: "Only the first " + fmtNum(res.rows.length) + " rows are shown. Add a LIMIT (or .limit()) to fetch less." })));
+    var body = h("tbody");
+    function visibleRows() {
+      var f = (view.filter || "").trim().toLowerCase();
+      var rows = f ? res.rows.filter(function (row) { return res.columns.some(function (col) { return plainText(row[col]).toLowerCase().indexOf(f) >= 0; }); }) : res.rows.slice();
+      if (view.sort) {
+        var col = view.sort.column, dir = view.sort.dir === "desc" ? -1 : 1;
+        rows.sort(function (a, b) { return compareValues(a[col], b[col]) * dir; });
+      }
+      return rows;
+    }
+    function paintRows() {
+      var rows = visibleRows();
+      clear(countEl);
+      if (res.columns.length) countEl.append(plural(res.rows.length, "row") + (res.truncated ? " (first " + fmtNum(res.rows.length) + " shown)" : "") + (rows.length !== res.rows.length ? " · " + fmtNum(rows.length) + " match" : ""));
+      else if (typeof res.affected === "number") countEl.append(plural(res.affected, "row") + " affected");
+      else countEl.append("Done");
+      clear(body);
+      rows.forEach(function (row, i) {
+        var tr = h("tr", null, h("td", { class: "rn", text: String(i + 1) }));
+        res.columns.forEach(function (col) {
+          var v = row[col];
+          var td = h("td", null, cellContent(v, !(col in row)));
+          var full = plainText(v);
+          if (full.length > 40) td.title = full.slice(0, 2000);
+          td.addEventListener("contextmenu", function (e) { e.preventDefault(); showMenu([{ label: "Copy value", icon: "copy", run: function () { copy(full); } }, { label: "Copy row as JSON", icon: "json", run: function () { copy(toJson([row])); } }], { x: e.clientX, y: e.clientY }); });
+          tr.append(td);
+        });
+        body.append(tr);
+      });
+      if (table) applyAllWidths();
+    }
+    var table = null;
+    function applyAllWidths() {
+      Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th, index) { var n = th.getAttribute("data-col"); if (n && t.resWidths[n]) applyWidth(table, index, t.resWidths[n]); });
+    }
     if (res.columns.length) {
       var wrap = h("div", { class: "grid-wrap" });
       if (!res.rows.length) wrap.append(h("div", { class: "grid-empty" }, icon("inbox"), "No rows."));
       else {
-        var table = h("table", { class: "grid" });
-        table.append(h("thead", null, h("tr", null, h("th", { class: "rn", text: "#" }), res.columns.map(function (col) { return h("th", { title: col }, h("div", { class: "h" }, h("span", { class: "name", text: col }))); }))));
-        var body = h("tbody");
-        res.rows.forEach(function (row, i) {
-          var tr = h("tr", null, h("td", { class: "rn", text: String(i + 1) }));
-          res.columns.forEach(function (col) {
-            var v = row[col];
-            var td = h("td", null, cellContent(v, !(col in row)));
-            var full = plainText(v);
-            if (full.length > 40) td.title = full.slice(0, 2000);
-            td.addEventListener("contextmenu", function (e) { e.preventDefault(); showMenu([{ label: "Copy value", icon: "copy", run: function () { copy(full); } }, { label: "Copy row as JSON", icon: "json", run: function () { copy(toJson([row])); } }], { x: e.clientX, y: e.clientY }); });
-            tr.append(td);
+        table = h("table", { class: "grid" });
+        var hr = h("tr", null, h("th", { class: "rn", text: "#" }));
+        res.columns.forEach(function (col) {
+          var sorted = view.sort && view.sort.column === col ? view.sort.dir : null;
+          var th = h("th", { class: "sortable", "data-col": col, title: col + " — click to sort the shown rows", "aria-sort": sorted ? (sorted === "asc" ? "ascending" : "descending") : null },
+            h("div", { class: "h" }, h("span", { class: "name", text: col }), sorted ? icon(sorted === "asc" ? "arrow-up" : "arrow-down", "sort") : null));
+          th.addEventListener("click", function () {
+            if (!view.sort || view.sort.column !== col) view.sort = { column: col, dir: "asc" };
+            else if (view.sort.dir === "asc") view.sort = { column: col, dir: "desc" };
+            else view.sort = null;
+            renderQueryResult(t);
           });
-          body.append(tr);
+          hr.append(th);
         });
-        table.append(body);
+        table.append(h("thead", null, hr), body);
         wrap.append(table);
+        t.resWidths = t.resWidths || {};
+        enableColumnResize(table, t.resWidths, null);
       }
       box.append(wrap);
     }
+    paintRows();
   }
 
   // ------------------------------------------------------------------ Connection modal
+  /** The host's stand-in for a saved password; saving it back keeps the stored one. */
+  var MASK = "********";
+  var TLS_CHOICES = {
+    postgres: [["", "Off"], ["require", "On, no certificate check"], ["verify-full", "On, verify certificate"]],
+    mysql: [["", "Off"], ["REQUIRED", "On, no certificate check"], ["VERIFY_IDENTITY", "On, verify certificate"]],
+    sqlserver: [["false", "Off"], ["true", "Encrypt, verify certificate"], ["trust", "Encrypt, trust server certificate"]],
+    oracle: [["", "Off (TCP)"], ["tcps", "On (TCPS)"]],
+    clickhouse: [["", "Off (HTTP)"], ["https", "On (HTTPS)"]],
+    mongodb: [["", "Off"], ["tls", "On"], ["insecure", "On, allow invalid certificates"]],
+    redis: [["", "Off"], ["tls", "On (rediss://)"]]
+  };
+  TLS_CHOICES.cockroachdb = TLS_CHOICES.postgres;
+  TLS_CHOICES.mariadb = TLS_CHOICES.mysql;
+  var USER_HINT = { postgres: "postgres", cockroachdb: "root", mysql: "root", mariadb: "root", sqlserver: "sa", oracle: "app", clickhouse: "default", mongodb: "optional", redis: "optional (ACL user)" };
+  var DB_HINT = { postgres: "app", cockroachdb: "defaultdb", mysql: "app", mariadb: "app", sqlserver: "app", oracle: "FREEPDB1", clickhouse: "default", mongodb: "app", redis: "0" };
+  var KNOWN_OPTIONS = ["ssl", "tls", "sslmode", "ssl-mode", "secure", "encrypt", "trustservercertificate", "tlsallowinvalidcertificates", "user id", "uid", "user", "username", "database", "initial catalog", "databasename", "port"];
+
+  function truthyText(v) { return /^(true|yes|1)$/i.test(String(v || "").trim()); }
+  function enc(v) { return encodeURIComponent(v); }
+  function adoValue(v) { return /[;{}=\s'"]/.test(v) ? "{" + v.replace(/}/g, "}}") + "}" : v; }
+
+  function emptyForm(kind) {
+    return { kind: kind || "postgres", host: "localhost", port: "", user: "", password: "", savedPassword: false, database: "", tls: kind === "sqlserver" ? "false" : "", srv: false, file: "", extra: "" };
+  }
+
+  /** Builds the connection string the host parses, from the form fields. */
+  function composeConnection(f) {
+    var kind = f.kind;
+    var pw = f.password || (f.savedPassword ? MASK : "");
+    if (kind === "sqlite") {
+      var file = f.file.trim();
+      if (!file) return "";
+      if (/^[A-Za-z]:[\\/]/.test(file)) return "sqlite:///" + file.replace(/\\/g, "/");
+      return "sqlite://" + (file.charAt(0) === "/" || file.charAt(0) === "~" ? "" : "./") + file.replace(/^\.\//, "");
+    }
+    var host = f.host.trim() || "localhost";
+    if (kind === "sqlserver") {
+      var parts = ["Server=" + host + (f.port ? "," + f.port : "")];
+      if (f.database) parts.push("Database=" + adoValue(f.database));
+      if (f.user) parts.push("User Id=" + adoValue(f.user));
+      if (pw) parts.push("Password=" + (pw === MASK ? MASK : adoValue(pw)));
+      parts.push("Encrypt=" + (f.tls && f.tls !== "false" ? "true" : "false"));
+      if (f.tls === "trust") parts.push("TrustServerCertificate=true");
+      var extraKv = f.extra.trim().replace(/^;+|;+$/g, "");
+      if (extraKv) parts.push(extraKv);
+      return parts.join(";");
+    }
+    var scheme = { postgres: "postgresql", cockroachdb: "cockroachdb", mysql: "mysql", mariadb: "mariadb", oracle: "oracle", clickhouse: "clickhouse", mongodb: f.srv ? "mongodb+srv" : "mongodb", redis: f.tls ? "rediss" : "redis" }[kind] || kind;
+    var auth = f.user || pw ? enc(f.user) + (pw ? ":" + (pw === MASK ? MASK : enc(pw)) : "") + "@" : "";
+    if (host.indexOf(":") >= 0 && host.indexOf(",") < 0 && host.charAt(0) !== "[") host = "[" + host + "]";
+    var port = f.port && !(kind === "mongodb" && f.srv) && host.indexOf(",") < 0 ? ":" + f.port : "";
+    var path = f.database ? "/" + enc(f.database) : "";
+    var q = [];
+    if ((kind === "postgres" || kind === "cockroachdb") && f.tls) q.push("sslmode=" + f.tls);
+    if (kind === "cockroachdb" && !f.tls) q.push("sslmode=disable");
+    if ((kind === "mysql" || kind === "mariadb") && f.tls) q.push("ssl-mode=" + f.tls);
+    if (kind === "oracle" && f.tls) q.push("ssl=true");
+    if (kind === "clickhouse" && f.tls) q.push("secure=true");
+    if (kind === "mongodb" && f.tls && !f.srv) q.push("tls=true");
+    if (kind === "mongodb" && f.tls === "insecure") q.push("tlsAllowInvalidCertificates=true");
+    var extra = f.extra.trim().replace(/^[?&]+/, "");
+    if (extra) q.push(extra);
+    return scheme + "://" + auth + host + port + path + (q.length ? "?" + q.join("&") : "");
+  }
+
+  /** The password as typed in a connection string, so switching to the form keeps it (it never leaves this page). */
+  function typedPassword(raw) {
+    var text = String(raw || "").trim();
+    var kv = /(?:^|;)\s*(?:password|pwd)\s*=\s*(\{(?:[^}]|\}\})*\}|"[^"]*"|'[^']*'|[^;]*)/i.exec(text);
+    if (kv && !/^[a-z][a-z0-9+]*:\/\/[^;]*@/i.test(text)) {
+      var v = kv[1].trim();
+      if (v.charAt(0) === "{") return v.slice(1, -1).replace(/}}/g, "}");
+      if (/^["']/.test(v)) return v.slice(1, -1);
+      return v;
+    }
+    var m = /^[a-z][a-z0-9+]*:\/\/([^?]*)/i.exec(text);
+    if (!m) return "";
+    var head = m[1];
+    var at = head.lastIndexOf("@");
+    if (at < 0) return "";
+    var auth = head.slice(0, at);
+    var colon = auth.indexOf(":");
+    if (colon < 0) return "";
+    try { return decodeURIComponent(auth.slice(colon + 1)); } catch (e) { return auth.slice(colon + 1); }
+  }
+
+  /** Fills the form from what the host detected in a connection string. */
+  function formFromDetect(res, raw) {
+    var s = res.summary || {}, o = res.options || {};
+    var f = emptyForm(res.kind);
+    if (res.kind === "sqlite") { f.file = s.file || ""; return f; }
+    f.host = s.host || "";
+    f.port = s.port && s.port !== (S.kinds[res.kind] || {}).defaultPort ? String(s.port) : "";
+    f.user = s.user || "";
+    f.database = s.database || "";
+    f.srv = /^mongodb\+srv:/i.test(String(raw).trim());
+    var pw = typedPassword(raw);
+    if (pw === MASK) f.savedPassword = true; else f.password = pw;
+    var k = res.kind;
+    if (k === "postgres" || k === "cockroachdb") f.tls = o.sslmode && o.sslmode !== "disable" ? (/verify/.test(o.sslmode) ? "verify-full" : "require") : s.ssl ? "require" : "";
+    else if (k === "mysql" || k === "mariadb") { var mode = String(o["ssl-mode"] || o.sslmode || "").toUpperCase(); f.tls = /VERIFY/.test(mode) ? "VERIFY_IDENTITY" : s.ssl ? "REQUIRED" : ""; }
+    else if (k === "sqlserver") f.tls = s.ssl ? (truthyText(o.trustservercertificate) ? "trust" : "true") : "false";
+    else if (k === "oracle") f.tls = s.ssl ? "tcps" : "";
+    else if (k === "clickhouse") f.tls = s.ssl ? "https" : "";
+    else if (k === "mongodb") f.tls = s.ssl && !f.srv ? (truthyText(o.tlsallowinvalidcertificates) ? "insecure" : "tls") : "";
+    else if (k === "redis") f.tls = s.ssl ? "tls" : "";
+    if (k === "oracle" && o.sid) { f.database = ""; }
+    var extras = Object.keys(o).filter(function (key) { return KNOWN_OPTIONS.indexOf(key) < 0 && !(k === "sqlserver" && /^(server|data source|address|addr|network address)$/.test(key)); });
+    f.extra = k === "sqlserver"
+      ? extras.map(function (key) { return key + "=" + adoValue(o[key]); }).join(";")
+      : extras.map(function (key) { return enc(key) + "=" + enc(o[key]); }).join("&");
+    return f;
+  }
+
   function openConnectionModal(id, preset) {
     preset = preset || {};
     var editing = !!id;
-    var state = { name: "", connectionString: preset.example || "", readOnly: false, color: COLORS[S.connections.length % COLORS.length], detected: null };
+    var state = {
+      mode: preset.kind ? "form" : (S.connMode || "form"),
+      form: emptyForm(preset.kind || "postgres"),
+      readOnly: false,
+      color: COLORS[S.connections.length % COLORS.length],
+      detected: null
+    };
     var nameInput = h("input", { class: "input", placeholder: "e.g. Local Postgres", maxlength: "60", "aria-label": "Name" });
     var csInput = h("input", { class: "input mono", type: "password", placeholder: "postgresql://user:password@localhost:5432/app", spellcheck: "false", autocomplete: "off", "aria-label": "Connection string" });
     var reveal = iconBtn("eye", "Show connection string", function () {
@@ -1787,10 +2268,20 @@
       clear(reveal).append(icon(hidden ? "eye-closed" : "eye"));
       reveal.title = hidden ? "Hide connection string" : "Show connection string";
     });
-    var browse = btn("Browse…", "folder-opened", function () {
-      call("pickSqliteFile").then(function (res) { if (res && res.connectionString) { csInput.value = res.connectionString; state.connectionString = res.connectionString; detect(); if (!nameInput.value) nameInput.value = res.connectionString.split("/").pop(); } }).catch(fail);
-    }, "", { title: "Pick a SQLite file" });
-    var detectBox = h("div", { class: "detect" }, icon("info"), h("div", { class: "muted", text: "Paste a connection string to detect the database type." }));
+    function pickFile() {
+      call("pickSqliteFile").then(function (res) {
+        if (!res || !res.connectionString) return;
+        state.form.kind = "sqlite";
+        state.form.file = res.connectionString.replace(/^sqlite:\/\//, "").replace(/^\/([A-Za-z]:)/, "$1");
+        csInput.value = res.connectionString;
+        if (!nameInput.value) nameInput.value = res.connectionString.split("/").pop();
+        if (state.mode === "form") renderForm();
+        detect();
+      }).catch(fail);
+    }
+    var browse = btn("Browse…", "folder-opened", pickFile, "", { title: "Pick a SQLite file" });
+    function detectPrompt() { return state.mode === "form" ? "Fill in the connection details." : "Paste a connection string to detect the database type."; }
+    var detectBox = h("div", { class: "detect" }, icon("info"), h("div", { class: "muted", text: detectPrompt() }));
     var testResult = h("div", { class: "test-result" });
     var errorBox = h("div");
     var readOnlyCk = h("input", { type: "checkbox" });
@@ -1798,7 +2289,7 @@
     function renderColors() {
       clear(colors);
       COLORS.forEach(function (name) {
-        var b = h("button", { type: "button", class: state.color === name ? "on" : "", title: name, role: "radio", "aria-checked": String(state.color === name), style: { background: "var(--c-" + name + ")" } });
+        var b = h("button", { type: "button", class: state.color === name ? "on" : "", title: name, role: "radio", "aria-checked": String(state.color === name), "aria-label": name, style: { background: "var(--c-" + name + ")" } });
         b.addEventListener("click", function () { state.color = name; renderColors(); });
         colors.append(b);
       });
@@ -1807,18 +2298,106 @@
     var examples = h("div", { class: "examples" });
     Object.keys(S.kinds).forEach(function (k) {
       var b = h("button", { type: "button", text: S.kinds[k].label, title: S.kinds[k].example });
-      b.addEventListener("click", function () { csInput.value = S.kinds[k].example; csInput.type = "text"; state.connectionString = csInput.value; detect(); csInput.focus(); });
+      b.addEventListener("click", function () { csInput.value = S.kinds[k].example; csInput.type = "text"; detect(); csInput.focus(); });
       examples.append(b);
     });
+
+    // ---- Mode switch: form fields or a raw connection string, always kept in sync.
+    var formBox = h("div", { class: "form-grid" });
+    var stringBox = h("div", { class: "field" }, h("label", { text: "Connection string" }), h("div", { class: "with-btn" }, csInput, reveal, browse), examples,
+      h("div", { class: "help", text: editing ? "The saved password is shown as ******** — leave it to keep it, or type a new one." : "Also accepts DATABASE_URL=… lines, JDBC URLs (jdbc:postgresql://, jdbc:oracle:thin:@…) and SQL Server key=value strings." }));
+    var seg = h("div", { class: "seg mode-switch", role: "tablist", "aria-label": "How to enter the connection" });
+    function renderSeg() {
+      clear(seg);
+      [["form", "list-unordered", "Form"], ["string", "link", "Connection string"]].forEach(function (m) {
+        var b = h("button", { type: "button", role: "tab", class: state.mode === m[0] ? "on" : "", "aria-selected": String(state.mode === m[0]) }, icon(m[1]), m[2]);
+        b.addEventListener("click", function () { switchMode(m[0]); });
+        seg.append(b);
+      });
+    }
+    function switchMode(mode) {
+      if (mode === state.mode) return;
+      if (mode === "form" && csInput.value.trim()) {
+        // Parse what was typed so nothing is lost; a string the host cannot parse stays where it is.
+        call("detect", { connectionString: csInput.value, id: id || undefined }).then(function (res) {
+          if (!res.ok) { toast("error", "Fix the connection string first.", res.error && res.error.message); return; }
+          state.form = formFromDetect(res, csInput.value);
+          state.mode = "form"; S.connMode = "form"; persistSoon();
+          renderSeg(); renderForm(); showMode();
+        }).catch(fail);
+        return;
+      }
+      state.mode = mode; S.connMode = mode; persistSoon();
+      renderSeg();
+      if (mode === "form") { renderForm(); syncFromForm(); }
+      showMode();
+    }
+    function showMode() {
+      formBox.classList.toggle("hidden", state.mode !== "form");
+      stringBox.classList.toggle("hidden", state.mode !== "string");
+      browse.classList.toggle("hidden", !(state.form.kind === "sqlite" || /^(sqlite|file):/i.test(csInput.value) || (state.detected && state.detected.kind === "sqlite")));
+    }
+    function syncFromForm() {
+      csInput.value = composeConnection(state.form);
+      testResult.className = "test-result"; clear(testResult);
+      detectSoon();
+    }
+    function field(label, input, cls, help) {
+      return h("div", { class: "field " + (cls || "") }, h("label", null, label), input, help ? h("div", { class: "help", text: help }) : null);
+    }
+    function textInput(key, attrs) {
+      var input = h("input", Object.assign({ class: "input", value: state.form[key] || "", spellcheck: "false", autocomplete: "off" }, attrs || {}));
+      input.addEventListener("input", function () { state.form[key] = input.value; syncFromForm(); });
+      return input;
+    }
+    function renderForm() {
+      var f = state.form;
+      var meta = S.kinds[f.kind] || {};
+      clear(formBox);
+      var kindSel = h("select", { class: "select", "aria-label": "Database type" }, Object.keys(S.kinds).map(function (k) { return h("option", { value: k, text: S.kinds[k].label, selected: k === f.kind }); }));
+      kindSel.addEventListener("change", function () {
+        var next = emptyForm(kindSel.value);
+        // Keep what still applies when switching type.
+        ["host", "user", "password", "savedPassword", "database"].forEach(function (k) { if (kindSel.value !== "sqlite" && f.kind !== "sqlite") next[k] = f[k]; });
+        state.form = next;
+        renderForm(); showMode(); syncFromForm();
+      });
+      formBox.append(field("Database type", kindSel, "span2", meta.notes || null));
+      if (f.kind === "sqlite") {
+        formBox.append(field("Database file", h("div", { class: "with-btn" }, textInput("file", { class: "input mono", placeholder: "/Users/me/project/dev.db", "aria-label": "Database file" }), btn("Browse…", "folder-opened", pickFile)), "span2", "Relative paths resolve against the first workspace folder."));
+        return;
+      }
+      formBox.append(
+        field(f.kind === "mongodb" && f.srv ? "Cluster host" : "Host", textInput("host", { placeholder: f.kind === "mongodb" && f.srv ? "cluster0.abcde.mongodb.net" : "localhost", "aria-label": "Host" })),
+        f.kind === "mongodb" && f.srv ? h("div") : field("Port", textInput("port", { placeholder: meta.defaultPort ? String(meta.defaultPort) : "", inputmode: "numeric", "aria-label": "Port" })));
+      if (f.kind === "mongodb") {
+        var srv = h("input", { type: "checkbox", checked: f.srv });
+        srv.addEventListener("change", function () { f.srv = srv.checked; if (f.srv) f.port = ""; renderForm(); syncFromForm(); });
+        formBox.append(h("label", { class: "inline-check span2" }, srv, "DNS seed list (mongodb+srv://), as used by MongoDB Atlas"));
+      }
+      var pass = h("input", { class: "input", type: "password", value: f.password, autocomplete: "new-password", placeholder: f.savedPassword ? "Saved password (unchanged)" : "", "aria-label": "Password" });
+      pass.addEventListener("input", function () { f.password = pass.value; syncFromForm(); });
+      var passReveal = iconBtn("eye", "Show password", function () { pass.type = pass.type === "password" ? "text" : "password"; });
+      formBox.append(
+        h("div", { class: "pair span2" },
+          field("User", textInput("user", { placeholder: USER_HINT[f.kind] || "", "aria-label": "User" })),
+          field("Password", h("div", { class: "with-btn" }, pass, passReveal), null, f.savedPassword ? "Leave empty to keep the saved password." : null)),
+        field(f.kind === "oracle" ? "Service name" : f.kind === "redis" ? "Database number" : "Database", textInput("database", { placeholder: DB_HINT[f.kind] || "", "aria-label": "Database" }), "span2",
+          f.kind === "oracle" ? "The PDB or service, e.g. FREEPDB1 or ORCLPDB1. For a SID, add sid=XE under Options." : f.kind === "postgres" || f.kind === "cockroachdb" ? "Other databases on the server appear in the explorer too." : null));
+      var tlsSel = h("select", { class: "select", "aria-label": "TLS" }, (TLS_CHOICES[f.kind] || [["", "Off"]]).map(function (c) { return h("option", { value: c[0], text: c[1], selected: c[0] === f.tls }); }));
+      tlsSel.addEventListener("change", function () { f.tls = tlsSel.value; syncFromForm(); });
+      formBox.append(field("TLS / SSL", tlsSel, "span2", f.kind === "mongodb" && f.srv ? "mongodb+srv connections always use TLS." : null));
+      formBox.append(field("Options", textInput("extra", { class: "input mono", placeholder: f.kind === "sqlserver" ? "ApplicationIntent=ReadOnly;MultiSubnetFailover=true" : f.kind === "mongodb" ? "authSource=admin&replicaSet=rs0" : f.kind === "postgres" ? "sslrootcert=/path/ca.pem&application_name=me" : "key=value&key2=value2", "aria-label": "Extra options" }), "span2",
+        "Driver options, " + (f.kind === "sqlserver" ? "as key=value pairs separated by ;" : "as a query string") + ". Optional."));
+    }
 
     var detectToken = 0;
     function detect() {
       var value = csInput.value;
-      state.connectionString = value;
-      browse.classList.toggle("hidden", !(/^(sqlite|file):/i.test(value) || !value.trim() || preset.kind === "sqlite" || (state.detected && state.detected.kind === "sqlite")));
+      showMode();
       if (!value.trim()) {
         state.detected = null;
-        clear(detectBox).append(icon("info"), h("div", { class: "muted", text: "Paste a connection string to detect the database type." }));
+        clear(detectBox).append(icon("info"), h("div", { class: "muted", text: detectPrompt() }));
         detectBox.className = "detect";
         return;
       }
@@ -1839,18 +2418,18 @@
         if (s.file) fact("File", s.file);
         else {
           fact("Host", s.host + (s.port ? ":" + s.port : ""));
-          fact(res.kind === "redis" ? "DB" : "Database", s.database);
+          fact(res.kind === "redis" ? "DB" : res.kind === "oracle" ? "Service" : "Database", s.database);
           fact("User", s.user);
           fact("Password", s.hasPassword ? "set" : "none");
           fact("TLS", s.ssl ? "on" : "off");
         }
-        detectBox.append(icon("pass-filled"), h("div", { class: "grow" }, h("b", { text: res.label + " detected" }), facts, res.warnings.length ? h("ul", null, res.warnings.map(function (w) { return h("li", { text: w }); })) : null));
+        detectBox.append(icon("pass-filled"), h("div", { class: "grow" }, h("b", { text: res.label + (state.mode === "string" ? " detected" : "") }), facts, res.warnings.length ? h("ul", null, res.warnings.map(function (w) { return h("li", { text: w }); })) : null));
         nameInput.placeholder = suggestName(res);
-        browse.classList.toggle("hidden", res.kind !== "sqlite");
+        showMode();
       }).catch(function () { /* detection is advisory */ });
     }
     var detectSoon = debounce(detect, 250);
-    csInput.addEventListener("input", function () { testResult.className = "test-result"; clear(testResult); detectSoon(); });
+    csInput.addEventListener("input", function () { testResult.className = "test-result"; clear(testResult); csInput.classList.remove("invalid"); detectSoon(); });
 
     var testBtn = btn("Test connection", "plug", test);
     var saveBtn = btn("Save", null, function () { save(false); });
@@ -1858,6 +2437,7 @@
 
     function test() {
       clear(errorBox);
+      if (!csInput.value.trim()) { errorBox.append(formError({ message: state.mode === "form" ? "Fill in the host first." : "Enter a connection string." })); return; }
       testBtn.disabled = true;
       testResult.className = "test-result";
       clear(testResult).append(icon("loading", "codicon-modifier-spin"), h("span", { text: "Testing…" }));
@@ -1874,8 +2454,14 @@
 
     function save(andConnect) {
       clear(errorBox);
-      var name = nameInput.value.trim() || nameInput.placeholder.replace(/^e\.g\. /, "");
-      if (!csInput.value.trim()) { csInput.classList.add("invalid"); errorBox.append(formError({ message: "Enter a connection string." })); return; }
+      if (!csInput.value.trim()) {
+        csInput.classList.add("invalid");
+        errorBox.append(formError({ message: state.mode === "form" ? "Fill in the connection details first." : "Enter a connection string." }));
+        return;
+      }
+      // An unnamed connection takes the name suggested from what was detected, never a stale example.
+      var name = nameInput.value.trim() || (state.detected ? suggestName(state.detected) : "");
+      if (!name) { nameInput.classList.add("invalid"); errorBox.append(formError({ message: "Give the connection a name." })); nameInput.focus(); return; }
       saveBtn.disabled = saveConnectBtn.disabled = true;
       call("saveConnection", { id: id || undefined, name: name, connectionString: csInput.value, readOnly: readOnlyCk.checked, color: state.color }).then(function (view) {
         close();
@@ -1890,12 +2476,14 @@
         errorBox.append(formError(err));
       });
     }
+    nameInput.addEventListener("input", function () { nameInput.classList.remove("invalid"); });
 
     var modal = h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-label": editing ? "Edit connection" : "New connection" },
       h("div", { class: "mhead" }, icon("database"), h("h3", { text: editing ? "Edit connection" : "New connection" }), iconBtn("close", "Close", function () { close(); })),
       h("div", { class: "mbody" },
-        h("div", { class: "field" }, h("label", { text: "Connection string" }), h("div", { class: "with-btn" }, csInput, reveal, browse), examples,
-          h("div", { class: "help", text: editing ? "The saved password is shown as ******** — leave it to keep it, or type a new one." : "PostgreSQL, MySQL/MariaDB, SQL Server (URL or Server=...;), SQLite file path, MongoDB (incl. +srv) or Redis (redis:// or rediss://)." })),
+        seg,
+        formBox,
+        stringBox,
         detectBox,
         testResult,
         h("div", { class: "field" }, h("label", { text: "Name" }), nameInput),
@@ -1908,6 +2496,13 @@
     var close = openOverlay(overlay, function () { close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(true); } });
 
+    function focusFirst() {
+      setTimeout(function () {
+        var first = state.mode === "form" ? formBox.querySelector("input:not([type=checkbox])") : csInput;
+        if (first) first.focus();
+      }, 30);
+    }
+    renderSeg();
     if (editing) {
       call("editConnection", { id: id }).then(function (data) {
         nameInput.value = data.name;
@@ -1915,14 +2510,19 @@
         readOnlyCk.checked = !!data.readOnly;
         state.color = data.color || state.color;
         renderColors();
-        detect();
+        return call("detect", { connectionString: data.connectionString, id: id });
+      }).then(function (res) {
+        if (res && res.ok) state.form = formFromDetect(res, csInput.value);
+        else state.mode = "string";
+        renderSeg(); renderForm(); showMode(); detect(); focusFirst();
       }).catch(function (err) { errorBox.append(formError(err)); });
     } else {
-      csInput.value = state.connectionString;
-      if (preset.example) csInput.type = "text";
-      detect();
+      renderForm();
+      if (state.mode === "form") syncFromForm();
+      else detect();
+      showMode();
+      focusFirst();
     }
-    setTimeout(function () { csInput.focus(); if (preset.example) csInput.select(); }, 30);
   }
 
   function suggestName(res) {
@@ -1943,7 +2543,7 @@
     (saved.tabs || []).forEach(function (t) {
       if (!conn(t.connId)) return;
       if (t.type === "query") S.tabs.push({ id: t.id, type: "query", connId: t.connId, database: t.database, schema: t.schema, text: t.text || "", title: t.title || "Query", editorH: t.editorH || 200 });
-      else if (t.target && t.target.object) S.tabs.push({ id: t.id, type: "data", connId: t.connId, target: t.target, objectType: t.objectType, mode: t.mode || "data", page: 1, pageSize: t.pageSize || 50, sort: t.sort || null, filters: t.filters || [], search: t.search || "", query: t.query || "", keyType: t.keyType || "", needsLoad: true, selected: new Set() });
+      else if (t.target && t.target.object) S.tabs.push({ id: t.id, type: "data", connId: t.connId, target: t.target, objectType: t.objectType, mode: t.mode || "data", page: 1, pageSize: t.pageSize || 50, sort: t.sort || null, filters: t.filters || [], search: t.search || "", query: t.query || "", keyType: t.keyType || "", colWidths: t.colWidths || {}, needsLoad: true, selected: new Set() });
     });
     S.active = S.tabs.some(function (t) { return t.id === saved.active; }) ? saved.active : (S.tabs[0] ? S.tabs[0].id : null);
     S.ready = true;

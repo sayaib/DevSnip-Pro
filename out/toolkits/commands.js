@@ -27,6 +27,7 @@ exports.TOOLKIT_COMMANDS = [
     { command: "densityConverter", tool: "mobile.density", section: "mobile", title: "dp / px / pt Converter & Asset Sizes" },
     { command: "jsonFormatter", tool: "text.format", section: "text", title: "JSON / YAML / XML Formatter" },
     { command: "yamlJsonTool", tool: "text.format", section: "text", title: "JSON / YAML / XML Formatter", values: { "format": "auto", "action": "validate" } },
+    { command: "xmlToJson", tool: "text.xml-json", section: "text", title: "XML → JSON Converter" },
     { command: "textDiff", tool: "dev.diff", section: "text", title: "Diff Checker" },
     { command: "regexLibrary", tool: "dev.regex-library", section: "text", title: "Regex Tester, Library & Code" },
     { command: "regexBuilder", tool: "dev.regex-library", section: "text", title: "Regex Tester, Library & Code", values: { "preset": "custom", "perLine": false } },

@@ -53,7 +53,7 @@ Every claim in the README and guides maps to one of these rows.
 | Keychain storage, read-only connections, destructive-statement confirmations | `src/database/store.ts` (SecretStorage), `service.ts`, `sql-builder.ts`, `adapters/sql-base.ts`, `adapters/redis.ts` |
 | Security Hub: workspace, cloud/container, dependency, endpoint scans | commands `securityAudit`, `cloudSecurityAudit`, `dependencyAudit`, `endpointSecurityScan`, `securityHub` |
 | LLM tokens and cost across 18 chat models (estimates) | `src/toolkits/sections/ai.ts`, `src/toolkits/engines/models.ts` |
-| 110 tools in 13 sections | `src/toolkits/layout.ts` (`validateRegistry`) |
+| 113 tools in 14 sections | `src/toolkits/layout.ts` (`validateRegistry`) |
 | Snippets in 39 languages; Create and Saved Snippets | `custom/*.json`, commands `createCustomSnippet`, `showSnippets` |
 | OpenCode install via `npm install -g opencode-ai`, verified with `opencode --version` | `src/commands/openCodeIntegration.ts` |
 | Walkthrough, Get started card, What's new | `contributes.walkthroughs`, `src/onboarding/activation.ts` |

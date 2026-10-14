@@ -44,6 +44,11 @@ node_modules/**/dist/react-native/**
 node_modules/@azure/msal-browser/**
 node_modules/mongodb/src/**
 node_modules/bson/src/**
+# oracledb runs in Thin mode (pure JavaScript); the native binaries are only for Thick mode.
+node_modules/oracledb/build/**
+node_modules/oracledb/examples/**
+node_modules/oracledb/package/**
+node_modules/oracledb/plugins/**
 # sql.js: only the Node WebAssembly build is loaded.
 node_modules/sql.js/**
 !node_modules/sql.js/package.json
