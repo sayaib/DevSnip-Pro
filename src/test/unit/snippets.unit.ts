@@ -89,3 +89,45 @@ suite("snippets survive updates", () => {
     }
   });
 });
+
+suite("bundled framework snippets", () => {
+  const root = path.resolve(__dirname, "../../..");
+  const manifest = read(path.join(root, "package.json")) as { contributes: { snippets: Array<{ language: string; path: string }> } };
+  const bundled = manifest.contributes.snippets.filter(entry => entry.path.startsWith("./snippets/"));
+
+  test("every bundled file is contributed, parses and uses the ds- prefix", () => {
+    const files = fs.readdirSync(path.join(root, "snippets")).filter(file => file.endsWith(".json"));
+    assert.deepStrictEqual([...new Set(bundled.map(entry => path.basename(entry.path)))].sort(), files.sort());
+    for (const entry of bundled) {
+      const snippets = Object.values(read(path.join(root, entry.path))) as Array<{ prefix: string; body: string[]; description: string }>;
+      assert.ok(snippets.length > 0, entry.path);
+      for (const snippet of snippets) {
+        assert.match(snippet.prefix, /^ds-[a-z0-9-]+$/, `${entry.path}: ${snippet.prefix}`);
+        assert.ok(Array.isArray(snippet.body) && snippet.body.length && snippet.description, `${entry.path}: ${snippet.prefix}`);
+      }
+    }
+  });
+
+  test("a prefix means one snippet per language", () => {
+    const byLanguage = new Map<string, string[]>();
+    for (const entry of bundled) {
+      const prefixes = (Object.values(read(path.join(root, entry.path))) as Array<{ prefix: string }>).map(snippet => snippet.prefix);
+      byLanguage.set(entry.language, [...(byLanguage.get(entry.language) ?? []), ...prefixes]);
+    }
+    for (const [language, prefixes] of byLanguage) assert.strictEqual(new Set(prefixes).size, prefixes.length, language);
+  });
+
+  test("bodies expand correctly when the defaults are accepted", () => {
+    for (const file of new Set(bundled.map(entry => entry.path))) {
+      for (const snippet of Object.values(read(path.join(root, file))) as Array<{ prefix: string; body: string[] }>) {
+        const body = snippet.body.join("\n");
+        // Placeholder transforms only run after tabbing through, so accepting defaults would leave e.g. "getname".
+        assert.doesNotMatch(body, /\$\{\d+\/[^}]*\//, `${file}: ${snippet.prefix} uses a transform`);
+        // A literal ${…} (JS template, Dart or Kotlin interpolation) must be escaped or VS Code reads it as a variable.
+        for (const match of body.matchAll(/(\\)?\$\{([^0-9}][^}:]*)/g)) {
+          if (!match[1]) assert.match(match[2], /^TM_/, `${file}: ${snippet.prefix} has an unescaped \${${match[2]}`);
+        }
+      }
+    }
+  });
+});

@@ -1,0 +1,126 @@
+{
+  "DevSnip: StatelessWidget": {
+    "prefix": "ds-stless",
+    "description": "A Flutter StatelessWidget.",
+    "body": [
+      "class ${1:MyWidget} extends StatelessWidget {",
+      "  const ${1:MyWidget}({super.key});",
+      "",
+      "  @override",
+      "  Widget build(BuildContext context) {",
+      "    return ${0:const Placeholder()};",
+      "  }",
+      "}"
+    ]
+  },
+  "DevSnip: StatefulWidget": {
+    "prefix": "ds-stful",
+    "description": "A Flutter StatefulWidget with initState and dispose.",
+    "body": [
+      "class ${1:MyWidget} extends StatefulWidget {",
+      "  const ${1:MyWidget}({super.key});",
+      "",
+      "  @override",
+      "  State<${1:MyWidget}> createState() => _${1:MyWidget}State();",
+      "}",
+      "",
+      "class _${1:MyWidget}State extends State<${1:MyWidget}> {",
+      "  @override",
+      "  void initState() {",
+      "    super.initState();",
+      "  }",
+      "",
+      "  @override",
+      "  void dispose() {",
+      "    super.dispose();",
+      "  }",
+      "",
+      "  @override",
+      "  Widget build(BuildContext context) {",
+      "    return ${0:const Placeholder()};",
+      "  }",
+      "}"
+    ]
+  },
+  "DevSnip: FutureBuilder": {
+    "prefix": "ds-future-builder",
+    "description": "A FutureBuilder with loading, error and data states.",
+    "body": [
+      "FutureBuilder<${1:String}>(",
+      "  future: ${2:_future},",
+      "  builder: (context, snapshot) {",
+      "    if (snapshot.connectionState != ConnectionState.done) {",
+      "      return const Center(child: CircularProgressIndicator());",
+      "    }",
+      "    if (snapshot.hasError) {",
+      "      return Center(child: Text('Error: \\${snapshot.error}'));",
+      "    }",
+      "    return ${0:Text('\\${snapshot.data\\}')};",
+      "  },",
+      ")"
+    ]
+  },
+  "DevSnip: JSON model": {
+    "prefix": "ds-json-model",
+    "description": "An immutable model with fromJson, toJson and copyWith, without code generation.",
+    "body": [
+      "class ${1:Item} {",
+      "  const ${1:Item}({required this.id, required this.${2:name}});",
+      "",
+      "  final int id;",
+      "  final String ${2:name};",
+      "",
+      "  factory ${1:Item}.fromJson(Map<String, dynamic> json) => ${1:Item}(",
+      "        id: json['id'] as int,",
+      "        ${2:name}: json['${2:name}'] as String,",
+      "      );",
+      "",
+      "  Map<String, dynamic> toJson() => {'id': id, '${2:name}': ${2:name}};",
+      "",
+      "  ${1:Item} copyWith({int? id, String? ${2:name}}) =>",
+      "      ${1:Item}(id: id ?? this.id, ${2:name}: ${2:name} ?? this.${2:name});",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: structured log": {
+    "prefix": "ds-log",
+    "description": "A dart:developer log call (needs import 'dart:developer' as developer;): shows in DevTools' Logging view with a name and, optionally, an error.",
+    "body": [
+      "developer.log('${1:message}', name: '${2:${TM_FILENAME_BASE}}'${3:, error: ${4:error}});",
+      "$0"
+    ]
+  },
+  "DevSnip: widget test": {
+    "prefix": "ds-widget-test",
+    "description": "A Flutter widget test.",
+    "body": [
+      "import 'package:flutter/material.dart';",
+      "import 'package:flutter_test/flutter_test.dart';",
+      "",
+      "void main() {",
+      "  testWidgets('${1:shows the title}', (tester) async {",
+      "    await tester.pumpWidget(const MaterialApp(home: Text('${2:Hello}')));",
+      "    expect(find.text('${2:Hello}'), findsOneWidget);",
+      "  });",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: Dart test": {
+    "prefix": "ds-test",
+    "description": "A package:test group with a test.",
+    "body": [
+      "import 'package:test/test.dart';",
+      "",
+      "void main() {",
+      "  group('${1:subject}', () {",
+      "    test('${2:works}', () {",
+      "      expect(${3:1 + 1}, ${4:2});",
+      "    });",
+      "  });",
+      "}",
+      "$0"
+    ]
+  }
+}

@@ -33,6 +33,7 @@ async function main() {
     require("./rewards.unit");
     require("./snippets.unit");
     require("./analysis.unit");
+    require("./debug-logs.unit");
     require("./api-client.unit");
     require("./premium.unit");
     require("./feature-services.unit");

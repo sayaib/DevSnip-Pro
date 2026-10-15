@@ -1,0 +1,141 @@
+{
+  "DevSnip: Express router": {
+    "prefix": "ds-express-router",
+    "description": "A typed Express router with list/get/create handlers and 201/404 responses. Mount with app.use(\"/api/items\", router).",
+    "body": [
+      "import { Router, type Request, type Response } from \"express\";",
+      "",
+      "interface ${1:Item} {",
+      "  id: string;",
+      "  name: string;",
+      "}",
+      "",
+      "const ${2:items} = new Map<string, ${1:Item}>();",
+      "export const router = Router();",
+      "",
+      "router.get(\"/\", (_req: Request, res: Response) => {",
+      "  res.json([...${2:items}.values()]);",
+      "});",
+      "",
+      "router.get(\"/:id\", (req: Request<{ id: string }>, res: Response) => {",
+      "  const item = ${2:items}.get(req.params.id);",
+      "  if (!item) {",
+      "    res.status(404).json({ error: \"Not found\" });",
+      "    return;",
+      "  }",
+      "  res.json(item);",
+      "});",
+      "",
+      "router.post(\"/\", (req: Request<unknown, unknown, Partial<${1:Item}>>, res: Response) => {",
+      "  if (typeof req.body?.name !== \"string\" || !req.body.name.trim()) {",
+      "    res.status(400).json({ error: \"name is required\" });",
+      "    return;",
+      "  }",
+      "  const item: ${1:Item} = { id: crypto.randomUUID(), name: req.body.name.trim() };",
+      "  ${2:items}.set(item.id, item);",
+      "  res.status(201).json(item);",
+      "});",
+      "$0"
+    ]
+  },
+  "DevSnip: Express error handler": {
+    "prefix": "ds-express-error",
+    "description": "Express error-handling middleware (four arguments); register it after all routes.",
+    "body": [
+      "import type { NextFunction, Request, Response } from \"express\";",
+      "",
+      "export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction): void {",
+      "  if (res.headersSent) {",
+      "    next(err);",
+      "    return;",
+      "  }",
+      "  console.error(`[\\${req.method} \\${req.originalUrl}]`, err);",
+      "  const status = typeof (err as { status?: unknown }).status === \"number\" ? (err as { status: number }).status : 500;",
+      "  res.status(status).json({ error: status === 500 ? \"Internal Server Error\" : String((err as Error).message) });",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: Next.js route handler": {
+    "prefix": "ds-next-route",
+    "description": "A Next.js App Router route handler (app/**/route.ts) with GET and a validated POST.",
+    "body": [
+      "export async function GET(request: Request) {",
+      "  const { searchParams } = new URL(request.url);",
+      "  const ${1:query} = searchParams.get(\"${1:query}\") ?? \"\";",
+      "  return Response.json({ ${1:query}, items: [] });",
+      "}",
+      "",
+      "export async function POST(request: Request) {",
+      "  const body: unknown = await request.json().catch(() => null);",
+      "  if (!body || typeof body !== \"object\") {",
+      "    return Response.json({ error: \"Expected a JSON object\" }, { status: 400 });",
+      "  }",
+      "  return Response.json(body, { status: 201 });",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: Next.js server action": {
+    "prefix": "ds-server-action",
+    "description": "A Next.js server action module (actions.ts) that validates FormData.",
+    "body": [
+      "\"use server\";",
+      "",
+      "export async function ${1:createItem}(formData: FormData): Promise<{ ok: boolean; error?: string }> {",
+      "  const ${2:name} = String(formData.get(\"${2:name}\") ?? \"\").trim();",
+      "  if (!${2:name}) return { ok: false, error: \"${2:name} is required\" };",
+      "  $0",
+      "  return { ok: true };",
+      "}"
+    ]
+  },
+  "DevSnip: zod schema": {
+    "prefix": "ds-zod",
+    "description": "A zod schema, its inferred type and a safe parser.",
+    "body": [
+      "import { z } from \"zod\";",
+      "",
+      "export const ${1:Item}Schema = z.object({",
+      "  ${2:name}: z.string().min(1),",
+      "  ${3:email}: z.string().email(),",
+      "});",
+      "",
+      "export type ${1:Item} = z.infer<typeof ${1:Item}Schema>;",
+      "",
+      "export function parse${1:Item}(input: unknown): ${1:Item} | undefined {",
+      "  const result = ${1:Item}Schema.safeParse(input);",
+      "  return result.success ? result.data : undefined;",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: typed fetch": {
+    "prefix": "ds-fetch-json",
+    "description": "A fetch wrapper that throws on non-2xx responses and supports cancellation.",
+    "body": [
+      "export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {",
+      "  const response = await fetch(url, { ...init, headers: { Accept: \"application/json\", ...init.headers } });",
+      "  if (!response.ok) {",
+      "    throw new Error(`\\${init.method ?? \"GET\"} \\${url} failed: \\${response.status} \\${response.statusText}`);",
+      "  }",
+      "  return (await response.json()) as T;",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: Vitest suite": {
+    "prefix": "ds-vitest",
+    "description": "A Vitest test suite.",
+    "body": [
+      "import { describe, expect, it } from \"vitest\";",
+      "",
+      "describe(\"${1:subject}\", () => {",
+      "  it(\"${2:works}\", () => {",
+      "    expect(${3:1 + 1}).toBe(${4:2});",
+      "  });",
+      "});",
+      "$0"
+    ]
+  }
+}

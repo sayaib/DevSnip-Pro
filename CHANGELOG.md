@@ -1,5 +1,86 @@
 # Development Changelog of DevSnip Pro
 
+## 11.79.1 - Debug logs for 8 languages, framework snippets, and Spring Boot, ASP.NET Core and Flutter support
+
+DevSnip Pro now helps with day-to-day debugging and cleanup in **JavaScript, TypeScript, Python, Java, Kotlin, C#, Dart and Swift**. It also adds framework snippets, Run & Debug setup, and dependency support for .NET and Flutter projects. No dependency is added, and activation is unchanged: every new feature loads the first time you use it.
+
+### Added
+
+#### Debugging
+
+- **Insert Debug Log** (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>, the editor's right-click menu, or the Testing & Debugging section) logs the variable or expression under the cursor, labelled with the file and line.
+  - The log goes where the value exists: after the statement that assigns it, at the top of the function for a parameter, at the top of the loop for a loop variable, and before a `return` or `throw`.
+  - It never goes inside a multi-line string, between a decorator and its target, between a header and an Allman-style `{`, or in a class body.
+  - When there is nowhere valid, the log is declined instead of written. This covers C# `out` parameters, discards (`_`), declarations without a value, a parameter of an expression-bodied Kotlin function, and the variable of a loop whose body has no braces.
+  - It uses the logger the file already has: Python `logging`, SLF4J or Lombok `log` in Spring Boot, `ILogger` in ASP.NET Core (with a message template), `android.util.Log`, `debugPrint` in Flutter and `os.Logger` in Swift. Otherwise it falls back to `console.log`, `print`, `System.out.println`, `println` or `Console.WriteLine`.
+  - It matches the file's quotes and semicolons, and works with several cursors.
+- **Clean Debug Logs** (formerly Clean Console Logs) scans the workspace for `console.log`, `print`, `pprint`, `breakpoint()`, `System.out.println`, `Log.d`, `Console.WriteLine`, `Debug.WriteLine`, `debugPrint`, `NSLog`, `dump` and more, including `<script>` blocks in HTML, Vue, Svelte and PHP.
+  - Calls inside comments and strings are ignored.
+  - Only statements that stand alone on their lines are removed. A statement that shares a line, continues an expression or is the body of an `if` without braces is listed for review instead.
+  - A Python block left empty gets `pass`, and a Swift or Dart `case` left empty gets `break`. CRLF line endings are kept.
+  - Logs written by Insert Debug Log through a project logger (for example `_logger.LogDebug("[Orders.cs:12] …")`) are removed too. They are recognised by their label, so your own logging is never touched.
+- **Remove Debug Logs in This File** does the same for the open editor, with one confirmation and Undo.
+- **Run & Debug Configurations** detects the projects in your workspace, including monorepos: Next.js, Vite, Create React App, Angular, NestJS, Node.js, React Native, Expo, FastAPI, Django, Flask, Python, Spring Boot, Java, Android, ASP.NET Core, .NET, Flutter and Dart. For each one it writes `.vscode/launch.json`, `tasks.json` and `extensions.json` for the language's official debugger, and lists the run, test and build commands. Existing configurations are kept, and only new names are added.
+
+#### Framework snippets
+
+- **56 `ds-` snippets** for Spring Boot (Boot 4 and 3), ASP.NET Core (.NET 8+), FastAPI, Flask, Django, pytest, React, Next.js (App Router), Express, zod, Vitest and Testing Library, Flutter and Dart, and SwiftUI. Type `ds-` in a file, or run **Framework Snippets** to pick one from a list. See the README for the full list.
+- The logger snippets (`ds-logger`) create the logger that Insert Debug Log then uses.
+
+#### Frameworks and languages
+
+- **API Resource Scaffolder** generates a validated CRUD API with pagination, `400`/`404`/`409` responses and unique fields for **Spring Boot** (JPA), **ASP.NET Core Web API** (EF Core) and **FastAPI** (SQLAlchemy and Pydantic), with PostgreSQL, MySQL, SQL Server or SQLite. Express, NestJS, Next.js and Fastify are still there too.
+- **Dockerfile**, **CI Pipeline** (GitHub Actions, GitLab CI, CodeQL) and **Health Check Endpoints** support .NET and ASP.NET Core. The Dockerfile is multi-stage, runs as a non-root user and builds from the `.csproj` you name.
+- **Unused Dependencies** lists npm, Python and Flutter/Dart packages that no code, script or config file uses, with the command that removes them. It never lists plugins (ESLint, Babel, pytest, tox), CLIs run from scripts, peer dependencies, frameworks' implicit packages, code generators or database drivers. pip-compile output is read by its `# via` notes, and a `pip freeze` dump is skipped with an explanation.
+- **Dependencies & Installation** supports **.NET (NuGet)** and **Dart / Flutter (pub)**.
+  - NuGet: it reads `.csproj`, `.fsproj` and `.vbproj` files, including Central Package Management (`Directory.Packages.props`), and installed versions from `obj/project.assets.json`. It offers `dotnet restore` and shows `dotnet add package` commands to copy.
+  - pub: it reads `pubspec.yaml` and `pubspec.lock`, and offers `flutter pub get` / `dart pub get` and `pub upgrade`. `pub add` runs only for dev dependencies.
+  - Latest versions come from nuget.org and pub.dev. As for npm and pip, every command is validated and confirmed before it runs.
+- **Remove Unused Imports** supports Kotlin. It no longer lists Python `from __future__` imports, `__init__.py` re-exports or names in `__all__`, keeps `React` in classic-JSX files, and handles multi-line TypeScript imports.
+
+### Improved
+
+- **Testing & Debugging** now starts with Insert Debug Log, Clean Debug Logs and Run & Debug Configurations. Clean Debug Logs moved here from Code & Productivity. 117 tools in 14 sections.
+
+### Fixed
+
+- The README said ready-made snippets ship for 39 languages. Those 39 files hold the snippets you save yourself; the bundled snippets are the new `ds-` ones.
+
+### Tests
+
+- New unit tests cover the debug-log lexer (strings, interpolation, comments and regex literals in every language), placement and removal, the snippet files, Unused Dependencies, and NuGet and pub parsing, versions, commands and safety checks. 713 unit tests pass.
+- New integration tests drive Insert Debug Log, Remove Debug Logs and Framework Snippets in a real editor. 67 integration tests pass, including every command run end to end and the panel memory check.
+- **Debug logs on real projects:**
+  - Logs were inserted for every declaration and every parameter, loop, catch and pattern variable, then each project was compiled or tested, and Clean Debug Logs had to restore every file byte for byte.
+  - Projects: Express (1,261 tests pass), ky (type-checks), Flask, Spring PetClinic, Microsoft's eShopOnWeb (C#), Alamofire (Swift), dart-lang/args and TheAlgorithms/Kotlin.
+  - Results, as logs inserted and then compiled or tested:
+    - **C#:** 578 logs; eShopOnWeb builds.
+    - **Swift:** 1,246 logs; Alamofire builds.
+    - **Kotlin:** 164 logs; compiles with kotlinc 2.2.
+    - **Java:** 118 logs; PetClinic compiles.
+    - **TypeScript:** 266 logs; ky type-checks.
+    - **JavaScript:** 179 logs; Express's 1,261 tests pass.
+    - **Python:** 530 logs; Flask imports and runs.
+    - **Dart:** 82 logs; args analyses cleanly.
+  - The only test failures were the few Flask and args tests that assert exact console output, which the inserted logs change by design.
+  - This found and fixed real placement bugs before release:
+    - Allman-style `{` on its own line (usual in C#).
+    - `if let` and `out var` bindings, and Swift `for … in` loops.
+    - Assignments whose value is a multi-line lambda or object initializer.
+    - Swift closures, implicit returns and if-expressions.
+    - Combine's `print` operator.
+    - C# methods returning `object`.
+- **Every `ds-` snippet** was expanded by VS Code's own snippet engine and compiled:
+  - Spring Boot 4 and 3 with `mvn test`, including the MockMvc test.
+  - An ASP.NET Core 8 app with an xUnit integration test that calls the generated endpoints, controller, exception handler, options, `DbContext` and loggers.
+  - Python 3.9 and later with pytest.
+  - TypeScript with `tsc --strict`, Vitest and Testing Library.
+  - `flutter analyze` and a widget test, `dart test`, and `swift build`.
+  - This caught and fixed several snippet bugs before release: placeholder transforms that only apply after tabbing, a missing `import Foundation`, an unescaped `}`, and a validation attribute ASP.NET Core rejects at runtime.
+- **Generated backends** (Spring Boot, ASP.NET Core, FastAPI) were built, run and exercised over HTTP: create, duplicate, invalid input, get, update, delete and missing records.
+- **Dependencies & Installation** was run inside VS Code on a workspace with Maven, .NET, Flutter, Dart, npm and pip projects, against the live registries.
+- **Unused Dependencies** was checked on Express, ky, Flask (including its pip-compile examples), dart-lang/args, a Flutter app and a fixture with known unused packages. Removing the reported packages left the Flutter and Dart projects analysing and passing their tests.
+
 ## 11.78.2 - Smoother CSV & Excel editing, and named columns
 
 Editing in the CSV & Excel Viewer now behaves like a text box inside a spreadsheet: click a cell and a steady caret appears in its text. New columns are named as you add them, and CSV files with common defects open without losing rows. Nothing outside the CSV & Excel Viewer changes, and no dependency is added.

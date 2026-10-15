@@ -583,6 +583,76 @@ spring:
     timeout-per-shutdown-phase: 20s
 ` };
             break;
+        case "aspnet": {
+            const timeout = `TimeSpan.FromMilliseconds(${t})`;
+            const checks = [
+                `    // Liveness: the process is running. Never check dependencies here.\n    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])`,
+                ...(has("database") ? [`    // dotnet add package Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore\n    .AddDbContextCheck<AppDbContext>("database", tags: ["ready"])`] : []),
+                ...(has("redis") ? [`    .AddCheck<RedisHealthCheck>("redis", tags: ["ready"], timeout: ${timeout})`] : []),
+                ...(has("http") ? [`    .AddCheck<UpstreamHealthCheck>("upstream", tags: ["ready"], timeout: ${timeout})`] : [])
+            ];
+            const classes = [
+                ...(has("redis") ? [`/// <summary>Pings Redis through the IConnectionMultiplexer you register (StackExchange.Redis).</summary>
+public sealed class RedisHealthCheck(IConnectionMultiplexer redis) : IHealthCheck
+{
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await redis.GetDatabase().PingAsync();
+            return HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Redis is unreachable", ex);
+        }
+    }
+}`] : []),
+                ...(has("http") ? [`/// <summary>Calls an upstream service's health endpoint (set Upstream:HealthUrl in appsettings.json).</summary>
+public sealed class UpstreamHealthCheck(IHttpClientFactory httpClientFactory, IConfiguration configuration) : IHealthCheck
+{
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        var url = configuration["Upstream:HealthUrl"];
+        if (string.IsNullOrEmpty(url)) return HealthCheckResult.Unhealthy("Upstream:HealthUrl is not set");
+        try
+        {
+            using var response = await httpClientFactory.CreateClient().GetAsync(url, cancellationToken);
+            return response.IsSuccessStatusCode ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy($"Upstream returned {(int)response.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Upstream is unreachable", ex);
+        }
+    }
+}`] : [])
+            ];
+            code = { path: "HealthChecks.cs", language: "csharp", content: `using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+${has("redis") ? "using StackExchange.Redis;\n" : ""}${has("database") ? "// using YourApp.Data; // the namespace of your DbContext (AppDbContext here)\n" : ""}
+// Program.cs:
+//   builder.Services.AddAppHealthChecks();${has("http") ? "\n//   builder.Services.AddHttpClient();" : ""}
+//   ...
+//   app.MapAppHealthChecks();
+public static class HealthCheckSetup
+{
+    public static IServiceCollection AddAppHealthChecks(this IServiceCollection services)
+    {
+        services.AddHealthChecks()
+${checks.join("\n")};
+        return services;
+    }
+
+    public static WebApplication MapAppHealthChecks(this WebApplication app)
+    {
+        app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") });
+        app.MapHealthChecks("/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+        return app;
+    }
+}
+${classes.length ? "\n" + classes.join("\n\n") + "\n" : ""}` };
+            break;
+        }
         case "go":
             code = { path: "health.go", language: "go", content: `package main
 
@@ -637,7 +707,11 @@ func readyHandler(w http.ResponseWriter, r *http.Request) {
     const ready = spring ? "/actuator/health/readiness" : "/ready";
     const seconds = Math.max(1, Math.ceil(t / 1000) + 1);
     const probes = {
-        dockerfile: `# Alpine/Debian slim images need wget or curl installed.
+        dockerfile: o.framework === "aspnet" ? `# The mcr.microsoft.com/dotnet/aspnet image has no curl or wget, so a Dockerfile
+# HEALTHCHECK needs one installed. Prefer the Compose or Kubernetes probes below.
+HEALTHCHECK --interval=30s --timeout=${seconds}s --start-period=20s --retries=3 \\
+  CMD curl -fsS http://127.0.0.1:${o.port}${ready} || exit 1
+` : `# Alpine/Debian slim images need wget or curl installed.
 HEALTHCHECK --interval=30s --timeout=${seconds}s --start-period=20s --retries=3 \\
   CMD wget -qO- http://127.0.0.1:${o.port}${ready} || exit 1
 `,

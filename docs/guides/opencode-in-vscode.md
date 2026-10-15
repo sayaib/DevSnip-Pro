@@ -38,8 +38,8 @@ Ask the agent for a change, for example "add a `/users/:id` endpoint with valida
 
 Agents and debugging sessions leave things behind:
 
-- **Clean Console Logs** finds `console.log` calls across the workspace and removes the ones you choose.
-- **Remove Unused Imports** works for JavaScript, TypeScript, Python and Java.
+- **Clean Debug Logs** finds leftover `console.log`, `print`, `System.out.println` and `Console.WriteLine` calls across the workspace and removes the ones you choose.
+- **Remove Unused Imports** works for JavaScript, TypeScript, Python, Java and Kotlin.
 - **Diff Checker** compares two texts, or two JSON documents structurally.
 
 ## 4. Keep what you reuse

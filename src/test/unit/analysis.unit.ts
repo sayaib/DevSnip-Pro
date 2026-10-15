@@ -1,48 +1,6 @@
 import * as assert from "assert";
-import { findConsoleLogs, wholeLineRange } from "../../commands/listAndRemoveConsoleLogsCommand";
 import { analyzeFileImports } from "../../commands/removeUnusedImportsCommand";
 import { suite, test } from "./run-unit-tests";
-
-suite("console.log scanner", () => {
-  test("finds a plain call with its offsets", () => {
-    const source = 'const a = 1;\nconsole.log("hello");\nconst b = 2;\n';
-    const logs = findConsoleLogs(source, "/tmp/a.ts");
-    assert.strictEqual(logs.length, 1);
-    assert.strictEqual(logs[0].lineNumber, 2);
-    assert.strictEqual(source.slice(logs[0].startOffset, logs[0].endOffset), 'console.log("hello");');
-  });
-
-  test("ignores commented-out and quoted occurrences", () => {
-    const source = [
-      '// console.log("commented");',
-      '/* console.log("block"); */',
-      'const text = "console.log(\\"quoted\\")";',
-      "const tpl = `console.log('in template')`;"
-    ].join("\n");
-    assert.deepStrictEqual(findConsoleLogs(source, "/tmp/b.ts"), []);
-  });
-
-  test("handles nested parentheses and multi-line calls", () => {
-    const source = 'console.log(JSON.stringify({ a: (1 + 2) }),\n  "second arg");\nnext();';
-    const logs = findConsoleLogs(source, "/tmp/c.ts");
-    assert.strictEqual(logs.length, 1);
-    assert.ok(logs[0].text.endsWith('"second arg");'));
-  });
-
-  test("does not match similarly named identifiers", () => {
-    const source = "myconsole.log(1);\nconsole.logger(2);\nconsole.warn(3);";
-    assert.deepStrictEqual(findConsoleLogs(source, "/tmp/d.ts"), []);
-  });
-
-  test("offsets stay correct for several calls in one file", () => {
-    const source = 'console.log(1);\nfoo();\nconsole.log(2);\n';
-    const logs = findConsoleLogs(source, "/tmp/e.ts");
-    assert.strictEqual(logs.length, 2);
-    for (const log of logs) {
-      assert.strictEqual(source.slice(log.startOffset, log.endOffset), log.text);
-    }
-  });
-});
 
 suite("unused import analysis", () => {
   test("reports an import whose symbols are never referenced", () => {
@@ -90,15 +48,41 @@ suite("unused import analysis", () => {
   test("ignores files in unsupported languages", () => {
     assert.deepStrictEqual(analyzeFileImports('import x from "y";', "/tmp/j.txt"), []);
   });
-});
 
-suite("console.log removal", () => {
-  test("a statement alone on its line removes the whole line; an inline one only the call", () => {
-    const text = 'const a = 1;\n  console.log("x");\nconst b = 2; console.log("y");\nconsole.log("z");';
-    const [first, inline, last] = findConsoleLogs(text, "a.js");
-    const apply = (range: { start: number; end: number }) => text.slice(0, range.start) + text.slice(range.end);
-    assert.strictEqual(apply(wholeLineRange(text, first.startOffset, first.endOffset)!), 'const a = 1;\nconst b = 2; console.log("y");\nconsole.log("z");');
-    assert.strictEqual(wholeLineRange(text, inline.startOffset, inline.endOffset), undefined, "code before it on the line stays");
-    assert.strictEqual(apply(wholeLineRange(text, last.startOffset, last.endOffset)!), 'const a = 1;\n  console.log("x");\nconst b = 2; console.log("y");\n', "the last line without a newline");
+  test("never removes Python imports that change compilation or are re-exported", () => {
+    assert.deepStrictEqual(analyzeFileImports("from __future__ import annotations\nx = 1\n", "/tmp/m.py"), []);
+    assert.deepStrictEqual(analyzeFileImports("from .models import User\n", "/tmp/pkg/__init__.py"), [], "__init__.py re-exports its imports");
+    assert.deepStrictEqual(analyzeFileImports("from .models import User\n__all__ = ['User']\n", "/tmp/pkg/api.py"), [], "names in __all__ are exported");
+    assert.deepStrictEqual(analyzeFileImports("from .models import User, Order\n__all__ = ['User']\n", "/tmp/pkg/api2.py"), [], "only all-unused statements are listed; Order alone is not enough");
+    assert.strictEqual(analyzeFileImports("from .models import User, Order\n__all__ = ['Other']\n", "/tmp/pkg/api3.py").length, 1);
+  });
+
+  test("names used in interpolations are used", () => {
+    assert.deepStrictEqual(analyzeFileImports('import { format } from "./f";\nconst s = `at ${format(d)}`;\n', "/tmp/t.ts"), []);
+    assert.deepStrictEqual(analyzeFileImports("import os\nprint(f\"{os.sep}\")\n", "/tmp/f.py"), []);
+    assert.deepStrictEqual(analyzeFileImports("import a.b.Thing\nval s = \"${Thing.x} and $other\"\n", "/tmp/K.kt"), []);
+  });
+
+  test("a URL string is not taken for a comment", () => {
+    assert.deepStrictEqual(analyzeFileImports('import { headers } from "./h";\nfetch("http://api.example.com", { headers });\n', "/tmp/u.ts"), []);
+  });
+
+  test("keeps React when the file has JSX (classic runtime)", () => {
+    assert.deepStrictEqual(analyzeFileImports('import React from "react";\nexport const A = () => <div />;\n', "/tmp/A.tsx"), []);
+    assert.strictEqual(analyzeFileImports('import React from "react";\nexport const n = 1;\n', "/tmp/B.ts").length, 1);
+  });
+
+  test("handles multi-line named imports as one statement", () => {
+    const source = 'import {\n  alpha,\n  beta,\n} from "./x";\nimport {\n  gamma,\n} from "./y";\nalpha();\n';
+    const found = analyzeFileImports(source, "/tmp/m.ts");
+    assert.strictEqual(found.length, 1);
+    assert.deepStrictEqual([found[0].lineNumber, found[0].endLineNumber, found[0].importedSymbols], [5, 7, ["gamma"]]);
+  });
+
+  test("analyses Kotlin imports, keeping implicit operator imports", () => {
+    assert.strictEqual(analyzeFileImports("import java.time.Instant\nfun main() {}\n", "/tmp/A.kt").length, 1);
+    assert.deepStrictEqual(analyzeFileImports("import androidx.compose.runtime.getValue\nimport androidx.compose.runtime.remember\nval x by remember { 1 }\n", "/tmp/B.kt"), []);
+    assert.deepStrictEqual(analyzeFileImports("import a.b.Long as L\nval x: L = 1\n", "/tmp/C.kt"), []);
+    assert.deepStrictEqual(analyzeFileImports("import kotlinx.coroutines.*\n", "/tmp/D.kt"), [], "wildcards are not analysable");
   });
 });

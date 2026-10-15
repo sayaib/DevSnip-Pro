@@ -33,7 +33,7 @@
         unknown: 'Unknown',
         checking: 'Checking'
     };
-    var ECOSYSTEM_LABEL = { node: 'Node.js', python: 'Python', maven: 'Maven', gradle: 'Gradle' };
+    var ECOSYSTEM_LABEL = { node: 'Node.js', python: 'Python', maven: 'Maven', gradle: 'Gradle', nuget: '.NET (NuGet)', pub: 'Dart / Flutter (pub)' };
     var KIND_LABEL = { install: 'Install', update: 'Update', upgrade: 'Upgrade', add: 'Add' };
 
     var el = {

@@ -1,4 +1,5 @@
 import * as path from "path";
+import { parse as parseYaml } from "yaml";
 import {
   compareMaven, comparePep440, compareSemver, isStableMaven, isStablePep440, isStableSemver,
   isValidPep440Specifier, mavenFlavour, mavenMajor, maxSatisfyingPep440, maxSatisfyingSemver,
@@ -15,14 +16,14 @@ import {
  * Linux. The command layer supplies file contents and registry responses.
  */
 
-export type Ecosystem = "node" | "python" | "maven" | "gradle";
-export type ManagerId = "npm" | "yarn" | "pnpm" | "pip" | "maven" | "gradle";
-export type ToolId = "npm" | "yarn" | "pnpm" | "python" | "mvn" | "mvnw" | "gradle" | "gradlew";
+export type Ecosystem = "node" | "python" | "maven" | "gradle" | "nuget" | "pub";
+export type ManagerId = "npm" | "yarn" | "pnpm" | "pip" | "maven" | "gradle" | "dotnet" | "pub";
+export type ToolId = "npm" | "yarn" | "pnpm" | "python" | "mvn" | "mvnw" | "gradle" | "gradlew" | "dotnet" | "flutter" | "dart";
 export type DependencyScope = "production" | "development" | "optional" | "peer";
 export type DependencyStatus = "up-to-date" | "outdated" | "major" | "missing" | "mismatch" | "unknown";
 
 export interface DeclaredDependency {
-  /** npm name, normalised PEP 503 name, or `group:artifact`. */
+  /** npm name, normalised PEP 503 name, `group:artifact`, NuGet id or pub package name. */
   name: string;
   /** Name as written in the manifest (Python keeps its original casing here). */
   displayName: string;
@@ -526,6 +527,180 @@ export function parseVersionCatalog(text: string, source = "gradle/libs.versions
 // Project detection
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// .NET (NuGet) and Dart / Flutter (pub)
+// ---------------------------------------------------------------------------
+
+const NUGET_ID = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+const PUB_NAME = /^[a-z_][a-z0-9_]*$/;
+
+/** `<PackageVersion Include="X" Version="1.2.3" />` entries of a Directory.Packages.props (Central Package Management). */
+export function parseCentralPackageVersions(text: string): Record<string, string> {
+  const versions: Record<string, string> = {};
+  for (const element of stripXmlComments(text).matchAll(/<PackageVersion\b([^>]*?)(?:\/>|>([\s\S]*?)<\/PackageVersion>)/g)) {
+    const include = /\bInclude\s*=\s*"([^"]+)"/.exec(element[1])?.[1];
+    const version = /\bVersion\s*=\s*"([^"]+)"/.exec(element[1])?.[1] ?? xmlValue(element[2] ?? "", "Version");
+    if (include && version) versions[include.toLowerCase()] = version.trim();
+  }
+  return versions;
+}
+
+/**
+ * PackageReference items of an SDK-style .csproj / .fsproj / .vbproj. A
+ * reference without a version takes it from Directory.Packages.props; one
+ * with PrivateAssets="all" (analyzers, build tools) counts as development.
+ */
+export function parseCsproj(text: string, source: string, central: Record<string, string> = {}): DeclaredDependency[] {
+  const deps: DeclaredDependency[] = [];
+  // A test project's packages never ship, so they count as development dependencies.
+  const testProject = /<IsTestProject>\s*true\s*</i.test(text) || /Include\s*=\s*"Microsoft\.NET\.Test\.Sdk"/i.test(text);
+  for (const element of stripXmlComments(text).matchAll(/<PackageReference\b([^>]*?)(?:\/>|>([\s\S]*?)<\/PackageReference>)/g)) {
+    const attributes = element[1], body = element[2] ?? "";
+    const id = /\bInclude\s*=\s*"([^"]+)"/.exec(attributes)?.[1]?.trim();
+    if (!id) continue;
+    const own = /\b(?:Version|VersionOverride)\s*=\s*"([^"]*)"/.exec(attributes)?.[1] ?? xmlValue(body, "VersionOverride") ?? xmlValue(body, "Version");
+    const centralVersion = central[id.toLowerCase()];
+    const spec = (own ?? centralVersion ?? "").trim();
+    const privateAssets = /\bPrivateAssets\s*=\s*"([^"]*)"/.exec(attributes)?.[1] ?? xmlValue(body, "PrivateAssets");
+    const validId = NUGET_ID.test(id);
+    const dynamic = !spec || spec.includes("$(") || spec.includes("*") || /^[[(]/.test(spec);
+    deps.push({
+      name: id.toLowerCase(),
+      displayName: id,
+      spec,
+      scope: testProject || (privateAssets && /\ball\b/i.test(privateAssets)) ? "development" : "production",
+      source,
+      registry: validId && !dynamic,
+      versionRef: own === undefined && centralVersion !== undefined ? "Directory.Packages.props" : undefined,
+      note: !validId ? "The package id is not a valid NuGet id."
+        : !spec ? "No version is declared (and none in Directory.Packages.props), so it cannot be checked."
+          : spec.includes("$(") ? "The version comes from an MSBuild property, so it is not checked."
+            : dynamic ? "A floating or range version is resolved by NuGet at restore time, so it is not checked." : undefined
+    });
+  }
+  return deps;
+}
+
+/** dependencies and dev_dependencies of a pubspec.yaml. SDK, path and git packages are listed but never installed automatically. */
+export function parsePubspec(text: string, source = "pubspec.yaml"): { dependencies: DeclaredDependency[]; flutter: boolean; error?: string } {
+  let doc: Record<string, unknown>;
+  try {
+    const parsed = parseYaml(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { dependencies: [], flutter: false, error: `${source} is not a YAML mapping.` };
+    doc = parsed as Record<string, unknown>;
+  } catch (error) {
+    return { dependencies: [], flutter: false, error: `${source} could not be parsed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const deps: DeclaredDependency[] = [];
+  let flutter = false;
+  for (const [key, scope] of [["dependencies", "production"], ["dev_dependencies", "development"]] as Array<[string, DependencyScope]>) {
+    const section = doc[key];
+    if (!section || typeof section !== "object" || Array.isArray(section)) continue;
+    for (const [name, value] of Object.entries(section as Record<string, unknown>)) {
+      let spec = "any", registry = PUB_NAME.test(name), note: string | undefined;
+      if (typeof value === "string" || typeof value === "number") spec = String(value).trim() || "any";
+      else if (value && typeof value === "object") {
+        const entry = value as Record<string, unknown>;
+        if ("sdk" in entry) {
+          if (name === "flutter" && entry.sdk === "flutter") flutter = true;
+          registry = false; note = `Part of the ${String(entry.sdk)} SDK.`;
+        } else if ("path" in entry || "git" in entry) {
+          registry = false; note = "Comes from a path or a git repository, so it is not checked against pub.dev.";
+        } else {
+          const hosted = entry.hosted;
+          const url = typeof hosted === "string" ? hosted : hosted && typeof hosted === "object" ? String((hosted as Record<string, unknown>).url ?? "") : "";
+          if (url && !/^https:\/\/pub\.dev\/?$/.test(url)) { registry = false; note = "Hosted on a private pub server, which this check does not query."; }
+          if (entry.version !== undefined) spec = String(entry.version).trim();
+        }
+      }
+      deps.push({ name, displayName: name, spec, scope, source, registry, note });
+    }
+  }
+  return { dependencies: deps, flutter };
+}
+
+/** NuGet version order: up to four numeric parts, then pre-release labels (SemVer 2 rules). */
+export function compareNuget(a: string, b: string): number {
+  const split = (value: string) => {
+    const [release, pre = ""] = value.split("+")[0].split(/-(.*)/s);
+    const parts = release.split(".").map(part => Number.parseInt(part, 10) || 0);
+    while (parts.length < 4) parts.push(0);
+    return { parts, pre };
+  };
+  const x = split(a), y = split(b);
+  for (let i = 0; i < 4; i++) if (x.parts[i] !== y.parts[i]) return x.parts[i] < y.parts[i] ? -1 : 1;
+  if (!x.pre || !y.pre) return x.pre === y.pre ? 0 : x.pre ? -1 : 1;
+  const xs = x.pre.split("."), ys = y.pre.split(".");
+  for (let i = 0; i < Math.max(xs.length, ys.length); i++) {
+    if (xs[i] === undefined) return -1;
+    if (ys[i] === undefined) return 1;
+    const xn = /^\d+$/.test(xs[i]), yn = /^\d+$/.test(ys[i]);
+    if (xn && yn && Number(xs[i]) !== Number(ys[i])) return Number(xs[i]) < Number(ys[i]) ? -1 : 1;
+    if (xn !== yn) return xn ? -1 : 1;
+    const order = xs[i].toLowerCase().localeCompare(ys[i].toLowerCase());
+    if (order) return order;
+  }
+  return 0;
+}
+
+const isStableNuget = (version: string) => !version.split("+")[0].includes("-");
+const nugetMajor = (version: string) => Number.parseInt(version, 10);
+
+export function nugetIndexUrl(id: string): string {
+  return `https://api.nuget.org/v3-flatcontainer/${encodeURIComponent(id.toLowerCase())}/index.json`;
+}
+
+export function pubPackageUrl(name: string): string {
+  return `https://pub.dev/api/packages/${encodeURIComponent(name)}`;
+}
+
+/** NuGet's flat-container index: every published (listed or unlisted) version. */
+export function parseNugetIndex(data: unknown): RegistryInfo {
+  const versions = Array.isArray((data as { versions?: unknown })?.versions) ? ((data as { versions: unknown[] }).versions.filter(v => typeof v === "string") as string[]) : [];
+  const stable = versions.filter(isStableNuget).sort(compareNuget);
+  return { versions, latest: stable[stable.length - 1] };
+}
+
+/** pub.dev's package document; retracted versions cannot be resolved and are left out. */
+export function parsePubPackage(data: unknown): RegistryInfo {
+  const doc = data as { latest?: { version?: string }; versions?: Array<{ version?: string; retracted?: boolean }> } | undefined;
+  const versions = (doc?.versions ?? []).filter(entry => entry && typeof entry.version === "string" && !entry.retracted).map(entry => entry.version as string);
+  const stable = versions.filter(isStableSemver).sort(compareSemver);
+  return { versions, latest: stable[stable.length - 1] ?? doc?.latest?.version };
+}
+
+/** Resolved package versions from obj/project.assets.json (what `dotnet restore` produced), keyed by lower-case id. */
+export function parseNugetAssets(text: string): Map<string, string> {
+  const installed = new Map<string, string>();
+  try {
+    const libraries = (JSON.parse(text) as { libraries?: Record<string, { type?: string }> }).libraries ?? {};
+    for (const [key, library] of Object.entries(libraries)) {
+      const slash = key.lastIndexOf("/");
+      if (slash > 0 && library?.type === "package") installed.set(key.slice(0, slash).toLowerCase(), key.slice(slash + 1));
+    }
+  } catch {
+    /* unreadable: treat nothing as restored */
+  }
+  return installed;
+}
+
+/** Versions pinned in a pubspec.lock. */
+export function parsePubLock(text: string): Map<string, string> {
+  const installed = new Map<string, string>();
+  try {
+    const packages = (parseYaml(text) as { packages?: Record<string, { version?: unknown }> } | null)?.packages ?? {};
+    for (const [name, entry] of Object.entries(packages)) if (entry && entry.version !== undefined) installed.set(name, String(entry.version));
+  } catch {
+    /* unreadable lockfile */
+  }
+  return installed;
+}
+
+/** A pub constraint as an npm-style range ("any" means every version). */
+export function pubRange(spec: string): string {
+  return !spec || spec === "any" ? "*" : spec;
+}
+
 function toPosix(value: string): string {
   return value.replace(/\\/g, "/");
 }
@@ -658,6 +833,19 @@ export function detectProjects(files: ProjectFile[], root: string, platform: Nod
       }));
       entry.manifests.push(base);
       entry.dependencies.push(...parseGradle(body, base, gradleProperties(dir)));
+    } else if (/\.(?:cs|fs|vb)proj$/i.test(base)) {
+      const props = findUp(dir, ["Directory.Packages.props"], exists, root);
+      const central = props ? parseCentralPackageVersions(text(props) || "") : {};
+      const entry = project(dir, "nuget", () => ({ manager: "dotnet", tool: "dotnet", detectedBy: props ? `${base} with Central Package Management (${relative(dir, props)})` : base }));
+      entry.manifests.push(base);
+      if (props) entry.manifests.push(relative(dir, props));
+      entry.dependencies.push(...parseCsproj(body, base, central));
+    } else if (base === "pubspec.yaml") {
+      const parsed = parsePubspec(body);
+      const entry = project(dir, "pub", () => ({ manager: "pub", tool: parsed.flutter ? "flutter" : "dart", detectedBy: parsed.flutter ? "pubspec.yaml (Flutter)" : "pubspec.yaml (Dart)" }));
+      entry.manifests.push("pubspec.yaml");
+      entry.dependencies.push(...parsed.dependencies);
+      if (parsed.error) entry.warnings.push(parsed.error);
     } else if (base === "libs.versions.toml" && path.basename(dir) === "gradle") {
       const projectDir = path.dirname(dir);
       const wrapper = findUp(projectDir, platform === "win32" ? ["gradlew.bat"] : ["gradlew"], exists, root);
@@ -761,8 +949,9 @@ export interface DependencyVerdict {
 
 function newer(ecosystem: Ecosystem, a: string | undefined, b: string | undefined): boolean {
   if (!a || !b) return false;
-  if (ecosystem === "node") return compareSemver(a, b) > 0;
+  if (ecosystem === "node" || ecosystem === "pub") return compareSemver(a, b) > 0;
   if (ecosystem === "python") return comparePep440(a, b) > 0;
+  if (ecosystem === "nuget") return compareNuget(a, b) > 0;
   return compareMaven(a, b) > 0;
 }
 
@@ -793,6 +982,13 @@ export function evaluateDependency(
       : latest; // a dist-tag follows the tag, which is what `latest` reports
   } else if (ecosystem === "python") {
     compatible = maxSatisfyingPep440(versions, dependency.spec);
+  } else if (ecosystem === "pub") {
+    compatible = maxSatisfyingSemver(versions, pubRange(dependency.spec));
+  } else if (ecosystem === "nuget") {
+    const stable = versions.filter(isStableNuget).sort(compareNuget);
+    latest = stable.length ? stable[stable.length - 1] : latest;
+    const sameMajor = stable.filter(v => nugetMajor(v) === nugetMajor(dependency.spec));
+    compatible = sameMajor.length ? sameMajor[sameMajor.length - 1] : undefined;
   } else {
     const current = dependency.spec;
     const flavour = mavenFlavour(current);
@@ -805,7 +1001,8 @@ export function evaluateDependency(
 
   const base = { installed, compatible, latest };
   if (!installed) {
-    const where = ecosystem === "maven" ? "the local Maven repository" : ecosystem === "gradle" ? "the Gradle cache" : "this environment";
+    const where = ecosystem === "maven" ? "the local Maven repository" : ecosystem === "gradle" ? "the Gradle cache"
+      : ecosystem === "nuget" ? "this project's restore output (obj/project.assets.json); run dotnet restore" : ecosystem === "pub" ? "pubspec.lock / .dart_tool; run pub get" : "this environment";
     // Say so when the registry does not know the package either: installing will fail.
     const registryNote = info?.error && !versions.length ? ` ${info.error}` : "";
     return { ...base, status: "missing", detail: `Not installed in ${where}.${registryNote}` };
@@ -813,6 +1010,12 @@ export function evaluateDependency(
 
   if (ecosystem === "node" && dependency.spec && parseSemverRange(dependency.spec) && !satisfiesSemver(installed, dependency.spec)) {
     return { ...base, status: "mismatch", detail: `Installed ${installed} does not satisfy the declared range ${dependency.spec}. Reinstall to match the manifest.` };
+  }
+  if (ecosystem === "pub" && parseSemverRange(pubRange(dependency.spec)) && !satisfiesSemver(installed, pubRange(dependency.spec))) {
+    return { ...base, status: "mismatch", detail: `pubspec.lock has ${installed}, which does not satisfy ${dependency.spec}. Run pub get to match pubspec.yaml.` };
+  }
+  if (ecosystem === "nuget" && compareNuget(installed, dependency.spec) < 0) {
+    return { ...base, status: "mismatch", detail: `Restored ${installed} is older than the declared ${dependency.spec}. Run dotnet restore.` };
   }
   if (ecosystem === "python" && dependency.spec && !satisfiesPep440(installed, dependency.spec)) {
     return { ...base, status: "mismatch", detail: `Installed ${installed} does not satisfy ${dependency.spec}. Reinstall to match the requirement.` };
@@ -826,7 +1029,7 @@ export function evaluateDependency(
   }
 
   if (newer(ecosystem, compatible, installed)) {
-    const how = ecosystem === "node" || ecosystem === "python"
+    const how = ecosystem === "node" || ecosystem === "python" || ecosystem === "pub"
       ? "within the declared range, so updating does not change the manifest."
       : "in the same major version.";
     return { ...base, status: "outdated", detail: `${compatible} is available ${how}` };
@@ -835,7 +1038,7 @@ export function evaluateDependency(
     return {
       ...base,
       status: "major",
-      detail: ecosystem === "node" || ecosystem === "python"
+      detail: ecosystem === "node" || ecosystem === "python" || ecosystem === "pub"
         ? `${latest} is outside the declared range; upgrading changes the manifest. Review its changelog first.`
         : `${latest} is a new major version; review its migration notes before upgrading.`
     };
@@ -897,6 +1100,8 @@ export function projectInstallCommand(project: DetectedProject, missing: Declare
     case "yarn": return [{ tool: "yarn", args: ["install"] }];
     case "pnpm": return [{ tool: "pnpm", args: ["install"] }];
     case "maven": return [{ tool: project.tool, args: ["-B", "dependency:resolve"] }];
+    case "dotnet": return [{ tool: "dotnet", args: ["restore"] }];
+    case "pub": return [{ tool: project.tool, args: ["pub", "get"] }];
     case "gradle": return [{ tool: project.tool, args: ["dependencies", "--console=plain"] }];
     case "pip": {
       const targets = missing.length ? missing : project.dependencies;
@@ -920,6 +1125,7 @@ export function projectUpdateCommand(project: DetectedProject, dependencies: Dec
       : { tool: "yarn", args: ["upgrade", ...targets.map(d => d.name)] };
     case "pnpm": return { tool: "pnpm", args: ["update", ...targets.map(d => d.name)] };
     case "pip": return { tool: "python", args: ["-m", "pip", "install", "--disable-pip-version-check", "--upgrade", ...targets.map(d => pipArg(d))] };
+    case "pub": return { tool: project.tool, args: ["pub", "upgrade", ...targets.map(d => d.name)] };
     default: return undefined;
   }
 }
@@ -1011,6 +1217,36 @@ export function dependencyCommands(project: DetectedProject, dependency: Declare
       }
       break;
     }
+    case "nuget": {
+      options.push({ kind: "install", label: "dotnet restore", spec: { tool: "dotnet", args: ["restore"] }, runnable: needsInstall, note: "Restores every package the project declares; the .csproj is not changed." });
+      for (const [kind, version] of [["update", verdict.compatible], ["upgrade", target]] as Array<[CommandKind, string | undefined]>) {
+        if (!version || !newer("nuget", version, dependency.spec)) continue;
+        if (kind === "upgrade" && version === verdict.compatible) continue;
+        options.push({
+          kind, label: `Set version ${version}`,
+          spec: { tool: "dotnet", args: ["add", "package", dependency.displayName, "--version", version] },
+          runnable: false,
+          note: dependency.versionRef
+            ? `Copy-only: the version is set centrally. Change it in ${dependency.versionRef} (dotnet add package also edits that file).`
+            : `Copy-only: edits ${dependency.source}. Review the diff and rebuild before committing.`
+        });
+      }
+      break;
+    }
+    case "pub": {
+      const tool = project.tool;
+      options.push({ kind: "install", label: `${tool} pub get`, spec: { tool, args: ["pub", "get"] }, runnable: needsInstall, note: "Fetches every package pubspec.yaml declares; pubspec.yaml is not changed." });
+      options.push({ kind: "update", label: "Upgrade within constraint", spec: { tool, args: ["pub", "upgrade", dependency.name] }, runnable: verdict.status === "outdated", note: "Updates pubspec.lock only." });
+      if (target) {
+        options.push({
+          kind: "upgrade", label: `Upgrade to ${target}`,
+          spec: { tool, args: ["pub", "add", `${isDev ? "dev:" : ""}${dependency.name}:^${target}`] },
+          runnable: verdict.status === "major" && isDev,
+          note: isDev ? "Rewrites this dev_dependency's constraint in pubspec.yaml." : "Copy-only: production dependencies are never rewritten automatically."
+        });
+      }
+      break;
+    }
     case "gradle": {
       options.push({
         kind: "install", label: "Resolve dependencies",
@@ -1036,7 +1272,7 @@ export function gradleEditHint(dependency: DeclaredDependency, version: string):
 /** Flags the panel itself generates. Any other `-` argument is rejected. */
 const ALLOWED_FLAGS = new Set([
   "-m", "-r", "-B", "--upgrade", "--no-audit", "--no-fund", "--save-dev", "--save-optional", "--dev", "--optional",
-  "--disable-pip-version-check", "--console=plain", "-DforceVersion=true", "-DgenerateBackupPoms=false"
+  "--disable-pip-version-check", "--console=plain", "-DforceVersion=true", "-DgenerateBackupPoms=false", "--version"
 ]);
 const ALLOWED_FLAG_PATTERNS = [/^-Dartifact=[\w.-]+:[\w.-]+:[\w.+-]+$/, /^-Dincludes=[\w.-]+:[\w.-]+$/, /^-DdepVersion=[\w.+-]+$/];
 /** Maven goals and Gradle tasks the panel may run. */
@@ -1056,7 +1292,10 @@ const ALLOWED_SUBCOMMANDS: Record<ToolId, string[]> = {
   mvn: ["-B", "versions:use-dep-version"],
   mvnw: ["-B", "versions:use-dep-version"],
   gradle: ["dependencies"],
-  gradlew: ["dependencies"]
+  gradlew: ["dependencies"],
+  dotnet: ["restore", "add"],
+  flutter: ["pub"],
+  dart: ["pub"]
 };
 
 /**
@@ -1081,6 +1320,17 @@ export function validateCommandSpec(spec: CommandSpec): ValidationResult {
   if (spec.tool === "python" && (spec.args[1] !== "pip" || spec.args[2] !== "install")) {
     return { ok: false, reason: "Only `python -m pip install` may run." };
   }
+  if (spec.tool === "dotnet" && (spec.args[0] === "restore" ? spec.args.length !== 1 : spec.args[1] !== "package" || spec.args[3] !== "--version" || spec.args.length !== 5 || !NUGET_ID.test(spec.args[2]))) {
+    return { ok: false, reason: "Only `dotnet restore` and `dotnet add package <id> --version <version>` may run." };
+  }
+  const pub = spec.tool === "flutter" || spec.tool === "dart";
+  if (pub && (!["get", "upgrade", "add"].includes(spec.args[1]) || (spec.args[1] === "get" && spec.args.length !== 2))) {
+    return { ok: false, reason: `Only \`${spec.tool} pub get\`, \`pub upgrade\` and \`pub add\` may run.` };
+  }
+  // pub arguments are package names, or for add "[dev:]name:constraint"; nothing else (no path:, git: or hosted: descriptors).
+  if (pub && spec.args.slice(2).some(arg => !(spec.args[1] === "add" ? /^(?:dev:)?[a-z_][a-z0-9_]*:[\^<>=~ .0-9A-Za-z+-]+$/ : /^[a-z_][a-z0-9_]*$/).test(arg))) {
+    return { ok: false, reason: "A pub argument must be a package name (and, for pub add, a version constraint)." };
+  }
   for (let i = 0; i < spec.args.length; i++) {
     const arg = spec.args[i];
     if (!arg || arg.length > 512 || !SAFE_ARGUMENT.test(arg)) {
@@ -1093,7 +1343,7 @@ export function validateCommandSpec(spec: CommandSpec): ValidationResult {
     if (goals && !arg.startsWith("-") && !goals.includes(arg)) {
       return { ok: false, reason: `\`${arg}\` is not a goal or task this panel runs.` };
     }
-    if (!goals && NON_REGISTRY_ARGUMENT.test(arg)) {
+    if (!goals && !pub && NON_REGISTRY_ARGUMENT.test(arg)) {
       return { ok: false, reason: `${JSON.stringify(arg)} points outside the package registry, so it is never installed automatically.` };
     }
     if (arg === "-r") {
@@ -1262,6 +1512,9 @@ export function toolInstallHint(tool: ToolId, platform: NodeJS.Platform): string
     case "mvnw": return "The Maven Wrapper script is missing or not executable. On macOS/Linux run `chmod +x mvnw`.";
     case "gradle": return "Install Gradle (https://gradle.org/install/) or generate the Gradle Wrapper with `gradle wrapper`.";
     case "gradlew": return "The Gradle Wrapper script is missing or not executable. On macOS/Linux run `chmod +x gradlew`.";
+    case "dotnet": return "Install the .NET SDK from https://dotnet.microsoft.com/download (the SDK, not only the runtime), then reopen VS Code.";
+    case "flutter": return "Install Flutter (https://docs.flutter.dev/get-started/install) and add its bin folder to PATH, then reopen VS Code.";
+    case "dart": return "Install the Dart SDK (https://dart.dev/get-dart), or Flutter, which includes it, then reopen VS Code.";
   }
 }
 
@@ -1309,6 +1562,10 @@ const FAILURE_RULES: Array<{ pattern: RegExp; message: string }> = [
     message: "The build needs a different JDK. Install the Java version the project targets and point JAVA_HOME at it." },
   { pattern: /Could not resolve dependencies for project|Failed to collect dependencies|Could not find artifact|Could not resolve all (?:files|dependencies|artifacts)|Could not find [\w.-]+:[\w.-]+:/i,
     message: "Maven/Gradle could not resolve a dependency. Check the coordinates and version, and that the repository hosting it is declared in the build (and reachable)." },
+  { pattern: /NU1101|NU1102|Unable to find package|version solving failed|doesn't match any versions|depends on [\w_]+ any which doesn't exist/i,
+    message: "No published version matches what the project asks for. Check the package name and version in the .csproj or pubspec.yaml (and the Dart/Flutter SDK constraint), or add the feed or server that hosts a private package." },
+  { pattern: /NU1301|Unable to load the service index|Failed to retrieve information about|Got socket error|Connection closed before full header/i,
+    message: "The package feed could not be reached. Check your connection or proxy settings (nuget.config, PUB_HOSTED_URL, HTTPS_PROXY) and retry." },
   { pattern: /ELIFECYCLE|install script|postinstall|lifecycle script/i,
     message: "A package's install script failed. The log above shows which package and why; it usually needs a missing system tool or a newer runtime." }
 ];

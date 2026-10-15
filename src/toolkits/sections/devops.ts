@@ -7,7 +7,7 @@ import { Level, WELL_KNOWN_PORTS, analyzeLogs, checkEnv, cidrContains, cidrInfo,
 import { modelServingFiles, observabilityFiles } from "../engines/devops-mlops";
 import { code, counts, f, opts, severityMessages, table } from "./helpers";
 
-const STACKS = opts(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["java-maven", "Java (Maven)"], ["java-gradle", "Java (Gradle)"], ["static", "Static site (nginx)"]);
+const STACKS = opts(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["java-maven", "Java (Maven)"], ["java-gradle", "Java (Gradle)"], ["dotnet", ".NET / ASP.NET Core"], ["static", "Static site (nginx)"]);
 
 // ---------------------------------------------------------------------------
 // Containers & Kubernetes
@@ -34,6 +34,7 @@ const dockerfile: ToolSpec = {
     f.select("pythonServer", "Python server", opts(["uvicorn", "uvicorn (FastAPI / ASGI)"], ["gunicorn", "gunicorn (Django / Flask)"], ["python", "python <file>"]), { showIf: { field: "stack", equals: ["python"] } }),
     f.text("appModule", "App module", { width: "narrow", default: "main:app", showIf: { field: "stack", equals: ["python"] } }),
     f.select("pythonDeps", "Dependencies from", opts(["requirements", "requirements.txt"], ["pyproject", "pyproject.toml"]), { showIf: { field: "stack", equals: ["python"] } }),
+    f.text("dotnetProject", "Project file", { width: "narrow", default: "App.csproj", showIf: { field: "stack", equals: ["dotnet"] }, help: "Path of the .csproj to publish, e.g. src/Api/Api.csproj." }),
     f.text("healthPath", "Health check path", { width: "narrow", default: "/health", showIf: { field: "mode", equals: ["generate"] }, help: "Leave empty for no HEALTHCHECK." })
   ],
   async run(values, ctx, action) {
@@ -56,7 +57,7 @@ const dockerfile: ToolSpec = {
     const stack = str(values, "stack", "node") as Stack;
     const o: DockerOptions = {
       stack,
-      version: str(values, "version").trim() || (stack === "python" ? "3.12" : stack === "go" ? "1.23" : stack.startsWith("java") ? "21" : "22"),
+      version: str(values, "version").trim() || (stack === "python" ? "3.12" : stack === "go" ? "1.23" : stack.startsWith("java") ? "21" : stack === "dotnet" ? "8.0" : "22"),
       port: num(values, "port", 3000, { min: 1, max: 65535, integer: true, label: "Port" }),
       packageManager: str(values, "packageManager", "npm") as DockerOptions["packageManager"],
       buildCommand: str(values, "buildCommand"),
@@ -64,7 +65,8 @@ const dockerfile: ToolSpec = {
       healthPath: str(values, "healthPath"),
       pythonServer: str(values, "pythonServer", "uvicorn") as DockerOptions["pythonServer"],
       appModule: str(values, "appModule", "main:app"),
-      pythonDeps: str(values, "pythonDeps", "requirements") as DockerOptions["pythonDeps"]
+      pythonDeps: str(values, "pythonDeps", "requirements") as DockerOptions["pythonDeps"],
+      dotnetProject: str(values, "dotnetProject", "App.csproj")
     };
     const text = generateDockerfile(o);
     const findings = lintDockerfile(text).filter(x => x.severity !== "info");
@@ -192,7 +194,7 @@ const ci: ToolSpec = {
   fields: [
     f.select("platform", "Platform", opts(["github", "GitHub Actions"], ["gitlab", "GitLab CI"], ["jenkins", "Jenkins"], ["security", "GitHub security scanning (CodeQL, dependency review, secrets)"])),
     f.select("stack", "Stack", STACKS),
-    f.text("version", "Version", { width: "narrow", placeholder: "22 / 3.12 / 1.23 / 21" }),
+    f.text("version", "Version", { width: "narrow", placeholder: "22 / 3.12 / 1.23 / 21 / 8.0" }),
     f.text("matrix", "Also test versions", { width: "narrow", placeholder: "20, 24", showIf: { field: "platform", equals: ["github", "gitlab"] } }),
     f.select("packageManager", "Package manager", opts("npm", "pnpm", "yarn"), { showIf: { field: "stack", equals: ["node", "static"] } }),
     f.toggle("lint", "Lint", true, { showIf: { field: "platform", equals: ["github", "gitlab", "jenkins"] } }),
@@ -491,13 +493,13 @@ const health: ToolSpec = {
   id: "devops.health",
   command: "healthCheckGenerator",
   title: "Health Check Generator",
-  summary: "Liveness and readiness endpoints for Express, Fastify, FastAPI, Flask, Spring Boot or Go - with dependency checks and timeouts - plus matching Docker, Compose and Kubernetes probes.",
+  summary: "Liveness and readiness endpoints for Express, Fastify, FastAPI, Flask, Spring Boot, ASP.NET Core or Go - with dependency checks and timeouts - plus matching Docker, Compose and Kubernetes probes.",
   guide: "Liveness says the process is alive and must not check dependencies, or one slow database restarts every pod. Readiness checks dependencies and takes the instance out of the load balancer while they are down.",
-  keywords: ["health check", "healthz", "readiness", "liveness", "probe", "express", "fastapi", "spring actuator"],
+  keywords: ["health check", "healthz", "readiness", "liveness", "probe", "express", "fastapi", "spring actuator", "asp.net core health checks", "maphealthchecks"],
   icon: "heart",
   live: true,
   fields: [
-    f.select("framework", "Framework", opts(["express", "Express"], ["fastify", "Fastify"], ["fastapi", "FastAPI"], ["flask", "Flask"], ["spring", "Spring Boot"], ["go", "Go (net/http)"])),
+    f.select("framework", "Framework", opts(["express", "Express"], ["fastify", "Fastify"], ["fastapi", "FastAPI"], ["flask", "Flask"], ["spring", "Spring Boot"], ["aspnet", "ASP.NET Core"], ["go", "Go (net/http)"])),
     f.num("port", "Port", 3000, { min: 1, max: 65535 }),
     f.toggle("database", "Check database", true),
     f.toggle("redis", "Check Redis", false),

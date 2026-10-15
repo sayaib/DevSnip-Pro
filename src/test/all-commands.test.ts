@@ -15,7 +15,8 @@ const EXTENSION_ID = "sayaib.hue-console";
 const NO_PANEL = new Set([
   "searchTools", "chooseTheme", "premiumStatus", "createCustomSnippet", "observabilityAnalyze",
   "securityAudit", "cloudSecurityAudit", "removeUnusedImports", "listAndRemoveConsoleLogs", "readmeManager",
-  "getStarted", "whatsNew", "resetFeatureUsage", "dependencyManager", "endpointSecurityScan", "dependencyAudit"
+  "getStarted", "whatsNew", "resetFeatureUsage", "dependencyManager", "endpointSecurityScan", "dependencyAudit",
+  "insertDebugLog", "removeDebugLogsInFile", "frameworkSnippets"
 ]);
 
 /** Guidance a command rightly shows when run with no editor or selection, as it is here. */

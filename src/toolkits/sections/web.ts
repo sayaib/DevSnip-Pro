@@ -1,4 +1,4 @@
-import { ToolSpec, ToolInputError, ToolResult, bool, fmtBytes, num, required, str } from "../types";
+import { GeneratedFile, ToolSpec, ToolInputError, ToolResult, bool, fmtBytes, num, required, str } from "../types";
 import { CURL_TARGETS, CurlTarget, curlWarnings, generateFromCurl, parseCurl, toCurl } from "../engines/web-curl";
 import { ArrayFormat, AssetKind, CACHE_PRESETS, buildCookie, buildUrl, cacheConfigs, explainCacheControl, objectToQuery, parseCookieHeader, parseSetCookie, parseUrlReport, queryToObject } from "../engines/web-http";
 import { analyzeCsp, auditHeaders, buildCsp, checkCors, corsConfigs, explainCorsError, securityHeaderConfigs, securityHeaderSet } from "../engines/web-security";
@@ -7,6 +7,7 @@ import { curlExamples, formatGraphql, graphqlOperations, lintSpec, minifyGraphql
 import { TYPE_RATIOS, convertUnits, fluidClamp, htmlToJsx, metaTags, typeScale } from "../engines/web-frontend";
 import { ApiDatabase, ApiFramework, DbKind, ReactKind, buildConnectionUrl, connectionSnippets, connectionWarnings, parseConnectionUrl, parseFields, reactScaffold, scaffoldResource, sqlToMongo } from "../engines/web-scaffold";
 import { BumpKind, COMMIT_TYPES, GITIGNORE, GITIGNORE_MARKERS, GIT_RECIPES, GitParams, MAX_VERSION_CODE, buildGitignore, bump, commitMessage, compareVersions, derivedVersionCode, describeRange, formatVersion, missingIgnores, parseRange, parseVersion, satisfies } from "../engines/web-git";
+import { SqlDatabase, aspnetResource, fastapiResource, springResource } from "../engines/web-scaffold-backend";
 import { inspectApiResponse } from "../engines/data-inspect";
 import { code, f, list, opts, severityMessages, table, text } from "./helpers";
 
@@ -720,19 +721,43 @@ const scaffoldTool: ToolSpec = {
   id: "web.api-scaffold",
   command: "apiScaffolder",
   title: "API Resource Scaffolder",
-  summary: "Describe a resource and its fields; get a validated CRUD API (list with pagination, get, create, update, delete) for Express, NestJS, Next.js route handlers or Fastify on Prisma, Mongoose or an in-memory store.",
-  guide: "Field syntax: name: type, one per line. Types: string, text, int, number, boolean, date, email, url, uuid, enum(a|b|c), string[], number[], json. Add ! for required and unique for a unique index. id, createdAt and updatedAt are added for you.",
-  keywords: ["crud", "rest api", "express", "nestjs", "next.js api", "fastify", "prisma", "mongoose", "zod", "class-validator", "scaffold", "boilerplate"],
+  summary: "Describe a resource and its fields; get a validated CRUD API (paginated list, get, create, update, delete) for Express, NestJS, Next.js, Fastify, Spring Boot, ASP.NET Core Web API or FastAPI.",
+  guide: "Field syntax: name: type, one per line. Types: string, text, int, number, boolean, date, email, url, uuid, enum(a|b|c), string[], number[], json. Add ! for required and unique for a unique index. id, createdAt and updatedAt are added for you. Spring Boot uses JPA and Bean Validation, ASP.NET Core uses EF Core and data annotations, FastAPI uses SQLAlchemy 2 and Pydantic v2; each rejects invalid input (400; FastAPI uses its standard 422), returns 404 for a missing record and 409 for a duplicate unique value.",
+  keywords: ["crud", "rest api", "express", "nestjs", "next.js api", "fastify", "prisma", "mongoose", "zod", "class-validator", "spring boot", "jpa", "rest controller", "asp.net core", "web api", "ef core", "fastapi", "sqlalchemy", "pydantic", "scaffold", "boilerplate"],
   icon: "server",
   fields: [
     f.text("resource", "Resource (singular)", { width: "narrow", default: "product", required: true }),
-    f.select("framework", "Framework", opts(["express", "Express + Zod"], ["nestjs", "NestJS + class-validator"], ["next", "Next.js route handlers + Zod"], ["fastify", "Fastify + JSON Schema"])),
-    f.select("db", "Database", opts(["prisma", "Prisma (Postgres / MySQL / SQLite)"], ["mongoose", "MongoDB (Mongoose)"], ["memory", "In-memory (prototype)"])),
+    f.select("framework", "Framework", opts(["express", "Express + Zod"], ["nestjs", "NestJS + class-validator"], ["next", "Next.js route handlers + Zod"], ["fastify", "Fastify + JSON Schema"], ["spring", "Spring Boot + JPA"], ["aspnet", "ASP.NET Core Web API + EF Core"], ["fastapi", "FastAPI + SQLAlchemy"])),
+    f.select("db", "Database", opts(["prisma", "Prisma (Postgres / MySQL / SQLite)"], ["mongoose", "MongoDB (Mongoose)"], ["memory", "In-memory (prototype)"]), { showIf: { field: "framework", equals: ["express", "nestjs", "next", "fastify"] } }),
+    f.select("sqlDb", "Database", opts(["postgres", "PostgreSQL"], ["mysql", "MySQL"], ["sqlserver", "SQL Server"], ["sqlite", "SQLite (H2 for Spring Boot)"]), { showIf: { field: "framework", equals: ["spring", "aspnet", "fastapi"] } }),
+    f.text("packageName", "Base package", { width: "narrow", default: "com.example.demo", showIf: { field: "framework", equals: ["spring"] } }),
+    f.text("namespace", "Root namespace", { width: "narrow", default: "MyApi", showIf: { field: "framework", equals: ["aspnet"] } }),
     f.area("fields", "Fields", { rows: 8, required: true, default: "name: string!\nslug: string! unique\ndescription: text\nprice: number!\nstock: int!\nstatus: enum(draft|active|archived)!\ntags: string[]\nimageUrl: url" })
+  ],
+  examples: [
+    { label: "Spring Boot: orders", values: { resource: "order", framework: "spring", sqlDb: "postgres", packageName: "com.example.shop", fields: "customerEmail: email!\nreference: string! unique\ntotal: number!\nstatus: enum(pending|paid|shipped)!\nnotes: text" } },
+    { label: "ASP.NET Core: customers", values: { resource: "customer", framework: "aspnet", sqlDb: "sqlserver", namespace: "Shop.Api", fields: "name: string!\nemail: email! unique\nbirthDate: date\nactive: boolean!" } },
+    { label: "FastAPI: articles", values: { resource: "article", framework: "fastapi", sqlDb: "sqlite", fields: "title: string!\nslug: string! unique\nbody: text!\npublished: boolean!\ntags: string[]" } }
   ],
   run(values) {
     const fields = parseFields(required(values, "fields", "Fields"));
-    const r = scaffoldResource(required(values, "resource", "Resource"), fields, str(values, "framework", "express") as ApiFramework, str(values, "db", "prisma") as ApiDatabase);
+    const resource = required(values, "resource", "Resource");
+    const framework = str(values, "framework", "express");
+    const sqlDb = str(values, "sqlDb", "postgres") as SqlDatabase;
+    let r: { files: GeneratedFile[]; steps: string[] };
+    if (framework === "spring") {
+      const pkg = str(values, "packageName", "com.example.demo").trim();
+      if (!/^[a-z_][\w]*(\.[a-z_][\w]*)*$/.test(pkg)) throw new ToolInputError("The base package must look like com.example.demo (lower-case segments separated by dots).");
+      r = springResource(resource, fields, pkg, sqlDb);
+    } else if (framework === "aspnet") {
+      const ns = str(values, "namespace", "MyApi").trim();
+      if (!/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/.test(ns)) throw new ToolInputError("The root namespace must look like MyApi or Shop.Api.");
+      r = aspnetResource(resource, fields, ns, sqlDb);
+    } else if (framework === "fastapi") {
+      r = fastapiResource(resource, fields, sqlDb);
+    } else {
+      r = scaffoldResource(resource, fields, framework as ApiFramework, str(values, "db", "prisma") as ApiDatabase);
+    }
     return { stats: [{ label: "Fields", value: String(fields.length) }, { label: "Files", value: String(r.files.length) }], messages: r.steps.map(t => ({ kind: "info" as const, text: t })), outputs: [{ kind: "files", title: "Files", files: r.files }] };
   }
 };

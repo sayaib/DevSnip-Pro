@@ -1,0 +1,194 @@
+{
+  "DevSnip: ILogger field": {
+    "prefix": "ds-logger",
+    "description": "An injected ILogger<T> field and constructor. Insert Debug Log then logs through it with LogDebug.",
+    "body": [
+      "private readonly ILogger<${TM_FILENAME_BASE}> _logger;",
+      "",
+      "public ${TM_FILENAME_BASE}(ILogger<${TM_FILENAME_BASE}> logger)",
+      "{",
+      "    _logger = logger;",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: source-generated log message": {
+    "prefix": "ds-log-message",
+    "description": "A [LoggerMessage] method: structured, allocation-free logging (the class must be partial).",
+    "body": [
+      "[LoggerMessage(Level = LogLevel.${1|Information,Debug,Warning,Error|}, Message = \"${2:Processed order} {${3:OrderId}}\")]",
+      "private static partial void Log${4:Processed}(ILogger logger, ${5:int} ${6:orderId});",
+      "$0"
+    ]
+  },
+  "DevSnip: minimal API endpoints": {
+    "prefix": "ds-minimal-api",
+    "description": "A route group of minimal API endpoints with typed results. Register with app.Map<Name>Endpoints() in Program.cs.",
+    "body": [
+      "using Microsoft.AspNetCore.Http.HttpResults;",
+      "",
+      "public static class ${1:Item}Endpoints",
+      "{",
+      "    public static RouteGroupBuilder Map${1:Item}Endpoints(this IEndpointRouteBuilder app)",
+      "    {",
+      "        var group = app.MapGroup(\"/api/${2:items}\").WithTags(\"${1:Item}\");",
+      "",
+      "        group.MapGet(\"/\", () => TypedResults.Ok(Array.Empty<string>()));",
+      "",
+      "        group.MapGet(\"/{id:int}\", Results<Ok<string>, NotFound> (int id) =>",
+      "            id > 0 ? TypedResults.Ok($\"${1:Item} {id}\") : TypedResults.NotFound());",
+      "",
+      "        return group;",
+      "    }",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: API controller": {
+    "prefix": "ds-api-controller",
+    "description": "An [ApiController] with routing, automatic 400 validation responses and 201/204/404 results.",
+    "body": [
+      "using Microsoft.AspNetCore.Mvc;",
+      "",
+      "[ApiController]",
+      "[Route(\"api/[controller]\")]",
+      "public class ${TM_FILENAME_BASE} : ControllerBase",
+      "{",
+      "    private static readonly Dictionary<int, ${1:Item}> Store = new();",
+      "",
+      "    [HttpGet(\"{id:int}\")]",
+      "    public ActionResult<${1:Item}> Get(int id) =>",
+      "        Store.TryGetValue(id, out var item) ? item : NotFound();",
+      "",
+      "    [HttpPost]",
+      "    public ActionResult<${1:Item}> Create(${1:Item} item)",
+      "    {",
+      "        Store[item.Id] = item;",
+      "        return CreatedAtAction(nameof(Get), new { id = item.Id }, item);",
+      "    }",
+      "",
+      "    [HttpDelete(\"{id:int}\")]",
+      "    public IActionResult Delete(int id) => Store.Remove(id) ? NoContent() : NotFound();",
+      "}",
+      "",
+      "public sealed record ${1:Item}(int Id, [System.ComponentModel.DataAnnotations.Required] string Name);",
+      "$0"
+    ]
+  },
+  "DevSnip: global exception handler": {
+    "prefix": "ds-exception-handler",
+    "description": "An IExceptionHandler (.NET 8+) that logs and returns ProblemDetails. Register with builder.Services.AddExceptionHandler<T>(); AddProblemDetails(); app.UseExceptionHandler();",
+    "body": [
+      "using Microsoft.AspNetCore.Diagnostics;",
+      "using Microsoft.AspNetCore.Mvc;",
+      "",
+      "public sealed class ${TM_FILENAME_BASE}(ILogger<${TM_FILENAME_BASE}> logger) : IExceptionHandler",
+      "{",
+      "    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)",
+      "    {",
+      "        logger.LogError(exception, \"Unhandled exception for {Path}\", httpContext.Request.Path);",
+      "        var problem = new ProblemDetails",
+      "        {",
+      "            Status = StatusCodes.Status500InternalServerError,",
+      "            Title = \"An unexpected error occurred\",",
+      "        };",
+      "        httpContext.Response.StatusCode = problem.Status.Value;",
+      "        await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);",
+      "        return true;",
+      "    }",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: options class": {
+    "prefix": "ds-options",
+    "description": "A validated options class bound from appsettings.json. Register with builder.Services.AddOptions<T>().BindConfiguration(T.Section).ValidateDataAnnotations().ValidateOnStart();",
+    "body": [
+      "using System.ComponentModel.DataAnnotations;",
+      "",
+      "public sealed class ${TM_FILENAME_BASE}",
+      "{",
+      "    public const string Section = \"${1:MyService}\";",
+      "",
+      "    [Required, Url]",
+      "    public string ${2:BaseUrl} { get; init; } = \"\";",
+      "",
+      "    [Range(1, 300)]",
+      "    public int ${3:TimeoutSeconds} { get; init; } = 30;",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: EF Core DbContext": {
+    "prefix": "ds-dbcontext",
+    "description": "An EF Core DbContext. Register with builder.Services.AddDbContext<T>(o => o.UseSqlite(...)) or UseNpgsql / UseSqlServer.",
+    "body": [
+      "using Microsoft.EntityFrameworkCore;",
+      "",
+      "public class ${TM_FILENAME_BASE}(DbContextOptions<${TM_FILENAME_BASE}> options) : DbContext(options)",
+      "{",
+      "    public DbSet<${1:Item}> ${2:Items} => Set<${1:Item}>();",
+      "",
+      "    protected override void OnModelCreating(ModelBuilder modelBuilder)",
+      "    {",
+      "        modelBuilder.Entity<${1:Item}>().HasIndex(e => e.${3:Name}).IsUnique();",
+      "    }",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: record": {
+    "prefix": "ds-record",
+    "description": "An immutable positional record.",
+    "body": [
+      "public sealed record ${1:ItemDto}(${2:int Id, string Name});",
+      "$0"
+    ]
+  },
+  "DevSnip: xUnit test class": {
+    "prefix": "ds-xunit",
+    "description": "An xUnit test class with a fact and a theory.",
+    "body": [
+      "using Xunit;",
+      "",
+      "public class ${TM_FILENAME_BASE}",
+      "{",
+      "    [Fact]",
+      "    public void ${1:ItWorks}()",
+      "    {",
+      "        Assert.Equal(${2:2}, ${3:1 + 1});",
+      "    }",
+      "",
+      "    [Theory]",
+      "    [InlineData(1, 2)]",
+      "    [InlineData(2, 3)]",
+      "    public void ${4:AddsOne}(int value, int expected)",
+      "    {",
+      "        Assert.Equal(expected, value + 1);",
+      "    }",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: integration test with WebApplicationFactory": {
+    "prefix": "ds-webapp-test",
+    "description": "An xUnit integration test that boots the API in memory (Microsoft.AspNetCore.Mvc.Testing; add 'public partial class Program;' to Program.cs).",
+    "body": [
+      "using System.Net;",
+      "using Microsoft.AspNetCore.Mvc.Testing;",
+      "using Xunit;",
+      "",
+      "public class ${TM_FILENAME_BASE}(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>",
+      "{",
+      "    [Fact]",
+      "    public async Task ${1:GetReturnsOk}()",
+      "    {",
+      "        var client = factory.CreateClient();",
+      "        var response = await client.GetAsync(\"${2:/api/items}\");",
+      "        Assert.Equal(HttpStatusCode.OK, response.StatusCode);",
+      "    }",
+      "}",
+      "$0"
+    ]
+  }
+}

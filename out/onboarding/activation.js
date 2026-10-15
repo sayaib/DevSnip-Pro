@@ -60,6 +60,15 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     {
+        version: "11.79.1",
+        items: [
+            { title: "Insert Debug Log (Ctrl+Alt+Shift+L) and Clean Debug Logs for JS/TS, Python, Java, Kotlin, C#, Dart and Swift", command: "insertDebugLog" },
+            { title: "Run & Debug Configurations: launch.json for Next.js, Spring Boot, ASP.NET Core, FastAPI, Flutter and more", command: "debugConfigGenerator" },
+            { title: "Framework snippets: type ds- for Spring Boot, ASP.NET Core, FastAPI, React, Next.js, Flutter and SwiftUI", command: "frameworkSnippets" },
+            { title: "Unused Dependencies, plus NuGet and pub in Dependencies & Installation", command: "unusedDependencies" }
+        ]
+    },
+    {
         version: "11.78.2",
         items: [
             { title: "CSV & Excel editing: click a cell to edit its text with a caret, and name new columns as you add them", command: "csvViewer" }

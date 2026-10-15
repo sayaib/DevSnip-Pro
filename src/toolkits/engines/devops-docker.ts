@@ -6,7 +6,7 @@ import { tokenizeShell } from "./web-curl";
  * Dockerfile generation (from the workspace's real stack) and linting.
  */
 
-export type Stack = "node" | "python" | "go" | "java-maven" | "java-gradle" | "static";
+export type Stack = "node" | "python" | "go" | "java-maven" | "java-gradle" | "dotnet" | "static";
 
 export interface DockerOptions {
   stack: Stack;
@@ -19,6 +19,8 @@ export interface DockerOptions {
   pythonServer: "uvicorn" | "gunicorn" | "python";
   appModule: string;
   pythonDeps: "requirements" | "pyproject";
+  /** .NET: the project file to publish (e.g. Api/Api.csproj); its name is the assembly name. */
+  dotnetProject?: string;
 }
 
 export interface DetectedStack {
@@ -32,6 +34,14 @@ export async function detectStack(ctx: ToolContext): Promise<DetectedStack> {
   const ws = ctx.workspace;
   if (!ws) throw new ToolInputError("Open a workspace folder to detect its stack, or choose the stack manually.");
   const evidence: string[] = [];
+  // An ASP.NET Core project at the root wins over a ClientApp package.json next to it.
+  for (const project of await ws.findFiles("{*.csproj,src/*/*.csproj}", 10)) {
+    const text = (await ws.readFile(project)) ?? "";
+    if (!/Sdk\s*=\s*"Microsoft\.NET\.Sdk\.Web"/i.test(text)) continue;
+    const framework = /<TargetFrameworks?>\s*net(\d+\.\d+)/.exec(text)?.[1] ?? "8.0";
+    evidence.push(`${project} (ASP.NET Core, net${framework})`);
+    return { stack: "dotnet", evidence, options: { version: framework, port: 8080, dotnetProject: project } };
+  }
   if (await ws.exists("package.json")) {
     const pkg = JSON.parse((await ws.readFile("package.json")) || "{}");
     const scripts = pkg.scripts ?? {};
@@ -83,7 +93,7 @@ export async function detectStack(ctx: ToolContext): Promise<DetectedStack> {
   if (await ws.exists("pom.xml")) { evidence.push("pom.xml (Maven)"); return { stack: "java-maven", evidence, options: { version: "21", port: 8080 } }; }
   if ((await ws.exists("build.gradle")) || (await ws.exists("build.gradle.kts"))) { evidence.push("build.gradle (Gradle)"); return { stack: "java-gradle", evidence, options: { version: "21", port: 8080 } }; }
   if (await ws.exists("index.html")) { evidence.push("index.html (static site)"); return { stack: "static", evidence, options: { port: 8080 } }; }
-  throw new ToolInputError("Could not detect the stack (no package.json, requirements.txt, pyproject.toml, go.mod, pom.xml, build.gradle or index.html at the workspace root). Choose it manually.");
+  throw new ToolInputError("Could not detect the stack (no package.json, requirements.txt, pyproject.toml, go.mod, pom.xml, build.gradle, ASP.NET Core .csproj or index.html at the workspace root). Choose it manually.");
 }
 
 const shellToExec = (command: string) => JSON.stringify(command.trim().split(/\s+/));
@@ -189,6 +199,28 @@ ${health ? `HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries
 ` : ""}ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
 `;
     }
+    case "dotnet": {
+      const project = o.dotnetProject?.trim() || "App.csproj";
+      const assembly = project.split("/").pop()!.replace(/\.csproj$/i, "");
+      const dir = project.includes("/") ? project.slice(0, project.lastIndexOf("/") + 1) : "";
+      return `# syntax=docker/dockerfile:1
+FROM mcr.microsoft.com/dotnet/sdk:${o.version} AS build
+WORKDIR /src
+COPY ${project} ${dir || "./"}
+RUN dotnet restore "${project}"
+COPY . .
+RUN dotnet publish "${project}" -c Release -o /app/publish --no-restore /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:${o.version}
+WORKDIR /app
+COPY --from=build /app/publish .
+ENV ASPNETCORE_HTTP_PORTS=${o.port}
+EXPOSE ${o.port}
+# The .NET 8+ images ship a non-root "app" user.
+USER $APP_UID
+${health ? `# The aspnet image has no curl or wget: probe ${health} from Compose or Kubernetes instead of a HEALTHCHECK.\n` : ""}ENTRYPOINT ["dotnet", "${assembly}.dll"]
+`;
+    }
     case "static": {
       const build = o.buildCommand.trim();
       const lock = o.packageManager === "pnpm" ? "pnpm-lock.yaml" : o.packageManager === "yarn" ? "yarn.lock" : "package-lock.json";
@@ -219,7 +251,8 @@ export function dockerignore(stack: Stack): string {
     python: ["__pycache__", "*.pyc", ".venv", "venv", ".pytest_cache", ".mypy_cache", "*.egg-info"],
     go: ["bin", "*.test"],
     "java-maven": ["target"],
-    "java-gradle": ["build", ".gradle"]
+    "java-gradle": ["build", ".gradle"],
+    dotnet: ["bin", "obj", "**/bin", "**/obj", "*.user", ".vs"]
   };
   return [...extra[stack], ...common].join("\n") + "\n";
 }

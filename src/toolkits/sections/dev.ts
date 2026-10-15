@@ -1,8 +1,11 @@
-import { ToolSpec, ToolInputError, ToolResult, bool, num, str } from "../types";
+import { GeneratedFile, Output, ToolSpec, ToolInputError, ToolResult, Values, bool, num, str } from "../types";
 import { CASES, Codec, IdKind, LineOp, decode, describeCron, detectCodec, encode, generateIds, inspectId, nextRuns, parseCron, slugify, textStats, transformLines, words } from "../engines/dev-utils";
 import { diffLines, diffValues } from "../engines/data-inspect";
 import { HashAlgorithm, JWT_ALGS, WebhookProvider, availableHashes, digest, hmac, isKeyMaterial, signJwt, toBytes, verifyJwtSignature, verifyWebhook, webhookHandler } from "../engines/web-auth";
 import { REGEX_LIBRARY, RegexLang, regexCode, testRegex, validateRegex } from "../engines/dev-regex";
+import { DetectedProject, KIND_LABELS, PackageManager, ProjectKind, detectProjects } from "../engines/project-detect";
+import { EXTENSION_NAMES, mergeExtensions, mergeLaunch, mergeTasks, setupFor } from "../engines/dev-debug";
+import { findUnusedDependencies } from "../engines/dev-unused-deps";
 import { code, f, opts, table } from "./helpers";
 
 const CODECS = opts(["base64", "Base64"], ["base64url", "Base64URL"], ["url-component", "URL component (query values)"], ["url", "Full URL"], ["html", "HTML entities"], ["hex", "Hex (UTF-8 bytes)"], ["unicode", "Unicode escapes (\\uXXXX)"], ["json-string", "JSON string literal"]);
@@ -516,4 +519,167 @@ const regexTool: ToolSpec = {
   }
 };
 
-export const DEV_TOOLS: ToolSpec[] = [encodeTool, jwtTool, hashTool, idTool, timestampTool, cronTool, regexTool, diffTool, textTool];
+const DEBUG_STACKS: ProjectKind[] = ["node", "nextjs", "vite", "angular", "nestjs", "react-native", "expo", "fastapi", "django", "flask", "python", "spring-boot", "java", "aspnet", "dotnet", "flutter", "dart"];
+const NODE_STACKS = ["node", "nextjs", "vite", "angular", "nestjs", "react-native", "expo"];
+const WEB_PORTS: Partial<Record<ProjectKind, number>> = { nextjs: 3000, vite: 5173, angular: 4200, nestjs: 3000, node: 3000, fastapi: 8000, django: 8000, flask: 5000, "spring-boot": 8080, aspnet: 5000 };
+
+const debugConfigTool: ToolSpec = {
+  id: "dev.debug-config",
+  command: "debugConfigGenerator",
+  title: "Run & Debug Configurations",
+  summary: "Detect the projects in your workspace and get .vscode/launch.json, tasks.json and recommended extensions for debugging them, plus their run, test and build commands.",
+  guide: "Detect from workspace reads package.json, pyproject.toml / requirements.txt / manage.py, pom.xml / build.gradle, *.csproj and pubspec.yaml at the root and up to two folders down. Configurations use each language's official debugger: js-debug for Node, Next.js and Chrome, debugpy for Python, the Java debugger for Spring Boot, coreclr for .NET, Dart-Code for Flutter and React Native Tools for React Native and Expo. An existing launch.json is kept: only configurations with new names are added.",
+  keywords: ["launch.json", "debug", "debugger", "tasks.json", "breakpoint", "attach", "debugpy", "spring boot debug", "coreclr", "asp.net core", "flutter debug", "next.js debug", "react native debug", "run configuration"],
+  icon: "target",
+  actions: [{ id: "detect", label: "Detect from workspace" }],
+  fields: [
+    f.select("stack", "Project type", DEBUG_STACKS.map(kind => ({ value: kind, label: KIND_LABELS[kind] }))),
+    f.text("folder", "Folder", { width: "narrow", placeholder: "(workspace root)", help: "Sub-folder of the project, e.g. backend or apps/web." }),
+    f.num("port", "Port", 3000, { min: 1, max: 65535, showIf: { field: "stack", equals: ["nextjs", "vite", "angular", "fastapi", "flask", "aspnet"] } }),
+    f.select("packageManager", "Package manager", opts("npm", "pnpm", "yarn", "bun"), { showIf: { field: "stack", equals: NODE_STACKS } }),
+    f.select("testRunner", "Tests", opts(["none", "None"], ["vitest", "Vitest"], ["jest", "Jest"]), { showIf: { field: "stack", equals: NODE_STACKS } }),
+    f.text("entry", "Entry file", { width: "narrow", default: "src/index.js", showIf: { field: "stack", equals: ["node", "python", "dart"] } }),
+    f.text("appModule", "App", { width: "narrow", default: "main:app", help: "FastAPI: module:variable. Flask: the app file.", showIf: { field: "stack", equals: ["fastapi", "flask"] } }),
+    f.toggle("pytest", "pytest", true, { showIf: { field: "stack", equals: ["fastapi", "django", "flask", "python"] } }),
+    f.text("mainClass", "Main class", { width: "narrow", default: "com.example.demo.DemoApplication", showIf: { field: "stack", equals: ["spring-boot", "java"] } }),
+    f.select("buildTool", "Build tool", opts(["maven", "Maven (./mvnw)"], ["gradle", "Gradle (./gradlew)"]), { showIf: { field: "stack", equals: ["spring-boot", "java"] } }),
+    f.text("projectName", "Project name", { width: "narrow", default: "demo", help: "Maven artifactId or Gradle rootProject.name; .NET: the .csproj name.", showIf: { field: "stack", equals: ["spring-boot", "java", "aspnet", "dotnet"] } }),
+    f.text("targetFramework", "Target framework", { width: "narrow", default: "net8.0", showIf: { field: "stack", equals: ["aspnet", "dotnet"] } })
+  ],
+  examples: [
+    { label: "Spring Boot (Maven)", values: { stack: "spring-boot", mainClass: "com.example.orders.OrdersApplication", projectName: "orders", buildTool: "maven" } },
+    { label: "ASP.NET Core Web API in api/", values: { stack: "aspnet", folder: "api", projectName: "Shop.Api", targetFramework: "net8.0", port: 5080 } },
+    { label: "FastAPI with pytest", values: { stack: "fastapi", appModule: "app.main:app", port: 8000, pytest: true } }
+  ],
+  async run(values, ctx, action) {
+    let projects: DetectedProject[];
+    let setValues: Values | undefined;
+    if (action === "detect") {
+      if (!ctx.workspace) throw new ToolInputError("Open a folder to detect its projects, or choose the project type yourself.");
+      projects = await detectProjects(ctx.workspace);
+      if (!projects.length) throw new ToolInputError("No supported project was found (looked for package.json, pyproject.toml, requirements.txt, manage.py, pom.xml, build.gradle, *.csproj and pubspec.yaml up to two folders deep). Choose the project type yourself.");
+      setValues = formValues(projects.find(p => DEBUG_STACKS.includes(p.kind) && !p.isTest) ?? projects[0]);
+    } else {
+      projects = [projectFromForm(values)];
+    }
+    const setups = projects.map(p => setupFor(p, projects.length > 1));
+    const configurations = setups.flatMap(s => s.configurations);
+    const tasks = setups.flatMap(s => s.tasks);
+    const extensions = setups.flatMap(s => s.extensions);
+    const read = (file: string) => ctx.workspace?.readFile(file) ?? Promise.resolve(undefined);
+    const messages: NonNullable<ToolResult["messages"]> = [];
+    const files: GeneratedFile[] = [];
+    if (configurations.length) {
+      const launch = mergeLaunch(await read(".vscode/launch.json"), configurations);
+      files.push({ path: ".vscode/launch.json", language: "json", content: launch.content });
+      if (launch.kept) messages.push({ kind: "info", text: `Your launch.json keeps its ${launch.kept} configuration${launch.kept === 1 ? "" : "s"}; ${launch.added.length} new one${launch.added.length === 1 ? " is" : "s are"} added.` });
+      if (launch.warning) messages.push({ kind: "warning", text: launch.warning });
+    }
+    if (tasks.length) {
+      const merged = mergeTasks(await read(".vscode/tasks.json"), tasks);
+      files.push({ path: ".vscode/tasks.json", language: "json", content: merged.content });
+      if (merged.warning) messages.push({ kind: "warning", text: merged.warning });
+    }
+    if (extensions.length) {
+      const merged = mergeExtensions(await read(".vscode/extensions.json"), extensions);
+      files.push({ path: ".vscode/extensions.json", language: "json", content: merged.content });
+      if (merged.added.length) messages.push({ kind: "info", text: `Debugging needs: ${merged.added.map(id => EXTENSION_NAMES[id] ?? id).join(", ")}. VS Code offers to install them from extensions.json.` });
+    }
+    for (const note of setups.flatMap(s => s.notes)) messages.push({ kind: "info", text: note });
+    const commands = projects.flatMap((p, i) => setups[i].commands.map(([what, command]) => [p.dir || "(root)", KIND_LABELS[p.kind], what, command]));
+    const outputs: Output[] = [];
+    if (files.length) outputs.push({ kind: "files", title: "VS Code files", files });
+    if (action === "detect") outputs.push(table("Detected projects", ["Folder", "Type", "Language", "Found from"], projects.map(p => [p.dir || "(root)", p.framework, p.language, p.evidence.join("; ")])));
+    if (commands.length) outputs.push(table("Run, test and build", ["Folder", "Project", "Task", "Command"], commands));
+    return {
+      setValues,
+      stats: [{ label: "Projects", value: String(projects.length) }, { label: "Configurations", value: String(configurations.length) }, ...(tasks.length ? [{ label: "Tasks", value: String(tasks.length) }] : [])],
+      messages,
+      outputs
+    };
+  }
+};
+
+function projectFromForm(values: Values): DetectedProject {
+  const kind = str(values, "stack", "node") as ProjectKind;
+  if (!DEBUG_STACKS.includes(kind)) throw new ToolInputError("Choose a project type.");
+  const dir = str(values, "folder").trim().replace(/^\.?\/+|\/+$/g, "");
+  if (dir.split("/").includes("..")) throw new ToolInputError("The folder must be inside the workspace.");
+  const name = str(values, "projectName").trim() || dir.split("/").pop() || "app";
+  const runner = str(values, "testRunner", "none");
+  const python = ["fastapi", "django", "flask", "python"].includes(kind);
+  const entry = str(values, "entry").trim();
+  return {
+    kind, dir, name, language: KIND_LABELS[kind], framework: KIND_LABELS[kind], evidence: [],
+    packageManager: str(values, "packageManager", "npm") as PackageManager,
+    scripts: NODE_STACKS.includes(kind) ? { dev: "dev", start: "start", ...(runner !== "none" ? { test: runner } : {}) } : undefined,
+    testRunner: NODE_STACKS.includes(kind) ? (runner === "none" ? undefined : runner) : python ? (bool(values, "pytest", true) ? "pytest" : undefined) : undefined,
+    port: num(values, "port", WEB_PORTS[kind] ?? 3000, { min: 1, max: 65535, integer: true, label: "Port" }),
+    entry: kind === "django" ? "manage.py" : kind === "flutter" ? "lib/main.dart" : entry || undefined,
+    tsRunner: /\.[cm]?ts$/.test(entry) ? "tsx" : undefined,
+    appModule: str(values, "appModule").trim() || (kind === "flask" ? "app.py" : "main:app"),
+    mainClass: str(values, "mainClass").trim() || undefined,
+    buildTool: str(values, "buildTool", "maven") as "maven" | "gradle",
+    wrapper: true,
+    csproj: `${name}.csproj`, assemblyName: name, targetFramework: str(values, "targetFramework").trim() || "net8.0"
+  };
+}
+
+function formValues(p: DetectedProject): Values {
+  const v: Values = { stack: p.kind, folder: p.dir };
+  if (p.port) v.port = p.port;
+  if (p.packageManager) v.packageManager = p.packageManager;
+  if (NODE_STACKS.includes(p.kind)) v.testRunner = p.testRunner === "vitest" || p.testRunner === "jest" ? p.testRunner : "none";
+  if (p.entry) v.entry = p.entry;
+  if (p.appModule) v.appModule = p.appModule;
+  if (p.mainClass) v.mainClass = p.mainClass;
+  if (p.buildTool) v.buildTool = p.buildTool;
+  if (p.kind === "spring-boot" || p.kind === "java" || p.kind === "aspnet" || p.kind === "dotnet") v.projectName = p.kind.startsWith("spring") || p.kind === "java" ? p.name : p.assemblyName ?? p.name;
+  if (p.targetFramework) v.targetFramework = p.targetFramework;
+  if (p.testRunner === "pytest") v.pytest = true;
+  return v;
+}
+
+const ECOSYSTEM_LABELS = { npm: "npm", python: "Python", pub: "Dart / Flutter" } as const;
+
+const unusedDepsTool: ToolSpec = {
+  id: "dev.unused-deps",
+  command: "unusedDependencies",
+  title: "Unused Dependencies",
+  summary: "Find npm, Python and Dart/Flutter packages your manifests declare but no code, script or config file uses, with the command that removes them.",
+  guide: "Reads every package.json, requirements*.txt, pyproject.toml and pubspec.yaml up to three folders down, then the project's source files. npm: a package counts as used when code imports or requires it, a script runs one of its executables, or a config file names it (eslint/babel/prettier plugins by their short names too). Python: when one of its modules is imported, or settings and config name it (Django INSTALLED_APPS, database URLs, Procfile). Dart: when a file imports package:name/. Servers, CLIs, linters, code generators and database drivers that work without an import are never listed. Nothing is removed for you: review the list, then run the command.",
+  keywords: ["unused dependencies", "depcheck", "remove dependency", "npm uninstall", "redundant packages", "pip", "requirements.txt", "pubspec", "flutter pub remove", "bundle size", "cleanup"],
+  icon: "scissors",
+  fields: [
+    f.text("folder", "Folder", { width: "narrow", placeholder: "(whole workspace)", help: "Limit the scan to a sub-folder, e.g. apps/web." }),
+    f.toggle("includeDev", "Include dev dependencies", true)
+  ],
+  async run(values, ctx) {
+    if (!ctx.workspace) throw new ToolInputError("Open a folder first: this tool reads the workspace's manifests and source files.");
+    const folder = str(values, "folder").trim();
+    if (folder.split("/").includes("..")) throw new ToolInputError("The folder must be inside the workspace.");
+    const scans = await findUnusedDependencies(ctx.workspace, { folder, includeDev: bool(values, "includeDev", true) });
+    if (!scans.length) throw new ToolInputError("No package.json, requirements*.txt, pyproject.toml or pubspec.yaml with dependencies was found" + (folder ? ` under ${folder}.` : "."));
+    const unused = scans.flatMap(scan => scan.unused.map(u => [scan.dir || "(root)", ECOSYSTEM_LABELS[scan.ecosystem], u.name, u.section, u.reason]));
+    const commands = scans.filter(scan => scan.removeCommand).map(scan => `${scan.dir ? `cd ${scan.dir} && ` : ""}${scan.removeCommand}`);
+    const messages: NonNullable<ToolResult["messages"]> = scans.flatMap(scan => scan.notes.map(text => ({ kind: "info" as const, text: `${scan.dir || "(root)"}: ${text}` })));
+    messages.unshift(unused.length
+      ? { kind: "warning", text: "Review before removing: a package can also be loaded dynamically (a computed import or require), by a framework plugin, or from a file outside these folders. Run your build and tests after removing." }
+      : { kind: "success", text: "Every declared dependency is used." });
+    const outputs: Output[] = [];
+    if (unused.length) outputs.push(table("Possibly unused", ["Folder", "Ecosystem", "Package", "Declared in", "Why"], unused));
+    if (commands.length) outputs.push(code("Remove them", "shellscript", commands.join("\n")));
+    outputs.push(table("Projects scanned", ["Folder", "Ecosystem", "Manifest", "Dependencies", "Source files", "Possibly unused"], scans.map(scan => [scan.dir || "(root)", ECOSYSTEM_LABELS[scan.ecosystem], scan.manifest, scan.checked, scan.sourceFiles, scan.unused.length])));
+    return {
+      stats: [
+        { label: "Projects", value: String(scans.length) },
+        { label: "Dependencies checked", value: String(scans.reduce((sum, scan) => sum + scan.checked, 0)) },
+        { label: "Possibly unused", value: String(unused.length), tone: unused.length ? "warn" : "good" }
+      ],
+      messages,
+      outputs
+    };
+  }
+};
+
+export const DEV_TOOLS: ToolSpec[] = [encodeTool, jwtTool, hashTool, idTool, timestampTool, cronTool, regexTool, diffTool, textTool, debugConfigTool, unusedDepsTool];

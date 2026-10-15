@@ -43,8 +43,9 @@ const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
 const premium_commands_1 = require("./premium/premium-commands");
 const tools_sidebar_1 = require("./sidebar/tools-sidebar");
-const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets"].map(id => `sayaib.hue-console.${id}`);
+const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets", "frameworkSnippets"].map(id => `sayaib.hue-console.${id}`);
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
+const DEBUG_LOG_COMMANDS = ["insertDebugLog", "removeDebugLogsInFile"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 function activate(context) {
     // Before anything writes state, so an existing user is never treated as a new install.
@@ -107,11 +108,15 @@ function activate(context) {
         ["snippets", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, SNIPPET_COMMANDS, async () => {
                 (await Promise.resolve().then(() => __importStar(require("./commands/createSnippetCommand")))).registerCreateSnippetCommand(context);
                 (await Promise.resolve().then(() => __importStar(require("./commands/showSnippetsCommand")))).registerShowSnippetsCommand(context, snippetsFolderPath);
+                (await Promise.resolve().then(() => __importStar(require("./commands/frameworkSnippets")))).registerFrameworkSnippetsCommand(context);
             })],
         ["workspace hygiene", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, HYGIENE_COMMANDS, async () => {
                 (await Promise.resolve().then(() => __importStar(require("./commands/listAndRemoveConsoleLogsCommand")))).registerListAndRemoveConsoleLogsCommand(context);
                 (await Promise.resolve().then(() => __importStar(require("./commands/removeUnusedImportsCommand")))).registerRemoveUnusedImportsCommand(context);
                 (await Promise.resolve().then(() => __importStar(require("./commands/readmeManager")))).registerReadmeManagerCommand(context);
+            })],
+        ["debug logs", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, DEBUG_LOG_COMMANDS, async () => {
+                (await Promise.resolve().then(() => __importStar(require("./debug/commands")))).registerDebugLogCommands(context);
             })],
         ["OpenCode integration", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.openCodeIntegration"], async () => {
                 (await Promise.resolve().then(() => __importStar(require("./commands/openCodeIntegration")))).registerOpenCodeIntegrationCommand(context);

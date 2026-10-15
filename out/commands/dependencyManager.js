@@ -45,10 +45,11 @@ const MAX_REGISTRY_LOOKUPS = 500;
 const REGISTRY_CONCURRENCY = 6;
 const REGISTRY_TTL_MS = 15 * 60 * 1000;
 const JOB_TIMEOUT_MS = 15 * 60 * 1000;
-const SKIP_GLOB = "**/{node_modules,.git,dist,out,coverage,.next,.nuxt,.venv,venv,__pycache__,vendor,target,.gradle,.terraform,.vscode-test,Pods,site-packages,bower_components}/**";
+const SKIP_GLOB = "**/{node_modules,.git,dist,out,coverage,.next,.nuxt,.venv,venv,__pycache__,vendor,target,.gradle,.terraform,.vscode-test,Pods,site-packages,bower_components,bin,obj,.dart_tool,.symlinks,ephemeral}/**";
 const MANIFEST_GLOBS = [
     "**/package.json", "**/requirements*.txt", "**/requirements/*.txt", "**/pyproject.toml", "**/pom.xml",
-    "**/build.gradle", "**/build.gradle.kts", "**/gradle/libs.versions.toml", "**/gradle.properties"
+    "**/build.gradle", "**/build.gradle.kts", "**/gradle/libs.versions.toml", "**/gradle.properties",
+    "**/*.{csproj,fsproj,vbproj}", "**/Directory.Packages.props", "**/pubspec.yaml"
 ];
 const MARKER_GLOB = "**/{package-lock.json,npm-shrinkwrap.json,yarn.lock,pnpm-lock.yaml,.yarnrc.yml,mvnw,mvnw.cmd,gradlew,gradlew.bat}";
 // ---------------------------------------------------------------------------
@@ -68,14 +69,19 @@ function buildSearchPath(platform) {
             process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "pnpm"),
             process.env.ProgramFiles && path.join(process.env.ProgramFiles, "nodejs"),
             process.env.USERPROFILE && path.join(process.env.USERPROFILE, "scoop", "shims"),
-            process.env.ChocolateyInstall && path.join(process.env.ChocolateyInstall, "bin")
+            process.env.ChocolateyInstall && path.join(process.env.ChocolateyInstall, "bin"),
+            process.env.ProgramFiles && path.join(process.env.ProgramFiles, "dotnet"),
+            process.env.USERPROFILE && path.join(process.env.USERPROFILE, "flutter", "bin"),
+            process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Pub", "Cache", "bin")
         ]
         : [
             "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin", "/snap/bin",
             path.join(home, ".local", "bin"), path.join(home, ".npm-global", "bin"), path.join(home, ".yarn", "bin"),
             path.join(home, ".volta", "bin"), path.join(home, ".bun", "bin"), path.join(home, "Library", "pnpm"),
             path.join(home, ".local", "share", "pnpm"), path.join(home, ".sdkman", "candidates", "maven", "current", "bin"),
-            path.join(home, ".sdkman", "candidates", "gradle", "current", "bin")
+            path.join(home, ".sdkman", "candidates", "gradle", "current", "bin"),
+            path.join(home, ".dotnet"), "/usr/local/share/dotnet", "/usr/share/dotnet",
+            path.join(home, "flutter", "bin"), path.join(home, "development", "flutter", "bin"), path.join(home, "fvm", "default", "bin"), "/opt/flutter/bin"
         ];
     const separator = platform === "win32" ? ";" : ":";
     return [current, ...extra.filter((entry) => Boolean(entry))].filter(Boolean).join(separator);
@@ -258,11 +264,15 @@ class ToolResolver {
             ? await this.probe(file, ["-v"], project.dir, /^Apache Maven/i, 30000)
             : tool === "gradle"
                 ? await this.probe(file, ["--version"], project.dir, /^Gradle\s/i, 60000)
-                : await this.probe(file, ["--version"], project.dir);
+                : tool === "flutter"
+                    ? await this.probe(file, ["--version"], project.dir, /^Flutter\s/i, 60000)
+                    : tool === "dart"
+                        ? await this.probe(file, ["--version"], project.dir, /Dart SDK version/i, 30000)
+                        : await this.probe(file, ["--version"], project.dir);
         if (!version) {
             return { id: tool, found: false, prefixArgs: [], display: tool, location: file, hint: `\`${file}\` exists but did not run. ${(0, dependency_manager_1.toolInstallHint)(tool, this.platform)}` };
         }
-        const cleaned = version.replace(/^(Apache Maven|Gradle)\s+/i, "").replace(/\s*\(.*\)\s*$/, "");
+        const cleaned = version.replace(/^(Apache Maven|Gradle|Flutter|Dart SDK version:)\s+/i, "").replace(/\s*[•(].*$/, "");
         return { id: tool, found: true, file, prefixArgs: [], display: tool, version: cleaned || version, location: file };
     }
     async lookupPython(project) {
@@ -353,6 +363,18 @@ async function fetchRegistryInfo(ecosystem, name) {
                 ? { versions: [], error: "Not found on pypi.org. A package from a private index is not checked." }
                 : response.status >= 400 ? { versions: [], error: `pypi.org answered HTTP ${response.status}.` } : (0, dependency_manager_1.parsePypiDocument)(response.data);
         }
+        else if (ecosystem === "nuget") {
+            const response = await axios_1.default.get((0, dependency_manager_1.nugetIndexUrl)(name), { ...common, headers: { "User-Agent": userAgent, Accept: "application/json" } });
+            info = response.status === 404
+                ? { versions: [], error: "Not found on nuget.org. Packages from a private feed are not checked." }
+                : response.status >= 400 ? { versions: [], error: `api.nuget.org answered HTTP ${response.status}.` } : (0, dependency_manager_1.parseNugetIndex)(response.data);
+        }
+        else if (ecosystem === "pub") {
+            const response = await axios_1.default.get((0, dependency_manager_1.pubPackageUrl)(name), { ...common, headers: { "User-Agent": userAgent, Accept: "application/vnd.pub.v2+json" } });
+            info = response.status === 404
+                ? { versions: [], error: "Not found on pub.dev. Packages from a private pub server are not checked." }
+                : response.status >= 400 ? { versions: [], error: `pub.dev answered HTTP ${response.status}.` } : (0, dependency_manager_1.parsePubPackage)(response.data);
+        }
         else {
             info = { versions: [], error: "Not found on Maven Central or Google's Maven repository. Artifacts from other repositories are not checked." };
             for (const url of (0, dependency_manager_1.mavenMetadataUrls)(name)) {
@@ -367,7 +389,7 @@ async function fetchRegistryInfo(ecosystem, name) {
         }
     }
     catch (error) {
-        const host = ecosystem === "node" ? "registry.npmjs.org" : ecosystem === "python" ? "pypi.org" : "Maven Central";
+        const host = ecosystem === "node" ? "registry.npmjs.org" : ecosystem === "python" ? "pypi.org" : ecosystem === "nuget" ? "api.nuget.org" : ecosystem === "pub" ? "pub.dev" : "Maven Central";
         // Failures are not cached, so the next scan tries again.
         return { versions: [], error: describeNetworkError(error, host) };
     }
@@ -525,8 +547,8 @@ function projectView(state) {
         installLines: (0, dependency_manager_1.projectInstallCommand)(project, missing.map(dep => dep.dependency)).map(spec => commandLine(state, spec)),
         updateLine: updateSpec ? commandLine(state, updateSpec) : "",
         canInstall: state.tool.found && missing.length > 0,
-        canUpdate: state.tool.found && outdated.length > 0 && (project.ecosystem === "node" || project.ecosystem === "python"),
-        manualUpdates: project.ecosystem === "maven" || project.ecosystem === "gradle",
+        canUpdate: state.tool.found && outdated.length > 0 && (project.ecosystem === "node" || project.ecosystem === "python" || project.ecosystem === "pub"),
+        manualUpdates: project.ecosystem === "maven" || project.ecosystem === "gradle" || project.ecosystem === "nuget",
         dependencies: [...state.dependencies]
             .map(dep => ({ dep, status: shownStatus(dep) }))
             .sort((a, b) => (dependency_manager_1.STATUS_ORDER[a.status] ?? 4.5) - (dependency_manager_1.STATUS_ORDER[b.status] ?? 4.5)
@@ -568,7 +590,7 @@ class DependencyPanel {
         this.disposables = [];
         this.disposables.push(panel.webview.onDidReceiveMessage(message => void this.onMessage(message)), vscode.workspace.onDidSaveTextDocument(document => {
             const base = path.basename(document.uri.fsPath);
-            if (/^(package\.json|requirements.*\.txt|pyproject\.toml|pom\.xml|build\.gradle(\.kts)?|libs\.versions\.toml)$/.test(base))
+            if (/^(package\.json|requirements.*\.txt|pyproject\.toml|pom\.xml|build\.gradle(\.kts)?|libs\.versions\.toml|.+\.(?:cs|fs|vb)proj|Directory\.Packages\.props|pubspec\.(?:yaml|lock))$/.test(base))
                 this.scheduleRescan();
         }));
         panel.onDidDispose(() => this.dispose());
@@ -629,7 +651,7 @@ class DependencyPanel {
             }
             if (!states.length) {
                 this.projects = [];
-                this.post({ type: "empty", message: "No package.json, requirements*.txt, pyproject.toml, pom.xml or build.gradle was found in this workspace." });
+                this.post({ type: "empty", message: "No package.json, requirements*.txt, pyproject.toml, pom.xml, build.gradle, .csproj or pubspec.yaml was found in this workspace." });
                 return;
             }
             this.post({ type: "scanning", message: `Found ${states.length} project${states.length === 1 ? "" : "s"}. Checking tools and installed versions...` });
@@ -693,9 +715,24 @@ class DependencyPanel {
                 pythonUnknown = "No Python interpreter with pip was found, so installed versions cannot be read.";
             }
         }
+        let restored;
+        if (project.ecosystem === "nuget") {
+            restored = (0, dependency_manager_1.parseNugetAssets)(await fs.promises.readFile(path.join(project.dir, "obj", "project.assets.json"), "utf8").catch(() => "{}"));
+        }
+        else if (project.ecosystem === "pub") {
+            // pubspec.lock is committed, so only a fetched .dart_tool/package_config.json means the packages are on disk.
+            const fetched = fileExists(path.join(project.dir, ".dart_tool", "package_config.json"));
+            restored = fetched ? (0, dependency_manager_1.parsePubLock)(await fs.promises.readFile(path.join(project.dir, "pubspec.lock"), "utf8").catch(() => "")) : new Map();
+        }
         state.dependencies = await Promise.all(project.dependencies.map(async (dependency, index) => {
             let installed;
-            if (project.ecosystem === "node") {
+            if (restored) {
+                installed = restored.get(dependency.name);
+                // SDK packages (flutter, flutter_test) are locked as 0.0.0; they have no version of their own.
+                if (project.ecosystem === "pub" && !dependency.registry && installed === "0.0.0")
+                    installed = undefined;
+            }
+            else if (project.ecosystem === "node") {
                 installed = await readInstalledNodeVersion(project, dependency.name, state.root);
             }
             else if (project.ecosystem === "python") {
@@ -820,8 +857,8 @@ class DependencyPanel {
                 const outdated = state.dependencies.filter(dep => dep.verdict.status === "outdated" && dep.dependency.scope !== "peer");
                 if (!outdated.length)
                     continue;
-                if (state.project.ecosystem === "maven" || state.project.ecosystem === "gradle") {
-                    skipped.push(`${label}: ${state.project.manager} updates edit the build file, so use the per-dependency commands.`);
+                if (state.project.ecosystem === "maven" || state.project.ecosystem === "gradle" || state.project.ecosystem === "nuget") {
+                    skipped.push(`${label}: ${state.project.manager} updates edit the project file, so use the per-dependency commands.`);
                     continue;
                 }
                 const eligible = outdated.filter(dep => includeProduction || dep.dependency.scope !== "production");
@@ -895,6 +932,10 @@ class DependencyPanel {
             notes.push("npm, yarn and pnpm run each package's install scripts.");
         if (steps.some(step => step.state.tool.id === "mvnw" || step.state.tool.id === "gradlew"))
             notes.push("The project's own wrapper script runs and may download a Maven/Gradle distribution.");
+        if (steps.some(step => step.state.project.ecosystem === "nuget"))
+            notes.push("dotnet restore downloads packages from the feeds in nuget.config (nuget.org by default).");
+        if (steps.some(step => step.state.project.ecosystem === "pub"))
+            notes.push("pub get downloads packages from pub.dev and updates pubspec.lock.");
         const python = steps.find(step => step.state.project.ecosystem === "python");
         if (python)
             notes.push(`Target Python: ${python.state.tool.location}${python.state.tool.isVenv ? " (virtual environment)" : " - not a virtual environment"}.`);

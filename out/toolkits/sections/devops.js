@@ -9,7 +9,7 @@ const devops_config_1 = require("../engines/devops-config");
 const devops_utils_1 = require("../engines/devops-utils");
 const devops_mlops_1 = require("../engines/devops-mlops");
 const helpers_1 = require("./helpers");
-const STACKS = (0, helpers_1.opts)(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["java-maven", "Java (Maven)"], ["java-gradle", "Java (Gradle)"], ["static", "Static site (nginx)"]);
+const STACKS = (0, helpers_1.opts)(["node", "Node.js"], ["python", "Python"], ["go", "Go"], ["java-maven", "Java (Maven)"], ["java-gradle", "Java (Gradle)"], ["dotnet", ".NET / ASP.NET Core"], ["static", "Static site (nginx)"]);
 // ---------------------------------------------------------------------------
 // Containers & Kubernetes
 // ---------------------------------------------------------------------------
@@ -34,6 +34,7 @@ const dockerfile = {
         helpers_1.f.select("pythonServer", "Python server", (0, helpers_1.opts)(["uvicorn", "uvicorn (FastAPI / ASGI)"], ["gunicorn", "gunicorn (Django / Flask)"], ["python", "python <file>"]), { showIf: { field: "stack", equals: ["python"] } }),
         helpers_1.f.text("appModule", "App module", { width: "narrow", default: "main:app", showIf: { field: "stack", equals: ["python"] } }),
         helpers_1.f.select("pythonDeps", "Dependencies from", (0, helpers_1.opts)(["requirements", "requirements.txt"], ["pyproject", "pyproject.toml"]), { showIf: { field: "stack", equals: ["python"] } }),
+        helpers_1.f.text("dotnetProject", "Project file", { width: "narrow", default: "App.csproj", showIf: { field: "stack", equals: ["dotnet"] }, help: "Path of the .csproj to publish, e.g. src/Api/Api.csproj." }),
         helpers_1.f.text("healthPath", "Health check path", { width: "narrow", default: "/health", showIf: { field: "mode", equals: ["generate"] }, help: "Leave empty for no HEALTHCHECK." })
     ],
     async run(values, ctx, action) {
@@ -59,7 +60,7 @@ const dockerfile = {
         const stack = (0, types_1.str)(values, "stack", "node");
         const o = {
             stack,
-            version: (0, types_1.str)(values, "version").trim() || (stack === "python" ? "3.12" : stack === "go" ? "1.23" : stack.startsWith("java") ? "21" : "22"),
+            version: (0, types_1.str)(values, "version").trim() || (stack === "python" ? "3.12" : stack === "go" ? "1.23" : stack.startsWith("java") ? "21" : stack === "dotnet" ? "8.0" : "22"),
             port: (0, types_1.num)(values, "port", 3000, { min: 1, max: 65535, integer: true, label: "Port" }),
             packageManager: (0, types_1.str)(values, "packageManager", "npm"),
             buildCommand: (0, types_1.str)(values, "buildCommand"),
@@ -67,7 +68,8 @@ const dockerfile = {
             healthPath: (0, types_1.str)(values, "healthPath"),
             pythonServer: (0, types_1.str)(values, "pythonServer", "uvicorn"),
             appModule: (0, types_1.str)(values, "appModule", "main:app"),
-            pythonDeps: (0, types_1.str)(values, "pythonDeps", "requirements")
+            pythonDeps: (0, types_1.str)(values, "pythonDeps", "requirements"),
+            dotnetProject: (0, types_1.str)(values, "dotnetProject", "App.csproj")
         };
         const text = (0, devops_docker_1.generateDockerfile)(o);
         const findings = (0, devops_docker_1.lintDockerfile)(text).filter(x => x.severity !== "info");
@@ -194,7 +196,7 @@ const ci = {
     fields: [
         helpers_1.f.select("platform", "Platform", (0, helpers_1.opts)(["github", "GitHub Actions"], ["gitlab", "GitLab CI"], ["jenkins", "Jenkins"], ["security", "GitHub security scanning (CodeQL, dependency review, secrets)"])),
         helpers_1.f.select("stack", "Stack", STACKS),
-        helpers_1.f.text("version", "Version", { width: "narrow", placeholder: "22 / 3.12 / 1.23 / 21" }),
+        helpers_1.f.text("version", "Version", { width: "narrow", placeholder: "22 / 3.12 / 1.23 / 21 / 8.0" }),
         helpers_1.f.text("matrix", "Also test versions", { width: "narrow", placeholder: "20, 24", showIf: { field: "platform", equals: ["github", "gitlab"] } }),
         helpers_1.f.select("packageManager", "Package manager", (0, helpers_1.opts)("npm", "pnpm", "yarn"), { showIf: { field: "stack", equals: ["node", "static"] } }),
         helpers_1.f.toggle("lint", "Lint", true, { showIf: { field: "platform", equals: ["github", "gitlab", "jenkins"] } }),
@@ -495,13 +497,13 @@ const health = {
     id: "devops.health",
     command: "healthCheckGenerator",
     title: "Health Check Generator",
-    summary: "Liveness and readiness endpoints for Express, Fastify, FastAPI, Flask, Spring Boot or Go - with dependency checks and timeouts - plus matching Docker, Compose and Kubernetes probes.",
+    summary: "Liveness and readiness endpoints for Express, Fastify, FastAPI, Flask, Spring Boot, ASP.NET Core or Go - with dependency checks and timeouts - plus matching Docker, Compose and Kubernetes probes.",
     guide: "Liveness says the process is alive and must not check dependencies, or one slow database restarts every pod. Readiness checks dependencies and takes the instance out of the load balancer while they are down.",
-    keywords: ["health check", "healthz", "readiness", "liveness", "probe", "express", "fastapi", "spring actuator"],
+    keywords: ["health check", "healthz", "readiness", "liveness", "probe", "express", "fastapi", "spring actuator", "asp.net core health checks", "maphealthchecks"],
     icon: "heart",
     live: true,
     fields: [
-        helpers_1.f.select("framework", "Framework", (0, helpers_1.opts)(["express", "Express"], ["fastify", "Fastify"], ["fastapi", "FastAPI"], ["flask", "Flask"], ["spring", "Spring Boot"], ["go", "Go (net/http)"])),
+        helpers_1.f.select("framework", "Framework", (0, helpers_1.opts)(["express", "Express"], ["fastify", "Fastify"], ["fastapi", "FastAPI"], ["flask", "Flask"], ["spring", "Spring Boot"], ["aspnet", "ASP.NET Core"], ["go", "Go (net/http)"])),
         helpers_1.f.num("port", "Port", 3000, { min: 1, max: 65535 }),
         helpers_1.f.toggle("database", "Check database", true),
         helpers_1.f.toggle("redis", "Check Redis", false),

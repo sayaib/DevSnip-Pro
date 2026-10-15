@@ -1,0 +1,180 @@
+{
+  "DevSnip: module logger": {
+    "prefix": "ds-logger",
+    "description": "A module-level logger. Insert Debug Log then logs through it (logger.debug) instead of print.",
+    "body": [
+      "import logging",
+      "",
+      "logger = logging.getLogger(__name__)",
+      "$0"
+    ]
+  },
+  "DevSnip: logging setup": {
+    "prefix": "ds-logging-config",
+    "description": "Configure the root logger once, in the program's entry point.",
+    "body": [
+      "logging.basicConfig(",
+      "    level=logging.${1|INFO,DEBUG,WARNING,ERROR|},",
+      "    format=\"%(asctime)s %(levelname)s %(name)s: %(message)s\",",
+      ")",
+      "$0"
+    ]
+  },
+  "DevSnip: log an exception": {
+    "prefix": "ds-try-log",
+    "description": "try/except that logs the traceback and re-raises.",
+    "body": [
+      "try:",
+      "    ${1:pass}",
+      "except ${2:Exception}:",
+      "    logger.exception(\"${3:Operation failed}\")",
+      "    raise",
+      "$0"
+    ]
+  },
+  "DevSnip: main entry point": {
+    "prefix": "ds-main",
+    "description": "A main() function and the __name__ guard.",
+    "body": [
+      "def main() -> None:",
+      "    ${0:pass}",
+      "",
+      "",
+      "if __name__ == \"__main__\":",
+      "    main()"
+    ]
+  },
+  "DevSnip: dataclass": {
+    "prefix": "ds-dataclass",
+    "description": "A typed dataclass.",
+    "body": [
+      "from dataclasses import dataclass, field",
+      "",
+      "",
+      "@dataclass",
+      "class ${1:Item}:",
+      "    ${2:name}: ${3:str}",
+      "    tags: list[str] = field(default_factory=list)",
+      "$0"
+    ]
+  },
+  "DevSnip: FastAPI app": {
+    "prefix": "ds-fastapi-app",
+    "description": "A FastAPI application with a health endpoint. Run with: uvicorn main:app --reload",
+    "body": [
+      "from fastapi import FastAPI",
+      "",
+      "app = FastAPI(title=\"${1:My API}\")",
+      "",
+      "",
+      "@app.get(\"/health\")",
+      "def health() -> dict[str, str]:",
+      "    return {\"status\": \"ok\"}",
+      "$0"
+    ]
+  },
+  "DevSnip: FastAPI router": {
+    "prefix": "ds-fastapi-router",
+    "description": "An APIRouter with a Pydantic model and typed GET/POST routes. Include it with app.include_router(router).",
+    "body": [
+      "from fastapi import APIRouter, HTTPException, status",
+      "from pydantic import BaseModel",
+      "",
+      "router = APIRouter(prefix=\"/${1:items}\", tags=[\"${1:items}\"])",
+      "",
+      "",
+      "class ${2:Item}(BaseModel):",
+      "    id: int",
+      "    name: str",
+      "",
+      "",
+      "_store: dict[int, ${2:Item}] = {}",
+      "",
+      "",
+      "@router.get(\"/{item_id}\")",
+      "def get_${3:item}(item_id: int) -> ${2:Item}:",
+      "    if item_id not in _store:",
+      "        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"${2:Item} not found\")",
+      "    return _store[item_id]",
+      "",
+      "",
+      "@router.post(\"\", status_code=status.HTTP_201_CREATED)",
+      "def create_${3:item}(body: ${2:Item}) -> ${2:Item}:",
+      "    _store[body.id] = body",
+      "    return body",
+      "$0"
+    ]
+  },
+  "DevSnip: Pydantic model": {
+    "prefix": "ds-pydantic",
+    "description": "A Pydantic v2 model with field validation.",
+    "body": [
+      "from pydantic import BaseModel, Field",
+      "",
+      "",
+      "class ${1:Model}(BaseModel):",
+      "    ${2:name}: str = Field(min_length=1, max_length=${3:100})",
+      "$0"
+    ]
+  },
+  "DevSnip: Flask route": {
+    "prefix": "ds-flask-route",
+    "description": "A Flask view function returning JSON.",
+    "body": [
+      "@${1:app}.${2|get,post,put,patch,delete|}(\"/${3:items}\")",
+      "def ${4:list_items}():",
+      "    return {\"${5:items}\": []}",
+      "$0"
+    ]
+  },
+  "DevSnip: Django class-based view": {
+    "prefix": "ds-django-view",
+    "description": "A Django View returning JSON for GET.",
+    "body": [
+      "from django.http import HttpRequest, JsonResponse",
+      "from django.views import View",
+      "",
+      "",
+      "class ${1:Item}View(View):",
+      "    def get(self, request: HttpRequest) -> JsonResponse:",
+      "        return JsonResponse({\"${2:items}\": []})",
+      "$0"
+    ]
+  },
+  "DevSnip: pytest test": {
+    "prefix": "ds-pytest",
+    "description": "A pytest test function.",
+    "body": [
+      "def test_${1:it_works}() -> None:",
+      "    ${0:assert True}"
+    ]
+  },
+  "DevSnip: pytest fixture": {
+    "prefix": "ds-pytest-fixture",
+    "description": "A pytest fixture with teardown after yield.",
+    "body": [
+      "import pytest",
+      "",
+      "",
+      "@pytest.fixture",
+      "def ${1:resource}():",
+      "    ${2:value = object()}",
+      "    yield ${3:value}",
+      "    $0"
+    ]
+  },
+  "DevSnip: pytest parametrize": {
+    "prefix": "ds-pytest-param",
+    "description": "A table-driven pytest test.",
+    "body": [
+      "import pytest",
+      "",
+      "",
+      "@pytest.mark.parametrize((\"value\", \"expected\"), [",
+      "    (${1:1}, ${2:1}),",
+      "])",
+      "def test_${3:cases}(value, expected) -> None:",
+      "    assert ${0:value} == expected"
+    ]
+  }
+}

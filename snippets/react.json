@@ -1,0 +1,110 @@
+{
+  "DevSnip: React component": {
+    "prefix": "ds-rfc",
+    "description": "A typed React function component named after the file.",
+    "body": [
+      "interface ${TM_FILENAME_BASE}Props {",
+      "  ${1:title}: string;",
+      "}",
+      "",
+      "export function ${TM_FILENAME_BASE}({ ${1:title} }: ${TM_FILENAME_BASE}Props) {",
+      "  return <${2:div}>{${1:title}}</${2:div}>;",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: React custom hook": {
+    "prefix": "ds-hook",
+    "description": "A custom hook that fetches JSON, cancels on unmount and exposes loading and error state.",
+    "body": [
+      "import { useEffect, useState } from \"react\";",
+      "",
+      "export function use${1:Data}<T>(url: string) {",
+      "  const [data, setData] = useState<T>();",
+      "  const [error, setError] = useState<Error>();",
+      "  const [loading, setLoading] = useState(true);",
+      "",
+      "  useEffect(() => {",
+      "    const controller = new AbortController();",
+      "    setLoading(true);",
+      "    fetch(url, { signal: controller.signal })",
+      "      .then(response => {",
+      "        if (!response.ok) throw new Error(`HTTP \\${response.status}`);",
+      "        return response.json() as Promise<T>;",
+      "      })",
+      "      .then(setData)",
+      "      .catch((reason: unknown) => {",
+      "        if (!controller.signal.aborted) setError(reason instanceof Error ? reason : new Error(String(reason)));",
+      "      })",
+      "      .finally(() => {",
+      "        if (!controller.signal.aborted) setLoading(false);",
+      "      });",
+      "    return () => controller.abort();",
+      "  }, [url]);",
+      "",
+      "  return { data, error, loading };",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: React context": {
+    "prefix": "ds-context",
+    "description": "A typed context, its provider and a hook that fails loudly outside the provider.",
+    "body": [
+      "import { createContext, useContext, useMemo, useState, type ReactNode } from \"react\";",
+      "",
+      "interface ${1:Theme}ContextValue {",
+      "  ${2:value}: string;",
+      "  ${4:setValue}: (next: string) => void;",
+      "}",
+      "",
+      "const ${1:Theme}Context = createContext<${1:Theme}ContextValue | null>(null);",
+      "",
+      "export function ${1:Theme}Provider({ children }: { children: ReactNode }) {",
+      "  const [${2:value}, ${4:setValue}] = useState(\"${3:initial}\");",
+      "  const context = useMemo(() => ({ ${2:value}, ${4:setValue} }), [${2:value}]);",
+      "  return <${1:Theme}Context.Provider value={context}>{children}</${1:Theme}Context.Provider>;",
+      "}",
+      "",
+      "export function use${1:Theme}() {",
+      "  const context = useContext(${1:Theme}Context);",
+      "  if (!context) throw new Error(\"use${1:Theme} must be used inside <${1:Theme}Provider>\");",
+      "  return context;",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: Next.js page": {
+    "prefix": "ds-next-page",
+    "description": "A Next.js App Router page (server component) with typed async params (Next.js 15+).",
+    "body": [
+      "export default async function ${1:Item}Page({ params }: { params: Promise<{ ${2:id}: string }> }) {",
+      "  const { ${2:id} } = await params;",
+      "  return (",
+      "    <main>",
+      "      <h1>${1:Item} {${2:id}}</h1>",
+      "    </main>",
+      "  );",
+      "}",
+      "$0"
+    ]
+  },
+  "DevSnip: Testing Library test": {
+    "prefix": "ds-rtl",
+    "description": "A React Testing Library test with Vitest.",
+    "body": [
+      "import { render, screen } from \"@testing-library/react\";",
+      "import { describe, expect, it } from \"vitest\";",
+      "",
+      "import { ${1:Component} } from \"./${1:Component}\";",
+      "",
+      "describe(\"<${1:Component} />\", () => {",
+      "  it(\"renders\", () => {",
+      "    render(<${1:Component} ${2:title}=\"${3:Hello}\" />);",
+      "    expect(screen.getByText(\"${3:Hello}\")).toBeTruthy();",
+      "  });",
+      "});",
+      "$0"
+    ]
+  }
+}

@@ -36,8 +36,8 @@ These run locally, which matters when the JSON is a production payload or the JW
 ## Keep the codebase tidy
 
 - **Create Snippet** turns a selection into an IntelliSense snippet; **Saved Snippets** lists and deletes them.
-- **Clean Console Logs** and **Remove Unused Imports** clean up before a commit.
-- **Dependencies & Installation** shows every dependency with its declared range, installed version and the latest allowed and stable versions, for npm, yarn, pnpm, pip, Maven and Gradle. It runs nothing without showing you the exact command first.
+- **Clean Debug Logs**, **Remove Unused Imports** and **Unused Dependencies** clean up before a commit.
+- **Dependencies & Installation** shows every dependency with its declared range, installed version and the latest allowed and stable versions, for npm, yarn, pnpm, pip, Maven, Gradle, NuGet and pub. It runs nothing without showing you the exact command first.
 
 ## DevOps boilerplate that is checked
 

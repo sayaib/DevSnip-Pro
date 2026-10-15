@@ -23,6 +23,8 @@ function commands(o) {
             return { install: [], lint: undefined, test: "mvn -B -ntp verify", build: "mvn -B -ntp -DskipTests package", image: `maven:3-eclipse-temurin-${o.version || "21"}`, cacheDir: ".m2/repository" };
         case "java-gradle":
             return { install: [], lint: undefined, test: "./gradlew test --no-daemon", build: "./gradlew build -x test --no-daemon", image: `gradle:jdk${o.version || "21"}`, cacheDir: ".gradle" };
+        case "dotnet":
+            return { install: ["dotnet restore"], lint: "dotnet format --verify-no-changes --no-restore", test: "dotnet test --no-restore", build: "dotnet build --no-restore -c Release", image: `mcr.microsoft.com/dotnet/sdk:${o.version || "8.0"}`, cacheDir: ".nuget/packages" };
     }
 }
 function versions(o) {
@@ -34,7 +36,7 @@ function versions(o) {
     return [...new Set(all)];
 }
 function defaultVersion(stack) {
-    return stack === "python" ? "3.12" : stack === "go" ? "1.23" : stack.startsWith("java") ? "21" : "22";
+    return stack === "python" ? "3.12" : stack === "go" ? "1.23" : stack.startsWith("java") ? "21" : stack === "dotnet" ? "8.0" : "22";
 }
 function setupSteps(o, versionExpr) {
     switch (o.stack) {
@@ -55,6 +57,8 @@ function setupSteps(o, versionExpr) {
             return ["      - uses: actions/setup-java@v4", "        with:", "          distribution: temurin", `          java-version: ${versionExpr}`, "          cache: maven"];
         case "java-gradle":
             return ["      - uses: actions/setup-java@v4", "        with:", "          distribution: temurin", `          java-version: ${versionExpr}`, "      - uses: gradle/actions/setup-gradle@v4"];
+        case "dotnet":
+            return ["      - uses: actions/setup-dotnet@v4", "        with:", `          dotnet-version: ${versionExpr}`];
     }
 }
 const q = (v) => JSON.stringify(v);
@@ -104,7 +108,7 @@ function gitlabCi(o) {
     const vs = versions(o);
     const js = o.stack === "node" || o.stack === "static";
     const lockFile = js ? (o.packageManager === "pnpm" ? "pnpm-lock.yaml" : o.packageManager === "yarn" ? "yarn.lock" : "package-lock.json")
-        : o.stack === "python" ? "requirements.txt" : o.stack === "go" ? "go.sum" : o.stack === "java-maven" ? "pom.xml" : "build.gradle";
+        : o.stack === "python" ? "requirements.txt" : o.stack === "go" ? "go.sum" : o.stack === "java-maven" ? "pom.xml" : o.stack === "dotnet" ? "packages.lock.json" : "build.gradle";
     const variables = {};
     if (js && o.packageManager === "npm")
         variables.npm_config_cache = "$CI_PROJECT_DIR/.npm";
@@ -118,6 +122,8 @@ function gitlabCi(o) {
         variables.MAVEN_OPTS = "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository";
     if (o.stack === "java-gradle")
         variables.GRADLE_USER_HOME = "$CI_PROJECT_DIR/.gradle";
+    if (o.stack === "dotnet")
+        variables.NUGET_PACKAGES = "$CI_PROJECT_DIR/.nuget/packages";
     const beforeScript = [
         ...(js && o.packageManager === "pnpm" ? ["corepack enable", "pnpm config set store-dir .pnpm-store"] : []),
         ...c.install
@@ -487,8 +493,8 @@ function validFargate(cpu, memory) {
 }
 exports.validFargate = validFargate;
 function securityWorkflow(stack) {
-    const language = stack === "python" ? "python" : stack === "go" ? "go" : stack.startsWith("java") ? "java-kotlin" : "javascript-typescript";
-    const build = stack.startsWith("java") || stack === "go" ? "autobuild" : "none";
+    const language = stack === "python" ? "python" : stack === "go" ? "go" : stack.startsWith("java") ? "java-kotlin" : stack === "dotnet" ? "csharp" : "javascript-typescript";
+    const build = stack.startsWith("java") || stack === "go" || stack === "dotnet" ? "autobuild" : "none";
     return `name: Security
 
 on:

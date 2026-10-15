@@ -18,8 +18,9 @@ import { CollectionStore } from "./services/collections";
 import { registerPremiumCommands } from "./premium/premium-commands";
 import { ToolsSidebarProvider, TOOLS_VIEW_ID } from "./sidebar/tools-sidebar";
 
-const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets"].map(id => `sayaib.hue-console.${id}`);
+const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets", "frameworkSnippets"].map(id => `sayaib.hue-console.${id}`);
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
+const DEBUG_LOG_COMMANDS = ["insertDebugLog", "removeDebugLogsInFile"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 
 export function activate(context: vscode.ExtensionContext) {
@@ -88,11 +89,15 @@ export function activate(context: vscode.ExtensionContext) {
     ["snippets", () => registerLazyCommands(context.subscriptions, SNIPPET_COMMANDS, async () => {
       (await import("./commands/createSnippetCommand")).registerCreateSnippetCommand(context);
       (await import("./commands/showSnippetsCommand")).registerShowSnippetsCommand(context, snippetsFolderPath);
+      (await import("./commands/frameworkSnippets")).registerFrameworkSnippetsCommand(context);
     })],
     ["workspace hygiene", () => registerLazyCommands(context.subscriptions, HYGIENE_COMMANDS, async () => {
       (await import("./commands/listAndRemoveConsoleLogsCommand")).registerListAndRemoveConsoleLogsCommand(context);
       (await import("./commands/removeUnusedImportsCommand")).registerRemoveUnusedImportsCommand(context);
       (await import("./commands/readmeManager")).registerReadmeManagerCommand(context);
+    })],
+    ["debug logs", () => registerLazyCommands(context.subscriptions, DEBUG_LOG_COMMANDS, async () => {
+      (await import("./debug/commands")).registerDebugLogCommands(context);
     })],
     ["OpenCode integration", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.openCodeIntegration"], async () => {
       (await import("./commands/openCodeIntegration")).registerOpenCodeIntegrationCommand(context);

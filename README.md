@@ -4,7 +4,7 @@
 
 **Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and more, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
 
-Free · No account · Runs locally · 110 developer tools
+Free · No account · Runs locally · 117 developer tools
 
 **[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://buymeacoffee.com/ssayaibj)
 
@@ -20,7 +20,8 @@ Free · No account · Runs locally · 110 developer tools
 | 🔒 **[Security scans](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)** | Hard-coded secrets, containers, dependencies and live endpoints  |
 | 📊 **[CSV & Excel viewer](#csv-and-excel-viewer)**                                     | View and edit .csv, .tsv and .xlsx files in a searchable, sortable grid |
 | 🧰 **[100+ utilities](#json-formatter-jwt-decoder-curl-converter-and-100-utilities)**   | JSON, JWT, regex, Docker, Kubernetes, cron, UUIDs and more               |
-| ✂️ **[Snippets & cleanup](#code-snippets-cleanup-and-opencode)**                        | Custom snippets, console.log cleanup, unused imports, OpenCode           |
+| 🐞 **[Debug & cleanup](#debug-logs-run--debug-and-cleanup)**                              | Debug logs for 8 languages, launch.json setup, unused imports and packages |
+| ✂️ **[Snippets & frameworks](#snippets-for-spring-boot-aspnet-core-fastapi-react-and-flutter)** | Spring Boot, ASP.NET Core, FastAPI, React, Flutter and SwiftUI snippets, API scaffolds |
 
 ## Get started in 60 seconds
 
@@ -119,29 +120,50 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 
 ## JSON formatter, JWT decoder, cURL converter and 100+ utilities
 
-113 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
+117 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
 
 ![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/all-tools.jpg)
 
 - **Text & data:** JSON / YAML / XML formatter, an XML → JSON converter (strict validation, namespaces, CDATA, lossless mode, large files), diff checker, regex tester, timestamps, UUIDs, and JSON to TypeScript, Zod, Pydantic, Go, Kotlin or Swift.
 - **API helpers:** cURL converter, OpenAPI / Swagger toolkit, GraphQL types, CORS debugger, JWT decoder and signer, OAuth 2.0 & PKCE.
-- **DevOps & cloud:** Dockerfile, Docker Compose, Kubernetes & Helm, Terraform, CI pipeline and Nginx generators, plus a cron helper.
+- **DevOps & cloud:** Dockerfile, Docker Compose, Kubernetes & Helm, Terraform, CI pipeline and Nginx generators (Node.js, Python, Go, Java and .NET), plus a cron helper.
 - **Web & mobile:** React / Next.js generator, HTML → JSX, SEO meta tags, adb & simctl commands, deep links, app signing and asset sizes.
 
 See [all tools by section](#all-tools-by-section) below.
 
 📖 [Format JSON, decode JWTs and other quick tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md)
 
-## Code snippets, cleanup and OpenCode
+## Debug logs, Run & Debug, and cleanup
 
-- **Snippets:** select code, run **DevSnip Pro: Create Snippet**, give it a prefix — it appears in IntelliSense. Ready-made snippets ship for 39 languages.
-- **Clean up:** remove `console.log` calls, and unused imports in JavaScript, TypeScript, Python and Java.
-- **Dependencies:** see declared, installed and newest versions for npm, yarn, pnpm, pip, Maven and Gradle; installs run only after you confirm the command.
+Language-aware logging and cleanup for **JavaScript, TypeScript, Python, Java, Kotlin, C#, Dart and Swift**.
+
+- **Insert Debug Log** (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>, or right-click): logs the variable under the cursor, labelled with the file and line, after the statement that sets it. It uses the logger the file already has: `logger.debug` for Python's `logging`, `log.debug` for SLF4J or Lombok in Spring Boot, `_logger.LogDebug` for `ILogger` in ASP.NET Core, `Log.d` on Android, `debugPrint` in Flutter and `os.Logger` in Swift. Otherwise it falls back to `console.log`, `print`, `System.out.println` or `Console.WriteLine`. Works with several cursors.
+- **Clean Debug Logs** finds leftover `console.log`, `print`, `System.out.println`, `Console.WriteLine`, `debugPrint` and similar calls across the workspace (and in `<script>` blocks of HTML, Vue, Svelte and PHP). Calls inside comments and strings are ignored. Only statements that stand alone on their lines are removed. A Python block left empty gets `pass`. **Remove Debug Logs in This File** does the same for the open editor, and **Undo** reverts it.
+- **Run & Debug Configurations** detects Next.js, Vite, Angular, NestJS, Node.js, React Native, Expo, FastAPI, Django, Flask, Spring Boot, ASP.NET Core, .NET and Flutter projects, including monorepos. It writes `.vscode/launch.json`, `tasks.json` and `extensions.json` for each language's official debugger, and keeps the configurations you already have.
+- **Remove Unused Imports** for JavaScript, TypeScript, Python, Java and Kotlin. It never removes `from __future__` imports, `__init__.py` re-exports, names in `__all__`, or `React` in classic-JSX files.
+- **Unused Dependencies** lists npm, Python and Flutter/Dart packages that no code, script or config file uses, and gives the command to remove them. Plugins, CLIs, code generators and database drivers that work without an import are not listed.
+- **Dependencies & Installation** shows declared, installed and newest versions for npm, yarn, pnpm, pip, Maven, Gradle, **NuGet** (`.csproj`, including Central Package Management) and **pub** (`pubspec.yaml`). Commands run only after you confirm them.
 - **OpenCode:** checks for Node.js and the OpenCode CLI, installs or repairs it, and launches it in your workspace.
 
 ![OpenCode Integration Hub in VS Code showing Node.js and OpenCode installed](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/opencode.jpg)
 
 📖 [Install and use OpenCode in VS Code](docs/guides/opencode-in-vscode.md)
+
+## Snippets for Spring Boot, ASP.NET Core, FastAPI, React and Flutter
+
+Type `ds-` in a file, or run **DevSnip Pro: Framework Snippets** to pick one from a list. Every snippet was expanded by VS Code and then compiled, and run where a framework allows it.
+
+| Language | Snippets |
+| :-- | :-- |
+| Java / Spring Boot | REST controller, service, JPA entity and repository, `@RestControllerAdvice` with ProblemDetail, configuration properties, MockMvc test (Boot 4 or 3), JUnit 5 test, SLF4J logger, record DTO |
+| C# / ASP.NET Core | Minimal API endpoint group, API controller, `IExceptionHandler`, validated options, EF Core `DbContext`, `[LoggerMessage]`, `ILogger` field, xUnit and `WebApplicationFactory` tests |
+| Python | FastAPI app and router, Pydantic model, Flask route, Django view, dataclass, logging setup, pytest test, fixture and parametrize |
+| TypeScript / React / Next.js | React component, data-fetching hook, context provider, Next.js page, route handler and server action, Express router and error handler, zod schema, typed `fetch`, Vitest and Testing Library tests |
+| Dart / Flutter | Stateless and stateful widgets, `FutureBuilder`, JSON model, `dart:developer` log, widget and unit tests |
+| Swift / SwiftUI | SwiftUI view, `ObservableObject` view model, async JSON request, `os.Logger` |
+
+- **Your own snippets:** select code, run **DevSnip Pro: Create Snippet** and give it a prefix. It appears in IntelliSense in any of 39 languages.
+- **API Resource Scaffolder** generates a validated CRUD API with pagination for Express, NestJS, Next.js, Fastify, **Spring Boot** (JPA), **ASP.NET Core** (EF Core) or **FastAPI** (SQLAlchemy).
 
 ## DevSnip Pro vs Postman and Thunder Client
 
@@ -187,12 +209,12 @@ Twelve themes restyle every DevSnip Pro panel from the **Theme** selector at the
 - **Backend & API** — REST API Client, cURL Converter, API Response Inspector, URL & Query String Tool, CORS Builder & Debugger, OpenAPI / Swagger Toolkit, GraphQL Formatter & Types, API Resource Scaffolder
 - **Web & Frontend** — React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder
 - **Mobile Development** — adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes
-- **Code & Productivity** — Saved Snippets, Create Snippet, Clean Console Logs, Remove Unused Imports, Dependencies & Installation, README Viewer & Manager, OpenCode Integration
+- **Code & Productivity** — Saved Snippets, Create Snippet, Framework Snippets, Remove Unused Imports, Dependencies & Installation, Unused Dependencies, README Viewer & Manager, OpenCode Integration
 - **Text & Formatters** — JSON / YAML / XML Formatter, XML → JSON Converter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools
 - **Encoders & Converters** — Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter
 - **Database** — Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB
 - **Spreadsheets & CSV** — CSV / TSV Viewer, Excel Viewer (.xlsx)
-- **Testing & Debugging** — Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit
+- **Testing & Debugging** — Insert Debug Log, Clean Debug Logs, Run & Debug Configurations, Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit
 - **Git & Version Control** — Git Command Recipes, .gitignore Generator, Semver & App Versions
 - **DevOps & Cloud** — Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter
 - **Security & Auth** — JWT Decoder & Signer, Workspace Security Audit, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit
@@ -242,7 +264,7 @@ Remote and WSL work, except the OpenCode hub, which needs a local process. vscod
 | Setting                                         | Default | What it does                                                               |
 | :---------------------------------------------- | :------ | :------------------------------------------------------------------------- |
 | `devsnip.apiTimeout`                            | `30000` | REST request timeout (ms). A per-request timeout overrides it.             |
-| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before removing `console.log` statements.                              |
+| `devsnip.consoleLogCleanup.confirmBeforeDelete` | `true`  | Ask before Clean Debug Logs removes `console.log`, `print` and similar calls. |
 | `devsnip.securityAudit.maxFiles`                | `2000`  | Files read by each workspace, cloud or dependency scan.                    |
 | `devsnip.security.endpointTimeout`              | `15000` | Per-request timeout (ms) for the endpoint scanner.                         |
 | `devsnip.security.activeChecks`                 | `false` | Pre-enable the endpoint scanner's active checks.                           |
@@ -250,7 +272,7 @@ Remote and WSL work, except the OpenCode hub, which needs a local process. vscod
 | `devsnip.analytics.enabled`                     | `true`  | Send anonymous usage analytics.                                            |
 | `devsnip.analytics.debug`                       | `false` | Log every analytics event to the **DevSnip Pro: Analytics** output channel. |
 
-**Keyboard shortcuts:** none are set by default, so nothing conflicts. Add your own, for example `{ "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" }`.
+**Keyboard shortcuts:** only **Insert Debug Log** has one by default (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>, in supported languages). Add your own, for example `{ "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" }`.
 
 ## Troubleshooting
 

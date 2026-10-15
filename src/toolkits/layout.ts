@@ -66,7 +66,7 @@ export const NAV: NavSection[] = [
       e("corsHelper", "CORS Builder & Debugger", "globe", "CORS config for Express, NestJS, Next.js and nginx, and fixes for CORS errors.", { tool: "web.cors" }),
       e("openApiTools", "OpenAPI / Swagger Toolkit", "book", "Lint a spec, list endpoints, and generate TypeScript types, a fetch client and cURL.", { tool: "web.openapi" }),
       e("graphqlTools", "GraphQL Formatter & Types", "symbol-structure", "Format queries, build request bodies, and turn SDL into TypeScript.", { tool: "web.graphql" }),
-      e("apiScaffolder", "API Resource Scaffolder", "server", "A validated CRUD API for Express, NestJS, Next.js or Fastify on Prisma or Mongoose.", { tool: "web.api-scaffold" })
+      e("apiScaffolder", "API Resource Scaffolder", "server", "CRUD APIs for Express, NestJS, Next.js, Fastify, Spring Boot, ASP.NET Core and FastAPI.", { tool: "web.api-scaffold" })
     ]
   },
   {
@@ -102,9 +102,10 @@ export const NAV: NavSection[] = [
     entries: [
       e("showSnippets", "Saved Snippets", "file-code", "Browse, insert and manage the snippets you have saved.", { hubIcon: "code", keywords: ["snippet", "template", "insert"] }),
       e("createCustomSnippet", "Create Snippet", "edit", "Save the selected code as a reusable custom snippet.", { hubIcon: "sparkles", keywords: ["snippet", "save selection"] }),
-      e("listAndRemoveConsoleLogs", "Clean Console Logs", "trash", "Find console.log calls across the workspace and remove them.", { hubIcon: "filter", keywords: ["console.log", "debug statements", "cleanup"] }),
+      e("frameworkSnippets", "Framework Snippets", "symbol-snippet", "Spring Boot, ASP.NET Core, FastAPI, React, Next.js, Flutter and SwiftUI snippets. Type ds- in a file.", { hubIcon: "braces", keywords: ["snippet", "spring boot", "asp.net", "fastapi", "django", "flask", "react", "next.js", "express", "flutter", "swiftui", "pytest", "xunit", "junit", "logger"] }),
       e("removeUnusedImports", "Remove Unused Imports", "symbol-method", "Detect imports that are never used and remove them.", { hubIcon: "scissors", keywords: ["imports", "cleanup", "unused"] }),
       e("dependencyManager", "Dependencies & Installation", "package", "Check npm, yarn, pnpm, pip, Maven and Gradle dependencies and update them.", { hubIcon: "package", keywords: ["npm", "pip", "maven", "gradle", "outdated", "upgrade"] }),
+      e("unusedDependencies", "Unused Dependencies", "trash", "npm, Python and Flutter packages that no code, script or config uses, and the command to remove them.", { tool: "dev.unused-deps" }),
       e("readmeManager", "README Viewer & Manager", "book", "Browse, preview and edit the README files in your workspace.", { hubIcon: "book", keywords: ["readme", "markdown", "docs"] }),
       e("openCodeIntegration", "OpenCode Integration", "comment-discussion", "Run the OpenCode AI assistant from inside VS Code.", { hubIcon: "message", keywords: ["ai assistant", "agent", "opencode"] })
     ]
@@ -152,8 +153,11 @@ export const NAV: NavSection[] = [
   },
   {
     id: "testing", title: "Testing & Debugging", emoji: "🐞", codicon: "bug", color: "terminal.ansiBrightRed",
-    description: "Explain build errors, analyse logs, generate test data, validate payloads and find what is using a port.",
+    description: "Insert and clean up debug logs, set up run & debug configurations, explain build errors, analyse logs and generate test data.",
     entries: [
+      e("insertDebugLog", "Insert Debug Log", "debug-console", "Log the selected variable with console.log, print, SLF4J, ILogger, debugPrint or Log.d.", { hubIcon: "terminal", keywords: ["console.log", "print", "logger", "debug log", "slf4j", "ilogger", "debugprint", "turbo console log"] }),
+      e("listAndRemoveConsoleLogs", "Clean Debug Logs", "trash", "Find and remove leftover console.log, print, println and Console.WriteLine calls.", { hubIcon: "filter", keywords: ["console.log", "print", "system.out.println", "console.writeline", "debug statements", "cleanup"] }),
+      e("debugConfigGenerator", "Run & Debug Configurations", "debug-start", "Detect your projects and get launch.json, tasks.json and run, test and build commands.", { tool: "dev.debug-config" }),
       e("buildErrorExplainer", "Build Error Explainer", "bug", "Paste a Gradle, Xcode, CocoaPods, Metro, Flutter or npm log and get the fix.", { tool: "mobile.build-errors" }),
       e("observabilityAnalyze", "Log Analyzer & Formatter", "pulse", "Summarise app, JSON and access logs: errors, status codes, slow requests.", { tool: "devops.logs" }),
       e("mockDataGenerator", "Mock Data Generator", "sparkle", "Seeded fake records as JSON, CSV or SQL inserts.", { tool: "data.mock" }),

@@ -1,0 +1,78 @@
+{
+  "DevSnip: os Logger": {
+    "prefix": "ds-logger",
+    "description": "A unified-logging Logger (iOS 14+, macOS 11+). Insert Debug Log then logs through it with logger.debug.",
+    "body": [
+      "import Foundation",
+      "import os",
+      "",
+      "private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? \"${1:app}\", category: \"${2:${TM_FILENAME_BASE}}\")",
+      "$0"
+    ]
+  },
+  "DevSnip: SwiftUI view": {
+    "prefix": "ds-swiftui-view",
+    "description": "A SwiftUI view with a preview.",
+    "body": [
+      "import SwiftUI",
+      "",
+      "struct ${1:${TM_FILENAME_BASE}}: View {",
+      "    var body: some View {",
+      "        ${0:Text(\"Hello\")}",
+      "    }",
+      "}",
+      "",
+      "struct ${1:${TM_FILENAME_BASE}}_Previews: PreviewProvider {",
+      "    static var previews: some View {",
+      "        ${1:${TM_FILENAME_BASE}}()",
+      "    }",
+      "}"
+    ]
+  },
+  "DevSnip: view model": {
+    "prefix": "ds-view-model",
+    "description": "A main-actor ObservableObject view model that loads data with async/await.",
+    "body": [
+      "import Foundation",
+      "",
+      "@MainActor",
+      "final class ${1:Items}ViewModel: ObservableObject {",
+      "    @Published private(set) var ${2:items}: [${3:String}] = []",
+      "    @Published private(set) var errorMessage: String?",
+      "",
+      "    func load() async {",
+      "        do {",
+      "            ${2:items} = try await ${4:fetch}()",
+      "            errorMessage = nil",
+      "        } catch {",
+      "            errorMessage = error.localizedDescription",
+      "        }",
+      "    }",
+      "",
+      "    private func ${4:fetch}() async throws -> [${3:String}] {",
+      "        ${0:[]}",
+      "    }",
+      "}"
+    ]
+  },
+  "DevSnip: async JSON request": {
+    "prefix": "ds-fetch-json",
+    "description": "A generic async URLSession request that checks the status code and decodes JSON.",
+    "body": [
+      "import Foundation",
+      "",
+      "enum APIError: Error {",
+      "    case badStatus(Int)",
+      "}",
+      "",
+      "func fetchJSON<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {",
+      "    let (data, response) = try await URLSession.shared.data(from: url)",
+      "    if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {",
+      "        throw APIError.badStatus(http.statusCode)",
+      "    }",
+      "    return try JSONDecoder().decode(T.self, from: data)",
+      "}",
+      "$0"
+    ]
+  }
+}

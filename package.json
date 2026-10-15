@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.78.2",
+  "version": "11.79.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -247,6 +247,38 @@
       {
         "language": "vue",
         "path": "./custom/custom_vue.json"
+      },
+      {
+        "language": "python",
+        "path": "./snippets/python.json"
+      },
+      {
+        "language": "java",
+        "path": "./snippets/java.json"
+      },
+      {
+        "language": "csharp",
+        "path": "./snippets/csharp.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/typescript.json"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./snippets/typescript.json"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./snippets/react.json"
+      },
+      {
+        "language": "dart",
+        "path": "./snippets/dart.json"
+      },
+      {
+        "language": "swift",
+        "path": "./snippets/swift.json"
       }
     ],
     "commands": [
@@ -400,7 +432,7 @@
       },
       {
         "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-        "title": "⚡ DevSnip Pro: Clean Console Logs"
+        "title": "🐞 DevSnip Pro: Clean Debug Logs"
       },
       {
         "command": "sayaib.hue-console.removeUnusedImports",
@@ -417,6 +449,14 @@
       {
         "command": "sayaib.hue-console.openCodeIntegration",
         "title": "⚡ DevSnip Pro: OpenCode Integration"
+      },
+      {
+        "command": "sayaib.hue-console.frameworkSnippets",
+        "title": "⚡ DevSnip Pro: Framework Snippets"
+      },
+      {
+        "command": "sayaib.hue-console.unusedDependencies",
+        "title": "⚡ DevSnip Pro: Unused Dependencies"
       },
       {
         "command": "sayaib.hue-console.jsonFormatter",
@@ -523,6 +563,18 @@
       {
         "command": "sayaib.hue-console.networkTools",
         "title": "🐞 DevSnip Pro: Port & Network Toolkit"
+      },
+      {
+        "command": "sayaib.hue-console.insertDebugLog",
+        "title": "🐞 DevSnip Pro: Insert Debug Log"
+      },
+      {
+        "command": "sayaib.hue-console.removeDebugLogsInFile",
+        "title": "🐞 DevSnip Pro: Remove Debug Logs in This File"
+      },
+      {
+        "command": "sayaib.hue-console.debugConfigGenerator",
+        "title": "🐞 DevSnip Pro: Run & Debug Configurations"
       },
       {
         "command": "sayaib.hue-console.gitRecipes",
@@ -797,6 +849,14 @@
         "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)"
       }
     ],
+    "keybindings": [
+      {
+        "command": "sayaib.hue-console.insertDebugLog",
+        "key": "ctrl+alt+shift+l",
+        "mac": "ctrl+alt+shift+l",
+        "when": "editorTextFocus && !editorReadonly && editorLangId =~ /^(javascript|typescript|javascriptreact|typescriptreact|python|java|kotlin|csharp|dart|swift)$/"
+      }
+    ],
     "customEditors": [
       {
         "viewType": "devsnip.spreadsheetViewer",
@@ -841,7 +901,7 @@
         "devsnip.consoleLogCleanup.confirmBeforeDelete": {
           "type": "boolean",
           "default": true,
-          "description": "Ask for confirmation before removing console.log statements. Turn this off to remove them immediately."
+          "description": "Ask for confirmation before Clean Debug Logs removes every statement shown (console.log, print, System.out.println, Console.WriteLine and the like). Turn this off to remove them immediately."
         },
         "devsnip.securityAudit.maxFiles": {
           "type": "number",
@@ -938,6 +998,16 @@
           "command": "sayaib.hue-console.xmlToJson",
           "group": "2_tools@1",
           "when": "editorLangId == xml"
+        },
+        {
+          "command": "sayaib.hue-console.insertDebugLog",
+          "group": "0_debug@1",
+          "when": "editorLangId =~ /^(javascript|typescript|javascriptreact|typescriptreact|python|java|kotlin|csharp|dart|swift)$/"
+        },
+        {
+          "command": "sayaib.hue-console.removeDebugLogsInFile",
+          "group": "0_debug@2",
+          "when": "editorLangId =~ /^(javascript|typescript|javascriptreact|typescriptreact|python|java|kotlin|csharp|dart|swift|html|vue|svelte|php)$/"
         },
         {
           "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
@@ -1060,6 +1130,14 @@
         {
           "command": "sayaib.hue-console.openInSpreadsheetViewer",
           "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.insertDebugLog",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "sayaib.hue-console.removeDebugLogsInFile",
+          "when": "editorIsOpen"
         }
       ]
     },
