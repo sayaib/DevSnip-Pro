@@ -514,6 +514,7 @@ export function securityHubHtml(nonce: string, initial: { url: string; timeoutMs
         runs a security scan. This check reports passes as well as problems.</p>
       <div class="actions">
         <button class="btn" id="poRun">Run dependency &amp; config check</button>
+        <button class="btn ghost" id="poOsv" title="Checks every dependency version against OSV.dev for known CVEs and GHSA advisories">Scan dependencies for known CVEs (OSV)</button>
       </div>
       <div class="progress" id="poProgress"><span class="spinner"></span><span id="poProgressText">Reading manifests…</span></div>
       <div id="poBanner"></div>
@@ -656,6 +657,8 @@ el('epCancel').addEventListener('click', function () {
       vscode.postMessage({ type: entry[2] });
     });
   });
+
+el('poOsv').addEventListener('click', function () { vscode.postMessage({ type: 'openOsvScanner' }); });
 
 /* ---- rendering ---- */
 var STATUS_META = {
@@ -1110,6 +1113,7 @@ export function registerSecurityToolsCommands(context: vscode.ExtensionContext):
     if (message.type === "scanWorkspace") { await runFileScan(panel, "workspace"); return; }
     if (message.type === "scanCloud") { await runFileScan(panel, "cloud"); return; }
     if (message.type === "scanPosture") { await runPosture(panel); return; }
+    if (message.type === "openOsvScanner") { await vscode.commands.executeCommand("sayaib.hue-console.osvScanner"); return; }
   }
 
   async function runEndpoint(panel: vscode.WebviewPanel, message: any): Promise<void> {

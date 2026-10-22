@@ -37,7 +37,7 @@ Each finding has a file and line, the evidence, a severity and a fix. If you fin
 - **`.env` hygiene:** whether `.env` is ignored;
 - **CI:** whether CI runs any security scanning.
 
-It complements your package manager's own `npm audit` / `pip-audit`; it does not replace them.
+For **known vulnerabilities** (CVEs) in the versions you actually install, run **DevSnip Pro: OSV Vulnerability Scanner**. It reads your lockfiles across npm, PyPI, Maven/Gradle, Go, Cargo, RubyGems, NuGet and more. It checks every package version against [OSV.dev](https://osv.dev), the database behind `osv-scanner`, which includes the GitHub Advisory Database. For each finding it shows the severity, the fixed version and the upgrade command. See [OSV-SCANNER.md](../OSV-SCANNER.md).
 
 ## 4. A live endpoint
 

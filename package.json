@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.79.1",
+  "version": "11.80.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -673,6 +673,20 @@
         "title": "🛡️ DevSnip Pro: Dependency & Config Check"
       },
       {
+        "command": "sayaib.hue-console.osvScanner",
+        "title": "🛡️ DevSnip Pro: OSV Vulnerability Scanner"
+      },
+      {
+        "command": "sayaib.hue-console.osvScanWorkspace",
+        "title": "🛡️ DevSnip Pro: Scan Workspace Dependencies for Vulnerabilities (OSV)"
+      },
+      {
+        "command": "sayaib.hue-console.osvScanFile",
+        "title": "Scan for Vulnerabilities (OSV)",
+        "category": "DevSnip Pro",
+        "icon": "$(shield)"
+      },
+      {
         "command": "sayaib.hue-console.certInspector",
         "title": "🛡️ DevSnip Pro: Certificate & SSL Pinning Inspector"
       },
@@ -950,6 +964,29 @@
           "type": "boolean",
           "default": false,
           "description": "Pre-enable the endpoint scanner's active checks (reflected-input probe and requests for well-known sensitive paths). They are read-only but generate extra traffic, so they are opt-in by default."
+        },
+        "devsnip.osvScanner.buildToolResolution": {
+          "type": "string",
+          "enum": ["ask", "always", "never"],
+          "enumDescriptions": [
+            "Run Maven (dependency:tree) and Gradle (a read-only dependency task) in trusted workspaces after asking once per workspace.",
+            "Run them in trusted workspaces without asking.",
+            "Never run build tools: DevSnip Pro resolves dependencies itself from POMs and build files."
+          ],
+          "default": "ask",
+          "markdownDescription": "Whether the OSV Vulnerability Scanner may run your build tools (`./mvnw`/`mvn`, `./gradlew`/`gradle`) to get the exact resolved dependency tree, including transitive dependencies from Spring Boot starters and BOMs. Build tools run the build's own code, so they never run in an untrusted workspace."
+        },
+        "devsnip.osvScanner.downloadPoms": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Let the OSV Vulnerability Scanner's built-in Maven resolver download POM files from Maven Central (only coordinates are requested). When off, it uses POMs in the workspace and your local Maven repository only."
+        },
+        "devsnip.osvScanner.buildToolTimeoutSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 3600,
+          "description": "Time limit for one Maven or Gradle run of the OSV Vulnerability Scanner. Projects the build tool does not finish in time are resolved by the built-in resolver."
         }
       }
     },
@@ -1078,6 +1115,16 @@
       ],
       "explorer/context": [
         {
+          "command": "sayaib.hue-console.osvScanFile",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@21"
+        },
+        {
+          "command": "sayaib.hue-console.osvScanFile",
+          "when": "resourceFilename =~ /^(package-lock\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lock|package\\.json|requirements.*\\.txt|.*[-_]requirements\\.txt|Pipfile|Pipfile\\.lock|poetry\\.lock|uv\\.lock|pdm\\.lock|pyproject\\.toml|pom\\.xml|build\\.gradle|build\\.gradle\\.kts|gradle\\.lockfile|libs\\.versions\\.toml|go\\.mod|Cargo\\.lock|Cargo\\.toml|Gemfile|Gemfile\\.lock|gems\\.rb|gems\\.locked|packages\\.lock\\.json|project\\.assets\\.json|.*\\.(cs|fs|vb)proj|packages\\.config|composer\\.json|composer\\.lock|pubspec\\.yaml|pubspec\\.lock|mix\\.lock|Package\\.resolved|renv\\.lock)$/ && !explorerResourceIsFolder",
+          "group": "navigation@21"
+        },
+        {
           "command": "sayaib.hue-console.openInSpreadsheetViewer",
           "when": "resourceExtname =~ /^\\.(csv|tsv|tab|xlsx|xlsm)$/i && !explorerResourceIsFolder",
           "group": "navigation@20"
@@ -1130,6 +1177,10 @@
         {
           "command": "sayaib.hue-console.openInSpreadsheetViewer",
           "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.osvScanFile",
+          "when": "resourceFilename =~ /^(package-lock\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lock|package\\.json|requirements.*\\.txt|.*[-_]requirements\\.txt|Pipfile|Pipfile\\.lock|poetry\\.lock|uv\\.lock|pdm\\.lock|pyproject\\.toml|pom\\.xml|build\\.gradle|build\\.gradle\\.kts|gradle\\.lockfile|libs\\.versions\\.toml|go\\.mod|Cargo\\.lock|Cargo\\.toml|Gemfile|Gemfile\\.lock|gems\\.rb|gems\\.locked|packages\\.lock\\.json|project\\.assets\\.json|.*\\.(cs|fs|vb)proj|packages\\.config|composer\\.json|composer\\.lock|pubspec\\.yaml|pubspec\\.lock|mix\\.lock|Package\\.resolved|renv\\.lock)$/"
         },
         {
           "command": "sayaib.hue-console.insertDebugLog",

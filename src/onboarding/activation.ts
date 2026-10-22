@@ -48,6 +48,13 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
   {
+    version: "11.80.1",
+    items: [
+      { title: "OSV Vulnerability Scanner: known CVEs in npm, PyPI, Maven, Go, Cargo, RubyGems, NuGet and more", command: "osvScanner" },
+      { title: "Spring Boot, Maven and Gradle projects are scanned with their full dependency tree, transitive libraries included", command: "osvScanWorkspace" }
+    ]
+  },
+  {
     version: "11.79.1",
     items: [
       { title: "Insert Debug Log (Ctrl+Alt+Shift+L) and Clean Debug Logs for JS/TS, Python, Java, Kotlin, C#, Dart and Swift", command: "insertDebugLog" },

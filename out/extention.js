@@ -47,6 +47,7 @@ const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets", "frameworkSnipp
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
 const DEBUG_LOG_COMMANDS = ["insertDebugLog", "removeDebugLogsInFile"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
+const OSV_COMMANDS = ["osvScanner", "osvScanWorkspace", "osvScanFile"].map(id => `sayaib.hue-console.${id}`);
 function activate(context) {
     // Before anything writes state, so an existing user is never treated as a new install.
     const installSnapshot = (0, analytics_1.snapshotInstall)(context);
@@ -132,6 +133,9 @@ function activate(context) {
         ["toolkit tools", () => (0, runner_1.registerToolkitCommands)(context)],
         ["security tools", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, SECURITY_COMMANDS, async () => {
                 (await Promise.resolve().then(() => __importStar(require("./commands/securityTools")))).registerSecurityToolsCommands(context);
+            })],
+        ["OSV vulnerability scanner", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, OSV_COMMANDS, async () => {
+                (await Promise.resolve().then(() => __importStar(require("./osv/command")))).registerOsvScannerCommands(context);
             })],
         ["database client", () => (0, command_1.registerDatabaseClientCommand)(context)],
         ["CSV & Excel viewer", () => (0, command_2.registerSpreadsheetViewer)(context)],

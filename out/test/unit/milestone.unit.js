@@ -27,6 +27,7 @@ const assert = __importStar(require("assert"));
 const milestoneTracker_1 = require("../../commands/milestoneTracker");
 const milestone_view_1 = require("../../services/milestone-view");
 const quests_1 = require("../../services/quests");
+const activities_1 = require("../../services/activities");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode_stub_1 = require("./vscode-stub");
@@ -136,8 +137,10 @@ function freshContext(seed = {}) {
             .filter(item => item.done)
             .map(item => (0, quests_1.findQuest)(item.id)?.points ?? 0)
             .reduce((sum, points) => sum + points, 0) + (stats.quests.chestClaimed ? quests_1.QUEST_CHEST_POINTS : 0);
-        assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus + questBonus);
-        assert.ok(stats.dailyPoints < 500, "a single day cannot produce an unbounded score");
+        // This week's event (it rotates by calendar week) can complete during the run as well.
+        const eventBonus = stats.event.done ? (0, activities_1.findEvent)(stats.event.id)?.points ?? 0 : 0;
+        assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus + questBonus + eventBonus);
+        assert.ok(stats.dailyPoints - eventBonus < 500, "a single day cannot produce an unbounded score");
     });
     (0, run_unit_tests_1.test)("milestones unlock once and only once", async () => {
         const context = freshContext();
@@ -264,9 +267,12 @@ function viewFor(stats, extra = {}) {
         const context = freshContext();
         await (0, milestoneTracker_1.autoRecordToolUsage)("sayaib.hue-console.jsonFormatter");
         const stats = (0, milestoneTracker_1.getUserStats)(context);
-        // One tool run (+3) plus the First Tool milestone (+10).
-        assert.strictEqual(stats.totalPoints, 13);
-        assert.strictEqual(stats.lifetimePoints, 13);
+        // One tool run (+3) plus the First Tool milestone (+10), plus any of today's quests
+        // that one tool run completes (quests are picked by date, so this varies by day).
+        const questBonus = stats.quests.items.filter(item => item.done).reduce((sum, item) => sum + ((0, quests_1.findQuest)(item.id)?.points ?? 0), 0)
+            + (stats.quests.chestClaimed ? quests_1.QUEST_CHEST_POINTS : 0);
+        assert.strictEqual(stats.totalPoints, 13 + questBonus);
+        assert.strictEqual(stats.lifetimePoints, 13 + questBonus);
     });
     (0, run_unit_tests_1.test)("older data without lifetime points is migrated from balance plus spending in the log", () => {
         const stats = (0, milestoneTracker_1.sanitizeStats)({

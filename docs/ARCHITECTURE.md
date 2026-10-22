@@ -5,7 +5,7 @@ DevSnip Pro is a single VS Code extension written in TypeScript. It has no backe
 ```
 src/
 ├── extention.ts            activation: registers commands, sidebar, themes, analytics, onboarding
-├── toolkits/               117 tools in 14 sections
+├── toolkits/               118 tools in 14 sections
 │   ├── layout.ts           single source of truth: sections, order, labels, descriptions
 │   ├── sections/*.ts       ToolSpec forms (fields, presets, actions)
 │   ├── engines/*.ts        pure functions that do the work (unit-tested)
@@ -19,6 +19,9 @@ src/
 │                           (strings, comments, interpolation), placement and safe removal
 ├── database/               Database Client: connection strings, adapters, SQL builder, panel
 ├── spreadsheet/            CSV & Excel viewer: CSV parser, .xlsx reader (zlib only), custom editors
+├── osv/                    OSV Vulnerability Scanner: lockfile adapters, OSV.dev client, findings, reports
+│   ├── maven/              POM model, built-in Maven resolver, mvn dependency:tree runner, consent/settings
+│   └── gradle/             Gradle init-script task, build-script reader
 │   └── adapters/           PostgreSQL, MySQL, SQL Server, SQLite, MongoDB, Redis
 ├── sidebar/                Tools sidebar webview (search, favorites, rank card, onboarding cards)
 ├── onboarding/             first-use tracking, Get started guide, What's new

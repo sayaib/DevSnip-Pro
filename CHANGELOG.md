@@ -1,5 +1,121 @@
 # Development Changelog of DevSnip Pro
 
+## 11.80.1 - OSV Vulnerability Scanner: known CVEs in your dependencies, including Spring Boot, Maven and Gradle projects
+
+DevSnip Pro now finds dependencies with known vulnerabilities. It reads your lockfiles, manifests and Maven or Gradle builds, and checks every resolved package version against [OSV.dev](https://osv.dev), which includes the GitHub Advisory Database, PyPA, Go, RustSec and more. No npm dependency is added, and activation is unchanged: the scanner loads the first time you use it.
+
+### Added
+
+#### OSV Vulnerability Scanner
+
+- **Where to find it:** the Security & Auth section of the Tools sidebar, **Scan Workspace Dependencies for Vulnerabilities (OSV)** in the Command Palette, or **Scan for Vulnerabilities (OSV)** when you right-click a lockfile or manifest in the Explorer. Without an open folder, **Scan Files…** lets you pick files.
+- **Spring Boot and other Maven and Gradle projects are resolved to their full dependency tree**, so transitive libraries are checked, along with the versions that parents and BOMs manage. A starter brings in Tomcat, Spring Framework, Jackson, SnakeYAML, Logback and more.
+  - **Maven's own `dependency:tree`, or Gradle's resolved classpaths**, when you allow it once per trusted workspace. These run read-only: nothing is compiled, installed or changed.
+  - **Otherwise, a built-in Maven resolver** follows Maven's rules: parents, BOM imports, dependency management, property overrides, `${revision}`, nearest wins, scopes, optional dependencies, exclusions, relocations and version ranges. On two Spring Boot test projects it matched `mvn dependency:tree` exactly (84/84 and 99/99 dependencies).
+  - **A Gradle build-script reader** handles the Spring Boot plugin, `mavenBom`, `platform` and `project()` dependencies, with Gradle's highest-version-wins rule. It matched Gradle 8.10 on all 68 libraries of a Spring Boot test build; its findings are marked Potential.
+  - **Multi-module reactors and multi-project builds resolve as one build.** Your own modules are never queried as packages.
+  - **Right-click a folder** to scan one project of a monorepo.
+- **12 ecosystems, transitive dependencies included:**
+  - npm (`package-lock.json`, `yarn.lock` v1 and Berry, `pnpm-lock.yaml` v5–v9, `bun.lock`, `package.json`);
+  - PyPI (`poetry.lock` 1 and 2, `uv.lock`, `pdm.lock`, `Pipfile.lock`, the pip packages of `conda-lock.yml`, `requirements*.txt` and the files they include with `-r`, `pyproject.toml`, `Pipfile`, the pip section of `environment.yml`);
+  - Maven (`pom.xml`, `build.gradle(.kts)`, `gradle.lockfile`, version catalogs);
+  - Go (`go.mod`, with `replace`);
+  - crates.io (`Cargo.lock`, `Cargo.toml`);
+  - RubyGems (`Gemfile.lock`, `Gemfile`);
+  - NuGet (`packages.lock.json`, `obj/project.assets.json`, `.csproj` with central package versions, `packages.config`);
+  - Packagist (`composer.lock`, `composer.json`);
+  - Pub (`pubspec.lock`, `pubspec.yaml`);
+  - Hex (`mix.lock`);
+  - SwiftURL (`Package.resolved`, `Package.swift`);
+  - CRAN (`renv.lock`).
+- **Monorepos and nested projects:**
+  - A workspace lockfile covers the members it records (npm, pnpm, Yarn Berry and Bun). A standalone nested project keeps its own versions.
+  - A lockfile that no longer satisfies its manifest is reported. The lockfile version is scanned, because it is what gets installed.
+  - Every project keeps its own folder for commands.
+- **Versions are never guessed:**
+  - A lockfile or an exact pin gives a **Confirmed** finding.
+  - A range gives a **Potential** finding, and only for advisories the range can actually reach.
+  - A dependency that cannot be checked is listed as **Not analysed**, with the reason: version unknown, query failed, or outside OSV's coverage (git, paths, private sources).
+  - **Scan complete** and **Scan incomplete** are always told apart. An incomplete scan with no findings is never shown as clean.
+- **Severity comes from the advisory:** GitHub's reviewed rating, then a CVSS v3/v2 base score computed from the published vector. A record with no severity, such as many PYSEC and GO records, takes it from a GHSA or CVE alias, which is named as the source. Otherwise the severity is **Unknown**. CVSS v4 vectors are shown but not scored.
+- **Aliases are merged:** records for the same vulnerability (GHSA, PYSEC, GO, RUSTSEC, CVE) become one finding. Withdrawn advisories are dropped.
+- **Security dashboard:**
+  - severity cards that filter;
+  - search (<kbd>/</kbd>), and filters for ecosystem, confidence and scope;
+  - grouping and sorting;
+  - coverage counts: dependencies discovered, analysed, unresolved, failed and out of scope, and unique vulnerabilities;
+  - every finding and package listed, with no hidden pages; long lists are drawn in chunks;
+  - expandable findings with the description, affected and fixed versions, the CVSS vector, CWE, aliases linked to NVD, GitHub and OSV, and every file and line where the package appears;
+  - for transitive dependencies, a direct/transitive badge and the dependency path (for example via `spring-boot-starter-web` → `spring-boot-starter-tomcat`);
+  - **Packages**, **Fixes**, **Files** and **Scan notes** tabs.
+  - It follows the appearance theme, works at narrow widths and is fully keyboard accessible.
+- **Remediation:**
+  - **The target is checked:** each package's upgrade target is asked about at OSV, and raised if it is still affected.
+  - **Commands match the tool that wrote the lockfile:** npm, Yarn, pnpm, Bun, pip, Poetry, uv, PDM, Pipenv, Go, Cargo, Bundler, dotnet, Composer and pub.
+  - **Guidance for transitive dependencies** (overrides, resolutions, dependency management).
+  - **When no fix exists, the dashboard says so.**
+  - **Nothing changes automatically:** **Run…** asks for confirmation in a modal, and runs only commands the scan suggested.
+- **Reports:** export a self-contained HTML report (no scripts, everything escaped) or the full JSON result. Both include the scan time, workspace, files, versions, advisory IDs, severity, links, fixes and the scan's limitations.
+
+#### Security Hub
+
+- The **Dependencies & config** tab links to the OSV scanner for known CVEs.
+
+### Reliability
+
+- **Batching and pagination:**
+  - Up to 1,000 packages go in each request, with at most 2 batches and 8 record requests at once.
+  - Every `next_page_token` is followed, per query and per batch.
+- **Timeouts and retries:** requests time out after 30 seconds. They are retried with exponential backoff and jitter on network errors, timeouts, HTTP 429 and 5xx, honouring `Retry-After`.
+- **Failed batches are split.** A batch that keeps failing is halved, then sent as single `POST /v1/query` requests, so only the package OSV cannot answer for is left unchecked. When OSV cannot be reached at all, the scan reports it at once instead of retrying each package.
+- **Malformed data never stops the scan.** Records and queries are checked against the OSV schema, so a malformed record or an invalid coordinate never crashes the scan or reaches OSV.
+- **Missing data stays unknown.** Missing metadata is never turned into "no vulnerabilities" or "no fix", and a scan with gaps is reported as incomplete.
+- **Cancellation:**
+  - **Cancel** stops requests and any Maven or Gradle run at once, and keeps what finished.
+  - Only one scan runs at a time, and an older scan can never overwrite a newer result.
+- **The advisory cache** is kept in global storage. A record is reused only while its `modified` time matches OSV's, so an advisory updated upstream is fetched again. Downloaded release POMs are cached too, and both caches can be cleared from the dashboard.
+- **A diagnostic log:** the Output panel's **DevSnip Pro: OSV Scanner** channel, and the Scan notes tab, count every stage of the scan, so a missing finding can be traced to where it was lost.
+
+### Settings
+
+- `devsnip.osvScanner.buildToolResolution` (`ask`, `always` or `never`; default `ask`): whether Maven and Gradle may run to resolve exact dependency trees. They never run in untrusted workspaces.
+- `devsnip.osvScanner.downloadPoms` (default on): whether the built-in Maven resolver may download POM files from Maven Central.
+- `devsnip.osvScanner.buildToolTimeoutSeconds` (default 300): the time limit for one Maven or Gradle run.
+
+### Privacy and security
+
+- Only the ecosystem, package name and version are sent to `api.osv.dev`. Source code, file contents, paths, project names, registry URLs and credentials are never sent, and a test checks this.
+- The built-in Maven resolver requests POM files from Maven Central by coordinates. Turn it off with `devsnip.osvScanner.downloadPoms`.
+- **Build tools.** Maven and Gradle run only in trusted workspaces, after you allow them once per workspace (`devsnip.osvScanner.buildToolResolution`).
+  - They run with a time limit, and cancelling stops them along with their child processes.
+  - Their output is shown with credentials masked.
+
+### Packaging
+
+- No new npm dependencies.
+- The VSIX adds:
+  - `media/osv-scanner.js` and two panel icons;
+  - the compiled scanner under `out/osv/` (including `maven/` and `gradle/`).
+
+### Docs
+
+- New [docs/OSV-SCANNER.md](docs/OSV-SCANNER.md): installation, usage, supported files, Maven and Gradle resolution, precedence rules, settings, privacy, troubleshooting, limitations, report format and testing. Also updated: the README, the security guide, the architecture overview and the tool counts (118 tools).
+
+### Tests
+
+805 unit tests and 74 VS Code integration tests pass.
+
+- **Spring Boot and Maven regression suite (`osv-maven.unit.ts`):** a miniature repository with Spring Boot's real shape, real `mvn dependency:tree` and Gradle output, Gradle builds, and end-to-end scans. An opt-in live test (`DEVSNIP_TEST_OSV_LIVE=1`) checks documented advisories against the real OSV API.
+- **Unit tests:** the main suite covers:
+  - every parser, and TOML;
+  - version ranges;
+  - CVSS against the FIRST calculator;
+  - the API client against a scripted fetch: pagination, 429 with `Retry-After`, 5xx, network errors, timeouts, cancellation and malformed responses;
+  - the scan against a fake OSV: monorepos, 2,100-package trees, failed batches and records, and verified fixes;
+  - HTML escaping, and navigation.
+- **Integration tests** run in VS Code with a fake OSV and Maven Central: commands and the panel, workspace, folder and single-file scans, cancellation, the offline path, a Spring Boot-shaped Maven project, and POM downloads off. Opt-in live tests run real Maven and Gradle on Spring Boot projects (`DEVSNIP_TEST_MAVEN_LIVE=1`, `DEVSNIP_TEST_GRADLE_LIVE=1`).
+- **Milestone tests:** two tests no longer fail on days when the date-seeded daily quest or the weekly event completes during the test.
+
 ## 11.79.1 - Debug logs for 8 languages, framework snippets, and Spring Boot, ASP.NET Core and Flutter support
 
 DevSnip Pro now helps with day-to-day debugging and cleanup in **JavaScript, TypeScript, Python, Java, Kotlin, C#, Dart and Swift**. It also adds framework snippets, Run & Debug setup, and dependency support for .NET and Flutter projects. No dependency is added, and activation is unchanged: every new feature loads the first time you use it.

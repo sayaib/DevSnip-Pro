@@ -53,6 +53,8 @@ async function main(): Promise<void> {
   require("./database-live.unit");
   require("./spreadsheet.unit");
   require("./xml-json.unit");
+  require("./osv.unit");
+  require("./osv-maven.unit");
   require("./theme.unit");
   require("./onboarding.unit");
   /* eslint-enable @typescript-eslint/no-var-requires */

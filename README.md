@@ -17,7 +17,7 @@ Free · No account · Runs locally · 117 developer tools
 | 🚀 **[REST API client](#rest-api-client-in-vs-code)**                                   | HTTP, GraphQL, environments, collections, cURL import, code generation   |
 | 🗄️ **[Database client](#database-client-for-postgresql-mysql-mongodb-and-redis)**       | PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and more |
 | 🤖 **[AI tools](#llm-token-counter-cost-estimates-and-ai-tools)**                       | Token and cost estimates for 18 models, prompt builder, RAG helpers      |
-| 🔒 **[Security scans](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)** | Hard-coded secrets, containers, dependencies and live endpoints  |
+| 🔒 **[Security scans](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)** | Known CVEs in dependencies, hard-coded secrets, containers and live endpoints |
 | 📊 **[CSV & Excel viewer](#csv-and-excel-viewer)**                                     | View and edit .csv, .tsv and .xlsx files in a searchable, sortable grid |
 | 🧰 **[100+ utilities](#json-formatter-jwt-decoder-curl-converter-and-100-utilities)**   | JSON, JWT, regex, Docker, Kubernetes, cron, UUIDs and more               |
 | 🐞 **[Debug & cleanup](#debug-logs-run--debug-and-cleanup)**                              | Debug logs for 8 languages, launch.json setup, unused imports and packages |
@@ -103,7 +103,18 @@ Runs locally — no API key needed.
 - **Dependencies & config:** lockfiles, unbounded ranges, abandoned or compromised packages, registry credentials and `.env` hygiene.
 - **Endpoint scan** of a URL you're authorised to test: TLS, HSTS, security headers, CSP, CORS, cookies, auth behaviour and rate limiting.
 
-Everything runs locally except the endpoint scan, which only contacts the URL you enter.
+**OSV Vulnerability Scanner** checks every dependency version against [OSV.dev](https://osv.dev) for known CVEs and GHSA advisories.
+
+- **Twelve ecosystems:** npm, PyPI, Maven/Gradle, Go, Cargo, RubyGems, NuGet, Composer, pub, Hex, SwiftPM and CRAN.
+- **Transitive dependencies:** it reads your lockfiles, including in monorepos.
+- **Spring Boot and other Maven or Gradle projects** are resolved to their full dependency tree, with Maven or Gradle itself when you allow it, or with a built-in resolver. Libraries that starters, parents and BOMs bring in are checked too.
+- **Severity from the advisory:** GitHub's reviewed rating or the CVSS score. Results are grouped by severity, with search and filters.
+- **Verified fixes:** the fixed version, checked against OSV, and the upgrade command for your package manager. A command runs only after you confirm it.
+- **Honest about gaps:** a dependency with only a version range is marked *Potential*, never confirmed by guesswork. A scan that could not check everything says *Scan incomplete* and lists what was missed.
+- **Export** as HTML or JSON.
+- **Ways in:** right-click a lockfile in the Explorer, or run **Scan Workspace Dependencies for Vulnerabilities (OSV)**. [How it works](docs/OSV-SCANNER.md).
+
+Everything runs locally except the endpoint scan, which only contacts the URL you enter, and the OSV scanner, which sends only package names, versions and ecosystems to OSV.dev.
 
 📖 [Find hard-coded secrets and security issues in VS Code](docs/guides/find-hardcoded-secrets-in-vscode.md)
 
@@ -120,7 +131,7 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 
 ## JSON formatter, JWT decoder, cURL converter and 100+ utilities
 
-117 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
+118 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
 
 ![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/all-tools.jpg)
 
@@ -217,7 +228,7 @@ Twelve themes restyle every DevSnip Pro panel from the **Theme** selector at the
 - **Testing & Debugging** — Insert Debug Log, Clean Debug Logs, Run & Debug Configurations, Build Error Explainer, Log Analyzer & Formatter, Mock Data Generator, JSON Schema Validator, Port & Network Toolkit
 - **Git & Version Control** — Git Command Recipes, .gitignore Generator, Semver & App Versions
 - **DevOps & Cloud** — Dockerfile, Docker Compose, docker run → Compose, CI Pipeline, .env Checker, Kubernetes & Helm, Cloud Deploy Workflow, Cron Expression Helper, Nginx, Health Check Endpoints, Terraform, PM2, Observability Starter
-- **Security & Auth** — JWT Decoder & Signer, Workspace Security Audit, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit
+- **Security & Auth** — JWT Decoder & Signer, Workspace Security Audit, OSV Vulnerability Scanner, Hash / HMAC / Webhooks, OAuth 2.0 & PKCE, CSP & Security Headers, Endpoint Security Scan, Cookie Inspector, Dependency & Config Check, Certificate & SSL Pinning, Cloud & Container Audit
 - **AI & ML** — Prompt Builder, LLM Models / Tokens & Cost, LLM Client Setup, LLM Output Cleaner & JSON Validator, LLM API Tester, JSON → TOON, AI App Starter, AI/ML Code Snippets, GPU Memory & Speed, Model Serving Starter, Model Metrics, Dataset Split Planner, Learning-Rate Schedule, Model Card
 - **Data & RAG** — Chunking Tester, RAG Pipeline Generator, Vector Store Setup, Embedding Model Guide, Retrieval Configuration, Context Window Budget, Grounded Prompt Assembler, Chunk & Index Size Calculator, Retrieval Evaluation, Answer Grounding Checker, Vector Similarity, Near-Duplicate Chunk Finder, Hybrid Search Fusion, Chunk Metadata Validator, Data Transformer, Data Profiler, JSON Lines Inspector, Schema Viewer & Diff, Partition Planner, Spark Cluster & Cost, Delta Lake Log Analyzer
 

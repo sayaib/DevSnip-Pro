@@ -38,6 +38,7 @@ const registry_1 = require("../../toolkits/registry");
 const types_1 = require("../../toolkits/types");
 const page_2 = require("../../database/page");
 const securityTools_1 = require("../../commands/securityTools");
+const page_3 = require("../../osv/page");
 const api_test_1 = require("../../commands/api-test");
 const webview_ui_1 = require("../../utils/webview-ui");
 const vscode_stub_1 = require("./vscode-stub");
@@ -64,6 +65,7 @@ function pages() {
         ["toolkit", (0, page_1.renderToolPage)({ cspSource: "vscode-resource:", scriptUri: "t.js", tool: (0, types_1.describe)(tool), section: { id: "text", title: "Text" }, examples: [], initial: {}, platform: "darwin" })],
         ["hub", (0, tool_hub_1.renderToolHub)(hubs_1.ALL_TOOLS_HUB, { cspSource: "vscode-resource:", scriptUri: "h.js", pinned: [] })],
         ["database", (0, page_2.renderDatabasePage)({ cspSource: "vscode-resource:", scriptUri: "d.js", codiconsUri: "c.css", platform: "darwin" })],
+        ["osv", (0, page_3.renderOsvPage)({ cspSource: "vscode-resource:", scriptUri: "o.js", codiconsUri: "c.css" })],
         ["security", (0, securityTools_1.securityHubHtml)("abc123", { url: "https://example.com", timeoutMs: 1000, activeChecks: false })],
         ["rest", (0, api_test_1.getWebviewContent)([], true)]
     ];

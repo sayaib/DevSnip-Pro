@@ -22,6 +22,7 @@ const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets", "frameworkSnipp
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
 const DEBUG_LOG_COMMANDS = ["insertDebugLog", "removeDebugLogsInFile"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
+const OSV_COMMANDS = ["osvScanner", "osvScanWorkspace", "osvScanFile"].map(id => `sayaib.hue-console.${id}`);
 
 export function activate(context: vscode.ExtensionContext) {
   // Before anything writes state, so an existing user is never treated as a new install.
@@ -113,6 +114,9 @@ export function activate(context: vscode.ExtensionContext) {
     ["toolkit tools", () => registerToolkitCommands(context)],
     ["security tools", () => registerLazyCommands(context.subscriptions, SECURITY_COMMANDS, async () => {
       (await import("./commands/securityTools")).registerSecurityToolsCommands(context);
+    })],
+    ["OSV vulnerability scanner", () => registerLazyCommands(context.subscriptions, OSV_COMMANDS, async () => {
+      (await import("./osv/command")).registerOsvScannerCommands(context);
     })],
     ["database client", () => registerDatabaseClientCommand(context)],
     ["CSV & Excel viewer", () => registerSpreadsheetViewer(context)],

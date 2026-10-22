@@ -22,6 +22,7 @@ import {
 } from "../../commands/milestoneTracker";
 import { buildTrackerView, levelIndexFor, toolNamesFromManifest } from "../../services/milestone-view";
 import { QUEST_CHEST_POINTS, findQuest } from "../../services/quests";
+import { findEvent } from "../../services/activities";
 import * as fs from "fs";
 import * as path from "path";
 import { createExtensionContext } from "./vscode-stub";
@@ -143,8 +144,10 @@ suite("milestone state", () => {
       .filter(item => item.done)
       .map(item => findQuest(item.id)?.points ?? 0)
       .reduce((sum, points) => sum + points, 0) + (stats.quests.chestClaimed ? QUEST_CHEST_POINTS : 0);
-    assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus + questBonus);
-    assert.ok(stats.dailyPoints < 500, "a single day cannot produce an unbounded score");
+    // This week's event (it rotates by calendar week) can complete during the run as well.
+    const eventBonus = stats.event.done ? findEvent(stats.event.id)?.points ?? 0 : 0;
+    assert.strictEqual(stats.dailyPoints, stats.dailyEarnedPoints + milestoneBonus + questBonus + eventBonus);
+    assert.ok(stats.dailyPoints - eventBonus < 500, "a single day cannot produce an unbounded score");
   });
 
   test("milestones unlock once and only once", async () => {
@@ -288,9 +291,12 @@ suite("milestone lifetime points", () => {
     const context = freshContext();
     await autoRecordToolUsage("sayaib.hue-console.jsonFormatter");
     const stats = getUserStats(context);
-    // One tool run (+3) plus the First Tool milestone (+10).
-    assert.strictEqual(stats.totalPoints, 13);
-    assert.strictEqual(stats.lifetimePoints, 13);
+    // One tool run (+3) plus the First Tool milestone (+10), plus any of today's quests
+    // that one tool run completes (quests are picked by date, so this varies by day).
+    const questBonus = stats.quests.items.filter(item => item.done).reduce((sum, item) => sum + (findQuest(item.id)?.points ?? 0), 0)
+      + (stats.quests.chestClaimed ? QUEST_CHEST_POINTS : 0);
+    assert.strictEqual(stats.totalPoints, 13 + questBonus);
+    assert.strictEqual(stats.lifetimePoints, 13 + questBonus);
   });
 
   test("older data without lifetime points is migrated from balance plus spending in the log", () => {

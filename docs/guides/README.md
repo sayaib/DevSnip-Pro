@@ -20,6 +20,7 @@ Task-first guides for everyday development work in VS Code. Each one answers a c
 ## Security
 
 - [How to find hard-coded secrets and security issues in VS Code](find-hardcoded-secrets-in-vscode.md): workspace, infrastructure, dependency and endpoint checks before a release.
+- [OSV Vulnerability Scanner](../OSV-SCANNER.md): known CVEs in npm, PyPI, Maven, Go, Cargo, RubyGems, NuGet and more, from your lockfiles.
 
 ## Everyday tools
 

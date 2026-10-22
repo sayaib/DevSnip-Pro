@@ -13,6 +13,7 @@ import { findTool } from "../../toolkits/registry";
 import { describe } from "../../toolkits/types";
 import { renderDatabasePage } from "../../database/page";
 import { securityHubHtml } from "../../commands/securityTools";
+import { renderOsvPage } from "../../osv/page";
 import { getWebviewContent } from "../../commands/api-test";
 import { TOOL_CSS, UTILITY_CSS } from "../../utils/webview-ui";
 import { createExtensionContext } from "./vscode-stub";
@@ -39,6 +40,7 @@ function pages(): Array<[string, string]> {
     ["toolkit", renderToolPage({ cspSource: "vscode-resource:", scriptUri: "t.js", tool: describe(tool), section: { id: "text", title: "Text" }, examples: [], initial: {}, platform: "darwin" })],
     ["hub", renderToolHub(ALL_TOOLS_HUB, { cspSource: "vscode-resource:", scriptUri: "h.js", pinned: [] })],
     ["database", renderDatabasePage({ cspSource: "vscode-resource:", scriptUri: "d.js", codiconsUri: "c.css", platform: "darwin" })],
+    ["osv", renderOsvPage({ cspSource: "vscode-resource:", scriptUri: "o.js", codiconsUri: "c.css" })],
     ["security", securityHubHtml("abc123", { url: "https://example.com", timeoutMs: 1000, activeChecks: false })],
     ["rest", getWebviewContent([], true)]
   ];
