@@ -38,6 +38,8 @@ export interface DeclaredDependency {
   registry: boolean;
   /** Why the dependency cannot be checked, when that is known up front. */
   note?: string;
+  /** npm alias (`"old": "npm:lodash@4.17.4"`): the registry package and range it installs. */
+  alias?: { name: string; spec: string };
   /** Gradle/Maven: the version came from a property or catalog reference. */
   versionRef?: string;
 }
@@ -120,6 +122,8 @@ export function isRegistryNpmSpec(spec: string): boolean {
 export interface PackageJsonResult {
   dependencies: DeclaredDependency[];
   packageManager?: string;
+  /** The package's own "name". */
+  name?: string;
   error?: string;
 }
 
@@ -157,6 +161,9 @@ export function parsePackageJson(text: string, source = "package.json"): Package
       const spec = rawSpec.trim();
       const validName = isValidNpmName(name);
       const registry = validName && isRegistryNpmSpec(spec);
+      // "npm:<name>@<range>" installs another registry package under this name.
+      const aliased = /^npm:((?:@[^/@\s]+\/)?[^@\s]+)(?:@(.*))?$/i.exec(spec);
+      const alias = aliased && isValidNpmName(aliased[1]) && isRegistryNpmSpec(aliased[2]?.trim() || "*") ? { name: aliased[1], spec: aliased[2]?.trim() || "*" } : undefined;
       byName.set(name, {
         name,
         displayName: name,
@@ -164,6 +171,7 @@ export function parsePackageJson(text: string, source = "package.json"): Package
         scope,
         source,
         registry,
+        ...(alias ? { alias } : {}),
         note: !validName
           ? "The package name is not a valid npm name, so it is never installed automatically."
           : registry ? undefined : "Installed from git, a URL, a path, a workspace or an alias, so it is not checked against the registry."
@@ -172,7 +180,7 @@ export function parsePackageJson(text: string, source = "package.json"): Package
   }
 
   const packageManager = typeof manifest.packageManager === "string" ? manifest.packageManager : undefined;
-  return { dependencies: [...byName.values()], packageManager };
+  return { dependencies: [...byName.values()], packageManager, ...(typeof manifest.name === "string" && manifest.name ? { name: manifest.name } : {}) };
 }
 
 interface Pep508 { name: string; extras?: string; spec: string; marker?: string; direct: boolean }

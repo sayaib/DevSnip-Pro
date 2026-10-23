@@ -48,6 +48,13 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
   {
+    version: "11.81.1",
+    items: [
+      { title: "SCA Scanner: vulnerabilities, CISA known-exploited CVEs and deprecated packages, project by project", command: "scaScanner" },
+      { title: "Spring Boot-aware fixes: the lowest Boot release or property override that fixes each CVE, previewed before any edit", command: "scaScanWorkspace" }
+    ]
+  },
+  {
     version: "11.80.1",
     items: [
       { title: "OSV Vulnerability Scanner: known CVEs in npm, PyPI, Maven, Go, Cargo, RubyGems, NuGet and more", command: "osvScanner" },

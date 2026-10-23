@@ -1088,7 +1088,7 @@ suite("osv: remediation, reports and integration", () => {
     assert.match(html, /<h2>Limitations<\/h2>/);
     assert.match(html, /href="https:\/\/osv\.dev\/vulnerability\/GHSA-29mw-wpgm-hmr9"/);
     const json = JSON.parse(reportJson(result));
-    assert.deepStrictEqual(Object.keys(json).sort(), ["api", "cancelled", "diagnostics", "durationMs", "errors", "files", "findings", "finishedAt", "limitations", "packages", "partial", "remediations", "schemaVersion", "source", "startedAt", "status", "summary", "tool", "toolVersion", "workspace"]);
+    assert.deepStrictEqual(Object.keys(json).sort(), ["api", "cancelled", "diagnostics", "durationMs", "errors", "files", "findings", "finishedAt", "incompleteReasons", "limitations", "packages", "partial", "remediations", "schemaVersion", "source", "startedAt", "status", "summary", "tool", "toolVersion", "workspace"]);
     assert.match(html, /<b>Status:<\/b> <span class="ok">complete/);
   });
 

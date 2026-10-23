@@ -1,5 +1,154 @@
 # Development Changelog of DevSnip Pro
 
+## 11.81.1 - SCA Scanner: exploited CVEs, dependency health and Spring Boot-aware fixes
+
+A new **SCA Scanner** (software composition analysis) in the Security & Auth section. It builds on the OSV Vulnerability Scanner's engine, so both tools agree on every dependency and advisory. It adds which vulnerabilities are being exploited, which packages are deprecated or abandoned, and the safest fix for each, worked out from what actually controls the version. No npm dependency is added, and the scanner loads the first time you use it.
+
+### Added
+
+#### SCA Scanner
+
+- **Where to find it:** **SCA Scanner** in the Tools sidebar's Security & Auth section, **🛡️ DevSnip Pro: SCA Scanner** and **🛡️ DevSnip Pro: Scan Dependencies (SCA…)** in the Command Palette.
+- **Projects:**
+  - Maven reactors, Gradle builds, npm/Yarn/pnpm/Bun workspaces and other project folders are detected and listed, with their ecosystems and Spring Boot version.
+  - Scan all of them, or tick the ones you want. Parent POMs outside the selection are still read.
+- **Known exploited vulnerabilities:**
+  - Findings whose CVE is in CISA's Known Exploited Vulnerabilities catalog are marked **Exploited** and sorted first, with CISA's description, the date added, the required action and ransomware use.
+  - The catalog is downloaded once a day and matched locally.
+- **CVSS from NVD, only where OSV has none:** advisories without a published severity are scored from NVD's CVE API, preferring NVD's own CVSS 3.x analysis, and the source is named. No score is ever invented. A free NVD API key is optional and kept in VS Code's secret storage.
+- **Dependency health, kept apart from vulnerabilities:**
+  - **Deprecated, yanked, abandoned or inactive** packages are maintenance risks.
+  - **Outdated** packages (major, minor or patch behind) are informational.
+  - The data comes from npm, PyPI, Maven Central, NuGet, crates.io, RubyGems, Packagist, the Go module proxy, pub.dev and Hex.
+  - **A package is never called vulnerable because it is old.**
+- **Confirmed, potential and informational** findings are told apart.
+- **Spring Boot-aware remediation.** Each managed version records where it comes from: your POM, a parent (such as `spring-boot-starter-parent`), a BOM Boot imports (`spring-framework-bom`, `jackson-bom`, `log4j-bom` …) or a BOM you import. The fixes follow from that:
+  - **Upgrade Spring Boot** to the lowest release whose BOM manages a fixed version of that library. This is found by reading the real BOMs of published releases, and every release line is checked against OSV, so Tomcat 10.1 is not mistaken for a fix of a 9.0 advisory. Patch releases come first (low risk), then minor releases, then majors (high risk, with the Java 17 and `jakarta.*` note for Boot 3). Each card also names the Boot release that fixes every vulnerable library it manages.
+  - **Override the Boot property** (`tomcat.version`, `snakeyaml.version`) or the nested BOM's property (`spring-framework.version`), so a library family moves together. Libraries that share a property get one value, the highest any of them needs, at the risk of the biggest jump.
+  - **Pin it in your own `<dependencyManagement>`** when an imported BOM sets it.
+  - **Gradle:** upgrade the Spring Boot plugin, or set `ext['…']`.
+  - **Direct dependencies:** a version edit in `pom.xml`, `build.gradle`, `package.json`, `requirements.txt`, `.csproj`, `composer.json` or `Cargo.toml`.
+  - **Transitive npm dependencies:** `overrides`, `resolutions` or `pnpm.overrides`.
+- **Edits are previewed and confirmed.**
+  - **Preview Change** opens a diff.
+  - **Apply…** asks in a modal dialog, then changes and saves only that file. You can undo it in the editor.
+  - Edits keep the file's formatting and range operators. They refuse, with a reason, rather than guess.
+  - Only edits the current result proposed can be applied, and never in an untrusted workspace.
+  - Lockfiles are never edited, and nothing is installed or built.
+- **Dashboard:**
+  - **Cards:** critical, high, medium, low, informational and known exploited, plus totals for dependencies, vulnerable, direct and transitive.
+  - **Filters:** severity, ecosystem, direct/transitive, classification, exploited, scope and project. Search covers package, CVE, GHSA and text.
+  - **Sorting and grouping.**
+  - **Expandable findings** show affected and fixed versions, every dependency path, real file locations, and clickable CVE, GHSA, OSV and CWE links.
+  - **Tabs:** Remediation, Dependency health, Dependencies, and Sources & notes, which shows each advisory source's status.
+  - It is keyboard accessible and works at narrow widths.
+- **Export:** JSON (the full result) and CSV (one row per vulnerability or health finding, with spreadsheet formulas neutralised).
+- **Settings:** `devsnip.sca.healthChecks` (direct, all or off), `devsnip.sca.knownExploited`, `devsnip.sca.nvdEnrichment` and `devsnip.sca.bomUpgradeSearch`. Maven and Gradle settings are shared with the OSV Scanner.
+
+#### Scan diagnostics
+
+- **Every scan explains itself.** The **Sources & notes** tab and the log show:
+  - the projects found;
+  - the files scanned, unreadable, unsupported or left out as build output;
+  - dependencies discovered, resolved, direct and transitive;
+  - how Maven and Gradle resolved each build;
+  - packages checked, advisories and findings;
+  - errors, and the time spent in each stage.
+- **"Scan incomplete" always lists its reasons,** for example *2 dependency files could not be read; 6 dependency files are in an unsupported format*, with a button that jumps to them.
+
+### Fixed
+
+These fixes are in the shared engine, so the **OSV Vulnerability Scanner** gets them too. They were found by scanning a mixed repository and comparing the results with each package manager's own dependency list and with OSV.
+
+- **Projects in folders named `build`, `deps`, `dist`, `out`, `target` or `vendor` were never scanned.** These folders are now skipped only when they hold the build output or vendored packages of the project beside them (`vendor` beside `composer.json`, `target` beside `pom.xml`). A real project such as `tools/build/requirements.txt` is scanned, which found vulnerable packages that were missed before.
+- **Unsupported dependency files were skipped silently.** sbt, Deno, CocoaPods, Carthage, Conan, vcpkg, Stack/Cabal, Bazel, Clojure, Elm, Bower, Paket and other recognised files are now listed by name. The scan is marked incomplete, because their dependencies were not checked.
+- **A malformed `pom.xml` showed "0 dependencies".** It is now reported as unreadable, with the XML error.
+- **npm aliases** (`"old-lodash": "npm:lodash@4.17.4"`) were left unchecked. They are now checked as the package actually installed.
+- **Workspace packages could be looked up in the public registry.** npm and pnpm workspace members, linked `file:` packages and Cargo workspace crates are this project's own code, and are no longer sent to OSV. A public package of the same name could have produced false findings.
+- **pip `-c` constraint files were ignored.** A range such as `flask>=1.0,<2` is now checked at the version the constraints file pins.
+- **Many dependencies showed "relation unknown".** The project's own manifest now decides which lockfile entries are direct and which are transitive for npm, Yarn, pnpm, Poetry, uv, Pipenv, Composer and Cargo. On the test repository the count went from 103 to 0.
+- **Gradle builds read without running Gradle missed most dependencies when they used a version catalog.** The reader now understands:
+  - catalog libraries, bundles and plugin aliases (including the Spring Boot version they set);
+  - `mavenBom(SpringBootPlugin.BOM_COORDINATES)`;
+  - property overrides such as `extra["tomcat.version"]`, which Spring's dependency-management plugin applies.
+
+  On a Kotlin-script Spring Boot 3.4 build, it went from 5 to 76 of the 78 dependencies Gradle resolves. The two it skips are BOM-only POMs.
+- **Version catalog entries were counted twice** once Gradle had resolved the build. A declared version could differ from the one Gradle actually uses.
+- **The "Scan incomplete" banner** of the OSV Scanner now lists every reason, and the Files tab lists unsupported files.
+
+### Improved
+
+- **OSV Vulnerability Scanner:**
+  - **npm dependency paths:** `package-lock.json` v2/v3 dependencies now show the path that brings them in. It is rebuilt from the lockfile's edges the way Node resolves them.
+  - **One engine for both scanners.** The scan host moved to a shared engine (`src/osv/engine.ts`) that both scanners use.
+- **Maven and Gradle resolution records where every managed version comes from**, including the property and the BOM import behind it. Built-in properties such as `${project.version}` are never offered as overrides.
+- **SCA Scanner speed:** the exploitation, NVD, registry and Spring Boot upgrade checks run side by side. A scan of the test repository took 47 s instead of 168 s, with identical results.
+- **Cargo workspaces** are shown as one project, with their member crates.
+
+### Reliability
+
+- **Providers report their own status** (ok, partial, stale, unavailable, off). A provider that is unavailable makes the result **incomplete** instead of quietly clean. A provider you turned off does not.
+- **Rate limits:**
+  - NVD lookups are spaced for its public limit, capped per scan, cached for a week, and stop at the first rate-limit answer.
+  - Registry checks run 8 at a time and are cached for 6 hours. Failures are summed up per host.
+  - The BOM search shares loaded BOMs and its OSV answers across the scan, within a budget.
+- **Cancellation** stops the scan and every provider. Nothing more is requested after **Cancel**.
+
+### Privacy
+
+- **What is sent:**
+
+  | Service | Receives |
+  |---|---|
+  | OSV.dev, as before | Package names and versions |
+  | Registries | Package names |
+  | NVD | CVE ids |
+  | Maven Central | BOM coordinates |
+  | CISA | Nothing: the public catalog is downloaded |
+
+- **Never sent:** source code, file contents, paths and credentials. An integration test checks every request body.
+
+### Docs
+
+- New [docs/SCA-SCANNER.md](docs/SCA-SCANNER.md): usage, discovery, how results and fixes are decided, settings, privacy, diagnostics, limitations, verification, the report format and the code layout.
+- [docs/OSV-SCANNER.md](docs/OSV-SCANNER.md) describes the new folder rules and the unsupported-file reporting.
+
+### Tests
+
+- **Unit:** 847 tests, 42 of them new. They cover:
+  - KEV, NVD and registry parsing, caching and rate limits;
+  - all 14 edit operations;
+  - the BOM search, including release-line checks;
+  - project detection;
+  - npm paths;
+  - the Spring Boot analysis end to end against a mocked OSV, KEV, NVD, registries and Maven repository;
+  - the dashboard's filters and sorting, CSV escaping and the page's CSP;
+  - a regression test for every fix above.
+- **Integration:** 81 tests in VS Code. The SCA Scanner is tested against a fake network:
+  - its commands;
+  - a Spring Boot-style reactor from a fake Maven Central;
+  - enrichment and BOM-aware edits;
+  - the diff preview and the confirmation gate;
+  - discovery through VS Code's file search;
+  - project selection, cancellation and offline results.
+- **Verified against each package manager's own dependency list** on real projects. Every package found was also queried directly at OSV: no advisory was missing and none was extra.
+
+  | Ecosystem | Package manager's own list | Result |
+  |---|---|---|
+  | Maven | `mvn dependency:tree` | 114 of 114 |
+  | Gradle | `gradle dependencies` | 78 of 78 |
+  | npm | `npm ls` | 78 of 78 |
+  | pnpm | `pnpm list` | 57 of 57 |
+  | uv | `uv export` | 18 of 18 |
+  | Pipenv | `pipenv requirements` | 15 of 15 |
+  | Cargo | `cargo metadata` | 30 of 30 |
+  | NuGet | `dotnet list package` | 74 of 74 and 71 of 71; all 10 advisories NuGet's own audit reports |
+  | Poetry | `poetry show` | all, plus 3 platform-only lock entries |
+  | Go | `go list -deps -test` | all 13 built modules |
+
+  Bundler and Yarn match their generated lockfiles. Composer was checked only against a lockfile written in its format.
+- **Spring Boot, checked live:** a Spring Boot 2.6.6 reactor with `log4j-core` 2.14.1. All 96 dependencies were checked: 249 findings, 6 known exploited (Log4Shell CVE-2021-44228 and CVE-2021-45046, Tomcat CVE-2023-44487 and CVE-2025-24813). Maven's `dependency:tree` and the built-in resolver gave identical results.
+
 ## 11.80.1 - OSV Vulnerability Scanner: known CVEs in your dependencies, including Spring Boot, Maven and Gradle projects
 
 DevSnip Pro now finds dependencies with known vulnerabilities. It reads your lockfiles, manifests and Maven or Gradle builds, and checks every resolved package version against [OSV.dev](https://osv.dev), which includes the GitHub Advisory Database, PyPA, Go, RustSec and more. No npm dependency is added, and activation is unchanged: the scanner loads the first time you use it.

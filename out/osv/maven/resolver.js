@@ -66,9 +66,14 @@ function excluded(dep, exclusions) {
     return exclusions.some(ex => (ex.groupId === "*" || ex.groupId === dep.groupId) && (ex.artifactId === "*" || ex.artifactId === dep.artifactId));
 }
 class MavenResolver {
-    constructor(workspacePoms, repository, signal) {
+    /**
+     * `importOverrides` gives Gradle semantics: a project's properties override the same-named properties of the
+     * BOMs it imports (and of the BOMs those import), as Spring's dependency-management plugin does. Maven never does this.
+     */
+    constructor(workspacePoms, repository, signal, options = {}) {
         this.repository = repository;
         this.signal = signal;
+        this.options = options;
         this.workspace = new Map();
         this.workspaceErrors = new Map();
         this.workspaceByGav = new Map();
@@ -239,7 +244,15 @@ class MavenResolver {
             });
         }
         Object.assign(properties, builtins);
-        const ownManaged = [...raw.managed, ...active.flatMap(p => p.managed)];
+        // Only user-settable properties: ${project.version} and other built-ins cannot be overridden by a build.
+        const property = (version) => {
+            const name = /^\$\{([^}]+)\}$/.exec(version?.trim() ?? "")?.[1];
+            return name && !/^(?:project|pom|parent|env|settings|session)\.|^(?:version|groupId|artifactId|basedir)$/.test(name) ? name : undefined;
+        };
+        const ownManaged = [...raw.managed, ...active.flatMap(p => p.managed)].map(d => ({
+            ...d,
+            origin: { kind: loaded.path ? "workspace" : "parent", source: (0, exports.gavString)(gav), ...(loaded.path ? { path: loaded.path } : {}), ...(property(d.version) ? { property: property(d.version) } : {}) }
+        }));
         const isImport = (d) => d.scope === "import" && d.type === "pom";
         for (const repo of raw.repositories)
             if (/^https:\/\//i.test(repo))
@@ -273,6 +286,23 @@ class MavenResolver {
         }
         return promise;
     }
+    /** The BOM as the importing model sees it: with Gradle-style property overrides applied (a distinct model id, so it is cached apart). */
+    overridden(bom, importer) {
+        if (!this.options.importOverrides)
+            return bom;
+        const source = importer.overrides ?? importer.raw.properties ?? {};
+        const entries = Object.entries(source);
+        if (!entries.length)
+            return bom;
+        const applied = entries.filter(([key, value]) => key in bom.properties && bom.properties[key] !== value);
+        return {
+            ...bom,
+            // The override set is part of the id: nested BOMs see the same overrides, and results are cached per set.
+            id: `${bom.id}#${entries.map(([k, v]) => `${k}=${v}`).sort().join("&")}`,
+            properties: { ...bom.properties, ...Object.fromEntries(applied) },
+            overrides: { ...source }
+        };
+    }
     async buildEffective(model, chain) {
         const managed = new Map();
         for (const dep of model.explicitManaged) {
@@ -292,7 +322,7 @@ class MavenResolver {
             const bomModel = await this.loadModel({ gav }, []);
             if ("error" in bomModel)
                 return { error: `BOM ${(0, exports.gavString)(gav)} could not be loaded: ${bomModel.error}` };
-            return { effective: await this.effective(bomModel, [...chain, model.id, (0, exports.gavString)(gav)]) };
+            return { effective: await this.effective(this.overridden(bomModel, model), [...chain, model.id, (0, exports.gavString)(gav)]), gav };
         }));
         for (const bom of boms) {
             if ("error" in bom) {
@@ -300,9 +330,27 @@ class MavenResolver {
                     model.problems.push(bom.error);
                 continue;
             }
-            for (const [key, entry] of bom.effective.managed)
-                if (!managed.has(key))
-                    managed.set(key, entry);
+            for (const [key, entry] of bom.effective.managed) {
+                if (managed.has(key))
+                    continue;
+                // Seen from this model, everything a BOM brings is "import", named after the BOM imported here.
+                const declared = imports[boms.indexOf(bom)];
+                const via = declared.origin && declared.origin.kind !== "import"
+                    ? { kind: declared.origin.kind, source: declared.origin.source, ...(declared.origin.path ? { path: declared.origin.path } : {}), ...(declared.origin.property ? { property: declared.origin.property } : {}) }
+                    : undefined;
+                const nested = entry.origin?.kind === "import";
+                managed.set(key, {
+                    ...entry,
+                    origin: {
+                        ...(entry.origin ?? { source: (0, exports.gavString)(bom.gav) }),
+                        kind: "import",
+                        bom: (0, exports.gavString)(bom.gav),
+                        ...(via ? { importedBy: via } : {}),
+                        // The innermost BOM keeps its own name and the property its import reads.
+                        ...(nested ? {} : { directBom: (0, exports.gavString)(bom.gav), ...(via?.property ? { directBomProperty: via.property } : {}) })
+                    }
+                });
+            }
         }
         const seen = new Set();
         const dependencies = [];
@@ -355,6 +403,53 @@ class MavenResolver {
         if (!matching.length)
             return { error: "no published version is inside it." };
         return { version: matching.reduce((best, v) => ((0, dependency_versions_1.compareMaven)(v, best) > 0 ? v : best)) };
+    }
+    /**
+     * The version a published BOM (or parent) manages for one artifact, loading
+     * only what is needed: the BOM with its parents, then, when the artifact is
+     * not managed there directly, the imported BOM named by `via` (or each import
+     * in order). A full effective model would load every nested BOM, which is
+     * dozens of POMs for spring-boot-dependencies.
+     */
+    async managedVersion(bom, groupId, artifactId, via, depth = 0) {
+        if (depth > 4)
+            return undefined;
+        const model = await this.loadModel({ gav: bom }, []);
+        if ("error" in model)
+            return undefined;
+        for (const entry of model.explicitManaged) {
+            const d = this.interpolated(entry, model.properties);
+            if (d.groupId === groupId && d.artifactId === artifactId && d.version && !hasExpression(d.version))
+                return d.version;
+        }
+        const imports = model.imports.map(dep => this.interpolated(dep, model.properties)).filter(d => d.version && !hasExpression(d.version));
+        const ordered = via ? [...imports.filter(d => d.groupId === via.groupId && d.artifactId === via.artifactId), ...imports.filter(d => !(d.groupId === via.groupId && d.artifactId === via.artifactId))] : imports;
+        for (const imp of ordered) {
+            const found = await this.managedVersion({ groupId: imp.groupId, artifactId: imp.artifactId, version: imp.version }, groupId, artifactId, undefined, depth + 1);
+            if (found)
+                return found;
+            if (via)
+                break; // the BOM that managed it before does not any more: do not load every other import to look for it
+        }
+        return undefined;
+    }
+    /**
+     * Where each version managed for a workspace module comes from, keyed "group:artifact".
+     * Used to explain what controls a vulnerable version (Spring Boot's BOM, a property, your own POM).
+     */
+    async managementOf(file) {
+        const out = new Map();
+        const model = await this.loadModel({ path: file }, []);
+        if ("error" in model)
+            return out;
+        const root = await this.effective(model);
+        for (const entry of root.managed.values()) {
+            const key = `${entry.groupId}:${entry.artifactId}`;
+            if (!entry.version || hasExpression(entry.version) || out.has(key) || !entry.origin)
+                continue;
+            out.set(key, { ...entry.origin, version: entry.version });
+        }
+        return out;
     }
     /**
      * Resolves the dependency graph of one workspace module.
@@ -470,10 +565,12 @@ class MavenResolver {
                     problems.push(`${dep.groupId}:${dep.artifactId} ${version} resolves to ${picked.version}, the highest published version in the range.`);
                     version = picked.version;
                 }
+                const managedEntry = managedKeys.has(key) ? root.managed.get(managementKey(dep)) : undefined;
                 const node = {
                     groupId: dep.groupId, artifactId: dep.artifactId, version, classifier: dep.classifier, type: dep.type,
                     scope, optional: dep.optional, depth, via: item.via,
-                    internal: internal.has(`${dep.groupId}:${dep.artifactId}`)
+                    internal: internal.has(`${dep.groupId}:${dep.artifactId}`),
+                    ...(managedEntry?.origin && managedEntry.version === version ? { managed: { ...managedEntry.origin, version } } : {})
                 };
                 resolved.set(key, node);
                 winners.push({ ...item, node });

@@ -1,8 +1,8 @@
 import * as path from "path";
 import { MavenResolver, PomRepository } from "../maven/resolver";
 import type { BuildToolProject, ResolutionOutcome } from "../maven/index";
-import type { DependencyScope, ParsedDependency, ParsedFile } from "../types";
-import { buildDefaults, gradleBuildToPom, gradleProperties, readGradleBuild } from "./builtin";
+import type { DependencyScope, ManagedOrigin, ParsedDependency, ParsedFile } from "../types";
+import { buildDefaults, gradleBuildToPom, gradleProperties, readGradleBuild, readVersionCatalog } from "./builtin";
 import type { GradleConfiguration, GradleRunResult } from "./cli";
 
 /**
@@ -51,7 +51,7 @@ function scopeFor(configuration: string): DependencyScope {
 }
 
 /** Merges a project's classpaths: one entry per module version, production if any production classpath has it. */
-function fromConfigurations(file: string, configurations: GradleConfiguration[], label: string): ParsedFile {
+function fromConfigurations(file: string, configurations: GradleConfiguration[], label: string, management = new Map<string, ManagedOrigin>()): ParsedFile {
   const merged = new Map<string, ParsedDependency>();
   const unresolved = new Map<string, ParsedDependency>();
   for (const conf of configurations) {
@@ -60,7 +60,8 @@ function fromConfigurations(file: string, configurations: GradleConfiguration[],
       const scope = scopeFor(conf.configuration);
       const existing = merged.get(key);
       if (!existing) {
-        merged.set(key, { name: `${node.group}:${node.name}`, version: node.version, resolution: "lockfile", scope, direct: node.depth === 1, via: node.via });
+        const managed = management.get(`${node.group}:${node.name}`);
+        merged.set(key, { name: `${node.group}:${node.name}`, version: node.version, resolution: "lockfile", scope, direct: node.depth === 1, via: node.via, ...(managed?.version === node.version ? { managedBy: managed } : {}) });
         continue;
       }
       if (scope === "production") existing.scope = "production";
@@ -104,6 +105,34 @@ export async function resolveGradleProjects(
     const pending = new Set(members);
     let detail: string | undefined;
     let method: BuildToolProject["method"] = "builtin";
+    // Build scripts as POMs: every project of this build, so project(':x') dependencies resolve too.
+    const settingsText = SETTINGS_FILES.map(name => texts.get(join(root, name))).find(Boolean) ?? "";
+    const projectDirs = new Map<string, string>([[":", root]]);
+    for (const included of includedProjects(settingsText)) projectDirs.set(`:${included.replace(/\//g, ":")}`, join(root, included));
+    const coordinate = (dir: string) => ({ group: "gradle-project", name: (dir.slice(root.length).replace(/^\//, "") || "root").replace(/\//g, ".") });
+    const synthetic: Array<{ path: string; text: string }> = [];
+    const unreadable = new Map<string, string[]>();
+    const rootProps = gradleProperties([texts.get(join(root, "gradle.properties"))].filter((t): t is string => Boolean(t)));
+    // The default version catalog (gradle/libs.versions.toml) resolves `libs.…` accessors and plugin aliases.
+    const catalogText = texts.get(join(root, "gradle/libs.versions.toml"));
+    const catalog = catalogText ? readVersionCatalog(catalogText) : undefined;
+    const defaults = buildDefaults([settingsText, ...members.map(m => texts.get(m) ?? "")], rootProps, catalog);
+    for (const file of members) {
+      const dir = dirOf(file);
+      const props = gradleProperties([join(root, "gradle.properties"), join(dir, "gradle.properties")].map(p => texts.get(p)).filter((t): t is string => Boolean(t)));
+      const model = readGradleBuild(texts.get(file) ?? "", props, defaults);
+      // project(':lib') dependencies become dependencies on that project's POM.
+      for (const m of (texts.get(file) ?? "").matchAll(/^\s*([a-zA-Z]*(?:[Ii]mplementation|[Aa]pi|[Rr]untimeOnly|[Cc]ompileOnly))\s*[( ]\s*project\s*\(\s*(?:path\s*:\s*)?["'](:[^"']*)["']\s*\)/gm)) {
+        const target = projectDirs.get(m[2]) ?? join(root, m[2].replace(/^:/, "").replace(/:/g, "/"));
+        const c = coordinate(target);
+        model.dependencies.push({ group: c.group, name: c.name, version: "0", scope: /^test/i.test(m[1]) ? "test" : /compileOnly$/i.test(m[1]) ? "provided" : /runtimeOnly$/i.test(m[1]) ? "runtime" : "compile", line: 0 });
+      }
+      unreadable.set(file, model.unreadable);
+      synthetic.push({ path: join(dir, "pom.xml"), text: gradleBuildToPom(model, coordinate(dir)) });
+    }
+    // Also used to tell what manages each version (Spring Boot's BOM, an imported BOM) when Gradle itself resolved it.
+    const resolver = new MavenResolver(synthetic, strategy.repository, options.signal, { importOverrides: true });
+    const managementFor = async (file: string) => resolver.managementOf(join(dirOf(file), "pom.xml")).catch(() => new Map<string, ManagedOrigin>());
     if (strategy.runCli) {
       options.onProgress?.(`Resolving the Gradle build ${root || "."} with ${strategy.cliLabel ?? "Gradle"}`);
       const started = Date.now();
@@ -119,7 +148,7 @@ export async function resolveGradleProjects(
         }
         for (const [dir, configurations] of byDir) {
           const file = members.find(m => dirOf(m) === dir) ?? join(dir, "build.gradle");
-          out.set(file, fromConfigurations(file, configurations, strategy.cliLabel ?? "gradle"));
+          out.set(file, fromConfigurations(file, configurations, strategy.cliLabel ?? "gradle", members.includes(file) ? await managementFor(file) : undefined));
           pending.delete(file);
         }
         // A successful run that lists no classpath for a project (a root without the java plugin) means it has no dependencies.
@@ -139,29 +168,6 @@ export async function resolveGradleProjects(
     }
 
     if (pending.size) {
-      // Build scripts as POMs: every project of this build, so project(':x') dependencies resolve too.
-      const settingsText = SETTINGS_FILES.map(name => texts.get(join(root, name))).find(Boolean) ?? "";
-      const projectDirs = new Map<string, string>([[":", root]]);
-      for (const included of includedProjects(settingsText)) projectDirs.set(`:${included.replace(/\//g, ":")}`, join(root, included));
-      const coordinate = (dir: string) => ({ group: "gradle-project", name: (dir.slice(root.length).replace(/^\//, "") || "root").replace(/\//g, ".") });
-      const synthetic: Array<{ path: string; text: string }> = [];
-      const unreadable = new Map<string, string[]>();
-      const rootProps = gradleProperties([texts.get(join(root, "gradle.properties"))].filter((t): t is string => Boolean(t)));
-      const defaults = buildDefaults([settingsText, ...members.map(m => texts.get(m) ?? "")], rootProps);
-      for (const file of members) {
-        const dir = dirOf(file);
-        const props = gradleProperties([join(root, "gradle.properties"), join(dir, "gradle.properties")].map(p => texts.get(p)).filter((t): t is string => Boolean(t)));
-        const model = readGradleBuild(texts.get(file) ?? "", props, defaults);
-        // project(':lib') dependencies become dependencies on that project's POM.
-        for (const m of (texts.get(file) ?? "").matchAll(/^\s*([a-zA-Z]*(?:[Ii]mplementation|[Aa]pi|[Rr]untimeOnly|[Cc]ompileOnly))\s*[( ]\s*project\s*\(\s*(?:path\s*:\s*)?["'](:[^"']*)["']\s*\)/gm)) {
-          const target = projectDirs.get(m[2]) ?? join(root, m[2].replace(/^:/, "").replace(/:/g, "/"));
-          const c = coordinate(target);
-          model.dependencies.push({ group: c.group, name: c.name, version: "0", scope: /^test/i.test(m[1]) ? "test" : /compileOnly$/i.test(m[1]) ? "provided" : /runtimeOnly$/i.test(m[1]) ? "runtime" : "compile", line: 0 });
-        }
-        unreadable.set(file, model.unreadable);
-        synthetic.push({ path: join(dir, "pom.xml"), text: gradleBuildToPom(model, coordinate(dir)) });
-      }
-      const resolver = new MavenResolver(synthetic, strategy.repository, options.signal);
       for (const file of members) {
         if (!pending.has(file) || options.signal?.aborted) continue;
         const resolution = await resolver.resolveModule(join(dirOf(file), "pom.xml"), { conflict: "highest" });
@@ -172,6 +178,7 @@ export async function resolveGradleProjects(
             name: `${d.groupId}:${d.artifactId}`, version: d.version, resolution: "declared" as const,
             scope: d.scope === "test" ? "development" as const : "production" as const, direct: d.depth === 1,
             via: d.via.filter(v => !v.startsWith("gradle-project:")),
+            ...(d.managed ? { managedBy: d.managed } : {}),
             note: "Resolved from the build script without running Gradle; Gradle may resolve differently. Allow build tools for exact results.",
             ...(d.depth === 1 ? { line: lineOf(d.artifactId) } : {})
           })),
@@ -180,7 +187,7 @@ export async function resolveGradleProjects(
             registry: false, skip: "unresolved" as const, note: u.reason, ...(u.declared ? { spec: u.declared } : {})
           }))
         ];
-        const notes = [...resolution.problems, ...(unreadable.get(file) ?? []).slice(0, 5).map(line => `Not read (version catalog alias or code): ${line}`)];
+        const notes = [...resolution.problems, ...(unreadable.get(file) ?? []).slice(0, 5).map(line => `Not read (a catalog alias not in gradle/libs.versions.toml, or code): ${line}`)];
         out.set(file, { path: file, ecosystem: "Maven", kind: "manifest", manager: "gradle", dependencies, warnings: notes.slice(0, 25), resolvedBy: `DevSnip Pro's Gradle reader (${strategy.repositoryLabel})` });
         log(`Gradle: ${file} read from the build script: ${dependencies.filter(d => d.version).length} dependencies, ${resolution.unresolved.length} unresolved`);
       }

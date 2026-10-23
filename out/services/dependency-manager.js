@@ -110,6 +110,9 @@ function parsePackageJson(text, source = "package.json") {
             const spec = rawSpec.trim();
             const validName = isValidNpmName(name);
             const registry = validName && isRegistryNpmSpec(spec);
+            // "npm:<name>@<range>" installs another registry package under this name.
+            const aliased = /^npm:((?:@[^/@\s]+\/)?[^@\s]+)(?:@(.*))?$/i.exec(spec);
+            const alias = aliased && isValidNpmName(aliased[1]) && isRegistryNpmSpec(aliased[2]?.trim() || "*") ? { name: aliased[1], spec: aliased[2]?.trim() || "*" } : undefined;
             byName.set(name, {
                 name,
                 displayName: name,
@@ -117,6 +120,7 @@ function parsePackageJson(text, source = "package.json") {
                 scope,
                 source,
                 registry,
+                ...(alias ? { alias } : {}),
                 note: !validName
                     ? "The package name is not a valid npm name, so it is never installed automatically."
                     : registry ? undefined : "Installed from git, a URL, a path, a workspace or an alias, so it is not checked against the registry."
@@ -124,7 +128,7 @@ function parsePackageJson(text, source = "package.json") {
         }
     }
     const packageManager = typeof manifest.packageManager === "string" ? manifest.packageManager : undefined;
-    return { dependencies: [...byName.values()], packageManager };
+    return { dependencies: [...byName.values()], packageManager, ...(typeof manifest.name === "string" && manifest.name ? { name: manifest.name } : {}) };
 }
 exports.parsePackageJson = parsePackageJson;
 /** Parses one PEP 508 requirement string (the part pip and pyproject share). */

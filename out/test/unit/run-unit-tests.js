@@ -53,6 +53,8 @@ async function main() {
     require("./xml-json.unit");
     require("./osv.unit");
     require("./osv-maven.unit");
+    require("./sca.unit");
+    require("./sca-audit.unit");
     require("./theme.unit");
     require("./onboarding.unit");
     /* eslint-enable @typescript-eslint/no-var-requires */

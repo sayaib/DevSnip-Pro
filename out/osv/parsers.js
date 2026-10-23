@@ -27,6 +27,8 @@ exports.matchName = exports.parseDependencyFile = exports.FILE_ADAPTERS = export
 const path = __importStar(require("path"));
 const yaml_1 = require("yaml");
 const dependency_manager_1 = require("../services/dependency-manager");
+const xml_parse_1 = require("../toolkits/engines/xml-parse");
+const versions_1 = require("./versions");
 const toml_1 = require("./toml");
 /** Files read for context (versions, properties) but not scanned on their own. */
 exports.AUXILIARY_FILES = ["Directory.Packages.props", "gradle.properties", "settings.gradle", "settings.gradle.kts"];
@@ -259,7 +261,7 @@ function parseNpmLock(file, text, type) {
             const version = typeof entry.version === "string" ? entry.version : undefined;
             const topLevel = !installPath.slice(0, marker).includes("node_modules/");
             const line = lines.find(`"${installPath}": {`);
-            const base = { name, scope: npmScope(entry), direct: topLevel && direct.has(name) ? true : topLevel ? undefined : false, line };
+            const base = { name, scope: npmScope(entry), direct: topLevel && direct.has(name) ? true : topLevel ? undefined : false, line, installPath };
             if (entry.inBundle === true && !version)
                 continue;
             if (!version) {
@@ -272,7 +274,72 @@ function parseNpmLock(file, text, type) {
                 deps.push({ ...base, version, resolution: "lockfile" });
             }
         }
-        return { ...result(file, type, deps, warnings), members };
+        // Dependency paths: walk the lockfile's edges from the root and workspace members the way Node resolves
+        // them (nearest node_modules first, then each ancestor), keeping the shortest path to every install.
+        const edgesOf = (entry) => ["dependencies", "optionalDependencies", "peerDependencies"].flatMap(key => Object.keys(asRecord(entry?.[key]) ?? {}));
+        const resolveFrom = (from, name) => {
+            let base = from;
+            for (let hops = 0; hops < 64; hops++) {
+                const candidate = `${base ? `${base}/` : ""}node_modules/${name}`;
+                const found = asRecord(packages[candidate]);
+                if (found)
+                    return found.link === true && typeof found.resolved === "string" ? found.resolved : candidate;
+                if (!base)
+                    return undefined;
+                const marker = base.lastIndexOf("node_modules/");
+                base = marker < 0 ? "" : base.slice(0, marker).replace(/\/+$/, "");
+            }
+            return undefined;
+        };
+        const parentOf = new Map();
+        const queue = [...members];
+        const seen = new Set(members);
+        for (let i = 0; i < queue.length; i++) {
+            const from = queue[i];
+            for (const name of edgesOf(asRecord(packages[from]))) {
+                const to = resolveFrom(from, name);
+                if (!to || seen.has(to))
+                    continue;
+                seen.add(to);
+                parentOf.set(to, from);
+                queue.push(to);
+            }
+        }
+        const label = (installPath) => {
+            const entry = asRecord(packages[installPath]) ?? {};
+            const marker = installPath.lastIndexOf("node_modules/");
+            const name = typeof entry.name === "string" ? entry.name : installPath.slice(marker + "node_modules/".length);
+            return typeof entry.version === "string" ? `${name}@${entry.version}` : name;
+        };
+        const memberSet = new Set(members);
+        const viaFor = (installPath) => {
+            const chain = [];
+            let at = parentOf.get(installPath);
+            while (at !== undefined && !memberSet.has(at) && chain.length < 16) {
+                chain.unshift(label(at));
+                at = parentOf.get(at);
+            }
+            return chain.length ? chain : undefined;
+        };
+        for (const dep of deps) {
+            const installPath = dep.installPath;
+            if (installPath === undefined)
+                continue;
+            const via = viaFor(installPath);
+            if (via)
+                dep.via = via;
+            delete dep.installPath;
+        }
+        // Linked packages (workspace members, file: dependencies) are this workspace's own code.
+        const localPackages = Object.entries(packages)
+            .filter(([installPath, raw]) => installPath.includes("node_modules/") && asRecord(raw)?.link === true)
+            .map(([installPath]) => installPath.slice(installPath.lastIndexOf("node_modules/") + "node_modules/".length));
+        for (const member of members) {
+            const own = asRecord(packages[member])?.name;
+            if (member && typeof own === "string")
+                localPackages.push(own);
+        }
+        return { ...result(file, type, deps, warnings), members, localPackages: [...new Set(localPackages)] };
     }
     const legacy = asRecord(json.dependencies);
     if (legacy) {
@@ -468,7 +535,18 @@ function parsePnpmLock(file, text, type) {
         seen.add(id);
         deps.push({ name, version, resolution: "lockfile", scope, direct, line });
     }
-    return { ...result(file, type, deps), members };
+    // Importer dependencies on `link:` versions are workspace packages.
+    const localPackages = [];
+    for (const importer of Object.values(asRecord(doc.importers) ?? {})) {
+        for (const key of ["dependencies", "devDependencies", "optionalDependencies"]) {
+            for (const [name, raw] of Object.entries(asRecord(asRecord(importer)?.[key]) ?? {})) {
+                const version = typeof raw === "string" ? raw : asRecord(raw)?.version;
+                if (typeof version === "string" && /^(?:link|workspace|file):/.test(version))
+                    localPackages.push(name);
+            }
+        }
+    }
+    return { ...result(file, type, deps), members, ...(localPackages.length ? { localPackages: [...new Set(localPackages)] } : {}) };
 }
 function parseBunLock(file, text, type) {
     let doc;
@@ -528,11 +606,13 @@ function parseNpmManifest(file, text, type) {
     if (parsed.error)
         return result(file, type, [], [], parsed.error);
     const lines = new Lines(text);
-    const deps = fromDeclared(parsed.dependencies, lines, spec => {
+    // An alias is checked as the registry package it installs (OSV knows lodash, not "old-lodash").
+    const declared = parsed.dependencies.map(d => (d.alias ? { ...d, name: d.alias.name, spec: d.alias.spec, registry: true, note: undefined } : d));
+    const deps = fromDeclared(declared, lines, spec => {
         const exact = spec.replace(/^=/, "").trim();
         return SEMVER_EXACT.test(exact) ? exact.replace(/^v/, "") : undefined;
-    }, d => d.name, d => new RegExp(`"${escapeRegExp(d.name)}"\\s*:`));
-    return result(file, type, deps);
+    }, d => d.name, d => new RegExp(`"${escapeRegExp(d.displayName)}"\\s*:`));
+    return { ...result(file, type, deps), ...(parsed.name ? { selfName: parsed.name } : {}) };
 }
 // ---------------------------------------------------------------------------
 // Python
@@ -547,16 +627,45 @@ function pythonLine(lines, display) {
     // A lookbehind, so the match starts at the name itself and the line number is the name's line.
     return new RegExp(`(?<![\\w.-])${flexible}(?=\\s*[\\[<>=!~;@"',\\s\\]]|$)`, "im");
 }
-function parseRequirementsFile(file, text, type) {
+function parseRequirementsFile(file, text, type, context = NO_CONTEXT) {
     const scope = (0, dependency_manager_1.isDevRequirementsFile)(file) ? "development" : "production";
     const declared = (0, dependency_manager_1.parseRequirements)(text, file, scope);
     const lines = new Lines(text);
     const warnings = [];
-    if (/^\s*-[rc]\s+\S+/m.test(text))
-        warnings.push("Includes other requirement or constraint files (-r / -c); each is scanned separately when it is in the workspace.");
+    if (/^\s*(?:-r|--requirement)[\s=]+\S+/m.test(text))
+        warnings.push("Includes other requirement files (-r); each is scanned as well when it is in the workspace.");
     if (/^\s*-e\s+/m.test(text))
         warnings.push("Editable (-e) installs are local or VCS sources and are not checked.");
-    return result(file, type, fromDeclared(declared, lines, exactPep440, d => d.name, d => pythonLine(lines, d.displayName)), warnings);
+    const deps = fromDeclared(declared, lines, exactPep440, d => d.name, d => pythonLine(lines, d.displayName));
+    // pip -c constraint files pin the versions of what this file installs: a range with an exact constraint is that version.
+    const pins = new Map();
+    for (const match of text.matchAll(/^\s*(?:-c|--constraint)(?:\s+|=)(\S+)/gm)) {
+        const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1]));
+        const constraints = context.read?.(target);
+        if (constraints === undefined) {
+            warnings.push(`The constraints file ${match[1]} is not in the workspace, so the versions it pins are not known.`);
+            continue;
+        }
+        for (const c of (0, dependency_manager_1.parseRequirements)(constraints, target, scope)) {
+            const exact = c.registry ? exactPep440(c.spec) : undefined;
+            if (exact)
+                pins.set(c.name, { version: exact, from: target });
+        }
+    }
+    for (const dep of deps) {
+        const pin = dep.version || dep.registry === false ? undefined : pins.get((0, dependency_manager_1.normalizePipName)(dep.name));
+        if (!pin)
+            continue;
+        const spans = (0, versions_1.declaredSpans)("PyPI", dep.spec);
+        if (spans && !spans.some(span => (0, versions_1.spanContains)(span, pin.version, (0, versions_1.comparatorFor)("PyPI")))) {
+            warnings.push(`${dep.name}: ${pin.from} pins ${pin.version}, which "${dep.spec}" does not allow; pip would refuse to install it.`);
+            continue;
+        }
+        dep.version = pin.version;
+        dep.resolution = "pinned";
+        dep.note = `Pinned to ${pin.version} by ${pin.from}.`;
+    }
+    return result(file, type, deps, warnings);
 }
 function parsePipfileLock(file, text, type) {
     let doc;
@@ -843,6 +952,13 @@ function isMavenDynamic(version) {
 function parsePomFile(file, text, type, context) {
     if (!/<project[\s>]/.test(text))
         return result(file, type, [], [], "Not a Maven POM (no <project> element).");
+    // Malformed XML is reported, never read as "no dependencies".
+    try {
+        (0, xml_parse_1.parseXml)(text);
+    }
+    catch (error) {
+        return result(file, type, [], [], `Not a readable POM: ${errorText(error)}`);
+    }
     const declared = (0, dependency_manager_1.parsePom)(text, file);
     const lines = new Lines(text);
     // Properties a child POM uses are often defined in a parent POM higher up the tree.
@@ -994,6 +1110,7 @@ function parseCargoLock(file, text, type) {
         return result(file, type, [], [], `Not valid TOML: ${errorText(error)}`);
     }
     const deps = [];
+    const localPackages = [];
     for (const pkg of (0, toml_1.asTables)(doc.package)) {
         const name = (0, toml_1.asString)(pkg.name);
         const version = (0, toml_1.asString)(pkg.version);
@@ -1001,8 +1118,10 @@ function parseCargoLock(file, text, type) {
         if (!name)
             continue;
         const line = (0, toml_1.lineOf)(pkg);
-        if (!source)
-            continue; // a member of this workspace
+        if (!source) {
+            localPackages.push(name);
+            continue;
+        } // a member of this workspace (or a path crate)
         if (!/^(?:registry\+https:\/\/github\.com\/rust-lang\/crates\.io-index|sparse\+https:\/\/index\.crates\.io\/?)$/.test(source)) {
             deps.push({ name, resolution: "lockfile", scope: "production", line, registry: false,
                 note: source.startsWith("git+") ? "Built from a git repository, so crates.io advisories may not apply." : "Comes from an alternative registry, so crates.io advisories may not apply." });
@@ -1012,7 +1131,7 @@ function parseCargoLock(file, text, type) {
             continue;
         deps.push({ name, version, resolution: "lockfile", scope: "production", line });
     }
-    return result(file, type, deps);
+    return { ...result(file, type, deps), ...(localPackages.length ? { localPackages } : {}) };
 }
 function parseCargoToml(file, text, type) {
     let doc;

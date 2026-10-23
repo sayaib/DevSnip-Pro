@@ -238,11 +238,11 @@
     }
     if (su.files === 0) return;
     if (r.status === "incomplete") {
-      var gaps = [];
-      if (su.unresolvedPackages) gaps.push(plural(su.unresolvedPackages, "dependency", "dependencies") + " with a version that could not be determined");
-      if (su.failedPackages) gaps.push(plural(su.failedPackages, "dependency", "dependencies") + " OSV could not be queried for");
-      if (r.diagnostics && r.diagnostics.recordsFailed) gaps.push(plural(r.diagnostics.recordsFailed, "advisory", "advisories") + " whose details could not be loaded");
-      if (r.diagnostics && r.diagnostics.filesFailed) gaps.push(plural(r.diagnostics.filesFailed, "file") + " that could not be read");
+      var gaps = r.incompleteReasons && r.incompleteReasons.length ? r.incompleteReasons.slice() : [];
+      if (!gaps.length && su.unresolvedPackages) gaps.push(plural(su.unresolvedPackages, "dependency", "dependencies") + " with a version that could not be determined");
+      if (!(r.incompleteReasons && r.incompleteReasons.length) && su.failedPackages) gaps.push(plural(su.failedPackages, "dependency", "dependencies") + " OSV could not be queried for");
+      if (!(r.incompleteReasons && r.incompleteReasons.length) && r.diagnostics && r.diagnostics.recordsFailed) gaps.push(plural(r.diagnostics.recordsFailed, "advisory", "advisories") + " whose details could not be loaded");
+      if (!(r.incompleteReasons && r.incompleteReasons.length) && r.diagnostics && r.diagnostics.filesFailed) gaps.push(plural(r.diagnostics.filesFailed, "file") + " that could not be read");
       var actions = [
         su.unresolvedPackages || su.failedPackages ? button("Show Unchecked Packages", { kind: "ghost small", icon: "list-flat", onclick: function () { ui.pkgStatus = "unanalyzed"; persist(); renderPackagesPanel(); selectTab("packages"); } }) : null,
         r.diagnostics && r.diagnostics.buildTools && r.diagnostics.buildTools.length ? button("Build Tool Settings", { kind: "ghost small", icon: "settings-gear", onclick: function () { post({ type: "mavenSettings" }); } }) : null,
@@ -252,7 +252,7 @@
       var lead = su.findings === 0
         ? "No vulnerabilities were found in the " + plural(su.analyzedPackages, "analysed dependency", "analysed dependencies") + ", but the scan is incomplete, so this is not a clean result. "
         : "";
-      append(slots.status, banner("warn", "warning", "Scan incomplete", lead + "Not checked: " + gaps.join("; ") + "." + (r.errors.length ? " " + r.errors.join(" ") : ""), actions));
+      append(slots.status, banner("warn", "warning", "Scan incomplete", lead + "Not fully checked: " + gaps.join("; ") + "." + (r.errors.length ? " " + r.errors.join(" ") : ""), actions));
       return;
     }
     if (su.findings === 0) {
@@ -806,7 +806,13 @@
     });
     table.appendChild(tbody);
     panel.appendChild(h("div", { class: "table-wrap", style: "margin-top:14px" }, table));
-
+    // Recognised dependency files the scanner cannot read: listed, so a gap is never silent.
+    (r.unsupportedFiles || []).forEach(function (u) {
+      tbody.appendChild(h("tr", null,
+        h("td", null, r.source === "workspace" ? h("a", { href: "#", onclick: function (e) { e.preventDefault(); post({ type: "openFile", file: u.path, line: 1 }); } }, u.path) : h("span", { class: "mono" }, u.path)),
+        h("td", null, "—"), h("td", null, "unsupported"), h("td", null, "—"), h("td", null, "—"),
+        h("td", null, h("span", { class: "status unanalyzed" }, icon("circle-slash"), u.format + " is not supported, so its dependencies were not checked."))));
+    });
   }
 
   function renderNotesPanel() {

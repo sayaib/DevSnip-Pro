@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.80.1",
+  "version": "11.81.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -681,6 +681,14 @@
         "title": "🛡️ DevSnip Pro: Scan Workspace Dependencies for Vulnerabilities (OSV)"
       },
       {
+        "command": "sayaib.hue-console.scaScanner",
+        "title": "🛡️ DevSnip Pro: SCA Scanner"
+      },
+      {
+        "command": "sayaib.hue-console.scaScanWorkspace",
+        "title": "🛡️ DevSnip Pro: Scan Dependencies (SCA: vulnerabilities, exploited CVEs, dependency health)"
+      },
+      {
         "command": "sayaib.hue-console.osvScanFile",
         "title": "Scan for Vulnerabilities (OSV)",
         "category": "DevSnip Pro",
@@ -987,6 +995,32 @@
           "minimum": 30,
           "maximum": 3600,
           "description": "Time limit for one Maven or Gradle run of the OSV Vulnerability Scanner. Projects the build tool does not finish in time are resolved by the built-in resolver."
+        },
+        "devsnip.sca.healthChecks": {
+          "type": "string",
+          "enum": ["direct", "all", "off"],
+          "enumDescriptions": [
+            "Check direct dependencies in their registries (latest release, deprecated, yanked, abandoned).",
+            "Check every dependency, including transitive ones (more registry requests).",
+            "Do not check dependency health."
+          ],
+          "default": "direct",
+          "markdownDescription": "Which dependencies the SCA Scanner checks in their package registries for outdated, deprecated, yanked or abandoned releases. Only package names and versions are sent. Health findings are never counted as vulnerabilities."
+        },
+        "devsnip.sca.knownExploited": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Mark vulnerabilities listed in CISA's [Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) catalog. The catalog is downloaded (cached for a day) and matched locally; nothing from your project is sent."
+        },
+        "devsnip.sca.nvdEnrichment": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Look up CVSS scores in the National Vulnerability Database for CVEs that OSV publishes no severity for (only CVE ids are sent; cached for a week). Without an API key NVD allows 5 requests per 30 seconds, so at most 12 lookups run per scan; add a free key from the SCA Scanner's menu for more."
+        },
+        "devsnip.sca.bomUpgradeSearch": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "For Maven and Gradle dependencies whose version a parent POM or BOM controls (such as Spring Boot's), search that BOM's published releases for the lowest one that manages fixed versions. Reads `maven-metadata.xml` and BOM POMs from your local Maven repository and, when `devsnip.osvScanner.downloadPoms` allows, Maven Central."
         }
       }
     },

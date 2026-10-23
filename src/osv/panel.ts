@@ -5,18 +5,14 @@ import { trackToolUsed } from "../analytics";
 import { reach } from "../onboarding/activation";
 import { setWebviewHtml } from "../theme/service";
 import { confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
-import { OsvCache, OsvClient } from "./client";
+import { clearMemoryCache, loadCache, runEngineScan, saveCache, scanLog } from "./engine";
 import { renderOsvPage } from "./page";
 import { SUPPORTED_FILE_NAMES } from "./parsers";
 import { reportHtml, reportJson } from "./report";
-import { runScan, ScanFile } from "./scan";
 import type { ScanProgress, ScanResult } from "./types";
 import { SUPPORTED_ECOSYSTEMS } from "./types";
 import { discoverFiles, discoverWorkspace, FILE_DIALOG_FILTERS } from "./workspace";
-import { detectFileType } from "./parsers";
-import { resolveMavenProjects } from "./maven/index";
-import { buildToolGate, clearPomCache, createGradleStrategy, createMavenStrategy } from "./maven/host";
-import { resolveGradleProjects } from "./gradle/index";
+import { clearPomCache } from "./maven/host";
 
 /**
  * The OSV Vulnerability Scanner panel: one webview, one scan at a time.
@@ -27,7 +23,6 @@ import { resolveGradleProjects } from "./gradle/index";
  */
 
 const VIEW_TYPE = "devsnipOsvScanner";
-const CACHE_FILE = "osv-cache.json";
 const TOOL_ID = "osvScanner";
 
 interface Session {
@@ -44,16 +39,6 @@ let lastContext: vscode.ExtensionContext | undefined;
 let panel: vscode.WebviewPanel | undefined;
 let ready = false;
 const queue: unknown[] = [];
-let cache: OsvCache | undefined;
-let logChannel: vscode.LogOutputChannel | undefined;
-
-/** "DevSnip Pro: OSV Scanner" in the Output panel: what each scan found, queried and dropped, stage by stage. */
-function scanLog(): vscode.LogOutputChannel {
-  logChannel ??= vscode.window.createOutputChannel("DevSnip Pro: OSV Scanner", { log: true });
-  return logChannel;
-}
-let cacheLoad: Promise<OsvCache> | undefined;
-
 function post(message: unknown): void {
   if (!panel) return;
   if (!ready) { queue.push(message); return; }
@@ -63,37 +48,6 @@ function post(message: unknown): void {
 function workspaceInfo(): { name: string; folders: string[]; hasWorkspace: boolean } {
   const folders = vscode.workspace.workspaceFolders ?? [];
   return { name: vscode.workspace.name ?? folders[0]?.name ?? "No folder open", folders: folders.map(f => f.name), hasWorkspace: folders.length > 0 };
-}
-
-function toolVersion(context: vscode.ExtensionContext): string {
-  return String(context.extension?.packageJSON?.version ?? "dev");
-}
-
-async function loadCache(context: vscode.ExtensionContext): Promise<OsvCache> {
-  if (cache) return cache;
-  cacheLoad ??= (async () => {
-    const fresh = new OsvCache(2000);
-    try {
-      if (context.globalStorageUri) {
-        const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.globalStorageUri, CACHE_FILE));
-        fresh.load(JSON.parse(Buffer.from(bytes).toString("utf8")));
-      }
-    } catch { /* first run, or an unreadable cache: start empty */ }
-    cache = fresh;
-    return fresh;
-  })();
-  return cacheLoad;
-}
-
-async function saveCache(context: vscode.ExtensionContext): Promise<void> {
-  if (!cache?.dirty || !context.globalStorageUri) return;
-  try {
-    await vscode.workspace.fs.createDirectory(context.globalStorageUri);
-    await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(context.globalStorageUri, CACHE_FILE), Buffer.from(JSON.stringify(cache.toJSON()), "utf8"));
-    cache.dirty = false;
-  } catch (error) {
-    console.warn("DevSnip Pro: could not save the OSV cache.", error);
-  }
 }
 
 function initMessage(): unknown {
@@ -226,37 +180,18 @@ async function startScan(context: vscode.ExtensionContext, options: { fresh?: bo
       const discovery = options.files
         ? await discoverFiles(options.files, token.token)
         : await discoverWorkspace(token.token, (done, total) => onProgress({ phase: "discover", message: `Reading dependency files (${done}/${total})`, fraction: 0.02 + 0.03 * (done / Math.max(1, total)) }));
-      const files: ScanFile[] = discovery.files;
       if (controller.signal.aborted) throw new vscode.CancellationError();
-      const store = await loadCache(context);
-      const client = new OsvClient({ userAgent: `DevSnip-Pro/${toolVersion(context)} (VS Code ${vscode.version}; OSV scanner)` });
-      const log = scanLog();
-      log.info(`---- OSV scan of ${label} (DevSnip Pro ${toolVersion(context)}) ----`);
-      const pomPaths = files.filter(f => detectFileType(f.path)?.id === "pom").map(f => f.path);
-      const allowBuildTools = buildToolGate(context, message => log.info(message));
-      const result = await runScan(files, {
-        onLog: message => log.info(message),
-        resolveMaven: async (poms, signal) => {
-          const strategy = await createMavenStrategy({ context, allowBuildTools, locations: discovery.locations, pomPaths, onLog: message => log.info(message) });
-          return resolveMavenProjects(poms, strategy, { signal, onLog: message => log.info(message), onProgress: message => onProgress({ phase: "parse", message, fraction: 0.08 }) });
-        },
-        resolveGradle: async (gradleFiles, signal) => {
-          const buildFiles = gradleFiles.filter(f => !f.context && /build\.gradle(\.kts)?$/.test(f.path)).map(f => f.path);
-          const strategy = await createGradleStrategy({ context, allowBuildTools, locations: discovery.locations, buildFiles, onLog: message => log.info(message) });
-          return resolveGradleProjects(gradleFiles, strategy, { signal, onLog: message => log.info(message), onProgress: message => onProgress({ phase: "parse", message, fraction: 0.09 }) });
-        },
-        client, cache: store, signal: controller.signal, fresh: options.fresh, toolVersion: toolVersion(context),
+      const { result } = await runEngineScan({
+        context, discovery, label, title: "OSV scan", signal: controller.signal, fresh: options.fresh,
         workspace: { name: options.files ? label : info.name, folders: options.files ? [] : info.folders },
         // Files inside the workspace keep workspace-relative paths, so they can be opened and fixed from the panel.
         source: !options.files || discovery.inWorkspace ? "workspace" : "files",
-        limitations: discovery.limitations,
         onProgress: progress => { onProgress(progress); report.report({ message: progress.message }); }
       });
       if (mine !== generation) return; // a newer scan owns the panel now
       session.result = result;
       session.progress = undefined;
       post({ type: "result", result });
-      void saveCache(context);
       if (!result.cancelled) {
         trackToolUsed(TOOL_ID);
         void reach("first_security_scan");
@@ -359,7 +294,7 @@ async function runRemediation(command: string, cwd: string): Promise<void> {
 export function osvSessionForTests(reset = false): Session {
   if (reset) {
     session.result = undefined;
-    cache?.clear();
+    clearMemoryCache();
     if (lastContext) void clearPomCache(lastContext);
   }
   return session;

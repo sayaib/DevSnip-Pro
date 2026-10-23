@@ -15,7 +15,7 @@ function lineFinder(text) {
         return index < 0 ? undefined : text.slice(0, index).split("\n").length;
     };
 }
-function fromTree(file, tree, internal, text, label) {
+function fromTree(file, tree, internal, text, label, management = new Map()) {
     const line = lineFinder(text);
     const dependencies = tree.nodes
         .filter(node => !internal.has(`${node.groupId}:${node.artifactId}`))
@@ -26,6 +26,7 @@ function fromTree(file, tree, internal, text, label) {
         scope: scopeOf(node.scope, node.optional),
         direct: node.depth === 1,
         via: node.via,
+        ...(management.get(`${node.groupId}:${node.artifactId}`)?.version === node.version ? { managedBy: management.get(`${node.groupId}:${node.artifactId}`) } : {}),
         ...(node.depth === 1 ? { line: line(node.artifactId) } : {}),
         ...(node.classifier ? { note: `Classifier ${node.classifier}.` } : {})
     }));
@@ -41,6 +42,7 @@ function fromResolution(resolution, text, label) {
             scope: scopeOf(d.scope, d.optional),
             direct: d.depth === 1,
             via: d.via,
+            ...(d.managed ? { managedBy: d.managed } : {}),
             ...(d.depth === 1 ? { line: line(d.artifactId) } : {})
         })),
         ...resolution.unresolved.map(u => ({
@@ -104,7 +106,9 @@ async function resolveMavenProjects(poms, strategy, options = {}) {
                     const tree = gav && run.trees.find(t => t.groupId === gav.groupId && t.artifactId === gav.artifactId);
                     if (!tree)
                         continue;
-                    files.set(module, fromTree(module, tree, internal, texts.get(module), strategy.cliLabel ?? "mvn"));
+                    // What manages each version (Spring Boot's BOM, a property, your POM), from the POMs; best effort.
+                    const management = await resolver.managementOf(module).catch(() => new Map());
+                    files.set(module, fromTree(module, tree, internal, texts.get(module), strategy.cliLabel ?? "mvn", management));
                     pending.delete(module);
                 }
                 if (pending.size === 0)
@@ -140,6 +144,12 @@ async function resolveMavenProjects(poms, strategy, options = {}) {
             unresolved: new Set(moduleFiles.flatMap(f => f.dependencies.filter(d => d.skip === "unresolved").map(d => d.name))).size,
             ...(detail ? { detail } : {})
         });
+    }
+    // A POM that is not valid XML cannot be resolved or read: report it as unreadable, never as "0 dependencies".
+    for (const [file, reason] of resolver.invalid) {
+        if (!targets.has(file) || files.has(file))
+            continue;
+        files.set(file, { path: file, ecosystem: "Maven", kind: "manifest", manager: "maven", dependencies: [], warnings: [], error: `Not a readable POM: ${reason}` });
     }
     log(`Maven: POMs from the workspace ${resolver.stats.pomsFromWorkspace}, from repositories ${resolver.stats.pomsFetched}, not found ${resolver.stats.pomsMissing}`);
     return { files, projects };

@@ -24,14 +24,14 @@ import { includedProjects, resolveGradleProjects } from "../../osv/gradle/index"
  *   starters declare their own dependencies; libraries depend on each other.
  * ------------------------------------------------------------------ */
 
-type Dep = { g: string; a: string; v?: string; scope?: string; optional?: boolean; type?: string; classifier?: string; exclusions?: string[] };
+export type Dep = { g: string; a: string; v?: string; scope?: string; optional?: boolean; type?: string; classifier?: string; exclusions?: string[] };
 
-function deps(list: Dep[] | undefined, tag = "dependencies"): string {
+export function deps(list: Dep[] | undefined, tag = "dependencies"): string {
   if (!list || !list.length) return "";
   return `<${tag}>${list.map(d => `<dependency><groupId>${d.g}</groupId><artifactId>${d.a}</artifactId>${d.v ? `<version>${d.v}</version>` : ""}${d.type ? `<type>${d.type}</type>` : ""}${d.classifier ? `<classifier>${d.classifier}</classifier>` : ""}${d.scope ? `<scope>${d.scope}</scope>` : ""}${d.optional ? "<optional>true</optional>" : ""}${d.exclusions ? `<exclusions>${d.exclusions.map(e => { const [g, a] = e.split(":"); return `<exclusion><groupId>${g}</groupId><artifactId>${a}</artifactId></exclusion>`; }).join("")}</exclusions>` : ""}</dependency>`).join("")}</${tag}>`;
 }
 
-function pom(o: { g?: string; a: string; v?: string; packaging?: string; parent?: string; relativePath?: string; props?: Record<string, string>; deps?: Dep[]; managed?: Dep[]; modules?: string[]; relocation?: string }): string {
+export function pom(o: { g?: string; a: string; v?: string; packaging?: string; parent?: string; relativePath?: string; props?: Record<string, string>; deps?: Dep[]; managed?: Dep[]; modules?: string[]; relocation?: string }): string {
   const [pg, pa, pv] = o.parent ? o.parent.split(":") : [];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -47,11 +47,11 @@ function pom(o: { g?: string; a: string; v?: string; packaging?: string; parent?
 </project>`;
 }
 
-const BOOT = "org.springframework.boot";
-const SPRING = "org.springframework";
+export const BOOT = "org.springframework.boot";
+export const SPRING = "org.springframework";
 
 /** The miniature repository: coordinates → POM text, plus maven-metadata version lists. */
-function springRepository(): { poms: Map<string, string>; metadata: Map<string, string[]> } {
+export function springRepository(): { poms: Map<string, string>; metadata: Map<string, string[]> } {
   const poms = new Map<string, string>();
   const put = (gav: string, text: string) => poms.set(gav, text);
   put(`${BOOT}:spring-boot-dependencies:2.6.6`, pom({
@@ -99,7 +99,7 @@ function springRepository(): { poms: Map<string, string>; metadata: Map<string, 
 }
 
 /** A repository over the fixture: everything "remote", with request accounting. */
-function fixtureRepository(fixture = springRepository(), options: { failRemote?: boolean; delayMs?: number } = {}) {
+export function fixtureRepository(fixture = springRepository(), options: { failRemote?: boolean; delayMs?: number } = {}) {
   const requests: string[] = [];
   const byPath = new Map([...fixture.poms].map(([gav, text]) => { const [g, a, v] = gav.split(":"); return [pomPath({ groupId: g, artifactId: a, version: v }), text]; }));
   const repository = createPomRepository({
@@ -121,7 +121,7 @@ function fixtureRepository(fixture = springRepository(), options: { failRemote?:
 }
 
 /** The Spring Boot multi-module workspace the regression tests scan. */
-function springWorkspace(extra: { rootProps?: Record<string, string>; appDeps?: Dep[] } = {}): Array<{ path: string; text: string }> {
+export function springWorkspace(extra: { rootProps?: Record<string, string>; appDeps?: Dep[] } = {}): Array<{ path: string; text: string }> {
   return [
     { path: "pom.xml", text: pom({ parent: `${BOOT}:spring-boot-starter-parent:2.6.6`, relativePath: "", g: "com.example", a: "shop", v: "1.0.0", packaging: "pom", modules: ["common", "app"], props: { "java.version": "11", ...(extra.rootProps ?? {}) } }) },
     { path: "common/pom.xml", text: pom({ parent: "com.example:shop:1.0.0", a: "common", deps: [{ g: "org.apache.commons", a: "commons-text" }, { g: "org.yaml", a: "snakeyaml" }] }) },
@@ -393,10 +393,10 @@ suite("osv maven: Maven CLI", () => {
  * Scanning Spring Boot projects end to end (fake OSV)
  * ------------------------------------------------------------------ */
 
-interface Advisory { record: OsvRecord; hits: Array<{ name: string; versions: string[] }> }
+export interface Advisory { record: OsvRecord; hits: Array<{ name: string; versions: string[] }> }
 
 /** A fake OSV with querybatch pagination, /v1/query, /v1/vulns and switchable failures. */
-function fakeOsv(advisories: Advisory[], options: { pageSize?: number; failRecords?: string[]; failBatchesWith?: string } = {}): { fetch: FetchLike; stats: { batches: number; singles: number; pages: number } } {
+export function fakeOsv(advisories: Advisory[], options: { pageSize?: number; failRecords?: string[]; failBatchesWith?: string } = {}): { fetch: FetchLike; stats: { batches: number; singles: number; pages: number } } {
   const stats = { batches: 0, singles: 0, pages: 0 };
   const respond = (status: number, body: unknown) => ({ ok: status < 300, status, headers: { get: () => null }, text: async () => JSON.stringify(body) });
   const answer = (q: { package: { name: string }; version?: string; page_token?: string }) => {
@@ -423,9 +423,9 @@ function fakeOsv(advisories: Advisory[], options: { pageSize?: number; failRecor
   return { fetch, stats };
 }
 
-const range = (name: string, introduced: string, fixed?: string) => ({ package: { name, ecosystem: "Maven" }, ranges: [{ type: "ECOSYSTEM", events: (fixed ? [{ introduced }, { fixed }] : [{ introduced }]) as Array<Record<string, string>> }] });
+export const range = (name: string, introduced: string, fixed?: string) => ({ package: { name, ecosystem: "Maven" }, ranges: [{ type: "ECOSYSTEM", events: (fixed ? [{ introduced }, { fixed }] : [{ introduced }]) as Array<Record<string, string>> }] });
 
-const ADVISORIES: Advisory[] = [
+export const ADVISORIES: Advisory[] = [
   // Two different advisories for the same transitive package (Tomcat via spring-boot-starter-web).
   { record: { id: "GHSA-tom1-0000-0001", modified: "1", summary: "Tomcat request smuggling", aliases: ["CVE-2022-0001"], database_specific: { severity: "HIGH" }, affected: [range("org.apache.tomcat.embed:tomcat-embed-core", "9.0.0", "9.0.62")] }, hits: [{ name: "org.apache.tomcat.embed:tomcat-embed-core", versions: ["9.0.60"] }] },
   { record: { id: "GHSA-tom2-0000-0002", modified: "1", summary: "Tomcat DoS", aliases: ["CVE-2022-0002"], severity: [{ type: "CVSS_V3", score: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H" }], affected: [range("org.apache.tomcat.embed:tomcat-embed-core", "9.0.0", "9.0.69")] }, hits: [{ name: "org.apache.tomcat.embed:tomcat-embed-core", versions: ["9.0.60", "9.0.62"] }] },
@@ -437,7 +437,7 @@ const ADVISORIES: Advisory[] = [
   { record: { id: "GHSA-snak-0000-0005", modified: "1", summary: "SnakeYAML DoS", database_specific: { severity: "MODERATE" }, affected: [range("org.yaml:snakeyaml", "0", "1.31")] }, hits: [{ name: "org.yaml:snakeyaml", versions: ["1.29"] }] }
 ];
 
-function scanOptions(fetch: FetchLike, strategy: MavenStrategy, extra: Partial<Parameters<typeof runScan>[1]> = {}): Parameters<typeof runScan>[1] {
+export function scanOptions(fetch: FetchLike, strategy: MavenStrategy, extra: Partial<Parameters<typeof runScan>[1]> = {}): Parameters<typeof runScan>[1] {
   return {
     client: new OsvClient({ fetch, sleep: async () => undefined, retries: 1 }),
     cache: new OsvCache(), workspace: { name: "shop", folders: ["shop"] }, source: "workspace", toolVersion: "test",

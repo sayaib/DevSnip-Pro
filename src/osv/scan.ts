@@ -62,6 +62,8 @@ export interface ScanOptions {
   resolveGradle?: (files: ScanFile[], signal?: AbortSignal) => Promise<ResolutionOutcome>;
   /** Diagnostic log lines (no file contents, no credentials). */
   onLog?: (message: string) => void;
+  /** Dependency files discovery recognised but cannot read (sbt, CocoaPods, Conan, …): reported, and the scan is incomplete. */
+  unsupported?: Array<{ path: string; format: string }>;
 }
 
 export const TOOL_NAME = "DevSnip Pro OSV Vulnerability Scanner";
@@ -84,6 +86,7 @@ function ancestorsOf(dir: string): string[] {
 function makeContext(files: ScanFile[]): ParseContext {
   const byPath = new Map(files.filter(f => f.text !== undefined).map(f => [f.path, f.text as string]));
   return {
+    read: file => byPath.get(file),
     ancestors(name, dir) {
       const start = dir === "." ? "" : dir;
       return ancestorsOf(start).map(d => byPath.get(d ? `${d}/${name}` : name)).filter((t): t is string => t !== undefined);
@@ -163,6 +166,9 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     recordsFailed: 0, withdrawnDropped: 0, outOfRangeDropped: 0, aliasesMerged: 0, findings: 0, buildTools: []
   };
 
+  const timings: Record<string, number> = {};
+  let stageStart = Date.now();
+  const stage = (name: string) => { const now = Date.now(); timings[name] = (timings[name] ?? 0) + now - stageStart; stageStart = now; };
   // ---- parse -----------------------------------------------------------
   const context = makeContext(files);
   const parsed: ParsedFile[] = [];
@@ -177,7 +183,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
   const gradleBuilds = scanFiles.filter(f => detectFileType(f.path)?.id === "gradle");
   if (gradleBuilds.length && options.resolveGradle && !isCancelled()) {
     progress("parse", `Resolving ${gradleBuilds.length} Gradle project${gradleBuilds.length === 1 ? "" : "s"}…`, 0.07);
-    const gradleContext = files.filter(f => ["settings.gradle", "settings.gradle.kts", "gradle.properties"].includes(path.posix.basename(f.path)));
+    const gradleContext = files.filter(f => ["settings.gradle", "settings.gradle.kts", "gradle.properties"].includes(path.posix.basename(f.path)) || f.path.endsWith("gradle/libs.versions.toml"));
     try {
       gradle = await options.resolveGradle([...gradleBuilds, ...gradleContext], signal);
       diagnostics.buildTools.push(...gradle.projects);
@@ -202,6 +208,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
       log(`Maven resolution failed: ${message}`);
     }
   }
+  stage("resolve");
   for (let index = 0; index < scanFiles.length; index++) {
     if (isCancelled()) { cancelled = true; break; }
     const file = scanFiles[index];
@@ -233,6 +240,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     if (file.manager === "yarn" && files.find(f => f.path === file.path)?.text?.match(/^__metadata:/m)) file.manager = "yarn-berry";
   }
 
+  stage("parse");
   // ---- inventory ---------------------------------------------------------
   const packages = new Map<string, WorkPackage>();
   const lockfiles = parsed.filter(f => f.kind === "lockfile" && !f.error);
@@ -255,7 +263,8 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     const normal = matchName(ecosystem, dep.name);
     const occurrence: Occurrence = {
       file: file.path, line: dep.line, project: projectOf(file), manager: file.manager, scope: dep.scope,
-      direct: dep.direct, spec: dep.spec, resolution: dep.resolution, ...(dep.via?.length ? { via: dep.via } : {})
+      direct: dep.direct, spec: dep.spec, resolution: dep.resolution, ...(dep.via?.length ? { via: dep.via } : {}),
+      ...(dep.managedBy ? { managedBy: dep.managedBy } : {})
     };
     let key: string;
     let status: PackageRecord["status"] = "unanalyzed";
@@ -293,8 +302,17 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
 
   const manifests = parsed.filter(f => f.kind === "manifest" && !f.error);
   let conflicts = 0;
+  /** Lockfiles whose own project manifest was read: what that manifest does not declare is transitive. */
+  const ownedLocks = new Set<ParsedFile>();
+  const isUnder = (root: string, dir: string) => root === "" || dir === root || dir.startsWith(`${root}/`);
+  let localSkipped = 0;
   for (const file of manifests) {
     const dir = projectOf(file);
+    // A version catalog only declares versions; once the Gradle build that uses it is resolved, its entries are already there at the versions Gradle picked.
+    if (detectFileType(file.path)?.id === "gradle-catalog" && parsed.some(build => build.manager === "gradle" && build.resolvedBy && !build.error && build !== file && isUnder(dir, projectOf(build)))) {
+      log(`${file.path}: covered by the resolved Gradle build, so its declared versions are not scanned separately.`);
+      continue;
+    }
     // A lockfile covers a manifest in its own folder, or in a folder below that it records as a workspace
     // member. Formats that do not record members (Yarn 1, Cargo, ...) cover the folders below by name.
     const covering = ancestorsOf(dir).flatMap(d => (lockfilesByDir.get(d) ?? []).filter(lock => {
@@ -303,9 +321,22 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
       const relative = path.posix.relative(d || ".", dir || ".");
       return lock.members.includes(relative);
     }));
+    for (const lock of covering) if (projectOf(lock) === dir) ownedLocks.add(lock);
+    // The workspace's own packages (npm/pnpm links, workspace members): local code, never a registry package.
+    const local = new Set(covering.flatMap(lock => (lock.localPackages ?? []).map(n => matchName(file.ecosystem, n))));
+    if (file.ecosystem === "npm") {
+      const root = covering.length ? projectOf(covering[0])
+        : ancestorsOf(dir).filter(d => manifests.some(m => m.ecosystem === "npm" && projectOf(m) === d)).pop() ?? dir;
+      for (const m of manifests) if (m !== file && m.ecosystem === "npm" && m.selfName && isUnder(root, projectOf(m))) local.add(matchName("npm", m.selfName));
+    }
     for (const dep of file.dependencies) {
       const normal = matchName(file.ecosystem, dep.name);
       const coveredBy = covering.filter(lock => lockNames.get(lock)!.has(normal));
+      if (!coveredBy.length && local.has(normal)) {
+        localSkipped++;
+        log(`${file.path}: ${dep.name} is a package of this workspace, so it is not looked up in the registry.`);
+        continue;
+      }
       if (coveredBy.length) {
         // The lockfile already has the exact version; the manifest only tells us it is direct.
         // Precedence: the lockfile wins (it is what gets installed); a manifest range it does not satisfy is reported.
@@ -333,6 +364,11 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     }
   }
 
+  // A lockfile entry its own project's manifest does not declare is a transitive dependency.
+  for (const list of lockOccurrences.values()) {
+    for (const { occurrence, file } of list) if (occurrence.direct === undefined && ownedLocks.has(file)) occurrence.direct = false;
+  }
+  if (localSkipped) log(`Inventory: ${localSkipped} reference${localSkipped === 1 ? "" : "s"} to the workspace's own packages left out.`);
   const all = [...packages.values()];
   for (const pkg of all) {
     pkg.devOnly = pkg.occurrences.every(o => o.scope === "development");
@@ -343,6 +379,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
   diagnostics.packagesDiscovered = all.length;
   log(`Inventory: ${all.length} unique packages (${all.filter(p => p.status !== "unanalyzed").length} to query, ${all.filter(p => p.skipReason === "unresolved").length} with unknown versions, ${all.filter(p => p.skipReason === "source").length} from sources OSV does not cover).`);
 
+  stage("inventory");
   // ---- query OSV ---------------------------------------------------------
   // A coordinate OSV cannot take (control characters, an empty version) is reported, not sent.
   for (const pkg of all) {
@@ -401,6 +438,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     if (!pkg.refs && pkg.status !== "unanalyzed") { pkg.status = "unanalyzed"; pkg.skipReason = "cancelled"; pkg.note = "The scan was cancelled before this package was checked."; }
   }
 
+  stage("query");
   // ---- advisory records ----------------------------------------------------
   const records = new Map<string, OsvRecord>();
   const missing = new Map<string, string>();
@@ -487,6 +525,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     }
   }
 
+  stage("records");
   // ---- remediation, with the fix version checked against OSV ----------------
   const remediations: Remediation[] = [];
   const byPackage = new Map<string, Finding[]>();
@@ -553,6 +592,8 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
     });
   }
 
+  stage("verify");
+  diagnostics.timings = timings;
   // ---- result -------------------------------------------------------------
   const unresolved = all.filter(p => p.resolution === "range" && p.occurrences.every(o => o.resolution === "range")).length;
   const declared = all.filter(p => p.resolution === "declared").length;
@@ -560,7 +601,7 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
   if (unresolved) limitations.push(`${unresolved} dependenc${unresolved === 1 ? "y has" : "ies have"} no lockfile entry, so only a version range is known. Findings for them are marked Potential; commit a lockfile to confirm them.`);
   if (declared) limitations.push(`${declared} Gradle dependenc${declared === 1 ? "y is" : "ies are"} read from build scripts. Gradle can resolve newer versions through conflict resolution; enable dependency locking for exact results.`);
   if (parsed.some(f => f.ecosystem === "Go")) limitations.push("Go standard library and toolchain vulnerabilities are not checked (go.mod's go line is a minimum, not your toolchain). Use govulncheck for call-graph-aware Go results.");
-  if (parsed.some(f => f.ecosystem === "Maven" && f.kind === "manifest" && detectFileType(f.path)?.id === "pom")) limitations.push("Some pom.xml files were read for declared dependencies only (Maven resolution failed for them; see Scan notes), so their transitive dependencies are not checked. Scan again, or allow build tools (devsnip.osvScanner.buildToolResolution), to resolve the full dependency tree.");
+  if (parsed.some(f => f.ecosystem === "Maven" && f.kind === "manifest" && !f.error && detectFileType(f.path)?.id === "pom")) limitations.push("Some pom.xml files were read for declared dependencies only (Maven resolution failed for them; see Scan notes), so their transitive dependencies are not checked. Scan again, or allow build tools (devsnip.osvScanner.buildToolResolution), to resolve the full dependency tree.");
   if (conflicts) limitations.push(`${conflicts} lockfile entr${conflicts === 1 ? "y does" : "ies do"} not satisfy the range in the manifest next to it (an out-of-date lockfile). The lockfile versions were scanned, because they are what gets installed; the Files tab lists each conflict.`);
   const builtinMaven = diagnostics.buildTools.filter(m => m.tool === "Maven" && m.method === "builtin").length;
   if (builtinMaven) limitations.push(`${builtinMaven} Maven project${builtinMaven === 1 ? " was" : "s were"} resolved by DevSnip Pro's resolver, which follows Maven's rules (parents, BOMs, dependency management, nearest wins, scopes, exclusions) but does not activate profiles by JDK, OS or property. Allow build tools (devsnip.osvScanner.buildToolResolution) for Maven's own result.`);
@@ -572,6 +613,13 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
   if (outOfRangeTotal) limitations.push(`${outOfRangeTotal} advisor${outOfRangeTotal === 1 ? "y was" : "ies were"} left out because the declared version ranges exclude every affected version.`);
   const unreadable = parsed.filter(f => f.error);
   if (unreadable.length) limitations.push(`${unreadable.length} file${unreadable.length === 1 ? "" : "s"} could not be read: ${unreadable.slice(0, 5).map(f => f.path).join(", ")}${unreadable.length > 5 ? ", …" : ""}.`);
+  const unsupported = options.unsupported ?? [];
+  diagnostics.filesUnsupported = unsupported.length;
+  if (unsupported.length) {
+    const formats = [...new Set(unsupported.map(u => u.format))];
+    limitations.push(`${unsupported.length} dependency file${unsupported.length === 1 ? " is" : "s are"} in a format the scanner cannot read (${formats.join(", ")}): ${unsupported.slice(0, 5).map(u => u.path).join(", ")}${unsupported.length > 5 ? ", …" : ""}. Their dependencies were not checked.`);
+    log(`Unsupported dependency files: ${unsupported.map(u => `${u.path} (${u.format})`).join(", ")}`);
+  }
   if (cancelled) limitations.push("The scan was cancelled, so these results are incomplete.");
 
   findings.sort(compareFindings);
@@ -580,14 +628,25 @@ export async function runScan(files: ScanFile[], options: ScanOptions): Promise<
   const summary = summarize(parsed, packageList, findings);
   diagnostics.findings = findings.length;
   diagnostics.outOfRangeDropped = outOfRangeTotal;
-  const status: ScanResult["status"] = cancelled ? "cancelled"
-    : summary.failedPackages || summary.unresolvedPackages || diagnostics.filesFailed || diagnostics.recordsFailed || partial ? "incomplete" : "complete";
+  // Every cause of an incomplete scan is named, so "Scan incomplete" is never a mystery.
+  const incompleteReasons: string[] = [];
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (summary.unresolvedPackages) incompleteReasons.push(`${plural(summary.unresolvedPackages, "dependency's version", "dependencies' versions")} could not be determined`);
+  if (summary.failedPackages) incompleteReasons.push(`${plural(summary.failedPackages, "dependency", "dependencies")} could not be checked with OSV`);
+  if (diagnostics.recordsFailed) incompleteReasons.push(`${plural(diagnostics.recordsFailed, "advisory record", "advisory records")} could not be loaded`);
+  if (diagnostics.filesFailed) incompleteReasons.push(`${plural(diagnostics.filesFailed, "dependency file", "dependency files")} could not be read (${unreadable.slice(0, 3).map(f => f.path).join(", ")}${unreadable.length > 3 ? ", …" : ""})`);
+  if (unsupported.length) incompleteReasons.push(`${plural(unsupported.length, "dependency file is", "dependency files are")} in an unsupported format`);
+  if (partial && !incompleteReasons.length) incompleteReasons.push("some OSV requests failed");
+  const status: ScanResult["status"] = cancelled ? "cancelled" : incompleteReasons.length ? "incomplete" : "complete";
+  if (cancelled) incompleteReasons.unshift("the scan was cancelled");
   log(`Findings: ${findings.length} (${summary.uniqueVulnerabilities} unique advisories) after merging ${diagnostics.aliasesMerged} alias id${diagnostics.aliasesMerged === 1 ? "" : "s"}, dropping ${diagnostics.withdrawnDropped} withdrawn and ${outOfRangeTotal} out of the declared range. Critical ${summary.critical}, high ${summary.high}, medium ${summary.medium}, low ${summary.low}, unknown ${summary.unknown}.`);
   log(`Packages: ${summary.packages} discovered, ${summary.analyzedPackages} analysed, ${summary.unresolvedPackages} unresolved, ${summary.outOfScopePackages} out of scope, ${summary.failedPackages} failed. Scan ${status}.`);
   progress("done", status === "complete" ? "Scan complete" : status === "cancelled" ? "Scan cancelled" : "Scan finished with gaps", 1);
   return {
     schemaVersion: 1,
     status,
+    incompleteReasons,
+    ...(unsupported.length ? { unsupportedFiles: unsupported } : {}),
     diagnostics,
     tool: TOOL_NAME,
     toolVersion: options.toolVersion,

@@ -23,6 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.scanOptions = exports.ADVISORIES = exports.range = exports.fakeOsv = exports.springWorkspace = exports.fixtureRepository = exports.springRepository = exports.SPRING = exports.BOOT = exports.pom = exports.deps = void 0;
 const assert = __importStar(require("assert"));
 const fs = __importStar(require("fs"));
 const os = __importStar(require("os"));
@@ -44,6 +45,7 @@ function deps(list, tag = "dependencies") {
         return "";
     return `<${tag}>${list.map(d => `<dependency><groupId>${d.g}</groupId><artifactId>${d.a}</artifactId>${d.v ? `<version>${d.v}</version>` : ""}${d.type ? `<type>${d.type}</type>` : ""}${d.classifier ? `<classifier>${d.classifier}</classifier>` : ""}${d.scope ? `<scope>${d.scope}</scope>` : ""}${d.optional ? "<optional>true</optional>" : ""}${d.exclusions ? `<exclusions>${d.exclusions.map(e => { const [g, a] = e.split(":"); return `<exclusion><groupId>${g}</groupId><artifactId>${a}</artifactId></exclusion>`; }).join("")}</exclusions>` : ""}</dependency>`).join("")}</${tag}>`;
 }
+exports.deps = deps;
 function pom(o) {
     const [pg, pa, pv] = o.parent ? o.parent.split(":") : [];
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -59,41 +61,42 @@ function pom(o) {
   ${o.relocation ? `<distributionManagement><relocation>${o.relocation.split(":").map((v, i) => (v ? `<${["groupId", "artifactId", "version"][i]}>${v}</${["groupId", "artifactId", "version"][i]}>` : "")).join("")}</relocation></distributionManagement>` : ""}
 </project>`;
 }
-const BOOT = "org.springframework.boot";
-const SPRING = "org.springframework";
+exports.pom = pom;
+exports.BOOT = "org.springframework.boot";
+exports.SPRING = "org.springframework";
 /** The miniature repository: coordinates → POM text, plus maven-metadata version lists. */
 function springRepository() {
     const poms = new Map();
     const put = (gav, text) => poms.set(gav, text);
-    put(`${BOOT}:spring-boot-dependencies:2.6.6`, pom({
-        g: BOOT, a: "spring-boot-dependencies", v: "2.6.6", packaging: "pom",
+    put(`${exports.BOOT}:spring-boot-dependencies:2.6.6`, pom({
+        g: exports.BOOT, a: "spring-boot-dependencies", v: "2.6.6", packaging: "pom",
         props: { "tomcat.version": "9.0.60", "snakeyaml.version": "1.29", "jackson-bom.version": "2.13.2.20220328", "spring-framework.version": "5.3.18", "commons-text.version": "1.9" },
         managed: [
-            { g: BOOT, a: "spring-boot-starter", v: "2.6.6" }, { g: BOOT, a: "spring-boot-starter-web", v: "2.6.6" },
-            { g: BOOT, a: "spring-boot-starter-tomcat", v: "2.6.6" }, { g: BOOT, a: "spring-boot-starter-test", v: "2.6.6" },
+            { g: exports.BOOT, a: "spring-boot-starter", v: "2.6.6" }, { g: exports.BOOT, a: "spring-boot-starter-web", v: "2.6.6" },
+            { g: exports.BOOT, a: "spring-boot-starter-tomcat", v: "2.6.6" }, { g: exports.BOOT, a: "spring-boot-starter-test", v: "2.6.6" },
             { g: "org.apache.tomcat.embed", a: "tomcat-embed-core", v: "${tomcat.version}" },
             { g: "org.yaml", a: "snakeyaml", v: "${snakeyaml.version}" },
             { g: "org.apache.commons", a: "commons-text", v: "${commons-text.version}" },
             { g: "com.h2database", a: "h2", v: "1.4.200" },
             { g: "com.fasterxml.jackson", a: "jackson-bom", v: "${jackson-bom.version}", type: "pom", scope: "import" },
-            { g: SPRING, a: "spring-framework-bom", v: "${spring-framework.version}", type: "pom", scope: "import" }
+            { g: exports.SPRING, a: "spring-framework-bom", v: "${spring-framework.version}", type: "pom", scope: "import" }
         ]
     }));
-    put(`${BOOT}:spring-boot-starter-parent:2.6.6`, pom({ parent: `${BOOT}:spring-boot-dependencies:2.6.6`, a: "spring-boot-starter-parent", packaging: "pom", props: { "java.version": "1.8" } }));
+    put(`${exports.BOOT}:spring-boot-starter-parent:2.6.6`, pom({ parent: `${exports.BOOT}:spring-boot-dependencies:2.6.6`, a: "spring-boot-starter-parent", packaging: "pom", props: { "java.version": "1.8" } }));
     put("com.fasterxml.jackson:jackson-bom:2.13.2.20220328", pom({ g: "com.fasterxml.jackson", a: "jackson-bom", v: "2.13.2.20220328", packaging: "pom", managed: [{ g: "com.fasterxml.jackson.core", a: "jackson-databind", v: "2.13.2.2" }, { g: "com.fasterxml.jackson.core", a: "jackson-core", v: "2.13.2" }] }));
-    put(`${SPRING}:spring-framework-bom:5.3.18`, pom({ g: SPRING, a: "spring-framework-bom", v: "5.3.18", packaging: "pom", managed: ["spring-core", "spring-web", "spring-webmvc", "spring-jcl", "spring-test"].map(a => ({ g: SPRING, a, v: "5.3.18" })) }));
-    put(`${BOOT}:spring-boot-starter-web:2.6.6`, pom({ g: BOOT, a: "spring-boot-starter-web", v: "2.6.6", deps: [
-            { g: BOOT, a: "spring-boot-starter", v: "2.6.6" }, { g: BOOT, a: "spring-boot-starter-tomcat", v: "2.6.6" },
-            { g: SPRING, a: "spring-webmvc", v: "5.3.18" }, { g: "com.fasterxml.jackson.core", a: "jackson-databind", v: "2.13.2.2" }
+    put(`${exports.SPRING}:spring-framework-bom:5.3.18`, pom({ g: exports.SPRING, a: "spring-framework-bom", v: "5.3.18", packaging: "pom", managed: ["spring-core", "spring-web", "spring-webmvc", "spring-jcl", "spring-test"].map(a => ({ g: exports.SPRING, a, v: "5.3.18" })) }));
+    put(`${exports.BOOT}:spring-boot-starter-web:2.6.6`, pom({ g: exports.BOOT, a: "spring-boot-starter-web", v: "2.6.6", deps: [
+            { g: exports.BOOT, a: "spring-boot-starter", v: "2.6.6" }, { g: exports.BOOT, a: "spring-boot-starter-tomcat", v: "2.6.6" },
+            { g: exports.SPRING, a: "spring-webmvc", v: "5.3.18" }, { g: "com.fasterxml.jackson.core", a: "jackson-databind", v: "2.13.2.2" }
         ] }));
-    put(`${BOOT}:spring-boot-starter:2.6.6`, pom({ g: BOOT, a: "spring-boot-starter", v: "2.6.6", deps: [{ g: SPRING, a: "spring-core", v: "5.3.18" }, { g: "org.yaml", a: "snakeyaml", v: "1.29", scope: "runtime" }] }));
-    put(`${BOOT}:spring-boot-starter-tomcat:2.6.6`, pom({ g: BOOT, a: "spring-boot-starter-tomcat", v: "2.6.6", deps: [{ g: "org.apache.tomcat.embed", a: "tomcat-embed-core", v: "9.0.60" }] }));
-    put(`${BOOT}:spring-boot-starter-test:2.6.6`, pom({ g: BOOT, a: "spring-boot-starter-test", v: "2.6.6", deps: [{ g: SPRING, a: "spring-core", v: "5.3.18" }, { g: "junit", a: "junit", v: "4.13.2" }, { g: SPRING, a: "spring-test", v: "5.3.18" }] }));
-    put(`${SPRING}:spring-webmvc:5.3.18`, pom({ g: SPRING, a: "spring-webmvc", v: "5.3.18", deps: [{ g: SPRING, a: "spring-web", v: "5.3.18" }, { g: SPRING, a: "spring-core", v: "5.3.18" }, { g: "com.example.opt", a: "optional-thing", v: "1.0", optional: true }, { g: "javax.servlet", a: "servlet-api", v: "2.5", scope: "provided" }] }));
-    put(`${SPRING}:spring-web:5.3.18`, pom({ g: SPRING, a: "spring-web", v: "5.3.18", deps: [{ g: SPRING, a: "spring-core", v: "5.3.18" }] }));
-    put(`${SPRING}:spring-core:5.3.18`, pom({ g: SPRING, a: "spring-core", v: "5.3.18", deps: [{ g: SPRING, a: "spring-jcl", v: "5.3.18" }] }));
-    put(`${SPRING}:spring-jcl:5.3.18`, pom({ g: SPRING, a: "spring-jcl", v: "5.3.18" }));
-    put(`${SPRING}:spring-test:5.3.18`, pom({ g: SPRING, a: "spring-test", v: "5.3.18" }));
+    put(`${exports.BOOT}:spring-boot-starter:2.6.6`, pom({ g: exports.BOOT, a: "spring-boot-starter", v: "2.6.6", deps: [{ g: exports.SPRING, a: "spring-core", v: "5.3.18" }, { g: "org.yaml", a: "snakeyaml", v: "1.29", scope: "runtime" }] }));
+    put(`${exports.BOOT}:spring-boot-starter-tomcat:2.6.6`, pom({ g: exports.BOOT, a: "spring-boot-starter-tomcat", v: "2.6.6", deps: [{ g: "org.apache.tomcat.embed", a: "tomcat-embed-core", v: "9.0.60" }] }));
+    put(`${exports.BOOT}:spring-boot-starter-test:2.6.6`, pom({ g: exports.BOOT, a: "spring-boot-starter-test", v: "2.6.6", deps: [{ g: exports.SPRING, a: "spring-core", v: "5.3.18" }, { g: "junit", a: "junit", v: "4.13.2" }, { g: exports.SPRING, a: "spring-test", v: "5.3.18" }] }));
+    put(`${exports.SPRING}:spring-webmvc:5.3.18`, pom({ g: exports.SPRING, a: "spring-webmvc", v: "5.3.18", deps: [{ g: exports.SPRING, a: "spring-web", v: "5.3.18" }, { g: exports.SPRING, a: "spring-core", v: "5.3.18" }, { g: "com.example.opt", a: "optional-thing", v: "1.0", optional: true }, { g: "javax.servlet", a: "servlet-api", v: "2.5", scope: "provided" }] }));
+    put(`${exports.SPRING}:spring-web:5.3.18`, pom({ g: exports.SPRING, a: "spring-web", v: "5.3.18", deps: [{ g: exports.SPRING, a: "spring-core", v: "5.3.18" }] }));
+    put(`${exports.SPRING}:spring-core:5.3.18`, pom({ g: exports.SPRING, a: "spring-core", v: "5.3.18", deps: [{ g: exports.SPRING, a: "spring-jcl", v: "5.3.18" }] }));
+    put(`${exports.SPRING}:spring-jcl:5.3.18`, pom({ g: exports.SPRING, a: "spring-jcl", v: "5.3.18" }));
+    put(`${exports.SPRING}:spring-test:5.3.18`, pom({ g: exports.SPRING, a: "spring-test", v: "5.3.18" }));
     put("junit:junit:4.13.2", pom({ g: "junit", a: "junit", v: "4.13.2", deps: [{ g: "org.hamcrest", a: "hamcrest-core", v: "1.3" }] }));
     put("org.hamcrest:hamcrest-core:1.3", pom({ g: "org.hamcrest", a: "hamcrest-core", v: "1.3" }));
     put("com.fasterxml.jackson.core:jackson-databind:2.13.2.2", pom({ g: "com.fasterxml.jackson.core", a: "jackson-databind", v: "2.13.2.2", deps: [{ g: "com.fasterxml.jackson.core", a: "jackson-core", v: "2.13.2" }] }));
@@ -112,6 +115,7 @@ function springRepository() {
     const metadata = new Map([["commons-collections:commons-collections", ["3.1", "3.2", "3.2.1", "3.2.2", "20040616"]]]);
     return { poms, metadata };
 }
+exports.springRepository = springRepository;
 /** A repository over the fixture: everything "remote", with request accounting. */
 function fixtureRepository(fixture = springRepository(), options = {}) {
     const requests = [];
@@ -135,20 +139,22 @@ function fixtureRepository(fixture = springRepository(), options = {}) {
     });
     return { repository, requests };
 }
+exports.fixtureRepository = fixtureRepository;
 /** The Spring Boot multi-module workspace the regression tests scan. */
 function springWorkspace(extra = {}) {
     return [
-        { path: "pom.xml", text: pom({ parent: `${BOOT}:spring-boot-starter-parent:2.6.6`, relativePath: "", g: "com.example", a: "shop", v: "1.0.0", packaging: "pom", modules: ["common", "app"], props: { "java.version": "11", ...(extra.rootProps ?? {}) } }) },
+        { path: "pom.xml", text: pom({ parent: `${exports.BOOT}:spring-boot-starter-parent:2.6.6`, relativePath: "", g: "com.example", a: "shop", v: "1.0.0", packaging: "pom", modules: ["common", "app"], props: { "java.version": "11", ...(extra.rootProps ?? {}) } }) },
         { path: "common/pom.xml", text: pom({ parent: "com.example:shop:1.0.0", a: "common", deps: [{ g: "org.apache.commons", a: "commons-text" }, { g: "org.yaml", a: "snakeyaml" }] }) },
         { path: "app/pom.xml", text: pom({ parent: "com.example:shop:1.0.0", a: "app", deps: [
                     { g: "com.example", a: "common", v: "${project.version}" },
-                    { g: BOOT, a: "spring-boot-starter-web" },
+                    { g: exports.BOOT, a: "spring-boot-starter-web" },
                     { g: "com.h2database", a: "h2", scope: "runtime" },
-                    { g: BOOT, a: "spring-boot-starter-test", scope: "test" },
+                    { g: exports.BOOT, a: "spring-boot-starter-test", scope: "test" },
                     ...(extra.appDeps ?? [])
                 ] }) }
     ];
 }
+exports.springWorkspace = springWorkspace;
 const coordinates = (list) => Object.fromEntries(list.map(d => [`${d.groupId}:${d.artifactId}`, `${d.version}${d.scope ? `:${d.scope}` : ""}`]));
 /* ------------------------------------------------------------------ *
  * POMs and the resolver
@@ -423,17 +429,19 @@ function fakeOsv(advisories, options = {}) {
     };
     return { fetch, stats };
 }
+exports.fakeOsv = fakeOsv;
 const range = (name, introduced, fixed) => ({ package: { name, ecosystem: "Maven" }, ranges: [{ type: "ECOSYSTEM", events: (fixed ? [{ introduced }, { fixed }] : [{ introduced }]) }] });
-const ADVISORIES = [
+exports.range = range;
+exports.ADVISORIES = [
     // Two different advisories for the same transitive package (Tomcat via spring-boot-starter-web).
-    { record: { id: "GHSA-tom1-0000-0001", modified: "1", summary: "Tomcat request smuggling", aliases: ["CVE-2022-0001"], database_specific: { severity: "HIGH" }, affected: [range("org.apache.tomcat.embed:tomcat-embed-core", "9.0.0", "9.0.62")] }, hits: [{ name: "org.apache.tomcat.embed:tomcat-embed-core", versions: ["9.0.60"] }] },
-    { record: { id: "GHSA-tom2-0000-0002", modified: "1", summary: "Tomcat DoS", aliases: ["CVE-2022-0002"], severity: [{ type: "CVSS_V3", score: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H" }], affected: [range("org.apache.tomcat.embed:tomcat-embed-core", "9.0.0", "9.0.69")] }, hits: [{ name: "org.apache.tomcat.embed:tomcat-embed-core", versions: ["9.0.60", "9.0.62"] }] },
+    { record: { id: "GHSA-tom1-0000-0001", modified: "1", summary: "Tomcat request smuggling", aliases: ["CVE-2022-0001"], database_specific: { severity: "HIGH" }, affected: [(0, exports.range)("org.apache.tomcat.embed:tomcat-embed-core", "9.0.0", "9.0.62")] }, hits: [{ name: "org.apache.tomcat.embed:tomcat-embed-core", versions: ["9.0.60"] }] },
+    { record: { id: "GHSA-tom2-0000-0002", modified: "1", summary: "Tomcat DoS", aliases: ["CVE-2022-0002"], severity: [{ type: "CVSS_V3", score: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H" }], affected: [(0, exports.range)("org.apache.tomcat.embed:tomcat-embed-core", "9.0.0", "9.0.69")] }, hits: [{ name: "org.apache.tomcat.embed:tomcat-embed-core", versions: ["9.0.60", "9.0.62"] }] },
     // One advisory affecting two packages (Spring4Shell-style): two findings, one unique vulnerability.
-    { record: { id: "GHSA-sp4s-0000-0003", modified: "1", summary: "RCE via data binding", aliases: ["CVE-2022-22965"], database_specific: { severity: "CRITICAL" }, affected: [range("org.springframework:spring-webmvc", "5.3.0", "5.3.19"), range("org.springframework:spring-core", "5.3.0", "5.3.19")] }, hits: [{ name: "org.springframework:spring-webmvc", versions: ["5.3.18"] }, { name: "org.springframework:spring-core", versions: ["5.3.18"] }] },
+    { record: { id: "GHSA-sp4s-0000-0003", modified: "1", summary: "RCE via data binding", aliases: ["CVE-2022-22965"], database_specific: { severity: "CRITICAL" }, affected: [(0, exports.range)("org.springframework:spring-webmvc", "5.3.0", "5.3.19"), (0, exports.range)("org.springframework:spring-core", "5.3.0", "5.3.19")] }, hits: [{ name: "org.springframework:spring-webmvc", versions: ["5.3.18"] }, { name: "org.springframework:spring-core", versions: ["5.3.18"] }] },
     // Unknown severity and no fixed version (direct dependency, BOM-managed version).
-    { record: { id: "OSV-h2-0000-0004", modified: "1", summary: "H2 console issue", affected: [range("com.h2database:h2", "0")] }, hits: [{ name: "com.h2database:h2", versions: ["1.4.200"] }] },
+    { record: { id: "OSV-h2-0000-0004", modified: "1", summary: "H2 console issue", affected: [(0, exports.range)("com.h2database:h2", "0")] }, hits: [{ name: "com.h2database:h2", versions: ["1.4.200"] }] },
     // A vulnerability in a property-managed version, in a different module.
-    { record: { id: "GHSA-snak-0000-0005", modified: "1", summary: "SnakeYAML DoS", database_specific: { severity: "MODERATE" }, affected: [range("org.yaml:snakeyaml", "0", "1.31")] }, hits: [{ name: "org.yaml:snakeyaml", versions: ["1.29"] }] }
+    { record: { id: "GHSA-snak-0000-0005", modified: "1", summary: "SnakeYAML DoS", database_specific: { severity: "MODERATE" }, affected: [(0, exports.range)("org.yaml:snakeyaml", "0", "1.31")] }, hits: [{ name: "org.yaml:snakeyaml", versions: ["1.29"] }] }
 ];
 function scanOptions(fetch, strategy, extra = {}) {
     return {
@@ -443,11 +451,12 @@ function scanOptions(fetch, strategy, extra = {}) {
         ...extra
     };
 }
+exports.scanOptions = scanOptions;
 (0, run_unit_tests_1.suite)("osv maven: scanning Spring Boot projects", () => {
     const files = () => springWorkspace();
     (0, run_unit_tests_1.test)("transitive, BOM-managed and multi-module dependencies are all checked, with paths", async () => {
         const { repository } = fixtureRepository();
-        const osv = fakeOsv(ADVISORIES);
+        const osv = fakeOsv(exports.ADVISORIES);
         const logs = [];
         const result = await (0, scan_1.runScan)(files(), scanOptions(osv.fetch, { repository, repositoryLabel: "fixture" }, { onLog: m => logs.push(m) }));
         assert.strictEqual(result.status, "complete");
@@ -477,7 +486,7 @@ function scanOptions(fetch, strategy, extra = {}) {
     });
     (0, run_unit_tests_1.test)("Maven's own tree is used when Maven runs, and the built-in resolver takes over when it fails", async () => {
         const { repository } = fixtureRepository();
-        const osv = fakeOsv(ADVISORIES);
+        const osv = fakeOsv(exports.ADVISORIES);
         const cliRuns = [];
         const viaMaven = await (0, scan_1.runScan)(files(), scanOptions(osv.fetch, {
             repository, repositoryLabel: "fixture", cliLabel: "./mvnw",
@@ -513,14 +522,14 @@ function scanOptions(fetch, strategy, extra = {}) {
     });
     (0, run_unit_tests_1.test)("Maven Central unreachable: managed versions are unresolved and say why; nothing is silently empty", async () => {
         const { repository } = fixtureRepository(springRepository(), { failRemote: true });
-        const result = await (0, scan_1.runScan)(files(), scanOptions(fakeOsv(ADVISORIES).fetch, { repository, repositoryLabel: "fixture" }));
+        const result = await (0, scan_1.runScan)(files(), scanOptions(fakeOsv(exports.ADVISORIES).fetch, { repository, repositoryLabel: "fixture" }));
         assert.strictEqual(result.status, "incomplete");
         assert.ok(result.summary.unresolvedPackages >= 4);
         assert.ok(result.files.some(f => f.warnings.some(w => /spring-boot-starter-parent:2\.6\.6 could not be loaded/.test(w))));
     });
     (0, run_unit_tests_1.test)("OSV pagination, partial batch failures and failed record lookups lose nothing", async () => {
         const { repository } = fixtureRepository();
-        const osv = fakeOsv(ADVISORIES, { pageSize: 1, failBatchesWith: "org.yaml:snakeyaml", failRecords: ["GHSA-tom2-0000-0002"] });
+        const osv = fakeOsv(exports.ADVISORIES, { pageSize: 1, failBatchesWith: "org.yaml:snakeyaml", failRecords: ["GHSA-tom2-0000-0002"] });
         const result = await (0, scan_1.runScan)(files(), scanOptions(osv.fetch, { repository, repositoryLabel: "fixture" }));
         assert.ok(osv.stats.pages > 0, "page tokens were followed");
         assert.ok(osv.stats.singles > 0, "the failing batch fell back to single queries");
@@ -540,7 +549,7 @@ function scanOptions(fetch, strategy, extra = {}) {
         assert.strictEqual(result.summary.analyzedPackages, 0);
         assert.strictEqual(result.status, "incomplete");
         assert.ok(calls <= 4, `an unreachable OSV is not asked once per package (${calls} calls)`);
-        const advisories = fakeOsv(ADVISORIES);
+        const advisories = fakeOsv(exports.ADVISORIES);
         let first = true;
         const slowOnce = (url, init) => {
             if (first && url.endsWith("/v1/querybatch")) {
@@ -673,7 +682,7 @@ const gradleFiles = () => [
     });
     (0, run_unit_tests_1.test)("a scan of a Spring Boot Gradle build reports transitive findings with their paths", async () => {
         const { repository } = fixtureRepository();
-        const osv = fakeOsv(ADVISORIES);
+        const osv = fakeOsv(exports.ADVISORIES);
         const result = await (0, scan_1.runScan)(gradleFiles(), {
             client: new client_1.OsvClient({ fetch: osv.fetch, sleep: async () => undefined, retries: 1 }), cache: new client_1.OsvCache(),
             workspace: { name: "shop", folders: ["shop"] }, source: "workspace", toolVersion: "test",

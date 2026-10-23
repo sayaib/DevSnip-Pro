@@ -23,6 +23,7 @@ const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "re
 const DEBUG_LOG_COMMANDS = ["insertDebugLog", "removeDebugLogsInFile"].map(id => `sayaib.hue-console.${id}`);
 const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit"].map(id => `sayaib.hue-console.${id}`);
 const OSV_COMMANDS = ["osvScanner", "osvScanWorkspace", "osvScanFile"].map(id => `sayaib.hue-console.${id}`);
+const SCA_COMMANDS = ["scaScanner", "scaScanWorkspace"].map(id => `sayaib.hue-console.${id}`);
 
 export function activate(context: vscode.ExtensionContext) {
   // Before anything writes state, so an existing user is never treated as a new install.
@@ -117,6 +118,9 @@ export function activate(context: vscode.ExtensionContext) {
     })],
     ["OSV vulnerability scanner", () => registerLazyCommands(context.subscriptions, OSV_COMMANDS, async () => {
       (await import("./osv/command")).registerOsvScannerCommands(context);
+    })],
+    ["SCA scanner", () => registerLazyCommands(context.subscriptions, SCA_COMMANDS, async () => {
+      (await import("./sca/command")).registerScaScannerCommands(context);
     })],
     ["database client", () => registerDatabaseClientCommand(context)],
     ["CSV & Excel viewer", () => registerSpreadsheetViewer(context)],

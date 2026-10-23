@@ -31,17 +31,13 @@ const analytics_1 = require("../analytics");
 const activation_1 = require("../onboarding/activation");
 const service_1 = require("../theme/service");
 const webview_ui_1 = require("../utils/webview-ui");
-const client_1 = require("./client");
+const engine_1 = require("./engine");
 const page_1 = require("./page");
 const parsers_1 = require("./parsers");
 const report_1 = require("./report");
-const scan_1 = require("./scan");
 const types_1 = require("./types");
 const workspace_1 = require("./workspace");
-const parsers_2 = require("./parsers");
-const index_1 = require("./maven/index");
 const host_1 = require("./maven/host");
-const index_2 = require("./gradle/index");
 /**
  * The OSV Vulnerability Scanner panel: one webview, one scan at a time.
  *
@@ -50,7 +46,6 @@ const index_2 = require("./gradle/index");
  * that the current result actually suggested (a message cannot smuggle in its own).
  */
 const VIEW_TYPE = "devsnipOsvScanner";
-const CACHE_FILE = "osv-cache.json";
 const TOOL_ID = "osvScanner";
 const session = {};
 /** Bumped by every scan; only the newest scan may publish a result. */
@@ -59,14 +54,6 @@ let lastContext;
 let panel;
 let ready = false;
 const queue = [];
-let cache;
-let logChannel;
-/** "DevSnip Pro: OSV Scanner" in the Output panel: what each scan found, queried and dropped, stage by stage. */
-function scanLog() {
-    logChannel ?? (logChannel = vscode.window.createOutputChannel("DevSnip Pro: OSV Scanner", { log: true }));
-    return logChannel;
-}
-let cacheLoad;
 function post(message) {
     if (!panel)
         return;
@@ -79,38 +66,6 @@ function post(message) {
 function workspaceInfo() {
     const folders = vscode.workspace.workspaceFolders ?? [];
     return { name: vscode.workspace.name ?? folders[0]?.name ?? "No folder open", folders: folders.map(f => f.name), hasWorkspace: folders.length > 0 };
-}
-function toolVersion(context) {
-    return String(context.extension?.packageJSON?.version ?? "dev");
-}
-async function loadCache(context) {
-    if (cache)
-        return cache;
-    cacheLoad ?? (cacheLoad = (async () => {
-        const fresh = new client_1.OsvCache(2000);
-        try {
-            if (context.globalStorageUri) {
-                const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.globalStorageUri, CACHE_FILE));
-                fresh.load(JSON.parse(Buffer.from(bytes).toString("utf8")));
-            }
-        }
-        catch { /* first run, or an unreadable cache: start empty */ }
-        cache = fresh;
-        return fresh;
-    })());
-    return cacheLoad;
-}
-async function saveCache(context) {
-    if (!cache?.dirty || !context.globalStorageUri)
-        return;
-    try {
-        await vscode.workspace.fs.createDirectory(context.globalStorageUri);
-        await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(context.globalStorageUri, CACHE_FILE), Buffer.from(JSON.stringify(cache.toJSON()), "utf8"));
-        cache.dirty = false;
-    }
-    catch (error) {
-        console.warn("DevSnip Pro: could not save the OSV cache.", error);
-    }
 }
 function initMessage() {
     return {
@@ -186,7 +141,7 @@ async function handleMessage(context, message) {
             session.running?.controller.abort();
             return;
         case "showLog":
-            scanLog().show(true);
+            (0, engine_1.scanLog)().show(true);
             return;
         case "mavenSettings":
             await vscode.commands.executeCommand("workbench.action.openSettings", "devsnip.osvScanner");
@@ -215,9 +170,9 @@ async function handleMessage(context, message) {
             await runRemediation(String(message.command ?? ""), String(message.cwd ?? ""));
             return;
         case "clearCache": {
-            const store = await loadCache(context);
+            const store = await (0, engine_1.loadCache)(context);
             store.clear();
-            await saveCache(context);
+            await (0, engine_1.saveCache)(context);
             await (0, host_1.clearPomCache)(context);
             post({ type: "toast", kind: "ok", message: "Cleared cached OSV advisories and downloaded Maven POMs. The next scan fetches everything again." });
             return;
@@ -250,31 +205,13 @@ async function startScan(context, options) {
             const discovery = options.files
                 ? await (0, workspace_1.discoverFiles)(options.files, token.token)
                 : await (0, workspace_1.discoverWorkspace)(token.token, (done, total) => onProgress({ phase: "discover", message: `Reading dependency files (${done}/${total})`, fraction: 0.02 + 0.03 * (done / Math.max(1, total)) }));
-            const files = discovery.files;
             if (controller.signal.aborted)
                 throw new vscode.CancellationError();
-            const store = await loadCache(context);
-            const client = new client_1.OsvClient({ userAgent: `DevSnip-Pro/${toolVersion(context)} (VS Code ${vscode.version}; OSV scanner)` });
-            const log = scanLog();
-            log.info(`---- OSV scan of ${label} (DevSnip Pro ${toolVersion(context)}) ----`);
-            const pomPaths = files.filter(f => (0, parsers_2.detectFileType)(f.path)?.id === "pom").map(f => f.path);
-            const allowBuildTools = (0, host_1.buildToolGate)(context, message => log.info(message));
-            const result = await (0, scan_1.runScan)(files, {
-                onLog: message => log.info(message),
-                resolveMaven: async (poms, signal) => {
-                    const strategy = await (0, host_1.createMavenStrategy)({ context, allowBuildTools, locations: discovery.locations, pomPaths, onLog: message => log.info(message) });
-                    return (0, index_1.resolveMavenProjects)(poms, strategy, { signal, onLog: message => log.info(message), onProgress: message => onProgress({ phase: "parse", message, fraction: 0.08 }) });
-                },
-                resolveGradle: async (gradleFiles, signal) => {
-                    const buildFiles = gradleFiles.filter(f => !f.context && /build\.gradle(\.kts)?$/.test(f.path)).map(f => f.path);
-                    const strategy = await (0, host_1.createGradleStrategy)({ context, allowBuildTools, locations: discovery.locations, buildFiles, onLog: message => log.info(message) });
-                    return (0, index_2.resolveGradleProjects)(gradleFiles, strategy, { signal, onLog: message => log.info(message), onProgress: message => onProgress({ phase: "parse", message, fraction: 0.09 }) });
-                },
-                client, cache: store, signal: controller.signal, fresh: options.fresh, toolVersion: toolVersion(context),
+            const { result } = await (0, engine_1.runEngineScan)({
+                context, discovery, label, title: "OSV scan", signal: controller.signal, fresh: options.fresh,
                 workspace: { name: options.files ? label : info.name, folders: options.files ? [] : info.folders },
                 // Files inside the workspace keep workspace-relative paths, so they can be opened and fixed from the panel.
                 source: !options.files || discovery.inWorkspace ? "workspace" : "files",
-                limitations: discovery.limitations,
                 onProgress: progress => { onProgress(progress); report.report({ message: progress.message }); }
             });
             if (mine !== generation)
@@ -282,7 +219,6 @@ async function startScan(context, options) {
             session.result = result;
             session.progress = undefined;
             post({ type: "result", result });
-            void saveCache(context);
             if (!result.cancelled) {
                 (0, analytics_1.trackToolUsed)(TOOL_ID);
                 void (0, activation_1.reach)("first_security_scan");
@@ -400,7 +336,7 @@ async function runRemediation(command, cwd) {
 function osvSessionForTests(reset = false) {
     if (reset) {
         session.result = undefined;
-        cache?.clear();
+        (0, engine_1.clearMemoryCache)();
         if (lastContext)
             void (0, host_1.clearPomCache)(lastContext);
     }

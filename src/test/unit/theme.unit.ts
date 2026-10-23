@@ -14,6 +14,7 @@ import { describe } from "../../toolkits/types";
 import { renderDatabasePage } from "../../database/page";
 import { securityHubHtml } from "../../commands/securityTools";
 import { renderOsvPage } from "../../osv/page";
+import { renderScaPage } from "../../sca/page";
 import { getWebviewContent } from "../../commands/api-test";
 import { TOOL_CSS, UTILITY_CSS } from "../../utils/webview-ui";
 import { createExtensionContext } from "./vscode-stub";
@@ -41,6 +42,7 @@ function pages(): Array<[string, string]> {
     ["hub", renderToolHub(ALL_TOOLS_HUB, { cspSource: "vscode-resource:", scriptUri: "h.js", pinned: [] })],
     ["database", renderDatabasePage({ cspSource: "vscode-resource:", scriptUri: "d.js", codiconsUri: "c.css", platform: "darwin" })],
     ["osv", renderOsvPage({ cspSource: "vscode-resource:", scriptUri: "o.js", codiconsUri: "c.css" })],
+    ["sca", renderScaPage({ cspSource: "vscode-resource:", modelUri: "m.js", scriptUri: "s.js", codiconsUri: "c.css" })],
     ["security", securityHubHtml("abc123", { url: "https://example.com", timeoutMs: 1000, activeChecks: false })],
     ["rest", getWebviewContent([], true)]
   ];

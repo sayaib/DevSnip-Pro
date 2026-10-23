@@ -35,6 +35,24 @@ export type PackageManager =
  */
 export type Resolution = "lockfile" | "pinned" | "declared" | "range";
 
+/** Where a managed version comes from (see maven/resolver.ts): what remediation must change to move it. */
+export interface ManagedOrigin {
+  kind: "workspace" | "parent" | "import";
+  /** group:artifact:version of the POM (or BOM) whose dependency management declares it. */
+  source: string;
+  path?: string;
+  /** The property the managed version reads, e.g. "tomcat.version". */
+  property?: string;
+  /** The BOM the project imports, for kind "import". */
+  bom?: string;
+  /** For kind "import": where that import is declared (your POM, or an inherited parent such as spring-boot-dependencies). */
+  importedBy?: { kind: "workspace" | "parent"; source: string; path?: string; property?: string };
+  /** The BOM that itself declares the version (spring-framework-bom inside spring-boot-dependencies), and the property its import reads. */
+  directBom?: string;
+  directBomProperty?: string;
+  version: string;
+}
+
 /** One dependency as a parser read it from one file. */
 export interface ParsedDependency {
   /** Name as OSV expects it for the ecosystem (Maven `group:artifact`, NuGet keeps its casing). */
@@ -57,6 +75,8 @@ export interface ParsedDependency {
   skip?: SkipReason;
   /** Dependency path from the project's direct dependency down to this one's parent (group:artifact:version). */
   via?: string[];
+  /** For Maven and Gradle: the dependency management that set this version. */
+  managedBy?: ManagedOrigin;
 }
 
 /**
@@ -88,6 +108,10 @@ export interface ParsedFile {
    * lockfile's folder ("" for the root). Undefined when the format does not say.
    */
   members?: string[];
+  /** Packages of the workspace itself (npm/pnpm links, workspace members): local, never registry packages. */
+  localPackages?: string[];
+  /** A manifest's own package name (package.json "name"). */
+  selfName?: string;
 }
 
 /** Where one dependency was found. */
@@ -102,6 +126,7 @@ export interface Occurrence {
   spec?: string;
   resolution: Resolution;
   via?: string[];
+  managedBy?: ManagedOrigin;
 }
 
 export type PackageStatus = "vulnerable" | "potential" | "clean" | "unanalyzed";
@@ -247,6 +272,10 @@ export interface ScanDiagnostics {
   outOfRangeDropped: number;
   aliasesMerged: number;
   findings: number;
+  /** Recognised dependency files in formats the scanner cannot read. */
+  filesUnsupported?: number;
+  /** Milliseconds spent per stage: resolve (Maven/Gradle), parse, query (OSV), records, verify. */
+  timings?: Record<string, number>;
   /** Maven reactors and Gradle builds: whether the build tool or DevSnip Pro resolved them. */
   buildTools: Array<{ tool: "Maven" | "Gradle"; project: string; method: "build-tool" | "builtin"; modules: number; dependencies: number; unresolved: number; detail?: string }>;
 }
@@ -257,6 +286,10 @@ export interface ScanResult {
   schemaVersion: 1;
   /** complete: every discovered package in scope was resolved and checked; incomplete: some were not (see summary). */
   status: ScanStatus;
+  /** Why the scan is not complete, one line per cause (empty when complete). */
+  incompleteReasons?: string[];
+  /** Dependency files in formats the scanner recognises but cannot read. */
+  unsupportedFiles?: Array<{ path: string; format: string }>;
   diagnostics: ScanDiagnostics;
   tool: string;
   toolVersion: string;

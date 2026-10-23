@@ -4,6 +4,8 @@ The OSV Vulnerability Scanner finds dependencies with known vulnerabilities. It 
 
 It is part of DevSnip Pro (since 11.80.1). It is in the **Security & Auth** section of the Tools sidebar and in Browse All Tools.
 
+For known exploitation (CISA KEV), dependency health and Spring Boot-aware fixes with edit previews, use the [SCA Scanner](SCA-SCANNER.md), which runs on the same engine.
+
 ## Install
 
 1. Install DevSnip Pro from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console), or run `code --install-extension sayaib.hue-console`.
@@ -112,7 +114,7 @@ Each format is one adapter in `src/osv/parsers.ts` (`FILE_ADAPTERS`): a file-nam
 
 **Monorepos, nested projects and multiple package managers:**
 
-- **Every file is found.** Discovery covers the whole workspace, including every folder of a multi-root workspace. It skips `node_modules`, `vendor`, virtual environments, `target`, `dist`, `build`, `.gradle`, `Pods`, `.dart_tool` and similar folders. Those hold installed dependencies or build output, not projects of their own.
+- **Every file is found.** Discovery covers the whole workspace, including every folder of a multi-root workspace. It always skips installed packages and caches (`node_modules`, virtual environments, `.gradle`, `Pods`, `.dart_tool` and similar). `vendor`, `target`, `dist`, `build`, `out` and `deps` are skipped only when they are the vendored dependencies or build output of the project beside them, so a real project in a folder named `build` or `deps` is still scanned. Dependency files in formats the scanner cannot read (sbt, CocoaPods, Conan, vcpkg and others) are listed in the Files tab and make the scan incomplete; see [SCA Scanner → Discovery](SCA-SCANNER.md#discovery).
 - **Workspace lockfiles cover their members only.** A lockfile covers manifests in its own folder and in the member folders it records:
   - npm v2/v3 package paths;
   - pnpm importers;

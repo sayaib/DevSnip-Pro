@@ -276,7 +276,7 @@ const names = (events) => events.map(event => event.event);
                 assert.ok(sections.has((0, analytics_1.toolSection)(entry.command) ?? ""), entry.command);
         for (const command of commands_1.TOOLKIT_COMMANDS)
             assert.ok(sections.has((0, analytics_1.toolSection)(command.command) ?? ""), command.command);
-        const callSites = ["openGUI", "databaseClient", "csvViewer", "excelViewer", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit", "dependencyManager", "createCustomSnippet", "readmeManager", "openCodeIntegration"];
+        const callSites = ["openGUI", "databaseClient", "csvViewer", "excelViewer", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit", "dependencyManager", "osvScanner", "scaScanner", "createCustomSnippet", "readmeManager", "openCodeIntegration"];
         for (const tool of callSites)
             assert.ok((0, analytics_1.toolSection)(tool), `${tool} is not a tool, so trackToolUsed would ignore it`);
         assert.strictEqual((0, analytics_1.toolSection)("sayaib.hue-console.openGUI"), "api", "prefixed ids work too");
