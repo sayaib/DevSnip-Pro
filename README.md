@@ -6,7 +6,7 @@
 
 Free · No account · Runs locally · 117 developer tools
 
-**[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://buymeacoffee.com/ssayaibj)
+**[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Website & documentation](https://devsnip.pro) · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://buymeacoffee.com/ssayaibj)
 
 ![DevSnip Pro REST API Client in VS Code: a GET request with formatted JSON response, status, time and size](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/rest-api-client.jpg)
 
@@ -47,7 +47,7 @@ Build a request, send it and inspect the response — all in one panel.
 
 <sub>† Advanced tools, paid for with points you earn by using DevSnip Pro — there is nothing to buy. See [Points & milestones](#points--milestones).</sub>
 
-📖 [Test REST APIs in VS Code](docs/guides/test-rest-apis-in-vscode.md) · [Test a GraphQL API in VS Code](docs/guides/test-graphql-api-in-vscode.md)
+📖 [Test REST APIs in VS Code](docs/guides/test-rest-apis-in-vscode.md) · [Test a GraphQL API in VS Code](docs/guides/test-graphql-api-in-vscode.md) · 🌐 [REST API client for VS Code](https://devsnip.pro/features/rest-api-client)
 
 ## Database client for PostgreSQL, MySQL, MongoDB and Redis
 
@@ -75,7 +75,7 @@ Fill in a short form or paste a connection string — DevSnip Pro detects the da
 - **Safe by default:** passwords live in your OS keychain. Destructive statements ask first, dropping a table asks you to type its name, and **read-only** connections refuse every write — on most databases the server enforces it too.
 - **No extra installs:** every driver ships with the extension. Oracle uses node-oracledb Thin mode, so no Oracle Client is needed.
 
-📖 [Database Client reference: setup, examples, security and troubleshooting](docs/DATABASE-CLIENT.md) · 📖 [Connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md)
+📖 [Database Client reference: setup, examples, security and troubleshooting](docs/DATABASE-CLIENT.md) · 📖 [Connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md) · 🌐 [Database client for VS Code](https://devsnip.pro/databases)
 
 ## LLM token counter, cost estimates and AI tools
 
@@ -90,7 +90,7 @@ Runs locally — no API key needed.
 - **Starters:** JSON → TOON to shrink prompts, LLM Client Setup and AI App Starter.
 - **Call real models** from the REST client: prompts, streaming and schema validation are free; model comparison, benchmarks, embeddings and RAG pipeline tests use points†.
 
-📖 [Count LLM tokens and estimate cost in VS Code](docs/guides/count-llm-tokens-and-cost-in-vscode.md)
+📖 [Count LLM tokens and estimate cost in VS Code](docs/guides/count-llm-tokens-and-cost-in-vscode.md) · 🌐 [AI & LLM tools for VS Code](https://devsnip.pro/features/ai-llm-tools)
 
 ## Security scan: hard-coded secrets, containers, dependencies and endpoints
 
@@ -126,7 +126,7 @@ Runs locally — no API key needed.
 
 Everything runs locally except the endpoint scan, which only contacts the URL you enter, and the dependency scanners, which send only package names, versions and CVE ids (to OSV.dev, the package registries and NVD).
 
-📖 [Find hard-coded secrets and security issues in VS Code](docs/guides/find-hardcoded-secrets-in-vscode.md)
+📖 [Find hard-coded secrets and security issues in VS Code](docs/guides/find-hardcoded-secrets-in-vscode.md) · 🌐 [Security scanner for VS Code](https://devsnip.pro/features/security-scanner) · 🌐 [OSV & SCA scanner docs](https://devsnip.pro/docs/vulnerability-scanning)
 
 ## CSV and Excel viewer
 
@@ -152,7 +152,7 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 
 See [all tools by section](#all-tools-by-section) below.
 
-📖 [Format JSON, decode JWTs and other quick tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md)
+📖 [Format JSON, decode JWTs and other quick tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md) · 🌐 [All 119 developer tools](https://devsnip.pro/tools)
 
 ## Debug logs, Run & Debug, and cleanup
 
@@ -168,7 +168,7 @@ Language-aware logging and cleanup for **JavaScript, TypeScript, Python, Java, K
 
 ![OpenCode Integration Hub in VS Code showing Node.js and OpenCode installed](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/opencode.jpg)
 
-📖 [Install and use OpenCode in VS Code](docs/guides/opencode-in-vscode.md)
+📖 [Install and use OpenCode in VS Code](docs/guides/opencode-in-vscode.md) · 🌐 [OpenCode integration docs](https://devsnip.pro/docs/opencode)
 
 ## Snippets for Spring Boot, ASP.NET Core, FastAPI, React and Flutter
 
@@ -204,7 +204,7 @@ All three send API requests from VS Code, but they're built for different jobs.
 
 Need team sharing or a CI runner? Postman or Thunder Client fit better. Want requests as `.http` files in your repo? Try REST Client. Other tools' features change, so check their pages for current details.
 
-📖 [Free Postman alternative in VS Code: which API client to use](docs/guides/postman-alternative-in-vscode.md)
+📖 [Free Postman alternative in VS Code: which API client to use](docs/guides/postman-alternative-in-vscode.md) · 🌐 [Free Postman alternative in VS Code](https://devsnip.pro/guides/postman-alternative-in-vscode)
 
 ## Points & milestones
 
@@ -321,6 +321,7 @@ Of the toolbox tools, only the LLM API Tester uses the network, and it's marked 
 ## Support & feedback
 
 - 🐛 [Report a bug or request a feature](https://github.com/sayaib/DevSnip-Pro/issues/new/choose)
+- 🌐 [devsnip.pro](https://devsnip.pro): [documentation](https://devsnip.pro/docs), [guides](https://devsnip.pro/guides) and [feature overviews](https://devsnip.pro/features)
 - 📖 [Guides](docs/guides/README.md) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 - ⭐ A rating or review on the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) helps other developers find DevSnip Pro.
 

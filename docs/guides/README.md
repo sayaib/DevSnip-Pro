@@ -28,4 +28,6 @@ Task-first guides for everyday development work in VS Code. Each one answers a c
 
 ---
 
+**Read online:** every guide, with the full documentation, at [devsnip.pro/guides](https://devsnip.pro/guides).
+
 **Install:** [DevSnip Pro on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) or `code --install-extension sayaib.hue-console` · [Back to the README](../../README.md)

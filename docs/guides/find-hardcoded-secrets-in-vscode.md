@@ -72,3 +72,5 @@ Automated checks find the common problems quickly; they do not replace a review 
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
 Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [How to install and use OpenCode in VS Code](opencode-in-vscode.md) · [All guides](README.md)
+
+This guide is also published at [devsnip.pro/guides/find-hardcoded-secrets-in-vscode](https://devsnip.pro/guides/find-hardcoded-secrets-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).

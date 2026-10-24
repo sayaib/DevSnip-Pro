@@ -81,3 +81,5 @@ These are in the **Backend & API** and **Security & Auth** sections of the DevSn
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
 Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [How to test a GraphQL API in VS Code](test-graphql-api-in-vscode.md) · [All guides](README.md)
+
+This guide is also published at [devsnip.pro/guides/postman-alternative-in-vscode](https://devsnip.pro/guides/postman-alternative-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).

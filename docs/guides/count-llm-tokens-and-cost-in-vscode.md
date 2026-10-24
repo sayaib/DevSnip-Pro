@@ -49,3 +49,5 @@ If you use an AI coding agent in the terminal, **OpenCode Integration** installs
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
 Related: [How to install and use OpenCode in VS Code](opencode-in-vscode.md) · [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [All guides](README.md)
+
+This guide is also published at [devsnip.pro/guides/count-llm-tokens-and-cost-in-vscode](https://devsnip.pro/guides/count-llm-tokens-and-cost-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).

@@ -55,3 +55,5 @@ Agents are fast but probabilistic; checks are slower to set up but repeatable. U
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
 Related: [How to count LLM tokens and estimate cost in VS Code](count-llm-tokens-and-cost-in-vscode.md) · [How to find hard-coded secrets in VS Code](find-hardcoded-secrets-in-vscode.md) · [All guides](README.md)
+
+This guide is also published at [devsnip.pro/guides/opencode-in-vscode](https://devsnip.pro/guides/opencode-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).

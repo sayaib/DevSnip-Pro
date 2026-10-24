@@ -60,3 +60,5 @@ Open **GraphQL Formatter & Types** from the **Backend & API** section of the Too
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
 Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [Free Postman alternative in VS Code](postman-alternative-in-vscode.md) · [All guides](README.md)
+
+This guide is also published at [devsnip.pro/guides/test-graphql-api-in-vscode](https://devsnip.pro/guides/test-graphql-api-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).

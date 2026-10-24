@@ -76,3 +76,5 @@ For heavy administration (users and roles, backups, query plans at scale) a dedi
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
 Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [Format JSON, decode JWTs and other quick tools](format-json-decode-jwt-in-vscode.md) · [All guides](README.md)
+
+This guide is also published at [devsnip.pro/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode](https://devsnip.pro/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).
