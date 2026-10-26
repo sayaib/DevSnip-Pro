@@ -101,9 +101,6 @@ export function activate(context: vscode.ExtensionContext) {
     ["debug logs", () => registerLazyCommands(context.subscriptions, DEBUG_LOG_COMMANDS, async () => {
       (await import("./debug/commands")).registerDebugLogCommands(context);
     })],
-    ["OpenCode integration", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.openCodeIntegration"], async () => {
-      (await import("./commands/openCodeIntegration")).registerOpenCodeIntegrationCommand(context);
-    })],
     ["REST API client", () => registerLazyCommands(context.subscriptions, ["sayaib.hue-console.openGUI"], async () => {
       (await import("./commands/api-test")).apiTest(context, { access, collections });
     })],

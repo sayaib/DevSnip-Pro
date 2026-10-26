@@ -38,7 +38,7 @@ const command_registry_1 = require("../utils/command-registry");
  */
 exports.ACTIVATION_MILESTONES = [
     "first_launch", "first_tool", "first_api_request", "first_snippet", "first_ai_tool",
-    "first_security_scan", "first_database_connection", "first_opencode"
+    "first_security_scan", "first_database_connection"
 ];
 /** Firsts that are also Feature Explorer discoveries. */
 const DISCOVERY = {
@@ -46,8 +46,7 @@ const DISCOVERY = {
     first_ai_tool: "ai_tool",
     first_security_scan: "security_scan",
     first_database_connection: "database_connection",
-    first_snippet: "snippet",
-    first_opencode: "opencode"
+    first_snippet: "snippet"
 };
 /** The Getting started checklist: five high-value first steps, in a sensible order. */
 const GUIDE = [
@@ -59,6 +58,7 @@ const GUIDE = [
 ];
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
+    { version: "11.82.1", items: [] },
     {
         version: "11.81.1",
         items: [

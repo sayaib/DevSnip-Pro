@@ -133,7 +133,7 @@ export interface WeekSummary {
 }
 
 /** The core features the Feature Explorer milestone counts, each recorded once when first really used. */
-export const DISCOVERIES = ["api_request", "ai_tool", "security_scan", "database_connection", "snippet", "opencode"] as const;
+export const DISCOVERIES = ["api_request", "ai_tool", "security_scan", "database_connection", "snippet"] as const;
 export type Discovery = typeof DISCOVERIES[number];
 
 export interface LevelInfo {
@@ -184,7 +184,7 @@ export const MILESTONES: Milestone[] = [
     { id: "security_audit", title: "Security Sentinel", description: "Run 5 Security or Cloud Audits", target: 5, points: 80, category: "Security", icon: "🛡️" },
     { id: "ai_explorer", title: "AI/ML Enthusiast", description: "Use AI/ML or RAG tools 10 times", target: 10, points: 90, category: "AI", icon: "🤖" },
     { id: "points_5000", title: "Point Tycoon", description: "Earn 5,000 points in total", target: 5000, points: 500, category: "Milestone", icon: "💰" },
-    { id: "feature_explorer", title: "Feature Explorer", description: "Try 5 of: an API request, an AI tool, a security scan, a database, a snippet, OpenCode", target: 5, points: 60, category: "Discovery", icon: "🧭" },
+    { id: "feature_explorer", title: "Feature Explorer", description: "Try all 5: an API request, an AI tool, a security scan, a database and a snippet", target: 5, points: 60, category: "Discovery", icon: "🧭" },
     { id: "quiz_10", title: "Sharp Mind", description: "Answer 10 daily challenges correctly", target: 10, points: 120, category: "Learning", icon: "🧠" },
     { id: "events_3", title: "Event Regular", description: "Complete 3 weekly events", target: 3, points: 150, category: "Events", icon: "🎪" }
 ];

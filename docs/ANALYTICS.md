@@ -10,7 +10,7 @@ It is opt-out, follows VS Code's telemetry setting, and is limited to three even
 | :--- | :--- | :--- |
 | `extension_active` | At most once per local day per user, when DevSnip Pro starts (or on the first tool event of a new day) | – |
 | `tool_opened` | A tool's command runs successfully, from any surface (sidebar, palette, hub, context menu, keybinding). The same tool opened twice within 2 seconds counts once. | `tool`, `section` |
-| `tool_used` | A tool produced a result: a toolkit run, a REST request, a database connection, a security or dependency scan, a saved snippet or README, an OpenCode launch. At most once per tool every 5 minutes, so live results and repeated runs are not counted per keystroke. | `tool`, `section` |
+| `tool_used` | A tool produced a result: a toolkit run, a REST request, a database connection, a security or dependency scan, a saved snippet or README. At most once per tool every 5 minutes, so live results and repeated runs are not counted per keystroke. | `tool`, `section` |
 
 Every event also carries:
 

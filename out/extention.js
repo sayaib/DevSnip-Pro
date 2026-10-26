@@ -120,9 +120,6 @@ function activate(context) {
         ["debug logs", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, DEBUG_LOG_COMMANDS, async () => {
                 (await Promise.resolve().then(() => __importStar(require("./debug/commands")))).registerDebugLogCommands(context);
             })],
-        ["OpenCode integration", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.openCodeIntegration"], async () => {
-                (await Promise.resolve().then(() => __importStar(require("./commands/openCodeIntegration")))).registerOpenCodeIntegrationCommand(context);
-            })],
         ["REST API client", () => (0, command_registry_1.registerLazyCommands)(context.subscriptions, ["sayaib.hue-console.openGUI"], async () => {
                 (await Promise.resolve().then(() => __importStar(require("./commands/api-test")))).apiTest(context, { access, collections });
             })],

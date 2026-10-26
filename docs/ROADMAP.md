@@ -4,6 +4,7 @@ This is a list of directions being considered, not a promise or a schedule. Prio
 
 ## Recently shipped
 
+- **11.82.1:** OpenCode Integration removed.
 - **11.73.1:** Get started guide and walkthrough, What's new card, Feature Explorer milestone, faster startup through lazy loading.
 - **11.72.1:** Nine appearance themes for every DevSnip Pro panel; redesigned Milestones & Points.
 - **11.71.1:** Database Client for PostgreSQL, MySQL, SQL Server, SQLite, MongoDB and Redis.

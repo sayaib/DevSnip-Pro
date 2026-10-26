@@ -40,14 +40,10 @@ Models wrap JSON in prose, add trailing commas, or truncate an answer. **LLM Out
 
 The REST API Client knows the request shape of each major provider. It can send a prompt, stream the reply, show tokens, latency and cost, and validate the output against a schema. Comparing several models side by side, benchmarking, and testing embeddings, vector databases and RAG pipelines are advanced tools paid for with points. Your API keys are used for the request and never written to history or disk.
 
-## Pair it with a coding agent
-
-If you use an AI coding agent in the terminal, **OpenCode Integration** installs, checks and launches OpenCode in your workspace. See [How to install and use OpenCode in VS Code](opencode-in-vscode.md).
-
 ---
 
 **Try it:** [Install DevSnip Pro](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) (free, no account) or run `code --install-extension sayaib.hue-console`.
 
-Related: [How to install and use OpenCode in VS Code](opencode-in-vscode.md) · [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [All guides](README.md)
+Related: [How to test REST APIs in VS Code](test-rest-apis-in-vscode.md) · [All guides](README.md)
 
 This guide is also published at [devsnip.pro/guides/count-llm-tokens-and-cost-in-vscode](https://devsnip.pro/guides/count-llm-tokens-and-cost-in-vscode), alongside the full [DevSnip Pro documentation](https://devsnip.pro/docs).

@@ -141,7 +141,7 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 
 ## JSON formatter, JWT decoder, cURL converter and 100+ utilities
 
-119 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
+118 tools in 14 sections, all in the **Tools** sidebar with search (<kbd>Ctrl/Cmd</kbd>+<kbd>K</kbd>), favorites and recently used. Every result can be copied, inserted at the cursor, opened in an editor or saved.
 
 ![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/all-tools.jpg)
 
@@ -152,7 +152,7 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 
 See [all tools by section](#all-tools-by-section) below.
 
-📖 [Format JSON, decode JWTs and other quick tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md) · 🌐 [All 119 developer tools](https://devsnip.pro/tools)
+📖 [Format JSON, decode JWTs and other quick tools in VS Code](docs/guides/format-json-decode-jwt-in-vscode.md) · 🌐 [All 118 developer tools](https://devsnip.pro/tools)
 
 ## Debug logs, Run & Debug, and cleanup
 
@@ -164,11 +164,6 @@ Language-aware logging and cleanup for **JavaScript, TypeScript, Python, Java, K
 - **Remove Unused Imports** for JavaScript, TypeScript, Python, Java and Kotlin. It never removes `from __future__` imports, `__init__.py` re-exports, names in `__all__`, or `React` in classic-JSX files.
 - **Unused Dependencies** lists npm, Python and Flutter/Dart packages that no code, script or config file uses, and gives the command to remove them. Plugins, CLIs, code generators and database drivers that work without an import are not listed.
 - **Dependencies & Installation** shows declared, installed and newest versions for npm, yarn, pnpm, pip, Maven, Gradle, **NuGet** (`.csproj`, including Central Package Management) and **pub** (`pubspec.yaml`). Commands run only after you confirm them.
-- **OpenCode:** checks for Node.js and the OpenCode CLI, installs or repairs it, and launches it in your workspace.
-
-![OpenCode Integration Hub in VS Code showing Node.js and OpenCode installed](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/opencode.jpg)
-
-📖 [Install and use OpenCode in VS Code](docs/guides/opencode-in-vscode.md) · 🌐 [OpenCode integration docs](https://devsnip.pro/docs/opencode)
 
 ## Snippets for Spring Boot, ASP.NET Core, FastAPI, React and Flutter
 
@@ -230,7 +225,7 @@ Twelve themes restyle every DevSnip Pro panel from the **Theme** selector at the
 - **Backend & API** — REST API Client, cURL Converter, API Response Inspector, URL & Query String Tool, CORS Builder & Debugger, OpenAPI / Swagger Toolkit, GraphQL Formatter & Types, API Resource Scaffolder
 - **Web & Frontend** — React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder
 - **Mobile Development** — adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes
-- **Code & Productivity** — Saved Snippets, Create Snippet, Framework Snippets, Remove Unused Imports, Dependencies & Installation, Unused Dependencies, README Viewer & Manager, OpenCode Integration
+- **Code & Productivity** — Saved Snippets, Create Snippet, Framework Snippets, Remove Unused Imports, Dependencies & Installation, Unused Dependencies, README Viewer & Manager
 - **Text & Formatters** — JSON / YAML / XML Formatter, XML → JSON Converter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools
 - **Encoders & Converters** — Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter
 - **Database** — Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB
@@ -272,13 +267,13 @@ No. Requests are built in a form and saved to collections.
 No. Tools run locally, and network requests go only to the URLs and databases you enter. See [Privacy](#privacy-and-analytics).
 
 **Does it work offline?**
-Yes, except for things that need a network by definition: API requests, database connections, the endpoint scan, AI provider calls and the OpenCode install.
+Yes, except for things that need a network by definition: API requests, database connections, the endpoint scan, and AI provider calls.
 
 **Will it slow down VS Code?**
 No. Heavy features load only when you first open them, and database drivers load when you connect.
 
 **Does it work in Remote, WSL or vscode.dev?**
-Remote and WSL work, except the OpenCode hub, which needs a local process. vscode.dev isn't supported because several tools use Node APIs.
+Remote and WSL work. vscode.dev isn't supported because several tools use Node APIs.
 
 ## Settings
 
@@ -298,8 +293,6 @@ Remote and WSL work, except the OpenCode hub, which needs a local process. vscod
 ## Troubleshooting
 
 **A new snippet doesn't appear in IntelliSense.** VS Code loads snippets at startup — reload the window when prompted.
-
-**OpenCode is installed but not detected.** VS Code launched from the Dock or a shortcut gets a minimal `PATH`. Start it from a terminal or fix `PATH`, then press **Recheck System**. On Windows, use **Launch in Command Prompt** if PowerShell blocks it.
 
 **The Database Client can't connect.** The error says why (refused, host not found, auth failed, unknown Oracle service or TLS); see [Database Client troubleshooting](docs/DATABASE-CLIENT.md#troubleshooting). For a local self-signed certificate add `sslmode=no-verify` (PostgreSQL), `TrustServerCertificate=true` (SQL Server) or `tlsAllowInvalidCertificates=true` (MongoDB). SQL Server needs a SQL login.
 

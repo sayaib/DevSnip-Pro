@@ -15,7 +15,6 @@ Task-first guides for everyday development work in VS Code. Each one answers a c
 ## AI and LLMs
 
 - [How to count LLM tokens and estimate cost in VS Code](count-llm-tokens-and-cost-in-vscode.md): tokens and cost across models, prompt templates, parsing model output, RAG planning.
-- [How to install and use OpenCode in VS Code](opencode-in-vscode.md): set up the agent, then check its work with deterministic tools.
 
 ## Security
 

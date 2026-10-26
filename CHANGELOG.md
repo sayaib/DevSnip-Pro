@@ -1,5 +1,15 @@
 # Development Changelog of DevSnip Pro
 
+## 11.82.1 - OpenCode Integration removed
+
+The OpenCode Integration hub has been removed, so DevSnip Pro no longer installs, repairs or launches the OpenCode CLI. Nothing else changes. If you already installed OpenCode through it, OpenCode stays installed: run `opencode` in a terminal, or `npm uninstall -g opencode-ai` to remove it.
+
+### Removed
+
+- **OpenCode Integration:** the **⚡ DevSnip Pro: OpenCode Integration** command, its panel, and its entry in the Tools sidebar's Code & Productivity section and hub. The sidebar now has 118 tools in 14 sections.
+- **Feature Explorer** now counts five features (an API request, an AI tool, a security scan, a database and a snippet), and you complete it by trying all five. An OpenCode launch you already recorded no longer counts; milestones you already completed stay completed.
+- The OpenCode guide and every OpenCode mention in the README, docs and bug report template.
+
 ## 11.81.1 - SCA Scanner: exploited CVEs, dependency health and Spring Boot-aware fixes
 
 A new **SCA Scanner** (software composition analysis) in the Security & Auth section. It builds on the OSV Vulnerability Scanner's engine, so both tools agree on every dependency and advisory. It adds which vulnerabilities are being exploited, which packages are deprecated or abandoned, and the safest fix for each, worked out from what actually controls the version. No npm dependency is added, and the scanner loads the first time you use it.

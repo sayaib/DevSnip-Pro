@@ -14,7 +14,7 @@ import { COMMAND_PREFIX } from "../utils/command-registry";
 
 export const ACTIVATION_MILESTONES = [
   "first_launch", "first_tool", "first_api_request", "first_snippet", "first_ai_tool",
-  "first_security_scan", "first_database_connection", "first_opencode"
+  "first_security_scan", "first_database_connection"
 ] as const;
 export type ActivationMilestone = typeof ACTIVATION_MILESTONES[number];
 
@@ -24,8 +24,7 @@ const DISCOVERY: Partial<Record<ActivationMilestone, string>> = {
   first_ai_tool: "ai_tool",
   first_security_scan: "security_scan",
   first_database_connection: "database_connection",
-  first_snippet: "snippet",
-  first_opencode: "opencode"
+  first_snippet: "snippet"
 };
 
 export interface GuideStep {
@@ -47,6 +46,7 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  { version: "11.82.1", items: [] },
   {
     version: "11.81.1",
     items: [

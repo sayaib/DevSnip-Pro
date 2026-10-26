@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.81.1",
+  "version": "11.82.1",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -63,8 +63,7 @@
     "jwt decoder",
     "json formatter",
     "yaml formatter",
-    "rest client",
-    "opencode"
+    "rest client"
   ],
   "contributes": {
     "languages": [
@@ -445,10 +444,6 @@
       {
         "command": "sayaib.hue-console.readmeManager",
         "title": "⚡ DevSnip Pro: README Viewer & Manager"
-      },
-      {
-        "command": "sayaib.hue-console.openCodeIntegration",
-        "title": "⚡ DevSnip Pro: OpenCode Integration"
       },
       {
         "command": "sayaib.hue-console.frameworkSnippets",
@@ -1361,11 +1356,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "DevSnip Pro scans workspace files and can run npm and OpenCode commands, so it requires a trusted workspace."
+      "description": "DevSnip Pro scans workspace files and can run npm commands, so it requires a trusted workspace."
     },
     "virtualWorkspaces": {
       "supported": "limited",
-      "description": "Tools that spawn processes (OpenCode Integration) are unavailable in virtual workspaces."
+      "description": "Tools that spawn processes, such as dependency installs, are unavailable in virtual workspaces."
     }
   }
 }

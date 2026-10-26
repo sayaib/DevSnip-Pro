@@ -98,7 +98,7 @@ export const NAV: NavSection[] = [
   },
   {
     id: "code", title: "Code & Productivity", emoji: "⚡", codicon: "rocket", color: "terminal.ansiBrightYellow",
-    description: "Snippets, workspace clean-up, dependencies, README files and the OpenCode assistant.",
+    description: "Snippets, workspace clean-up, dependencies and README files.",
     entries: [
       e("showSnippets", "Saved Snippets", "file-code", "Browse, insert and manage the snippets you have saved.", { hubIcon: "code", keywords: ["snippet", "template", "insert"] }),
       e("createCustomSnippet", "Create Snippet", "edit", "Save the selected code as a reusable custom snippet.", { hubIcon: "sparkles", keywords: ["snippet", "save selection"] }),
@@ -106,8 +106,7 @@ export const NAV: NavSection[] = [
       e("removeUnusedImports", "Remove Unused Imports", "symbol-method", "Detect imports that are never used and remove them.", { hubIcon: "scissors", keywords: ["imports", "cleanup", "unused"] }),
       e("dependencyManager", "Dependencies & Installation", "package", "Check npm, yarn, pnpm, pip, Maven and Gradle dependencies and update them.", { hubIcon: "package", keywords: ["npm", "pip", "maven", "gradle", "outdated", "upgrade"] }),
       e("unusedDependencies", "Unused Dependencies", "trash", "npm, Python and Flutter packages that no code, script or config uses, and the command to remove them.", { tool: "dev.unused-deps" }),
-      e("readmeManager", "README Viewer & Manager", "book", "Browse, preview and edit the README files in your workspace.", { hubIcon: "book", keywords: ["readme", "markdown", "docs"] }),
-      e("openCodeIntegration", "OpenCode Integration", "comment-discussion", "Run the OpenCode AI assistant from inside VS Code.", { hubIcon: "message", keywords: ["ai assistant", "agent", "opencode"] })
+      e("readmeManager", "README Viewer & Manager", "book", "Browse, preview and edit the README files in your workspace.", { hubIcon: "book", keywords: ["readme", "markdown", "docs"] })
     ]
   },
   {

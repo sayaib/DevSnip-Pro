@@ -15,7 +15,7 @@ const DEFAULT_PHRASES = [
   "rest api client", "api client", "http client", "api testing", "graphql client", "postman alternative",
   "database client", "sql client", "postgresql", "mongodb", "redis",
   "llm", "token counter", "ai tools", "security scanner", "secret scanner",
-  "jwt decoder", "json formatter", "curl", "websocket", "code snippets", "opencode", "devsnip"
+  "jwt decoder", "json formatter", "curl", "websocket", "code snippets", "devsnip"
 ];
 
 async function query(criteria, extra = {}) {

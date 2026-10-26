@@ -5,14 +5,14 @@ DevSnip Pro is a single VS Code extension written in TypeScript. It has no backe
 ```
 src/
 ├── extention.ts            activation: registers commands, sidebar, themes, analytics, onboarding
-├── toolkits/               119 tools in 14 sections
+├── toolkits/               118 tools in 14 sections
 │   ├── layout.ts           single source of truth: sections, order, labels, descriptions
 │   ├── sections/*.ts       ToolSpec forms (fields, presets, actions)
 │   ├── engines/*.ts        pure functions that do the work (unit-tested)
 │   ├── registry.ts         stamps section/category from layout.ts, validates every tool appears once
 │   ├── runner.ts, page.ts  generic toolkit panel: form → engine → Copy / Insert / Save
 ├── commands/               larger panels: REST API Client, security, snippets, dependencies,
-│                           README manager, OpenCode, milestones, hubs
+│                           README manager, milestones, hubs
 ├── services/               logic behind those panels (HTTP, assertions, LLM providers,
 │                           vector DBs, security analysers, dependency versions)
 ├── debug/                  Insert Debug Log and Clean Debug Logs: a lexer for 8 languages
@@ -82,8 +82,7 @@ Errors from database drivers are rewritten in `src/database/connection-string.ts
 - a scan finishes;
 - a database connects;
 - an AI tool succeeds;
-- a snippet is saved;
-- OpenCode launches.
+- a snippet is saved.
 
 It also keeps the days the extension was used. The sidebar's **Get started** and **What's new** cards and the **Feature Explorer** milestone are built from it, and each first sends one anonymous `activation_milestone` event. New users are told apart from existing ones by the analytics install snapshot, so people who update never see the beginner guide.
 

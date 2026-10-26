@@ -267,7 +267,7 @@ suite("analytics wiring", () => {
     const sections = new Set<string>(NAV.map(s => s.id));
     for (const section of NAV) for (const entry of section.entries) assert.ok(sections.has(toolSection(entry.command) ?? ""), entry.command);
     for (const command of TOOLKIT_COMMANDS) assert.ok(sections.has(toolSection(command.command) ?? ""), command.command);
-    const callSites = ["openGUI", "databaseClient", "csvViewer", "excelViewer", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit", "dependencyManager", "osvScanner", "scaScanner", "createCustomSnippet", "readmeManager", "openCodeIntegration"];
+    const callSites = ["openGUI", "databaseClient", "csvViewer", "excelViewer", "endpointSecurityScan", "securityAudit", "cloudSecurityAudit", "dependencyAudit", "dependencyManager", "osvScanner", "scaScanner", "createCustomSnippet", "readmeManager"];
     for (const tool of callSites) assert.ok(toolSection(tool), `${tool} is not a tool, so trackToolUsed would ignore it`);
     assert.strictEqual(toolSection("sayaib.hue-console.openGUI"), "api", "prefixed ids work too");
   });
