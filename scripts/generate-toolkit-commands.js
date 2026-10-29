@@ -53,12 +53,21 @@ const upsert = (id, title, keepTitle) => {
 for (const section of NAV) {
   for (const entry of section.entries) {
     const tool = entry.tool ? findTool(entry.tool) : undefined;
-    upsert(COMMAND_PREFIX + entry.command, `${section.emoji} DevSnip Pro: ${tool ? tool.title : entry.label}`, false);
+    upsert(COMMAND_PREFIX + entry.command, `${section.emoji} DevSnip Pro: ${entry.label}`, false);
     for (const alias of (tool && tool.aliases) || []) {
       sectionOf.set(COMMAND_PREFIX + alias.command, section);
       upsert(COMMAND_PREFIX + alias.command, `${section.emoji} DevSnip Pro: ${tool.title}`, true);
     }
   }
+}
+// Legacy mode aliases stay callable by shortcuts and saved links, but each tool
+// has one discoverable palette entry. Its mode selector exposes the same actions.
+const palette = manifest.contributes.menus.commandPalette;
+for (const tool of ALL_TOOLS) for (const alias of tool.aliases || []) {
+  const command = COMMAND_PREFIX + alias.command;
+  const existing = palette.find(entry => entry.command === command);
+  if (existing) existing.when = "false";
+  else palette.push({ command, when: "false" });
 }
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 console.log(`commands.ts: ${rows.length} commands. package.json: ${added} added, ${renamed} retitled.`);

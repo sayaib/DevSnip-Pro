@@ -559,4 +559,35 @@ for (const engine of ["auto", "sql.js"]) {
             assert.ok(manifest.dependencies[dep], `${dep} ships with the extension`);
     });
 });
+(0, run_unit_tests_1.suite)("database: pending connection lifecycle", () => {
+    for (const action of ["disconnect", "dispose"]) {
+        (0, run_unit_tests_1.test)(`${action} closes a connection that finishes opening late`, async () => {
+            let started;
+            const beginning = new Promise(resolve => { started = resolve; });
+            let release;
+            const gate = new Promise(resolve => { release = resolve; });
+            let closes = 0;
+            const adapter = fakeAdapter({ connect: async () => { started(); await gate; return { version: "test" }; }, close: async () => { closes++; } });
+            const { service, id } = await serviceWith(adapter, fakeUi());
+            const pending = service.ensureConnected(id);
+            const rejected = assert.rejects(pending, /connection was closed/i);
+            await beginning;
+            if (action === "dispose")
+                await service.dispose();
+            else
+                await service.handle("disconnect", { id });
+            release();
+            await rejected;
+            assert.strictEqual(closes, 1, "late adapter must be released");
+            assert.strictEqual(service.views()[0].status, "disconnected");
+            if (action === "dispose")
+                await assert.rejects(service.ensureConnected(id), /client is closed/i);
+            else {
+                await service.ensureConnected(id);
+                assert.strictEqual(service.views()[0].status, "connected", "explicit reconnect remains available");
+                await service.dispose();
+            }
+        });
+    }
+});
 //# sourceMappingURL=database.unit.js.map

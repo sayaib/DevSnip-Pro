@@ -15,16 +15,19 @@ import { DEVOPS_TOOLS } from "./sections/devops";
 const SPECS: ToolSpec[] = [...DESKTOP_TOOLS, ...DEV_TOOLS, ...TEXT_TOOLS, ...WEB_TOOLS, ...MOBILE_TOOLS, ...AI_TOOLS, ...RAG_TOOLS, ...DATA_TOOLS, ...DEVOPS_TOOLS].filter(tool => isCommandSupported(tool.command));
 
 export const SECTIONS: NavSection[] = NAV;
+const specsById = new Map(SPECS.map(spec => [spec.id, spec]));
 
 /** Every toolkit tool in navigation order, with `section` and `category` from the layout. */
 export const ALL_TOOLS: ToolDefinition[] = NAV.flatMap(section => section.entries.filter(e => e.tool).map(entry => {
-  const spec = SPECS.find(s => s.id === entry.tool);
+  const spec = entry.tool ? specsById.get(entry.tool) : undefined;
   if (!spec) throw new Error(`layout.ts refers to unknown tool ${entry.tool}`);
-  return { ...spec, section: section.id, category: entry.category ?? "" } as ToolDefinition;
+  return { ...spec, title: entry.label, section: section.id, category: entry.category ?? "" } as ToolDefinition;
 }));
 
+const toolsById = new Map(ALL_TOOLS.map(tool => [tool.id, tool]));
+
 export function findTool(id: string): ToolDefinition | undefined {
-  return ALL_TOOLS.find(t => t.id === id);
+  return toolsById.get(id);
 }
 
 export function toolsIn(section: SectionId): ToolDefinition[] {

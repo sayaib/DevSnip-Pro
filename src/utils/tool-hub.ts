@@ -88,6 +88,7 @@ export interface HubTool {
   icon: HubIcon;
   /** Short label on the card, e.g. "LLM" or "Live". Optional. */
   tag?: string;
+  subsection?: string;
   /** Extra search terms that are not in the title or description. */
   keywords?: string[];
 }

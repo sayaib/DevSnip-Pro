@@ -8,7 +8,7 @@ exports.SIDEBAR_GROUPS = layout_1.NAV.map(section => ({
     name: section.title,
     icon: section.codicon,
     color: section.color,
-    tools: section.entries.map(entry => ({ label: entry.label, command: layout_1.COMMAND_PREFIX + entry.command, icon: entry.codicon, description: entry.description }))
+    tools: section.entries.map(entry => ({ label: entry.label, category: entry.category, command: layout_1.COMMAND_PREFIX + entry.command, icon: entry.codicon, description: entry.description }))
 }));
 /** Every command the sidebar can run; anything else posted by the page is ignored. */
 function sidebarCommands() {

@@ -36,7 +36,7 @@ async function searchableTools() {
         const tool = entry.tool ? findTool(entry.tool) : undefined;
         const keywords = (tool?.keywords ?? entry.keywords ?? []).slice(0, 5);
         return {
-            label: tool?.title ?? entry.label,
+            label: entry.label,
             description: [section.title, entry.category, ...keywords].filter(Boolean).join(" / "),
             command: COMMAND_PREFIX + entry.command
         };

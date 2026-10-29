@@ -364,7 +364,7 @@
       },
       {
         "command": "sayaib.hue-console.htmlToJsx",
-        "title": "🎨 DevSnip Pro: HTML → JSX Converter"
+        "title": "🎨 DevSnip Pro: HTML → JSX"
       },
       {
         "command": "sayaib.hue-console.cssUnits",
@@ -384,11 +384,11 @@
       },
       {
         "command": "sayaib.hue-console.cacheControl",
-        "title": "🎨 DevSnip Pro: Cache-Control Builder"
+        "title": "🔌 DevSnip Pro: Cache-Control Builder"
       },
       {
         "command": "sayaib.hue-console.deviceCommands",
-        "title": "📱 DevSnip Pro: adb & simctl Command Builder"
+        "title": "📱 DevSnip Pro: adb & simctl Commands"
       },
       {
         "command": "sayaib.hue-console.deepLinkHelper",
@@ -396,20 +396,20 @@
       },
       {
         "command": "sayaib.hue-console.appPermissions",
-        "title": "📱 DevSnip Pro: App Permissions Generator"
+        "title": "📱 DevSnip Pro: App Permissions"
       },
       {
         "command": "sayaib.hue-console.mobileLocalApi",
-        "title": "📱 DevSnip Pro: Local API Access from Devices",
+        "title": "📱 DevSnip Pro: Local API from Devices",
         "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.appEnvironments",
-        "title": "📱 DevSnip Pro: Environments & Build Flavors"
+        "title": "📱 DevSnip Pro: Environments & Flavors"
       },
       {
         "command": "sayaib.hue-console.appSigning",
-        "title": "📱 DevSnip Pro: Signing, Keystores & Fingerprints"
+        "title": "📱 DevSnip Pro: Signing & Keystores"
       },
       {
         "command": "sayaib.hue-console.sdkVersions",
@@ -421,7 +421,7 @@
       },
       {
         "command": "sayaib.hue-console.densityConverter",
-        "title": "📱 DevSnip Pro: dp / px / pt Converter & Asset Sizes"
+        "title": "📱 DevSnip Pro: dp / px / pt & Asset Sizes"
       },
       {
         "command": "sayaib.hue-console.showSnippets",
@@ -480,7 +480,7 @@
       },
       {
         "command": "sayaib.hue-console.regexLibrary",
-        "title": "📝 DevSnip Pro: Regex Tester, Library & Code"
+        "title": "📝 DevSnip Pro: Regex Tester & Library"
       },
       {
         "command": "sayaib.hue-console.regexBuilder",
@@ -570,7 +570,7 @@
       },
       {
         "command": "sayaib.hue-console.networkTools",
-        "title": "🐞 DevSnip Pro: Port & Network Toolkit",
+        "title": "🐳 DevSnip Pro: Port & Network Toolkit",
         "enablement": "!isWeb && !devsnip.webHost"
       },
       {
@@ -595,15 +595,15 @@
       },
       {
         "command": "sayaib.hue-console.semverCalculator",
-        "title": "🌿 DevSnip Pro: Semver & App Version Calculator"
+        "title": "🌿 DevSnip Pro: Semver & App Versions"
       },
       {
         "command": "sayaib.hue-console.dockerfileHelper",
-        "title": "🐳 DevSnip Pro: Dockerfile Generator & Linter"
+        "title": "🐳 DevSnip Pro: Dockerfile"
       },
       {
         "command": "sayaib.hue-console.composeHelper",
-        "title": "🐳 DevSnip Pro: Docker Compose Generator & Validator"
+        "title": "🐳 DevSnip Pro: Docker Compose"
       },
       {
         "command": "sayaib.hue-console.dockerRunToCompose",
@@ -611,15 +611,15 @@
       },
       {
         "command": "sayaib.hue-console.ciPipelineGenerator",
-        "title": "🐳 DevSnip Pro: CI Pipeline Generator"
+        "title": "🐳 DevSnip Pro: CI Pipeline"
       },
       {
         "command": "sayaib.hue-console.envChecker",
-        "title": "🐳 DevSnip Pro: .env Checker & Generator"
+        "title": "🐳 DevSnip Pro: .env Checker"
       },
       {
         "command": "sayaib.hue-console.kubernetesHelper",
-        "title": "🐳 DevSnip Pro: Kubernetes & Helm Generator / Validator"
+        "title": "🐳 DevSnip Pro: Kubernetes & Helm"
       },
       {
         "command": "sayaib.hue-console.cloudDeployGenerator",
@@ -631,11 +631,11 @@
       },
       {
         "command": "sayaib.hue-console.nginxConfig",
-        "title": "🐳 DevSnip Pro: Nginx Config Generator"
+        "title": "🐳 DevSnip Pro: Nginx Config"
       },
       {
         "command": "sayaib.hue-console.healthCheckGenerator",
-        "title": "🐳 DevSnip Pro: Health Check Generator"
+        "title": "🐳 DevSnip Pro: Health Check Endpoints"
       },
       {
         "command": "sayaib.hue-console.terraformGenerator",
@@ -643,7 +643,7 @@
       },
       {
         "command": "sayaib.hue-console.pm2Config",
-        "title": "🐳 DevSnip Pro: PM2 Ecosystem Generator"
+        "title": "🐳 DevSnip Pro: PM2 Ecosystem"
       },
       {
         "command": "sayaib.hue-console.observabilityStarter",
@@ -661,12 +661,12 @@
       },
       {
         "command": "sayaib.hue-console.hashGenerator",
-        "title": "🛡️ DevSnip Pro: Hash, HMAC & Webhook Signatures",
+        "title": "🛡️ DevSnip Pro: Hash, HMAC & Webhooks",
         "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.oauthPkce",
-        "title": "🛡️ DevSnip Pro: OAuth 2.0 & PKCE Helper"
+        "title": "🛡️ DevSnip Pro: OAuth 2.0 & PKCE"
       },
       {
         "command": "sayaib.hue-console.securityHeaders",
@@ -715,7 +715,7 @@
       },
       {
         "command": "sayaib.hue-console.certInspector",
-        "title": "🛡️ DevSnip Pro: Certificate & SSL Pinning Inspector",
+        "title": "🛡️ DevSnip Pro: Certificate & SSL Pinning",
         "enablement": "!isWeb && !devsnip.webHost"
       },
       {
@@ -741,7 +741,7 @@
       },
       {
         "command": "sayaib.hue-console.llmJsonValidator",
-        "title": "🤖 DevSnip Pro: LLM Output Cleaner & JSON Validator"
+        "title": "🤖 DevSnip Pro: LLM Output & JSON"
       },
       {
         "command": "sayaib.hue-console.llmResponseFormatter",
@@ -766,7 +766,7 @@
       },
       {
         "command": "sayaib.hue-console.gpuVram",
-        "title": "🤖 DevSnip Pro: GPU Memory & Speed Estimator"
+        "title": "🤖 DevSnip Pro: GPU Memory & Speed"
       },
       {
         "command": "sayaib.hue-console.mlopsGenerator",
@@ -870,7 +870,7 @@
       },
       {
         "command": "sayaib.hue-console.sparkCostEstimator",
-        "title": "🧬 DevSnip Pro: Spark Cluster & Cost Estimator"
+        "title": "🧬 DevSnip Pro: Spark Cluster & Cost"
       },
       {
         "command": "sayaib.hue-console.deltaLakeAnalyzer",
@@ -1366,6 +1366,26 @@
         {
           "command": "sayaib.hue-console.premiumStatus",
           "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.yamlJsonTool",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.urlEncoder",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.modelComparison",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.llmResponseFormatter",
+          "when": "false"
+        },
+        {
+          "command": "sayaib.hue-console.schemaDiff",
+          "when": "false"
         }
       ]
     },

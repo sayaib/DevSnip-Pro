@@ -14,7 +14,8 @@ function hubTools(): HubTool[] {
     const tool = entry.tool ? findTool(entry.tool) : undefined;
     return {
       command: COMMAND_PREFIX + entry.command,
-      title: tool?.title ?? entry.label,
+      title: entry.label,
+      subsection: entry.category,
       description: tool?.summary ?? entry.description,
       category: section.title,
       icon: (tool?.icon ?? entry.hubIcon ?? "code") as HubIcon,

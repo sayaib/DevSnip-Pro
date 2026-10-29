@@ -29,6 +29,7 @@ const path = __importStar(require("path"));
 const vm = __importStar(require("vm"));
 const tool_hub_1 = require("../../utils/tool-hub");
 const hubs_1 = require("../../commands/hubs");
+const registry_1 = require("../../toolkits/registry");
 const commands_1 = require("../../toolkits/commands");
 const layout_1 = require("../../toolkits/layout");
 const run_unit_tests_1 = require("./run-unit-tests");
@@ -39,6 +40,25 @@ const contributed = new Set(manifest.contributes.commands.map((c) => c.command))
     (0, run_unit_tests_1.test)("every hub definition is consistent (categories, icons, no duplicates)", () => {
         for (const hub of hubs_1.ALL_HUBS)
             assert.deepStrictEqual((0, tool_hub_1.validateHub)(hub), [], hub.heading);
+    });
+    (0, run_unit_tests_1.test)("every tool has a purpose-based subsection shared by hub and sidebar", () => {
+        for (const section of layout_1.NAV)
+            for (const entry of section.entries) {
+                assert.ok(entry.category && section.categories?.includes(entry.category), entry.command);
+                const card = hubs_1.ALL_HUBS[0].tools.find(t => t.command === "sayaib.hue-console." + entry.command);
+                assert.strictEqual(card.subsection, entry.category);
+                assert.strictEqual(card.title, entry.label);
+            }
+        assert.ok(layout_1.NAV.find(s => s.id === "api").entries.some(e => e.command === "cacheControl"));
+        assert.ok(layout_1.NAV.find(s => s.id === "devops").entries.some(e => e.command === "networkTools"));
+    });
+    (0, run_unit_tests_1.test)("legacy mode aliases remain contributed but do not duplicate palette entries", () => {
+        for (const tool of registry_1.ALL_TOOLS)
+            for (const alias of tool.aliases ?? []) {
+                const command = "sayaib.hue-console." + alias.command;
+                assert.ok(contributed.has(command), command);
+                assert.strictEqual(manifest.contributes.menus.commandPalette.find((e) => e.command === command)?.when, "false", command);
+            }
     });
     (0, run_unit_tests_1.test)("every card opens a contributed command", () => {
         for (const hub of hubs_1.ALL_HUBS) {

@@ -25,14 +25,10 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.confirmAction = exports.disposeAllToolPanels = exports.openToolPanel = exports.THEME_TOKENS = exports.toastScript = exports.UTILITY_CSS = exports.TOOL_CSS = exports.safePostMessage = exports.embedJson = exports.escapeHtml = exports.getNonce = void 0;
 const vscode = __importStar(require("vscode"));
+const random_1 = require("../platform/random");
 /** Cryptographically-random nonce for webview CSP script tags. */
 function getNonce() {
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let text = "";
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
+    return (0, random_1.randomBytes)(16).toString("hex");
 }
 exports.getNonce = getNonce;
 /** Escapes text that is interpolated into webview HTML. */
@@ -66,7 +62,9 @@ exports.embedJson = embedJson;
  */
 function safePostMessage(panel, message) {
     try {
-        void panel.webview.postMessage(message);
+        void Promise.resolve(panel.webview.postMessage(message)).catch(error => {
+            console.warn("DevSnip Pro: webview message could not be delivered.", error);
+        });
     }
     catch {
         /* panel disposed while work was in flight */

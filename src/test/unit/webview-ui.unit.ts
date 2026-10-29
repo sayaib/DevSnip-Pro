@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { embedJson, escapeHtml, getNonce } from "../../utils/webview-ui";
+import { embedJson, escapeHtml, getNonce, safePostMessage } from "../../utils/webview-ui";
 import { isKnownCommand, knownCommands, registerTrackedCommand, setUsageRecorder } from "../../utils/command-registry";
 import { executeQueuedCommand } from "../../utils/command-dispatch";
 import { suite, test } from "./run-unit-tests";
@@ -17,9 +17,22 @@ suite("webview helpers", () => {
     assert.strictEqual(JSON.parse(embedded).text, "</script><script>alert(1)</script>");
   });
 
+  test("webview delivery handles asynchronous rejection without an unhandled promise", async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => { warnings.push(args); };
+    try {
+      const panel = { webview: { postMessage: () => Promise.reject(new Error("closed transport")) } };
+      safePostMessage(panel as unknown as import("vscode").WebviewPanel, { type: "result" });
+      await new Promise(resolve => setImmediate(resolve));
+      assert.strictEqual(warnings.length, 1);
+    } finally { console.warn = warn; }
+  });
+
   test("nonces are 32 characters and not reused", () => {
     const first = getNonce();
     const second = getNonce();
+    assert.match(first, /^[a-f0-9]{32}$/);
     assert.strictEqual(first.length, 32);
     assert.notStrictEqual(first, second);
   });

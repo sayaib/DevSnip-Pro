@@ -14,7 +14,8 @@ function hubTools() {
         const tool = entry.tool ? (0, registry_1.findTool)(entry.tool) : undefined;
         return {
             command: layout_1.COMMAND_PREFIX + entry.command,
-            title: tool?.title ?? entry.label,
+            title: entry.label,
+            subsection: entry.category,
             description: tool?.summary ?? entry.description,
             category: section.title,
             icon: (tool?.icon ?? entry.hubIcon ?? "code"),

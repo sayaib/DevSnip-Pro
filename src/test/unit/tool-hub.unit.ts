@@ -4,6 +4,7 @@ import * as path from "path";
 import * as vm from "vm";
 import { HUB_ICONS, renderToolHub, validateHub } from "../../utils/tool-hub";
 import { ALL_HUBS } from "../../commands/hubs";
+import { ALL_TOOLS } from "../../toolkits/registry";
 import { TOOLKIT_COMMANDS } from "../../toolkits/commands";
 import { HUB_COMMANDS, NAV } from "../../toolkits/layout";
 import { suite, test } from "./run-unit-tests";
@@ -15,6 +16,25 @@ const contributed = new Set<string>(manifest.contributes.commands.map((c: { comm
 suite("tool hubs", () => {
   test("every hub definition is consistent (categories, icons, no duplicates)", () => {
     for (const hub of ALL_HUBS) assert.deepStrictEqual(validateHub(hub), [], hub.heading);
+  });
+
+  test("every tool has a purpose-based subsection shared by hub and sidebar", () => {
+    for (const section of NAV) for (const entry of section.entries) {
+      assert.ok(entry.category && section.categories?.includes(entry.category), entry.command);
+      const card = ALL_HUBS[0].tools.find(t => t.command === "sayaib.hue-console." + entry.command)!;
+      assert.strictEqual(card.subsection, entry.category);
+      assert.strictEqual(card.title, entry.label);
+    }
+    assert.ok(NAV.find(s => s.id === "api")!.entries.some(e => e.command === "cacheControl"));
+    assert.ok(NAV.find(s => s.id === "devops")!.entries.some(e => e.command === "networkTools"));
+  });
+
+  test("legacy mode aliases remain contributed but do not duplicate palette entries", () => {
+    for (const tool of ALL_TOOLS) for (const alias of tool.aliases ?? []) {
+      const command = "sayaib.hue-console." + alias.command;
+      assert.ok(contributed.has(command), command);
+      assert.strictEqual(manifest.contributes.menus.commandPalette.find((e: { command: string }) => e.command === command)?.when, "false", command);
+    }
   });
 
   test("every card opens a contributed command", () => {

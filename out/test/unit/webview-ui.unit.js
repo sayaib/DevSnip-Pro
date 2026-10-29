@@ -39,9 +39,24 @@ const run_unit_tests_1 = require("./run-unit-tests");
         // It still parses back to the original value.
         assert.strictEqual(JSON.parse(embedded).text, "</script><script>alert(1)</script>");
     });
+    (0, run_unit_tests_1.test)("webview delivery handles asynchronous rejection without an unhandled promise", async () => {
+        const warnings = [];
+        const warn = console.warn;
+        console.warn = (...args) => { warnings.push(args); };
+        try {
+            const panel = { webview: { postMessage: () => Promise.reject(new Error("closed transport")) } };
+            (0, webview_ui_1.safePostMessage)(panel, { type: "result" });
+            await new Promise(resolve => setImmediate(resolve));
+            assert.strictEqual(warnings.length, 1);
+        }
+        finally {
+            console.warn = warn;
+        }
+    });
     (0, run_unit_tests_1.test)("nonces are 32 characters and not reused", () => {
         const first = (0, webview_ui_1.getNonce)();
         const second = (0, webview_ui_1.getNonce)();
+        assert.match(first, /^[a-f0-9]{32}$/);
         assert.strictEqual(first.length, 32);
         assert.notStrictEqual(first, second);
     });

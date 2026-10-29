@@ -1,9 +1,13 @@
 # Development Changelog of DevSnip Pro
 
-## 11.83.2 - Security finding navigation and reliability (2026-10-29)
+## 11.83.2 - Tool organization, security navigation and reliability (2026-10-29)
+
+- Organize all 118 tools into purpose-based subsections shared by the sidebar, tool browser and search. Move HTTP caching to Backend & API and network utilities to DevOps & Cloud.
+- Use consistent tool names across navigation, panels and the Command Palette; hide seven duplicate legacy mode aliases from the palette while keeping their commands and functionality available. See the [tool organization guide](docs/TOOL_ORGANIZATION.md).
 
 - Click a workspace or cloud security finding to open its source file, select the reported line and center it in the editor. The existing Open button remains available; selecting evidence text does not trigger navigation.
 - Preserve exact scanned resource URIs when navigating, including remote and multi-folder workspaces.
+- Prevent database connections from reopening after disconnect or panel disposal; handle asynchronous webview delivery failures, generate CSP nonces with cryptographic randomness, and index tool registry lookups.
 - Fix lazy command loading races, retry recovery after partial or synchronous failures, and cleanup when commands are disposed during loading.
 - Apply compatible dependency security updates. Five high-severity npm findings remain in the Azure/MSAL dependency chain; see the [audit report](docs/audits/2026-10-29.md) for details.
 - Add regression coverage for finding clicks, source-line selection and command lifecycle handling; keep generated Python test artifacts in temporary storage.

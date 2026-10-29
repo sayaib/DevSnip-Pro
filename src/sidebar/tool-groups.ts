@@ -7,6 +7,7 @@ import { COMMAND_PREFIX, NAV } from "../toolkits/layout";
  */
 
 export interface SidebarTool {
+  category?: string;
   label: string;
   /** Full command id, e.g. sayaib.hue-console.openGUI. */
   command: string;
@@ -32,7 +33,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = NAV.map(section => ({
   name: section.title,
   icon: section.codicon,
   color: section.color,
-  tools: section.entries.map(entry => ({ label: entry.label, command: COMMAND_PREFIX + entry.command, icon: entry.codicon, description: entry.description }))
+  tools: section.entries.map(entry => ({ label: entry.label, category: entry.category, command: COMMAND_PREFIX + entry.command, icon: entry.codicon, description: entry.description }))
 }));
 
 /** Every command the sidebar can run; anything else posted by the page is ignored. */

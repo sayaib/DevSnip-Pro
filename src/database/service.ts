@@ -202,11 +202,15 @@ export class DatabaseService {
 
   /** Returns a connected adapter, connecting (or reconnecting) on demand. */
   async ensureConnected(id: string, force = false): Promise<DbAdapter> {
+    if (this.disposed) throw new DbError("The database client is closed.");
     const profile = this.store.require(id);
     const session = this.session(id);
     if (session.status === "connected" && session.adapter && !force) return session.adapter;
     if (session.connecting) return session.connecting;
-    if (force && session.adapter) await this.closeSession(id, false);
+    if (force && session.adapter) {
+      await this.closeSession(id, false);
+      return this.ensureConnected(id);
+    }
 
     session.status = "connecting";
     session.error = undefined;
@@ -218,8 +222,11 @@ export class DatabaseService {
         const spec = parseConnection(raw, this.ui.baseDir());
         session.secrets = secretsOf(raw, spec);
         if (spec.kind !== profile.kind) await this.store.setKind(id, spec.kind);
+        if (this.disposed || this.sessions.get(id) !== session) throw new DbError("The connection was closed.");
         adapter = this.factory(spec, { readOnly: profile.readOnly });
         const info = await withTimeout(adapter.connect(), LIMITS.connectTimeoutMs + 5_000, "Connecting");
+        // A pending connect must not resurrect a disconnected or disposed session.
+        if (this.disposed || this.sessions.get(id) !== session) throw new DbError("The connection was closed.");
         session.adapter = adapter;
         session.status = "connected";
         session.version = info.version;
@@ -243,8 +250,10 @@ export class DatabaseService {
   }
 
   private async closeSession(id: string, notify = true): Promise<void> {
-    for (const run of this.runs.values()) if (run.connId === id) await run.control.cancel().catch(() => undefined);
     const session = this.sessions.get(id);
+    // Invalidate before the first await: a late connect closes its own adapter.
+    this.sessions.delete(id);
+    for (const run of this.runs.values()) if (run.connId === id) await run.control.cancel().catch(() => undefined);
     if (!session) return;
     const adapter = session.adapter;
     session.adapter = undefined;
@@ -286,6 +295,7 @@ export class DatabaseService {
   }
 
   async handle(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    if (this.disposed) throw new DbError("The database client is closed.");
     const p = params ?? {};
     switch (method) {
       case "init":

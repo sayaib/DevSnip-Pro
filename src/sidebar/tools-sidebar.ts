@@ -378,6 +378,7 @@ const SIDEBAR_CSS = `
   --inset: 6px;
   /* Where a category's icon sits inside its row; tools and the guide line align to it. */
   --cat-icon-x: calc(2px + var(--twistie) + 6px);
+  --tree-guide-x: calc(var(--inset) + var(--cat-icon-x) + var(--icon) / 2 - .5px);
 
   /* Colour roles, all from the VS Code theme. */
   --fg: var(--vscode-sideBar-foreground, var(--vscode-foreground, #cccccc));
@@ -763,6 +764,8 @@ ${profileCss({ medal: [".medal"], banner: [".rank"], base: "var(--surface)", ink
   font-variant-numeric: tabular-nums;
 }
 .count.matched { color: var(--accent-fg); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.tool-subsection { padding: 12px 12px 4px calc(var(--tree-guide-x) + var(--s3)); overflow-wrap: anywhere; font-size: 11px; font-weight: 600; color: var(--vscode-descriptionForeground); }
+
 /* A collapsed category that holds the selected tool says so with a dot. */
 .holds { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-fg); flex: none; }
 .group.current:not(.open) > .cat .holds { display: block; }
@@ -782,7 +785,8 @@ ${profileCss({ medal: [".medal"], banner: [".rank"], base: "var(--surface)", ink
 .children-inner > :last-child { margin-bottom: var(--s1); }
 .children-inner::before {
   content: ''; position: absolute; top: 2px; bottom: 6px;
-  left: calc(var(--inset) + var(--cat-icon-x) + var(--icon) / 2 - .5px);
+  left: var(--tree-guide-x);
+  pointer-events: none;
   width: 1px; background: var(--guide); opacity: .4; transition: opacity .12s ease;
 }
 .group:hover .children-inner::before, .group.current .children-inner::before { opacity: .85; }

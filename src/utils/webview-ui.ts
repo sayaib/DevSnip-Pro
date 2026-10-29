@@ -1,13 +1,9 @@
 import * as vscode from "vscode";
+import { randomBytes } from "../platform/random";
 
 /** Cryptographically-random nonce for webview CSP script tags. */
 export function getNonce(): string {
-  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let text = "";
-  for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
+  return randomBytes(16).toString("hex");
 }
 
 /** Escapes text that is interpolated into webview HTML. */
@@ -41,7 +37,9 @@ export function embedJson(value: unknown): string {
  */
 export function safePostMessage(panel: vscode.WebviewPanel, message: unknown): void {
   try {
-    void panel.webview.postMessage(message);
+    void Promise.resolve(panel.webview.postMessage(message)).catch(error => {
+      console.warn("DevSnip Pro: webview message could not be delivered.", error);
+    });
   } catch {
     /* panel disposed while work was in flight */
   }

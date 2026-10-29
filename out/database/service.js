@@ -157,14 +157,18 @@ class DatabaseService {
     }
     /** Returns a connected adapter, connecting (or reconnecting) on demand. */
     async ensureConnected(id, force = false) {
+        if (this.disposed)
+            throw new types_1.DbError("The database client is closed.");
         const profile = this.store.require(id);
         const session = this.session(id);
         if (session.status === "connected" && session.adapter && !force)
             return session.adapter;
         if (session.connecting)
             return session.connecting;
-        if (force && session.adapter)
+        if (force && session.adapter) {
             await this.closeSession(id, false);
+            return this.ensureConnected(id);
+        }
         session.status = "connecting";
         session.error = undefined;
         this.changed();
@@ -176,8 +180,13 @@ class DatabaseService {
                 session.secrets = (0, connection_string_1.secretsOf)(raw, spec);
                 if (spec.kind !== profile.kind)
                     await this.store.setKind(id, spec.kind);
+                if (this.disposed || this.sessions.get(id) !== session)
+                    throw new types_1.DbError("The connection was closed.");
                 adapter = this.factory(spec, { readOnly: profile.readOnly });
                 const info = await withTimeout(adapter.connect(), types_1.LIMITS.connectTimeoutMs + 5000, "Connecting");
+                // A pending connect must not resurrect a disconnected or disposed session.
+                if (this.disposed || this.sessions.get(id) !== session)
+                    throw new types_1.DbError("The connection was closed.");
                 session.adapter = adapter;
                 session.status = "connected";
                 session.version = info.version;
@@ -205,10 +214,12 @@ class DatabaseService {
         return connecting;
     }
     async closeSession(id, notify = true) {
+        const session = this.sessions.get(id);
+        // Invalidate before the first await: a late connect closes its own adapter.
+        this.sessions.delete(id);
         for (const run of this.runs.values())
             if (run.connId === id)
                 await run.control.cancel().catch(() => undefined);
-        const session = this.sessions.get(id);
         if (!session)
             return;
         const adapter = session.adapter;
@@ -252,6 +263,8 @@ class DatabaseService {
         return profile;
     }
     async handle(method, params = {}) {
+        if (this.disposed)
+            throw new types_1.DbError("The database client is closed.");
         const p = params ?? {};
         switch (method) {
             case "init":

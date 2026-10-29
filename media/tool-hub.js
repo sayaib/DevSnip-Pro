@@ -193,7 +193,14 @@
         if (tools.length) sections.push(group(category, tools, terms, colorOf(category)));
       }
     } else if (matches.length) {
-      sections.push(group(state.category, matches.map(m => m.tool), terms, state.category === "Pinned" ? "var(--vscode-charts-yellow, #cca700)" : colorOf(state.category)));
+      if (state.category === "Pinned") {
+        sections.push(group(state.category, matches.map(m => m.tool), terms, "var(--vscode-charts-yellow, #cca700)"));
+      } else {
+        const subsections = [...new Set(matches.map(m => m.tool.subsection || state.category))];
+        for (const subsection of subsections) {
+          sections.push(group(subsection, matches.filter(m => (m.tool.subsection || state.category) === subsection).map(m => m.tool), terms, colorOf(state.category)));
+        }
+      }
     }
     el.results.replaceChildren(...sections);
     el.empty.hidden = matches.length > 0;

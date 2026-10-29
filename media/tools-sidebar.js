@@ -385,7 +385,15 @@
     const children = el("div", "children");
     const inner = el("div", "children-inner");
     inner.setAttribute("role", "group");
-    tools.forEach(tool => inner.appendChild(toolRow(tool, group, { level: 2, section: "tree", term: groupMatched ? "" : term })));
+    let previousCategory;
+    tools.forEach(tool => {
+      if (tool.category && tool.category !== previousCategory) {
+        const heading = el("div", "tool-subsection", tool.category);
+        inner.appendChild(heading);
+        previousCategory = tool.category;
+      }
+      inner.appendChild(toolRow(tool, group, { level: 2, section: "tree", term: groupMatched ? "" : term }));
+    });
     children.appendChild(inner);
     wrap.appendChild(children);
     return wrap;
@@ -419,7 +427,7 @@
 
   /** Names match first; descriptions widen the net so "kubernetes" finds the manifest tools. */
   function toolMatches(tool, term) {
-    return tool.label.toLowerCase().includes(term) || tool.description.toLowerCase().includes(term);
+    return tool.label.toLowerCase().includes(term) || tool.description.toLowerCase().includes(term) || (tool.category || "").toLowerCase().includes(term);
   }
 
   function matchesTerm(entry, term) {

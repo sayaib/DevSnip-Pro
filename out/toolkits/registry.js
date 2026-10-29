@@ -15,15 +15,17 @@ const devops_1 = require("./sections/devops");
 /** Every tool as its module defines it; where it is shown comes from layout.ts. */
 const SPECS = [...desktop_1.DESKTOP_TOOLS, ...dev_1.DEV_TOOLS, ...text_1.TEXT_TOOLS, ...web_1.WEB_TOOLS, ...mobile_1.MOBILE_TOOLS, ...ai_1.AI_TOOLS, ...rag_1.RAG_TOOLS, ...data_1.DATA_TOOLS, ...devops_1.DEVOPS_TOOLS].filter(tool => (0, capabilities_1.isCommandSupported)(tool.command));
 exports.SECTIONS = layout_1.NAV;
+const specsById = new Map(SPECS.map(spec => [spec.id, spec]));
 /** Every toolkit tool in navigation order, with `section` and `category` from the layout. */
 exports.ALL_TOOLS = layout_1.NAV.flatMap(section => section.entries.filter(e => e.tool).map(entry => {
-    const spec = SPECS.find(s => s.id === entry.tool);
+    const spec = entry.tool ? specsById.get(entry.tool) : undefined;
     if (!spec)
         throw new Error(`layout.ts refers to unknown tool ${entry.tool}`);
-    return { ...spec, section: section.id, category: entry.category ?? "" };
+    return { ...spec, title: entry.label, section: section.id, category: entry.category ?? "" };
 }));
+const toolsById = new Map(exports.ALL_TOOLS.map(tool => [tool.id, tool]));
 function findTool(id) {
-    return exports.ALL_TOOLS.find(t => t.id === id);
+    return toolsById.get(id);
 }
 exports.findTool = findTool;
 function toolsIn(section) {
