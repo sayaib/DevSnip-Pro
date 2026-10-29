@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { THEME_TOKENS, embedJson, escapeHtml, openToolPanel } from "./webview-ui";
 import { executeQueuedCommand } from "./command-dispatch";
 import { setWebviewHtml } from "../theme/service";
@@ -189,7 +188,7 @@ export function renderToolHub(config: HubConfig, options: { cspSource: string; s
 
 /** Opens (or reveals) a hub panel and wires its messages. */
 export function openToolHub(context: vscode.ExtensionContext, config: HubConfig, initialCategory?: string): void {
-  const mediaRoot = vscode.Uri.file(path.join(context.extensionPath, "media"));
+  const mediaRoot = vscode.Uri.joinPath(context.extensionUri, "media");
   const { panel, created } = openToolPanel(config.viewType, config.panelTitle, { enableScripts: true, localResourceRoots: [mediaRoot] });
   if (!created) {
     // Already open: switch it to the requested section.

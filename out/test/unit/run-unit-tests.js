@@ -40,6 +40,7 @@ async function main() {
     require("./webview-scripts.unit");
     require("./api-client-ui.unit");
     require("./security.unit");
+    require("./security-navigation.unit");
     require("./dependencies.unit");
     require("./analytics.unit");
     require("./tool-hub.unit");

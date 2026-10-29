@@ -13,6 +13,7 @@
  * the tool, not the section it is shown in.
  */
 
+import { isCommandSupported } from "../platform/capabilities";
 import type { HubIcon } from "../utils/tool-hub";
 
 export type SectionId = "api" | "frontend" | "mobile" | "code" | "text" | "convert" | "database" | "spreadsheets" | "testing" | "git" | "devops" | "security" | "ai" | "data";
@@ -54,7 +55,7 @@ export interface NavSection {
 
 const e = (command: string, label: string, codicon: string, description: string, extra: Partial<NavEntry> = {}): NavEntry => ({ command, label, codicon, description, ...extra });
 
-export const NAV: NavSection[] = [
+export const FULL_NAV: NavSection[] = [
   {
     id: "api", title: "Backend & API", emoji: "🔌", codicon: "cloud", color: "terminal.ansiBrightBlue",
     description: "Send and debug HTTP requests, convert cURL, fix CORS, work with OpenAPI and GraphQL, and scaffold REST endpoints.",
@@ -270,6 +271,18 @@ export const NAV: NavSection[] = [
     ]
   }
 ];
+
+/** Drop empty sections, subcategories and journeys along with unsupported tools. */
+export function navigationFor(web: boolean): NavSection[] {
+  return FULL_NAV.map(section => {
+    const entries = section.entries.filter(e => isCommandSupported(e.command, web));
+    return { ...section, entries,
+      categories: section.categories?.filter(c => entries.some(e => e.category === c)),
+      journey: section.journey?.filter(step => entries.some(e => e.command === step.command))
+    };
+  }).filter(section => section.entries.length > 0);
+}
+export const NAV = navigationFor(typeof process === "undefined" || !process.versions?.node);
 
 export const COMMAND_PREFIX = "sayaib.hue-console.";
 

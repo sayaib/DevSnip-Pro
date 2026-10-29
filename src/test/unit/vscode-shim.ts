@@ -14,10 +14,16 @@ function disposable() {
 }
 
 const api = {
+  Disposable: class {
+    private disposed = false;
+    constructor(private readonly cleanup: () => unknown) {}
+    dispose() { if (!this.disposed) { this.disposed = true; this.cleanup(); } }
+  },
   commands: {
     registerCommand(command: string, callback: Listener) {
+      if (registeredCommands.has(command)) throw new Error(`Command already registered: ${command}`);
       registeredCommands.set(command, callback);
-      return disposable();
+      return { dispose() { if (registeredCommands.get(command) === callback) registeredCommands.delete(command); } };
     },
     async executeCommand(command: string, ...args: any[]) {
       const handler = registeredCommands.get(command);

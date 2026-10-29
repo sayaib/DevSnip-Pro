@@ -12,7 +12,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.injectTheme = exports.extendCsp = exports.themeMessage = exports.THEME_MESSAGE = void 0;
-const crypto_1 = require("crypto");
+const random_1 = require("../platform/random");
 const themes_1 = require("./themes");
 exports.THEME_MESSAGE = "devsnip:theme";
 function themeMessage(themeId, surface) {
@@ -80,7 +80,7 @@ const RUNTIME = `(function () {
   });
 })();`;
 function nonce() {
-    return (0, crypto_1.randomBytes)(16).toString("base64").replace(/[^A-Za-z0-9]/g, "");
+    return (0, random_1.randomBytes)(16).toString("base64").replace(/[^A-Za-z0-9]/g, "");
 }
 /** Allows `nonceValue` for scripts, and for styles unless the policy already allows inline styles. */
 function extendCsp(policy, nonceValue) {

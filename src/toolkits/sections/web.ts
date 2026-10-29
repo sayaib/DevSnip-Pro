@@ -2,7 +2,7 @@ import { GeneratedFile, ToolSpec, ToolInputError, ToolResult, bool, fmtBytes, nu
 import { CURL_TARGETS, CurlTarget, curlWarnings, generateFromCurl, parseCurl, toCurl } from "../engines/web-curl";
 import { ArrayFormat, AssetKind, CACHE_PRESETS, buildCookie, buildUrl, cacheConfigs, explainCacheControl, objectToQuery, parseCookieHeader, parseSetCookie, parseUrlReport, queryToObject } from "../engines/web-http";
 import { analyzeCsp, auditHeaders, buildCsp, checkCors, corsConfigs, explainCorsError, securityHeaderConfigs, securityHeaderSet } from "../engines/web-security";
-import { OAUTH_PROVIDERS, parseCallback, pkcePair, randomToken } from "../engines/web-auth";
+import { OAUTH_PROVIDERS, parseCallback, pkcePair, randomToken } from "../../platform/oauth";
 import { curlExamples, formatGraphql, graphqlOperations, lintSpec, minifyGraphql, openApiFromSample, operations, parseSpec, sampleForGqlType, sdlToTypeScript, specClient, specTypes } from "../engines/web-apispec";
 import { TYPE_RATIOS, convertUnits, fluidClamp, htmlToJsx, metaTags, typeScale } from "../engines/web-frontend";
 import { ApiDatabase, ApiFramework, DbKind, ReactKind, buildConnectionUrl, connectionSnippets, connectionWarnings, parseConnectionUrl, parseFields, reactScaffold, scaffoldResource, sqlToMongo } from "../engines/web-scaffold";
@@ -363,12 +363,12 @@ const oauthTool: ToolSpec = {
     f.text("verifier", "Existing code_verifier (optional)", { placeholder: "Leave blank to generate a new one" }),
     f.area("callback", "Callback URL to decode (optional)", { rows: 2, placeholder: "http://localhost:3000/auth/callback?code=...&state=..." })
   ],
-  run(values) {
+  async run(values) {
     const key = str(values, "provider", "custom");
     const p = OAUTH_PROVIDERS[key] ?? OAUTH_PROVIDERS.custom;
     const authorize = key === "custom" ? str(values, "authorize", p.authorize) : p.authorize;
     const tokenUrl = key === "custom" ? str(values, "tokenUrl", p.token) : p.token;
-    const { verifier, challenge } = pkcePair(str(values, "verifier"));
+    const { verifier, challenge } = await pkcePair(str(values, "verifier"));
     const state = randomToken(16);
     const nonce = randomToken(16);
     const clientId = str(values, "clientId", "your-client-id").trim();
@@ -667,8 +667,8 @@ const cssUnitsTool: ToolSpec = {
     f.num("minVw", "Min viewport (px)", 375, { min: 100, showIf: { field: "mode", equals: ["clamp", "scale"] } }),
     f.num("maxVw", "Max viewport (px)", 1280, { min: 200, showIf: { field: "mode", equals: ["clamp", "scale"] } }),
     f.num("base", "Base size (px)", 16, { min: 8, max: 40, showIf: { field: "mode", equals: ["scale"] } }),
-    f.select("ratio", "Scale ratio (desktop)", TYPE_RATIOS.map(([v, , label]) => ({ value: v, label: `${v} - ${label}` })), { default: "1.25", showIf: { field: "mode", equals: ["scale"] } }),
-    f.select("minRatio", "Scale ratio (mobile)", [{ value: "none", label: "Same (not fluid)" }, ...TYPE_RATIOS.map(([v, , label]) => ({ value: v, label: `${v} - ${label}` }))], { default: "1.2", showIf: { field: "mode", equals: ["scale"] } })
+    f.select("ratio", "Scale ratio (desktop)", TYPE_RATIOS.map(([v, label]) => ({ value: v, label: `${v} - ${label}` })), { default: "1.25", showIf: { field: "mode", equals: ["scale"] } }),
+    f.select("minRatio", "Scale ratio (mobile)", [{ value: "none", label: "Same (not fluid)" }, ...TYPE_RATIOS.map(([v, label]) => ({ value: v, label: `${v} - ${label}` }))], { default: "1.2", showIf: { field: "mode", equals: ["scale"] } })
   ],
   run(values) {
     const mode = str(values, "mode", "convert");

@@ -7,6 +7,7 @@ const tool_hub_1 = require("../utils/tool-hub");
 function renderToolPage(o) {
     const data = {
         tool: o.tool,
+        outputCapabilities: o.outputCapabilities,
         section: o.section,
         examples: o.examples,
         initial: o.initial,

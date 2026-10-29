@@ -96,7 +96,7 @@ export interface ToolContext {
   /** Files the user picks, for inputs too large to paste (both ask the user; undefined when cancelled). */
   files?: {
     pick(options: { title: string; filters: Record<string, string[]>; maxBytes: number }): Promise<{ name: string; path: string; bytes: Uint8Array } | undefined>;
-    /** Asks where to save, suggesting `suggestedName` next to `near` (a picked file's path); returns the saved path. */
+    /** Asks where to save, suggesting `suggestedName` next to `near` (a picked file's URI); returns the saved URI. */
     save(content: string, options: { suggestedName: string; near?: string }): Promise<string | undefined>;
   };
   now?: () => Date;
@@ -108,6 +108,8 @@ export interface ToolExample {
 }
 
 export interface ToolAction {
+  /** File-based actions that need an editable destination. */
+  requiresSaveDestination?: boolean;
   id: string;
   label: string;
 }

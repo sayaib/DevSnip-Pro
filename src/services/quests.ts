@@ -1,3 +1,4 @@
+import { isCommandSupported } from "../platform/capabilities";
 /**
  * Daily quests: three small goals that change every day.
  *
@@ -73,6 +74,12 @@ export const QUEST_POOL: QuestDefinition[] = [
   { id: "database", title: "Query time", hint: "Open the Database Client", icon: "🗄️", target: 1, points: 15, step: run => (run.command === `${PREFIX}databaseClient` ? 1 : 0) }
 ];
 
+/** Goals that require a hidden tool must not be offered in the browser. */
+export function isQuestAvailable(id: string): boolean {
+  const required: Record<string, string> = { security_1: "securityAudit", snippet_1: "createCustomSnippet", api_client: "openGUI", database: "databaseClient" };
+  return !required[id] || isCommandSupported(required[id]);
+}
+
 export function findQuest(id: string): QuestDefinition | undefined {
   return QUEST_POOL.find(quest => quest.id === id);
 }
@@ -97,8 +104,8 @@ function seededRandom(seed: string): () => number {
 /** The quest ids for a date: one easy quest first, then two others, never repeating. */
 export function pickDailyQuestIds(date: string): string[] {
   const random = seededRandom(`devsnip-quests-${date}`);
-  const easy = QUEST_POOL.filter(quest => quest.easy);
-  const rest = QUEST_POOL.filter(quest => !quest.easy);
+  const easy = QUEST_POOL.filter(quest => quest.easy && isQuestAvailable(quest.id));
+  const rest = QUEST_POOL.filter(quest => !quest.easy && isQuestAvailable(quest.id));
   const picked = [easy[Math.floor(random() * easy.length)].id];
   const pool = [...rest];
   while (picked.length < QUESTS_PER_DAY && pool.length) {
@@ -121,7 +128,7 @@ export function sanitizeQuests(raw: unknown, today: string): DailyQuests {
   const rerolls = Math.max(0, Math.min(MAX_REROLLS_PER_DAY, Math.trunc(Number(source.rerolls) || 0)));
   // A rerolled set differs from the day's pick; keep it when it is a well-formed set of real quests.
   const storedIds = valid.map(item => item.id);
-  const keepStored = rerolls > 0 && storedIds.length === QUESTS_PER_DAY && new Set(storedIds).size === QUESTS_PER_DAY && storedIds.every(id => findQuest(id));
+  const keepStored = rerolls > 0 && storedIds.length === QUESTS_PER_DAY && new Set(storedIds).size === QUESTS_PER_DAY && storedIds.every(id => findQuest(id) && isQuestAvailable(id));
   const ids = keepStored ? storedIds : pickDailyQuestIds(today);
   return {
     date: today,
@@ -162,7 +169,7 @@ export function rerollQuest(quests: DailyQuests, questId: string, random: () => 
   const item = quests.items.find(entry => entry.id === questId);
   if (!item || item.done) return undefined;
   const taken = new Set(quests.items.map(entry => entry.id));
-  const pool = QUEST_POOL.filter(quest => !taken.has(quest.id));
+  const pool = QUEST_POOL.filter(quest => !taken.has(quest.id) && isQuestAvailable(quest.id));
   if (!pool.length) return undefined;
   const next = pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
   item.id = next.id;

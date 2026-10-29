@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateRegistry = exports.toolsIn = exports.findTool = exports.ALL_TOOLS = exports.SECTIONS = void 0;
+const capabilities_1 = require("../platform/capabilities");
+const desktop_1 = require("./desktop");
 const layout_1 = require("./layout");
 const dev_1 = require("./sections/dev");
 const text_1 = require("./sections/text");
@@ -11,7 +13,7 @@ const rag_1 = require("./sections/rag");
 const data_1 = require("./sections/data");
 const devops_1 = require("./sections/devops");
 /** Every tool as its module defines it; where it is shown comes from layout.ts. */
-const SPECS = [...dev_1.DEV_TOOLS, ...text_1.TEXT_TOOLS, ...web_1.WEB_TOOLS, ...mobile_1.MOBILE_TOOLS, ...ai_1.AI_TOOLS, ...rag_1.RAG_TOOLS, ...data_1.DATA_TOOLS, ...devops_1.DEVOPS_TOOLS];
+const SPECS = [...desktop_1.DESKTOP_TOOLS, ...dev_1.DEV_TOOLS, ...text_1.TEXT_TOOLS, ...web_1.WEB_TOOLS, ...mobile_1.MOBILE_TOOLS, ...ai_1.AI_TOOLS, ...rag_1.RAG_TOOLS, ...data_1.DATA_TOOLS, ...devops_1.DEVOPS_TOOLS].filter(tool => (0, capabilities_1.isCommandSupported)(tool.command));
 exports.SECTIONS = layout_1.NAV;
 /** Every toolkit tool in navigation order, with `section` and `category` from the layout. */
 exports.ALL_TOOLS = layout_1.NAV.flatMap(section => section.entries.filter(e => e.tool).map(entry => {

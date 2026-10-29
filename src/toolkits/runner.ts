@@ -1,7 +1,8 @@
+import { canWriteResource, outputCapabilities } from "../platform/workspace";
 import * as vscode from "vscode";
-import * as net from "net";
-import * as os from "os";
-import * as path from "path";
+import { toolNetwork } from "../platform/network";
+import { hostPlatform, resourceName } from "../platform/environment";
+import { isCommandSupported } from "../platform/capabilities";
 import { GeneratedFile, ToolContext, ToolDefinition, ToolExample, ToolInputError, ToolResult, Values, describe } from "./types";
 import { TOOLKIT_COMMANDS } from "./commands";
 import { renderToolPage } from "./page";
@@ -27,7 +28,7 @@ let lastEditor: vscode.TextEditor | undefined;
 export function registerToolkitCommands(context: vscode.ExtensionContext): void {
   lastEditor = vscode.window.activeTextEditor;
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => { if (editor) lastEditor = editor; }));
-  for (const entry of TOOLKIT_COMMANDS) {
+  for (const entry of TOOLKIT_COMMANDS.filter(e => isCommandSupported(e.command))) {
     context.subscriptions.push(registerTrackedCommand(COMMAND_PREFIX + entry.command, async (arg?: unknown) => {
       // Tool definitions and their engines load on first use, not at activation.
       const { findTool } = await import("./registry");
@@ -58,7 +59,7 @@ function initialFromInvocation(tool: ToolDefinition, arg: unknown): Values | und
 }
 
 export async function openTool(context: vscode.ExtensionContext, tool: ToolDefinition, initial?: Values): Promise<void> {
-  const mediaRoot = vscode.Uri.file(path.join(context.extensionPath, "media"));
+  const mediaRoot = vscode.Uri.joinPath(context.extensionUri, "media");
   const { panel, created } = openToolPanel(`devsnip.tool.${tool.id}`, tool.title, { enableScripts: true, localResourceRoots: [mediaRoot] });
   if (!created) {
     if (initial) safePostMessage(panel, { type: "setValues", values: initial, run: true });
@@ -67,14 +68,18 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
   const ctx = createToolContext(context);
   const { SECTIONS } = await import("./registry");
   const section = SECTIONS.find(s => s.id === tool.section)!;
+  const capabilities = outputCapabilities(lastEditor);
+  const descriptor = describe(tool);
+  descriptor.actions = descriptor.actions?.filter(action => !action.requiresSaveDestination || capabilities.saveAs);
   setWebviewHtml(panel.webview, renderToolPage({
     cspSource: panel.webview.cspSource,
     scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "toolkit.js")).toString(),
-    tool: describe(tool),
+    tool: descriptor,
+    outputCapabilities: capabilities,
     section: { id: section.id, title: section.title },
     examples: await allExamples(tool, ctx),
     initial: initial ?? {},
-    platform: process.platform
+    platform: hostPlatform()
   }));
 
   let latestRequest = 0;
@@ -119,7 +124,7 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
           safePostMessage(panel, { type: "notice", kind: "warning", text: "That file is larger than 5 MB; select the part you need first." });
           return;
         }
-        safePostMessage(panel, { type: "editorText", field: String(message.field), text, source: `${editor.selection.isEmpty ? "all of" : "selection in"} ${path.basename(editor.document.fileName)}` });
+        safePostMessage(panel, { type: "editorText", field: String(message.field), text, source: `${editor.selection.isEmpty ? "all of" : "selection in"} ${resourceName(editor.document.uri)}` });
         return;
       }
       case "copy":
@@ -136,9 +141,14 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
         return;
       }
       case "download": {
+        if (!outputCapabilities(lastEditor).saveAs) {
+          const document = await vscode.workspace.openTextDocument({ content: String(message.text ?? ""), language: editorLanguage(message.language) });
+          await vscode.window.showTextDocument(document, { preview: false });
+          return;
+        }
         const saved = await saveAs(String(message.text ?? ""), typeof message.language === "string" ? message.language : undefined, typeof message.fileName === "string" ? message.fileName : "");
         if (saved) {
-          safePostMessage(panel, { type: "notice", kind: "success", text: `Saved ${path.basename(saved)}.` });
+          safePostMessage(panel, { type: "notice", kind: "success", text: `Saved ${saved.split("/").pop() ?? saved}.` });
         }
         return;
       }
@@ -245,54 +255,42 @@ export function createToolContext(context: vscode.ExtensionContext): ToolContext
           const uri = resolve(relative);
           const stat = await vscode.workspace.fs.stat(uri);
           if (stat.size > MAX_READ_BYTES) return undefined;
-          return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
+          return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
         } catch {
           return undefined;
         }
       },
       async findFiles(glob, limit) {
         const uris = await vscode.workspace.findFiles(new vscode.RelativePattern(root, glob), SEARCH_EXCLUDE, limit);
-        return uris.map(u => path.relative(root.fsPath, u.fsPath).split(path.sep).join("/"));
+        return uris.map(u => u.path.slice(root.path.replace(/\/$/, "").length + 1));
       }
     } : undefined,
     storage: {
       get: (key, fallback) => context.globalState.get(key, fallback),
       set: async (key, value) => { await context.globalState.update(key, value); }
     },
-    network: { isPortFree },
+    network: toolNetwork,
     files: {
       async pick({ title, filters, maxBytes }) {
         const picked = await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: "Choose", title, filters, defaultUri: root });
         const uri = picked?.[0];
         if (!uri) return undefined;
         const stat = await vscode.workspace.fs.stat(uri);
-        if (stat.size > maxBytes) throw new ToolInputError(`${path.basename(uri.fsPath)} is ${(stat.size / 1024 / 1024).toFixed(0)} MB; files up to ${Math.round(maxBytes / 1024 / 1024)} MB can be converted.`);
-        return { name: path.basename(uri.fsPath), path: uri.fsPath, bytes: await vscode.workspace.fs.readFile(uri) };
+        if (stat.size > maxBytes) throw new ToolInputError(`${resourceName(uri)} is ${(stat.size / 1024 / 1024).toFixed(0)} MB; files up to ${Math.round(maxBytes / 1024 / 1024)} MB can be converted.`);
+        return { name: resourceName(uri), path: uri.toString(), bytes: await vscode.workspace.fs.readFile(uri) };
       },
       async save(content, { suggestedName, near }) {
-        const folder = near ? vscode.Uri.file(path.dirname(near)) : root ?? vscode.Uri.file(os.homedir());
-        const target = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.joinPath(folder, suggestedName.replace(/[\\/:*?"<>|]+/g, "-")), saveLabel: "Save" });
+        const folder = near ? vscode.Uri.joinPath(vscode.Uri.parse(near), "..") : root;
+        const target = await vscode.window.showSaveDialog({ defaultUri: folder ? vscode.Uri.joinPath(folder, suggestedName.replace(/[\\/:*?"<>|]+/g, "-")) : undefined, saveLabel: "Save" });
         if (!target) return undefined;
-        await vscode.workspace.fs.writeFile(target, Buffer.from(content, "utf8"));
-        return target.fsPath;
+        await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(content));
+        return target.toString();
       }
     },
     now: () => new Date()
   };
 }
 
-/** A port is in use when something accepts a connection on it (IPv4 or IPv6 loopback). */
-export async function isPortFree(port: number): Promise<boolean> {
-  const listening = (host: string) => new Promise<boolean>(resolve => {
-    const socket = net.connect({ port, host });
-    const done = (value: boolean) => { socket.destroy(); resolve(value); };
-    socket.setTimeout(400, () => done(false));
-    socket.once("connect", () => done(true));
-    socket.once("error", () => done(false));
-  });
-  const [v4, v6] = await Promise.all([listening("127.0.0.1"), listening("::1")]);
-  return !v4 && !v6;
-}
 
 // ---------------------------------------------------------------------------
 // Output actions
@@ -324,17 +322,17 @@ async function saveAs(text: string, language: string | undefined, suggested: str
   const name = /\.[A-Za-z0-9]{1,12}$/.test(base) || base === "Dockerfile" ? base : `${base}.${ext}`;
   const root = workspaceRoot();
   const target = await vscode.window.showSaveDialog({
-    defaultUri: root ? vscode.Uri.joinPath(root, name) : vscode.Uri.file(path.join(os.homedir(), name)),
+    defaultUri: root ? vscode.Uri.joinPath(root, name) : undefined,
     saveLabel: "Save"
   });
   if (!target) return undefined;
-  await vscode.workspace.fs.writeFile(target, Buffer.from(text, "utf8"));
-  return target.fsPath;
+  await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(text));
+  return target.toString();
 }
 
 async function insertAtCursor(text: string, language?: string): Promise<void> {
   const editor = lastEditor && !lastEditor.document.isClosed ? lastEditor : undefined;
-  if (!editor) {
+  if (!editor || !canWriteResource(editor.document.uri)) {
     const document = await vscode.workspace.openTextDocument({ content: text, language: editorLanguage(language) });
     await vscode.window.showTextDocument(document, { preview: false });
     return;
@@ -346,6 +344,7 @@ async function insertAtCursor(text: string, language?: string): Promise<void> {
 async function writeFiles(files: GeneratedFile[]): Promise<{ kind: "success" | "warning" | "error"; text: string; written: number }> {
   const root = workspaceRoot();
   if (!root) return { kind: "error", text: "Open a folder first: files are written into the workspace.", written: 0 };
+  if (!canWriteResource(root)) return { kind: "warning", text: "This repository is read-only. Copy the generated files or open them in an editor instead.", written: 0 };
   const targets: Array<{ file: GeneratedFile; uri: vscode.Uri; exists: boolean }> = [];
   for (const file of files) {
     const safe = safeRelativePath(file.path);
@@ -365,10 +364,10 @@ async function writeFiles(files: GeneratedFile[]): Promise<{ kind: "success" | "
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(t.uri, ".."));
     let content = t.file.content;
     if (t.file.mode === "append" && t.exists) {
-      const existing = Buffer.from(await vscode.workspace.fs.readFile(t.uri)).toString("utf8");
+      const existing = new TextDecoder().decode(await vscode.workspace.fs.readFile(t.uri));
       content = existing + (existing && !existing.endsWith("\n") ? "\n" : "") + content;
     }
-    await vscode.workspace.fs.writeFile(t.uri, Buffer.from(content, "utf8"));
+    await vscode.workspace.fs.writeFile(t.uri, new TextEncoder().encode(content));
   }
   const first = targets[0];
   await vscode.window.showTextDocument(first.uri, { preview: targets.length > 1, viewColumn: vscode.ViewColumn.Beside });

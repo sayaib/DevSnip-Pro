@@ -25,8 +25,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.markRecapShown = exports.pendingWeeklyRecap = exports.themeLockHints = exports.themeLockFor = exports.grantKeptTheme = exports.lockLabel = exports.tryDailyTip = exports.finishBitSprint = exports.answerDailyQuiz = exports.spinDailyWheel = exports.activitiesWaiting = exports.spinsLeft = exports.rerollDailyQuest = exports.openMysteryBox = exports.equipReward = exports.buyReward = exports.buyStreakFreeze = exports.loginPointsFor = exports.weekStartOf = exports.applyDayRollover = exports.createDefaultStats = exports.sanitizeStats = exports.RATE_LIMIT_AFTER = exports.DAILY_POINT_CAP = exports.milestoneProgress = exports.resetUserStats = exports.autoRecordToolUsage = exports.recordDiscovery = exports.recordActivity = exports.refundPoints = exports.redeemPoints = exports.effectiveUnlocked = exports.setActivityRandom = exports.saveUserStats = exports.getPointsBalance = exports.getUserStats = exports.setTreeRefreshCallback = exports.setMilestoneContext = exports.setCelebrationHandler = exports.REWARD_KIND_LABEL = exports.STREAK_FREEZE_COST = exports.FREEZE_EVERY_DAYS = exports.MAX_STREAK_FREEZES = exports.STREAK_LOGIN_BONUS_MAX = exports.DAILY_BONUS_POINTS = exports.DAILY_LOGIN_POINTS = exports.onDidChangePoints = exports.MILESTONES = exports.LEVELS = exports.DISCOVERIES = void 0;
 exports.getMilestoneTrackerHtml = exports.registerMilestoneTrackerCommand = exports.maybeShowWeeklyRecap = exports.showCelebrations = exports.openRedeem = exports.SUPPORT_URL = exports.buildMilestoneView = exports.claimDailyBonus = exports.claimDailyLogin = exports.getNextLevel = exports.getCurrentLevel = void 0;
+const capabilities_1 = require("../platform/capabilities");
 const vscode = __importStar(require("vscode"));
-const path = __importStar(require("path"));
 const command_registry_1 = require("../utils/command-registry");
 const command_dispatch_1 = require("../utils/command-dispatch");
 const webview_ui_1 = require("../utils/webview-ui");
@@ -1258,7 +1258,7 @@ exports.claimDailyBonus = claimDailyBonus;
 function buildMilestoneView(context) {
     let toolNames = {};
     try {
-        toolNames = (0, milestone_view_1.toolNamesFromManifest)(context.extension?.packageJSON?.contributes?.commands);
+        toolNames = (0, milestone_view_1.toolNamesFromManifest)(context.extension?.packageJSON?.contributes?.commands?.filter((c) => (0, capabilities_1.isCommandSupported)(c.command)));
     }
     catch {
         toolNames = {};
@@ -1277,7 +1277,7 @@ function buildMilestoneView(context) {
         loginPoints: loginPointsFor(stats.streakDays),
         bonusPoints: exports.DAILY_BONUS_POINTS,
         premium: feature_registry_1.DEVELOPER_FEATURES
-            .filter(feature => feature.enabled && feature.tier === 'premium' && (feature.pointCost ?? 0) > 0)
+            .filter(feature => (0, capabilities_1.isCommandSupported)('openGUI') && feature.enabled && feature.tier === 'premium' && (feature.pointCost ?? 0) > 0)
             .map(feature => ({ name: feature.name, pointCost: feature.pointCost })),
         toolNames,
         rewards: {
@@ -1384,15 +1384,15 @@ function registerMilestoneTrackerCommand(context) {
     const command = (0, command_registry_1.registerTrackedCommand)('sayaib.hue-console.milestoneTracker', () => {
         const { panel, created } = (0, webview_ui_1.openToolPanel)('milestoneTracker', 'DevSnip Pro - Milestones & Points', {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
+            localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
         });
         if (!created)
             return;
         trackerPanel = panel;
         trackerReady = false;
-        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'milestone-tracker.js')));
-        const coffeeUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'bmc-button.png')));
-        const effectsUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'reward-effects.js')));
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'milestone-tracker.js'));
+        const coffeeUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'bmc-button.png'));
+        const effectsUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'reward-effects.js'));
         (0, service_1.setWebviewHtml)(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri), String(coffeeUri), String(effectsUri)));
         let ready = false;
         let pending;

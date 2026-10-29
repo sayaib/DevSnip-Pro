@@ -10,7 +10,7 @@
  * Pure (no vscode import), so it is unit tested directly.
  */
 
-import { randomBytes } from "crypto";
+import { randomBytes } from "../platform/random";
 import { findTheme, ThemeKind, themeRules, TRANSITION_RULES, validThemeId } from "./themes";
 
 export const THEME_MESSAGE = "devsnip:theme";

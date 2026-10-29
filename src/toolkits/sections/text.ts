@@ -241,7 +241,7 @@ const xmlToJsonTool: ToolSpec = {
   keywords: ["xml to json", "xml2json", "convert xml", "xml parser", "xml validator", "soap", "rss", "svg", "namespaces", "cdata", "attributes", "json"],
   icon: "braces",
   live: true,
-  actions: [{ id: "file", label: "Convert a file…" }],
+  actions: [{ id: "file", label: "Convert a file…", requiresSaveDestination: true }],
   fields: [
     f.code("input", "XML", "xml", { rows: 14, required: true, fromEditor: true, default: XML_SAMPLE }),
     f.select("mapping", "Mapping", opts(["compact", "Compact JSON"], ["lossless", "Lossless (ordered nodes)"])),

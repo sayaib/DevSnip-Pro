@@ -27,6 +27,7 @@ const assert = __importStar(require("assert"));
 const os = __importStar(require("os"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const securityTools_1 = require("../commands/securityTools");
 const platformTools_1 = require("../commands/platformTools");
 /**
  * Exercises the audit rules against files written into the test workspace, so
@@ -43,6 +44,17 @@ async function writeFixture(relativePath, content) {
     return uri;
 }
 suite("Security audit rules", () => {
+    test("a finding opens its exact resource and selects the reported line", async () => {
+        const uri = await writeFixture("navigation.js", "first line\n  eval(input);\nlast line");
+        await (0, securityTools_1.openSecurityLocation)("ambiguous-display-name.js", 2, uri.toString());
+        const editor = vscode.window.activeTextEditor;
+        assert.ok(editor);
+        assert.strictEqual(editor.document.uri.toString(), uri.toString());
+        assert.strictEqual(editor.selection.start.line, 1);
+        assert.strictEqual(editor.document.getText(editor.selection), "  eval(input);");
+        await (0, securityTools_1.openSecurityLocation)("navigation.js", 9999, uri.toString());
+        assert.strictEqual(vscode.window.activeTextEditor.selection.start.line, 2);
+    });
     suiteSetup(async function () {
         if (!vscode.workspace.workspaceFolders?.length) {
             // The default test run has no folder open; skip rather than fail.

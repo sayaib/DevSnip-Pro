@@ -174,7 +174,7 @@ suite("toolkit tools", () => {
           for (const content of blocks) {
             const file = path.join(dir, `f${n++}.py`);
             fs.writeFileSync(file, content);
-            const compiled: SpawnSyncReturns<string> = spawnSync(py, ["-m", "py_compile", file], { encoding: "utf8" });
+            const compiled: SpawnSyncReturns<string> = spawnSync(py, ["-c", "import py_compile, sys; py_compile.compile(sys.argv[1], cfile=sys.argv[2], doraise=True)", file, file + "c"], { encoding: "utf8" });
             assert.strictEqual(compiled.status, 0, `${tool.id} [${label}]: ${compiled.stderr}`);
           }
         }

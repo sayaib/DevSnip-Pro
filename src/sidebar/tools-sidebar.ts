@@ -1,5 +1,5 @@
+import { isCommandSupported } from "../platform/capabilities";
 import * as vscode from "vscode";
-import * as path from "path";
 import { embedJson, escapeHtml, getNonce } from "../utils/webview-ui";
 import { executeQueuedCommand } from "../utils/command-dispatch";
 import { LEVELS, activitiesWaiting, effectiveUnlocked, getCurrentLevel, getNextLevel, getUserStats, openRedeem, themeLockHints } from "../commands/milestoneTracker";
@@ -290,14 +290,14 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     const usage = this.usage;
     const entry = usage[command] ?? { count: 0, last: 0 };
     usage[command] = { count: entry.count + 1, last: Date.now() };
-    void this.context.globalState.update(USAGE_KEY, usage);
+    void this.context.globalState.update(USAGE_KEY, { ...this.context.globalState.get<ToolUsage>(USAGE_KEY, {}), ...usage });
     this.post({ type: "usage", usage });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    const mediaRoot = vscode.Uri.file(path.join(this.context.extensionPath, "media"));
-    const codiconsRoot = vscode.Uri.file(path.join(this.context.extensionPath, "node_modules", "@vscode", "codicons", "dist"));
+    const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, "media");
+    const codiconsRoot = vscode.Uri.joinPath(this.context.extensionUri, "node_modules", "@vscode", "codicons", "dist");
     view.webview.options = { enableScripts: true, localResourceRoots: [mediaRoot, codiconsRoot] };
     setWebviewHtml(view.webview, renderToolsSidebar({
       cspSource: view.webview.cspSource,
@@ -358,7 +358,7 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
       const favorites = message.favorites
         .filter((command: unknown): command is string => typeof command === "string" && this.known.has(command))
         .slice(0, 100);
-      await this.context.globalState.update(FAVORITES_KEY, Array.from(new Set(favorites)));
+      await this.context.globalState.update(FAVORITES_KEY, Array.from(new Set([...this.context.globalState.get<string[]>(FAVORITES_KEY, []).filter(c => !isCommandSupported(c)), ...favorites])));
     }
   }
 }

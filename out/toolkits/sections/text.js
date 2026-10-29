@@ -244,7 +244,7 @@ const xmlToJsonTool = {
     keywords: ["xml to json", "xml2json", "convert xml", "xml parser", "xml validator", "soap", "rss", "svg", "namespaces", "cdata", "attributes", "json"],
     icon: "braces",
     live: true,
-    actions: [{ id: "file", label: "Convert a file…" }],
+    actions: [{ id: "file", label: "Convert a file…", requiresSaveDestination: true }],
     fields: [
         helpers_1.f.code("input", "XML", "xml", { rows: 14, required: true, fromEditor: true, default: XML_SAMPLE }),
         helpers_1.f.select("mapping", "Mapping", (0, helpers_1.opts)(["compact", "Compact JSON"], ["lossless", "Lossless (ordered nodes)"])),

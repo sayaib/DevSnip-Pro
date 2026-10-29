@@ -5,7 +5,6 @@
  * are removed, and a block a removal would leave empty gets `pass` (Python)
  * or `break` (a Swift or Dart switch case).
  */
-import * as path from "path";
 import {
   CODE, COMMENT, EXTENSIONS, Lexed, LogLanguage, SCRIPT_BLOCK_EXTENSIONS,
   bracketStacks, codeOfLine, indentOf, isBlankOrComment, lex, lineEndOffset, lineOf, matchingBracket, scriptBlocks
@@ -51,7 +50,7 @@ const PATTERNS = Object.fromEntries(Object.entries(CALLS).map(([language, calls]
 
 /** Every debug statement in a source file, or [] for a file type that is not scanned. */
 export function findDebugStatementsInFile(text: string, filePath: string): DebugStatement[] {
-  const ext = path.extname(filePath).toLowerCase();
+  const ext = (filePath.match(/\.[^./\\]+$/)?.[0] ?? "").toLowerCase();
   const language = EXTENSIONS[ext];
   if (language) return findDebugStatements(text, language);
   if (!SCRIPT_BLOCK_EXTENSIONS.includes(ext)) return [];

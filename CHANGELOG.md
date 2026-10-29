@@ -1,5 +1,44 @@
 # Development Changelog of DevSnip Pro
 
+## 11.83.2 - Security finding navigation and reliability (2026-10-29)
+
+- Click a workspace or cloud security finding to open its source file, select the reported line and center it in the editor. The existing Open button remains available; selecting evidence text does not trigger navigation.
+- Preserve exact scanned resource URIs when navigating, including remote and multi-folder workspaces.
+- Fix lazy command loading races, retry recovery after partial or synchronous failures, and cleanup when commands are disposed during loading.
+- Apply compatible dependency security updates. Five high-severity npm findings remain in the Azure/MSAL dependency chain; see the [audit report](docs/audits/2026-10-29.md) for details.
+- Add regression coverage for finding clicks, source-line selection and command lifecycle handling; keep generated Python test artifacts in temporary storage.
+
+## 11.83.1 - github1s and gitlab1s compatibility (2026-10-29)
+
+- Detect read-only filesystem providers automatically. Tool panels hide workspace writes and unavailable browser save destinations while retaining Copy and Open output actions.
+- Debug-log actions create editable scratch copies for read-only repository files; remote source files remain unchanged.
+- Added an Open VSX packaging/publishing command and installation guidance. github1s and gitlab1s use Open VSX; Microsoft Marketplace publication alone does not make the extension discoverable there.
+- The release must be published under `sayaib.hue-console` on Open VSX before it appears in either site's extension search.
+
+## 11.83.0 - VS Code Desktop and Web support (2026-10-29)
+
+DevSnip Pro now supports VS Code Desktop and the browser extension host used by vscode.dev and github.dev through one extension package and Marketplace listing. Platform detection is automatic; Desktop retains the complete toolkit, while Web shows 94 browser-compatible tools.
+
+### Added
+
+- A bundled browser extension entry point alongside the existing Desktop entry point.
+- Shared capability detection for the sidebar, navigation, categories, tool hub, search, onboarding, daily activities and milestone dashboard. Unsupported Web tools and empty categories are hidden.
+- Browser support for formatters, converters, code/configuration generators, AI and RAG planners, OAuth PKCE and editor debug-log actions, with the same responsive UI and themes.
+- Browser bundle dependency checks, 855 tool-variant checks and integration tests using the official VS Code web test runner.
+
+### Changed
+
+- Resource loading and toolkit file operations use VS Code URIs and the virtual filesystem API, preserving remote workspace schemes.
+- Browser random ID generation and OAuth PKCE use Web Crypto. Node-only drivers, networking and process dependencies are excluded from the browser runtime.
+- Browser and Desktop bundles use separate output paths so development compilation cannot overwrite the packaged browser entry point.
+- Existing Desktop tools, settings, snippet backups and stored user data are preserved. Hidden sidebar favorites and usage history are retained.
+
+### Platform availability
+
+- **Desktop:** the full toolkit, including REST/API clients, database connections, security scanners, dependency installation, spreadsheet viewers and custom snippet management.
+- **Web:** browser-compatible tools only. Features requiring unrestricted networking, Node cryptography, database drivers, local processes or local network inspection remain Desktop-only. No proxy or partially functional replacement is exposed.
+- See the [platform compatibility inventory](docs/WEB_COMPATIBILITY.md) for tool-by-tool availability and validation details.
+
 ## 11.82.1 - OpenCode Integration removed
 
 The OpenCode Integration hub has been removed, so DevSnip Pro no longer installs, repairs or launches the OpenCode CLI. Nothing else changes. If you already installed OpenCode through it, OpenCode stays installed: run `opencode` in a terminal, or `npm uninstall -g opencode-ai` to remove it.

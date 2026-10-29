@@ -1,3 +1,5 @@
+import { isCommandSupported } from "../platform/capabilities";
+import { DESKTOP_TOOLS } from "./desktop";
 import { ToolDefinition, ToolSpec } from "./types";
 import { NAV, NavSection, SectionId } from "./layout";
 import { DEV_TOOLS } from "./sections/dev";
@@ -10,7 +12,7 @@ import { DATA_TOOLS } from "./sections/data";
 import { DEVOPS_TOOLS } from "./sections/devops";
 
 /** Every tool as its module defines it; where it is shown comes from layout.ts. */
-const SPECS: ToolSpec[] = [...DEV_TOOLS, ...TEXT_TOOLS, ...WEB_TOOLS, ...MOBILE_TOOLS, ...AI_TOOLS, ...RAG_TOOLS, ...DATA_TOOLS, ...DEVOPS_TOOLS];
+const SPECS: ToolSpec[] = [...DESKTOP_TOOLS, ...DEV_TOOLS, ...TEXT_TOOLS, ...WEB_TOOLS, ...MOBILE_TOOLS, ...AI_TOOLS, ...RAG_TOOLS, ...DATA_TOOLS, ...DEVOPS_TOOLS].filter(tool => isCommandSupported(tool.command));
 
 export const SECTIONS: NavSection[] = NAV;
 

@@ -1111,7 +1111,7 @@ suite("osv: remediation, reports and integration", () => {
     const commands = new Set(pkg.contributes.commands.map((c: { command: string }) => c.command));
     for (const id of ["osvScanner", "osvScanWorkspace", "osvScanFile"]) assert.ok(commands.has(`sayaib.hue-console.${id}`), id);
     const explorer = pkg.contributes.menus["explorer/context"].find((m: { command: string; when: string }) => m.command.endsWith("osvScanFile") && m.when.includes("resourceFilename"));
-    assert.ok(pkg.contributes.menus["explorer/context"].some((m: { command: string; when: string }) => m.command.endsWith("osvScanFile") && m.when === "explorerResourceIsFolder"), "folders (projects) can be scanned too");
+    assert.ok(pkg.contributes.menus["explorer/context"].some((m: { command: string; when: string }) => m.command.endsWith("osvScanFile") && m.when.includes("explorerResourceIsFolder") && m.when.includes("!isWeb")), "folders (projects) can be scanned too");
     const pattern = new RegExp(/\/(.+)\//.exec(explorer.when)![1]);
     for (const name of ["package-lock.json", "yarn.lock", "requirements-dev.txt", "Cargo.lock", "App.csproj", "go.mod", "Package.resolved"]) {
       assert.ok(pattern.test(name), `${name} shows the explorer action`);

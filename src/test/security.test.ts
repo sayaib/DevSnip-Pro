@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { openSecurityLocation } from "../commands/securityTools";
 import { scanLocalCloudConfiguration, scanWorkspaceForSecurity } from "../commands/platformTools";
 
 /**
@@ -21,6 +22,18 @@ async function writeFixture(relativePath: string, content: string): Promise<vsco
 }
 
 suite("Security audit rules", () => {
+  test("a finding opens its exact resource and selects the reported line", async () => {
+    const uri = await writeFixture("navigation.js", "first line\n  eval(input);\nlast line");
+    await openSecurityLocation("ambiguous-display-name.js", 2, uri.toString());
+    const editor = vscode.window.activeTextEditor;
+    assert.ok(editor);
+    assert.strictEqual(editor!.document.uri.toString(), uri.toString());
+    assert.strictEqual(editor!.selection.start.line, 1);
+    assert.strictEqual(editor!.document.getText(editor!.selection), "  eval(input);");
+    await openSecurityLocation("navigation.js", 9999, uri.toString());
+    assert.strictEqual(vscode.window.activeTextEditor!.selection.start.line, 2);
+  });
+
   suiteSetup(async function () {
     if (!vscode.workspace.workspaceFolders?.length) {
       // The default test run has no folder open; skip rather than fail.

@@ -24,8 +24,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerDebugLogCommands = void 0;
+const workspace_1 = require("../platform/workspace");
 const vscode = __importStar(require("vscode"));
-const path = __importStar(require("path"));
+const environment_1 = require("../platform/environment");
 const command_registry_1 = require("../utils/command-registry");
 const find_logs_1 = require("./find-logs");
 const insert_log_1 = require("./insert-log");
@@ -36,8 +37,17 @@ function registerDebugLogCommands(context) {
     context.subscriptions.push((0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.insertDebugLog", insertDebugLog), (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.removeDebugLogsInFile", removeDebugLogsInFile));
 }
 exports.registerDebugLogCommands = registerDebugLogCommands;
-async function insertDebugLog() {
+async function editableEditor() {
     const editor = vscode.window.activeTextEditor;
+    if (!editor || (0, workspace_1.canWriteResource)(editor.document.uri))
+        return editor;
+    const document = await vscode.workspace.openTextDocument({ language: editor.document.languageId, content: editor.document.getText() });
+    const copy = await vscode.window.showTextDocument(document, { preview: false });
+    copy.selections = editor.selections;
+    return copy;
+}
+async function insertDebugLog() {
+    const editor = await editableEditor();
     if (!editor)
         return;
     const document = editor.document;
@@ -47,7 +57,7 @@ async function insertDebugLog() {
     }
     const text = document.getText();
     const indentUnit = editor.options.insertSpaces === false ? "\t" : " ".repeat(Number(editor.options.tabSize) || 4);
-    const fileName = path.basename(document.fileName);
+    const fileName = (0, environment_1.resourceName)(document.uri);
     const plans = [];
     for (const selection of editor.selections) {
         let expression = document.getText(selection).trim();
@@ -80,7 +90,7 @@ async function insertDebugLog() {
         vscode.window.showErrorMessage("The debug log could not be inserted (the file changed while inserting).");
 }
 async function removeDebugLogsInFile() {
-    const editor = vscode.window.activeTextEditor;
+    const editor = await editableEditor();
     if (!editor)
         return;
     const document = editor.document;
@@ -100,7 +110,7 @@ async function removeDebugLogsInFile() {
         return;
     }
     const kinds = [...new Set(removable.map(statement => statement.kind))].join(", ");
-    const choice = await vscode.window.showInformationMessage(`Remove ${removable.length} debug statement${removable.length === 1 ? "" : "s"} (${kinds}) from ${path.basename(document.fileName)}?`, { modal: true, detail: review ? `${review} more need a manual review and are left in place.` : "You can undo this with Undo." }, "Remove");
+    const choice = await vscode.window.showInformationMessage(`Remove ${removable.length} debug statement${removable.length === 1 ? "" : "s"} (${kinds}) from ${(0, environment_1.resourceName)(document.uri)}?`, { modal: true, detail: review ? `${review} more need a manual review and are left in place.` : "You can undo this with Undo." }, "Remove");
     if (choice !== "Remove")
         return;
     const plan = (0, find_logs_1.planRemovals)(text, removable);

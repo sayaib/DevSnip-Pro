@@ -1,4 +1,3 @@
-import * as path from "path";
 import * as vscode from "vscode";
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 
@@ -11,7 +10,7 @@ export function registerOnboardingCommands(context: vscode.ExtensionContext): vo
       await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH_ID, false);
     }),
     registerTrackedCommand(`${COMMAND_PREFIX}whatsNew`, async () => {
-      const changelog = vscode.Uri.file(path.join(context.extensionPath, "CHANGELOG.md"));
+      const changelog = vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md");
       await vscode.commands.executeCommand("markdown.showPreview", changelog);
     })
   );

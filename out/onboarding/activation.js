@@ -24,6 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.disposeActivation = exports.activationSummary = exports.dismissWhatsNew = exports.whatsNew = exports.dismissGuide = exports.guideVisible = exports.guideSteps = exports.noteThemeChosen = exports.noteToolRun = exports.noteCommand = exports.reach = exports.initActivation = exports.onDidChangeActivation = exports.RELEASE_HIGHLIGHTS = exports.ACTIVATION_MILESTONES = void 0;
+const capabilities_1 = require("../platform/capabilities");
 const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 /**
@@ -58,6 +59,15 @@ const GUIDE = [
 ];
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
+    { version: "11.83.2", items: [{ title: "Click security findings to open the source file and highlight the reported line", command: "securityHub" }] },
+    { version: "11.83.1", items: [{ title: "Read-only repository support for github1s and gitlab1s: copy/open generated output and edit debug logs in scratch documents", command: "advancedToolsHub" }] },
+    {
+        version: "11.83.0",
+        items: [
+            { title: "DevSnip Pro now supports VS Code Desktop and Web, with 94 browser-compatible tools and automatic platform detection", command: "advancedToolsHub" },
+            { title: "The same sidebar, themes, formatters and generators work across both hosts; Desktop keeps the complete toolkit", command: "advancedToolsHub" }
+        ]
+    },
     { version: "11.82.1", items: [] },
     {
         version: "11.81.1",
@@ -264,7 +274,7 @@ async function noteThemeChosen() {
 exports.noteThemeChosen = noteThemeChosen;
 function guideSteps() {
     const state = read();
-    return GUIDE.map(step => ({
+    return GUIDE.filter(step => (0, capabilities_1.isCommandSupported)(step.command)).map(step => ({
         ...step,
         command: command_registry_1.COMMAND_PREFIX + step.command,
         done: step.id === "theme_chosen" ? !!state.themeChosen : !!state.reached[step.id]
@@ -292,6 +302,7 @@ function whatsNew(currentVersion) {
         .filter(release => compareVersions(release.version, state.updatedFrom) > 0 && compareVersions(release.version, currentVersion) <= 0)
         .flatMap(release => release.items)
         .slice(0, 4)
+        .filter(item => !item.command || (0, capabilities_1.isCommandSupported)(item.command))
         .map(item => ({ ...item, command: item.command ? command_registry_1.COMMAND_PREFIX + item.command : undefined }));
     return items.length ? { version: currentVersion, items } : null;
 }

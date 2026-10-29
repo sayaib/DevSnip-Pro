@@ -24,7 +24,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerOnboardingCommands = exports.WALKTHROUGH_ID = void 0;
-const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 exports.WALKTHROUGH_ID = "sayaib.hue-console#devsnip.getStarted";
@@ -33,7 +32,7 @@ function registerOnboardingCommands(context) {
     context.subscriptions.push((0, command_registry_1.registerTrackedCommand)(`${command_registry_1.COMMAND_PREFIX}getStarted`, async () => {
         await vscode.commands.executeCommand("workbench.action.openWalkthrough", exports.WALKTHROUGH_ID, false);
     }), (0, command_registry_1.registerTrackedCommand)(`${command_registry_1.COMMAND_PREFIX}whatsNew`, async () => {
-        const changelog = vscode.Uri.file(path.join(context.extensionPath, "CHANGELOG.md"));
+        const changelog = vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md");
         await vscode.commands.executeCommand("markdown.showPreview", changelog);
     }));
 }

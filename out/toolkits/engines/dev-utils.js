@@ -1,14 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.describeCron = exports.nextRuns = exports.parseCron = exports.textStats = exports.transformLines = exports.slugify = exports.CASES = exports.words = exports.inspectId = exports.generateIds = exports.ulid = exports.uuidv7 = exports.detectCodec = exports.decode = exports.encode = void 0;
-const crypto_1 = require("crypto");
+const random_1 = require("../../platform/random");
 const types_1 = require("../types");
 const HTML_ENTITIES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const NAMED = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", copy: "©", reg: "®", trade: "™", hellip: "…", mdash: "—", ndash: "–", euro: "€" };
 function encode(text, codec) {
     switch (codec) {
         case "base64": return Buffer.from(text, "utf8").toString("base64");
-        case "base64url": return Buffer.from(text, "utf8").toString("base64url");
+        case "base64url": return Buffer.from(text, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
         case "url-component": return encodeURIComponent(text);
         case "url": return encodeURI(text);
         case "html": return text.replace(/[&<>"']/g, c => HTML_ENTITIES[c]);
@@ -104,7 +104,7 @@ exports.detectCodec = detectCodec;
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const NANO_ALPHABET = "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";
 function uuidv7(now = Date.now()) {
-    const bytes = (0, crypto_1.randomBytes)(16);
+    const bytes = (0, random_1.randomBytes)(16);
     const ts = BigInt(now);
     for (let i = 0; i < 6; i++)
         bytes[i] = Number((ts >> BigInt(8 * (5 - i))) & BigInt(0xff));
@@ -121,7 +121,7 @@ function ulid(now = Date.now()) {
         time = CROCKFORD[t % 32] + time;
         t = Math.floor(t / 32);
     }
-    const random = (0, crypto_1.randomBytes)(16);
+    const random = (0, random_1.randomBytes)(16);
     let rand = "";
     for (let i = 0; i < 16; i++)
         rand += CROCKFORD[random[i] % 32];
@@ -133,7 +133,7 @@ function randomString(alphabet, length) {
     const limit = 256 - (256 % alphabet.length);
     let out = "";
     while (out.length < length) {
-        for (const byte of (0, crypto_1.randomBytes)(length * 2)) {
+        for (const byte of (0, random_1.randomBytes)(length * 2)) {
             if (byte < limit)
                 out += alphabet[byte % alphabet.length];
             if (out.length === length)
@@ -148,7 +148,7 @@ function generateIds(kind, count, options) {
         let id;
         switch (kind) {
             case "uuid4":
-                id = (0, crypto_1.randomUUID)();
+                id = (0, random_1.randomUUID)();
                 break;
             case "uuid7":
                 id = uuidv7(Date.now());
@@ -160,13 +160,13 @@ function generateIds(kind, count, options) {
                 id = randomString(NANO_ALPHABET, options.length);
                 break;
             case "hex":
-                id = (0, crypto_1.randomBytes)(Math.ceil(options.length / 2)).toString("hex").slice(0, options.length);
+                id = (0, random_1.randomBytes)(Math.ceil(options.length / 2)).toString("hex").slice(0, options.length);
                 break;
             case "objectid": {
                 // MongoDB ObjectId: 4-byte seconds timestamp, 5 random bytes, 3-byte counter.
                 const time = Buffer.alloc(4);
                 time.writeUInt32BE(Math.floor(Date.now() / 1000));
-                id = Buffer.concat([time, (0, crypto_1.randomBytes)(5), Buffer.from([(i >> 16) & 255, (i >> 8) & 255, i & 255])]).toString("hex");
+                id = Buffer.concat([time, (0, random_1.randomBytes)(5), Buffer.from([(i >> 16) & 255, (i >> 8) & 255, i & 255])]).toString("hex");
                 break;
             }
             case "password": {
@@ -175,7 +175,7 @@ function generateIds(kind, count, options) {
                 // One character from every set, then shuffle, so every class is present.
                 const chars = [...sets.map(s => randomString(s, 1)), ...randomString(all, Math.max(0, options.length - sets.length))];
                 for (let j = chars.length - 1; j > 0; j--) {
-                    const k = (0, crypto_1.randomBytes)(1)[0] % (j + 1);
+                    const k = (0, random_1.randomBytes)(1)[0] % (j + 1);
                     [chars[j], chars[k]] = [chars[k], chars[j]];
                 }
                 id = chars.join("").slice(0, options.length);
@@ -278,7 +278,7 @@ function transformLines(text, ops) {
                 break;
             case "shuffle":
                 for (let i = lines.length - 1; i > 0; i--) {
-                    const j = (0, crypto_1.randomBytes)(4).readUInt32BE(0) % (i + 1);
+                    const j = (0, random_1.randomBytes)(4).readUInt32BE(0) % (i + 1);
                     [lines[i], lines[j]] = [lines[j], lines[i]];
                 }
                 break;

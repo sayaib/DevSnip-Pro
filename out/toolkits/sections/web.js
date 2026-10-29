@@ -5,7 +5,7 @@ const types_1 = require("../types");
 const web_curl_1 = require("../engines/web-curl");
 const web_http_1 = require("../engines/web-http");
 const web_security_1 = require("../engines/web-security");
-const web_auth_1 = require("../engines/web-auth");
+const oauth_1 = require("../../platform/oauth");
 const web_apispec_1 = require("../engines/web-apispec");
 const web_frontend_1 = require("../engines/web-frontend");
 const web_scaffold_1 = require("../engines/web-scaffold");
@@ -356,23 +356,23 @@ const oauthTool = {
     icon: "lock",
     runLabel: "Generate",
     fields: [
-        helpers_1.f.select("provider", "Provider", Object.entries(web_auth_1.OAUTH_PROVIDERS).map(([value, p]) => ({ value, label: p.label }))),
+        helpers_1.f.select("provider", "Provider", Object.entries(oauth_1.OAUTH_PROVIDERS).map(([value, p]) => ({ value, label: p.label }))),
         helpers_1.f.text("clientId", "Client ID", { default: "your-client-id" }),
         helpers_1.f.text("redirectUri", "Redirect URI", { default: "http://localhost:3000/auth/callback", help: "Mobile: a custom scheme (com.example.app:/oauth2redirect) or a universal / App Link." }),
         helpers_1.f.text("scope", "Scope (blank = provider default)", {}),
-        helpers_1.f.text("authorize", "Authorization endpoint (custom)", { default: web_auth_1.OAUTH_PROVIDERS.custom.authorize, showIf: { field: "provider", equals: ["custom"] } }),
-        helpers_1.f.text("tokenUrl", "Token endpoint (custom)", { default: web_auth_1.OAUTH_PROVIDERS.custom.token, showIf: { field: "provider", equals: ["custom"] } }),
+        helpers_1.f.text("authorize", "Authorization endpoint (custom)", { default: oauth_1.OAUTH_PROVIDERS.custom.authorize, showIf: { field: "provider", equals: ["custom"] } }),
+        helpers_1.f.text("tokenUrl", "Token endpoint (custom)", { default: oauth_1.OAUTH_PROVIDERS.custom.token, showIf: { field: "provider", equals: ["custom"] } }),
         helpers_1.f.text("verifier", "Existing code_verifier (optional)", { placeholder: "Leave blank to generate a new one" }),
         helpers_1.f.area("callback", "Callback URL to decode (optional)", { rows: 2, placeholder: "http://localhost:3000/auth/callback?code=...&state=..." })
     ],
-    run(values) {
+    async run(values) {
         const key = (0, types_1.str)(values, "provider", "custom");
-        const p = web_auth_1.OAUTH_PROVIDERS[key] ?? web_auth_1.OAUTH_PROVIDERS.custom;
+        const p = oauth_1.OAUTH_PROVIDERS[key] ?? oauth_1.OAUTH_PROVIDERS.custom;
         const authorize = key === "custom" ? (0, types_1.str)(values, "authorize", p.authorize) : p.authorize;
         const tokenUrl = key === "custom" ? (0, types_1.str)(values, "tokenUrl", p.token) : p.token;
-        const { verifier, challenge } = (0, web_auth_1.pkcePair)((0, types_1.str)(values, "verifier"));
-        const state = (0, web_auth_1.randomToken)(16);
-        const nonce = (0, web_auth_1.randomToken)(16);
+        const { verifier, challenge } = await (0, oauth_1.pkcePair)((0, types_1.str)(values, "verifier"));
+        const state = (0, oauth_1.randomToken)(16);
+        const nonce = (0, oauth_1.randomToken)(16);
         const clientId = (0, types_1.str)(values, "clientId", "your-client-id").trim();
         const redirect = (0, types_1.str)(values, "redirectUri").trim();
         if (!redirect)
@@ -390,7 +390,7 @@ const oauthTool = {
         const outputs = [];
         const callback = (0, types_1.str)(values, "callback").trim();
         if (callback) {
-            const cb = (0, web_auth_1.parseCallback)(callback);
+            const cb = (0, oauth_1.parseCallback)(callback);
             const err = cb.find(([k]) => k === "error");
             messages.unshift(err ? { kind: "error", text: `The provider returned ${err[1]}: ${cb.find(([k]) => k === "error_description")?.[1] ?? "no description"}.` } : { kind: "success", text: "Callback decoded. Check that its state matches the one you sent, then exchange the code within its lifetime (usually 1-10 minutes, single use)." });
             outputs.push((0, helpers_1.table)("Callback parameters", ["Parameter", "Value"], cb));
@@ -672,8 +672,8 @@ const cssUnitsTool = {
         helpers_1.f.num("minVw", "Min viewport (px)", 375, { min: 100, showIf: { field: "mode", equals: ["clamp", "scale"] } }),
         helpers_1.f.num("maxVw", "Max viewport (px)", 1280, { min: 200, showIf: { field: "mode", equals: ["clamp", "scale"] } }),
         helpers_1.f.num("base", "Base size (px)", 16, { min: 8, max: 40, showIf: { field: "mode", equals: ["scale"] } }),
-        helpers_1.f.select("ratio", "Scale ratio (desktop)", web_frontend_1.TYPE_RATIOS.map(([v, , label]) => ({ value: v, label: `${v} - ${label}` })), { default: "1.25", showIf: { field: "mode", equals: ["scale"] } }),
-        helpers_1.f.select("minRatio", "Scale ratio (mobile)", [{ value: "none", label: "Same (not fluid)" }, ...web_frontend_1.TYPE_RATIOS.map(([v, , label]) => ({ value: v, label: `${v} - ${label}` }))], { default: "1.2", showIf: { field: "mode", equals: ["scale"] } })
+        helpers_1.f.select("ratio", "Scale ratio (desktop)", web_frontend_1.TYPE_RATIOS.map(([v, label]) => ({ value: v, label: `${v} - ${label}` })), { default: "1.25", showIf: { field: "mode", equals: ["scale"] } }),
+        helpers_1.f.select("minRatio", "Scale ratio (mobile)", [{ value: "none", label: "Same (not fluid)" }, ...web_frontend_1.TYPE_RATIOS.map(([v, label]) => ({ value: v, label: `${v} - ${label}` }))], { default: "1.2", showIf: { field: "mode", equals: ["scale"] } })
     ],
     run(values) {
         const mode = (0, types_1.str)(values, "mode", "convert");

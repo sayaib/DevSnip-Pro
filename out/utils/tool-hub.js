@@ -25,7 +25,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.openToolHub = exports.renderToolHub = exports.validateHub = exports.HUB_ICONS = void 0;
 const vscode = __importStar(require("vscode"));
-const path = __importStar(require("path"));
 const webview_ui_1 = require("./webview-ui");
 const command_dispatch_1 = require("./command-dispatch");
 const service_1 = require("../theme/service");
@@ -188,7 +187,7 @@ function renderToolHub(config, options) {
 exports.renderToolHub = renderToolHub;
 /** Opens (or reveals) a hub panel and wires its messages. */
 function openToolHub(context, config, initialCategory) {
-    const mediaRoot = vscode.Uri.file(path.join(context.extensionPath, "media"));
+    const mediaRoot = vscode.Uri.joinPath(context.extensionUri, "media");
     const { panel, created } = (0, webview_ui_1.openToolPanel)(config.viewType, config.panelTitle, { enableScripts: true, localResourceRoots: [mediaRoot] });
     if (!created) {
         // Already open: switch it to the requested section.

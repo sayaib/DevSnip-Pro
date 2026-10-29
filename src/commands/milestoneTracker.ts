@@ -1,5 +1,5 @@
+import { isCommandSupported } from "../platform/capabilities";
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 import { executeQueuedCommand } from "../utils/command-dispatch";
 import { UTILITY_CSS, confirmAction, openToolPanel, safePostMessage } from "../utils/webview-ui";
@@ -1384,7 +1384,7 @@ export async function claimDailyBonus(context: vscode.ExtensionContext): Promise
 export function buildMilestoneView(context: vscode.ExtensionContext): TrackerView {
     let toolNames: Record<string, string> = {};
     try {
-        toolNames = toolNamesFromManifest(context.extension?.packageJSON?.contributes?.commands);
+        toolNames = toolNamesFromManifest(context.extension?.packageJSON?.contributes?.commands?.filter((c: { command: string }) => isCommandSupported(c.command)));
     } catch {
         toolNames = {};
     }
@@ -1402,7 +1402,7 @@ export function buildMilestoneView(context: vscode.ExtensionContext): TrackerVie
         loginPoints: loginPointsFor(stats.streakDays),
         bonusPoints: DAILY_BONUS_POINTS,
         premium: DEVELOPER_FEATURES
-            .filter(feature => feature.enabled && feature.tier === 'premium' && (feature.pointCost ?? 0) > 0)
+            .filter(feature => isCommandSupported('openGUI') && feature.enabled && feature.tier === 'premium' && (feature.pointCost ?? 0) > 0)
             .map(feature => ({ name: feature.name, pointCost: feature.pointCost as number })),
         toolNames,
         rewards: {
@@ -1507,15 +1507,15 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
     const command = registerTrackedCommand('sayaib.hue-console.milestoneTracker', () => {
         const { panel, created } = openToolPanel('milestoneTracker', 'DevSnip Pro - Milestones & Points', {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
+            localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
         });
         if (!created) return;
         trackerPanel = panel;
         trackerReady = false;
 
-        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'milestone-tracker.js')));
-        const coffeeUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'bmc-button.png')));
-        const effectsUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media', 'reward-effects.js')));
+        const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'milestone-tracker.js'));
+        const coffeeUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'bmc-button.png'));
+        const effectsUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'reward-effects.js'));
         setWebviewHtml(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri), String(coffeeUri), String(effectsUri)));
 
         let ready = false;

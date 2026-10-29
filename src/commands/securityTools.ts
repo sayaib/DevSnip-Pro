@@ -376,6 +376,7 @@ button.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px;
 .pill.info { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .pill.skip { background: var(--panel-2); color: var(--muted); }
 .sev { font: 700 10px var(--font); letter-spacing: .05em; color: var(--muted); text-transform: uppercase; }
+.result.has-location .result-body { cursor: pointer; }
 .result-title { font-weight: 600; font-size: 13px; flex: 1 1 260px; }
 .area { color: var(--muted); font-size: 11.5px; }
 .result-body { padding: 0 14px 14px 14px; border-top: 1px solid var(--line); margin-top: -1px; }
@@ -892,13 +893,22 @@ function resultNode(scope, check) {
   }
 
   if (check.location) {
+    var navigate = function () {
+      vscode.postMessage({ type: 'openLocation', file: check.location.file, line: check.location.line, resource: check.resource });
+    };
+    details.classList.add('has-location');
+    summary.title = 'Open ' + check.location.file + ':' + check.location.line;
+    // Summary activation also fires for Enter/Space. Keep disclosure behavior,
+    // and allow clicks on the finding body to navigate without stealing text selection.
+    details.addEventListener('click', function (event) {
+      if (event.target.closest('button, a') || window.getSelection().toString()) return;
+      navigate();
+    });
     var open = document.createElement('button');
     open.className = 'link';
     open.type = 'button';
     open.textContent = 'Open ' + check.location.file + ':' + check.location.line + ' →';
-    open.addEventListener('click', function () {
-      vscode.postMessage({ type: 'openLocation', file: check.location.file, line: check.location.line, resource: check.resource });
-    });
+    open.addEventListener('click', navigate);
     body.appendChild(open);
   }
 
@@ -977,18 +987,19 @@ interface ScanState {
   cancel?: vscode.CancellationTokenSource;
 }
 
-async function openLocation(file: string, line: number, resource?: string): Promise<void> {
+export async function openSecurityLocation(file: string, line: number, resource?: string): Promise<void> {
   const root = vscode.workspace.workspaceFolders?.[0];
   try {
     const uri = resource ? vscode.Uri.parse(resource) : root ? vscode.Uri.joinPath(root.uri, file) : vscode.Uri.file(file);
     const document = await vscode.workspace.openTextDocument(uri);
-    const target = Math.max(0, Math.min(line - 1, document.lineCount - 1));
-    const position = new vscode.Position(target, 0);
-    await vscode.window.showTextDocument(document, {
+    const target = Math.max(0, Math.min(Number.isFinite(line) ? Math.trunc(line) - 1 : 0, document.lineCount - 1));
+    const range = document.lineAt(target).range;
+    const editor = await vscode.window.showTextDocument(document, {
       viewColumn: vscode.ViewColumn.One,
       preview: false,
-      selection: new vscode.Range(position, position)
+      selection: range
     });
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
   } catch (error) {
     vscode.window.showErrorMessage(`DevSnip Pro could not open ${file}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -1084,7 +1095,7 @@ export function registerSecurityToolsCommands(context: vscode.ExtensionContext):
     if (!message || typeof message.type !== "string") return;
 
     if (message.type === "openLocation") {
-      await openLocation(String(message.file || ""), Number(message.line) || 1, typeof message.resource === "string" ? message.resource : undefined);
+      await openSecurityLocation(String(message.file || ""), Number(message.line) || 1, typeof message.resource === "string" ? message.resource : undefined);
       return;
     }
 

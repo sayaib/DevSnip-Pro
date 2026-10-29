@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "crypto";
+import { randomBytes, randomUUID } from "../../platform/random";
 import { ToolInputError } from "../types";
 
 /**
@@ -18,7 +18,7 @@ const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', a
 export function encode(text: string, codec: Codec): string {
   switch (codec) {
     case "base64": return Buffer.from(text, "utf8").toString("base64");
-    case "base64url": return Buffer.from(text, "utf8").toString("base64url");
+    case "base64url": return Buffer.from(text, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     case "url-component": return encodeURIComponent(text);
     case "url": return encodeURI(text);
     case "html": return text.replace(/[&<>"']/g, c => HTML_ENTITIES[c]);

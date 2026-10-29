@@ -61,6 +61,69 @@ suite("lazy commands", () => {
     assert.strictEqual(await vscode.commands.executeCommand(id), "loaded");
     assert.strictEqual(attempt, 2);
   });
+  test("calls during loading share one load and preserve arguments", async () => {
+    const ids = ["lazyConcurrentA", "lazyConcurrentB"].map(id => COMMAND_PREFIX + id);
+    const subscriptions: { dispose(): unknown }[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let loads = 0;
+    registerLazyCommands(subscriptions, ids, async () => {
+      loads++;
+      await gate;
+      for (const id of ids) registerTrackedCommand(id, (value: string) => value);
+    });
+    const first = vscode.commands.executeCommand(ids[0], "first");
+    await Promise.resolve();
+    const second = vscode.commands.executeCommand(ids[1], "second");
+    release();
+    assert.deepStrictEqual(await Promise.all([first, second]), ["first", "second"]);
+    assert.strictEqual(loads, 1);
+    subscriptions.forEach(s => s.dispose());
+    assert.ok(ids.every(id => !isKnownCommand(id)));
+  });
+
+  test("partial registration is rolled back and can retry", async () => {
+    const ids = ["lazyPartialA", "lazyPartialB"].map(id => COMMAND_PREFIX + id);
+    let attempts = 0;
+    registerLazyCommands([], ids, async () => {
+      registerTrackedCommand(ids[0], () => "a");
+      if (++attempts === 1) throw new Error("partial failure");
+      registerTrackedCommand(ids[1], () => "b");
+    });
+    await assert.rejects(Promise.resolve(vscode.commands.executeCommand(ids[0])), /partial failure/);
+    assert.strictEqual(await vscode.commands.executeCommand(ids[1]), "b");
+    assert.strictEqual(await vscode.commands.executeCommand(ids[0]), "a");
+  });
+
+  test("a synchronous load failure retries without retaining a rejected promise", async () => {
+    const id = COMMAND_PREFIX + "lazySynchronousFailure";
+    let attempts = 0;
+    registerLazyCommands([], [id], () => {
+      if (++attempts === 1) throw new Error("synchronous failure");
+      registerTrackedCommand(id, () => "recovered");
+      return Promise.resolve();
+    });
+    await assert.rejects(Promise.resolve(vscode.commands.executeCommand(id)), /synchronous failure/);
+    assert.strictEqual(await vscode.commands.executeCommand(id), "recovered");
+  });
+
+  test("disposal during loading prevents commands from surviving shutdown", async () => {
+    const id = COMMAND_PREFIX + "lazyDisposed";
+    const subscriptions: { dispose(): unknown }[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    registerLazyCommands(subscriptions, [id], async () => {
+      await gate;
+      registerTrackedCommand(id, () => "unreachable");
+    });
+    const pending = vscode.commands.executeCommand(id);
+    await Promise.resolve();
+    subscriptions.forEach(s => s.dispose());
+    release();
+    await assert.rejects(Promise.resolve(pending), /disposed while loading/);
+    assert.strictEqual(isKnownCommand(id), false);
+  });
+
 });
 
 suite("activation and onboarding", () => {

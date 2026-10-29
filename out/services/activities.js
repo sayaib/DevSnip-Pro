@@ -1,17 +1,7 @@
 "use strict";
-/**
- * Daily activities in Redeem: the spin wheel, the daily dev challenge, the
- * Bit Sprint mini-game, the tip of the day, the weekly event, the check-in
- * chest and lucky finds.
- *
- * Every activity is once a day (or once a week), so there is always a reason to
- * come back but never a reason to grind. Each one teaches something or points
- * at a tool worth knowing, and pays points or an exclusive reward.
- *
- * Pure: no vscode import, so it is unit tested directly.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findTip = exports.findQuiz = exports.tipForDate = exports.quizForDate = exports.LUCKY_POINTS = exports.LUCKY_CHANCE = exports.CHECKIN_CHEST_POINTS = exports.CHECKIN_CHEST_EVERY = exports.findEvent = exports.eventForWeek = exports.WEEKLY_EVENTS = exports.sprintPoints = exports.SPRINT_MAX_SCORE = exports.SPRINT_SECONDS = exports.SPRINT_MAX_POINTS = exports.spinWheel = exports.WHEEL_FALLBACK_POINTS = exports.WHEEL = exports.TIPS = exports.TIP_POINTS = exports.QUIZ_BANK = exports.QUIZ_TRY_POINTS = exports.QUIZ_CORRECT_POINTS = void 0;
+const capabilities_1 = require("../platform/capabilities");
 exports.QUIZ_CORRECT_POINTS = 15;
 /** Trying counts too: a wrong answer still teaches something. */
 exports.QUIZ_TRY_POINTS = 3;
@@ -126,8 +116,10 @@ function weekNumber(weekStart) {
 }
 /** The event running in the week that starts on `weekStart` (a Monday). Rotates through every event. */
 function eventForWeek(weekStart) {
-    const index = ((weekNumber(weekStart) % exports.WEEKLY_EVENTS.length) + exports.WEEKLY_EVENTS.length) % exports.WEEKLY_EVENTS.length;
-    return exports.WEEKLY_EVENTS[index];
+    const required = { security_week: "securityAudit", snippet_week: "createCustomSnippet", api_week: "openGUI" };
+    const available = exports.WEEKLY_EVENTS.filter(event => !required[event.id] || (0, capabilities_1.isCommandSupported)(required[event.id]));
+    const index = ((weekNumber(weekStart) % available.length) + available.length) % available.length;
+    return available[index];
 }
 exports.eventForWeek = eventForWeek;
 function findEvent(id) {
@@ -162,7 +154,8 @@ function quizForDate(date) {
 }
 exports.quizForDate = quizForDate;
 function tipForDate(date) {
-    return exports.TIPS[hash(`tip:${date}`) % exports.TIPS.length];
+    const available = exports.TIPS.filter(tip => (0, capabilities_1.isCommandSupported)(tip.command));
+    return available[hash(`tip:${date}`) % available.length];
 }
 exports.tipForDate = tipForDate;
 function findQuiz(id) {

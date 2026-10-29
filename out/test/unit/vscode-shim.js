@@ -12,10 +12,23 @@ function disposable() {
     return { dispose() { } };
 }
 const api = {
+    Disposable: class {
+        constructor(cleanup) {
+            this.cleanup = cleanup;
+            this.disposed = false;
+        }
+        dispose() { if (!this.disposed) {
+            this.disposed = true;
+            this.cleanup();
+        } }
+    },
     commands: {
         registerCommand(command, callback) {
+            if (exports.registeredCommands.has(command))
+                throw new Error(`Command already registered: ${command}`);
             exports.registeredCommands.set(command, callback);
-            return disposable();
+            return { dispose() { if (exports.registeredCommands.get(command) === callback)
+                    exports.registeredCommands.delete(command); } };
         },
         async executeCommand(command, ...args) {
             const handler = exports.registeredCommands.get(command);

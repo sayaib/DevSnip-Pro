@@ -69,3 +69,8 @@ node_modules/**/examples/**
 
 CONTRIBUTING.md
 SECURITY.md
+
+.vscode-test-web/**
+
+# TypeScript intermediate browser modules; only out/browser/extension.js is loaded.
+out/web/**

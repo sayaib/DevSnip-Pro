@@ -1,5 +1,6 @@
 import { THEME_TOKENS, embedJson, escapeHtml } from "../utils/webview-ui";
 import { HUB_ICONS } from "../utils/tool-hub";
+import type { OutputCapabilities } from "../platform/workspace";
 import { ToolDescriptor, ToolExample, Values } from "./types";
 
 /** The HTML shell of a tool panel. media/toolkit.js renders everything inside it. */
@@ -11,9 +12,11 @@ export function renderToolPage(o: {
   examples: ToolExample[];
   initial: Values;
   platform: string;
+  outputCapabilities?: OutputCapabilities;
 }): string {
   const data = {
     tool: o.tool,
+    outputCapabilities: o.outputCapabilities,
     section: o.section,
     examples: o.examples,
     initial: o.initial,

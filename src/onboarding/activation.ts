@@ -1,3 +1,4 @@
+import { isCommandSupported } from "../platform/capabilities";
 import * as vscode from "vscode";
 import { COMMAND_PREFIX } from "../utils/command-registry";
 
@@ -46,6 +47,15 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  { version: "11.83.2", items: [{ title: "Click security findings to open the source file and highlight the reported line", command: "securityHub" }] },
+  { version: "11.83.1", items: [{ title: "Read-only repository support for github1s and gitlab1s: copy/open generated output and edit debug logs in scratch documents", command: "advancedToolsHub" }] },
+  {
+    version: "11.83.0",
+    items: [
+      { title: "DevSnip Pro now supports VS Code Desktop and Web, with 94 browser-compatible tools and automatic platform detection", command: "advancedToolsHub" },
+      { title: "The same sidebar, themes, formatters and generators work across both hosts; Desktop keeps the complete toolkit", command: "advancedToolsHub" }
+    ]
+  },
   { version: "11.82.1", items: [] },
   {
     version: "11.81.1",
@@ -266,7 +276,7 @@ export async function noteThemeChosen(): Promise<void> {
 
 export function guideSteps(): GuideStep[] {
   const state = read();
-  return GUIDE.map(step => ({
+  return GUIDE.filter(step => isCommandSupported(step.command)).map(step => ({
     ...step,
     command: COMMAND_PREFIX + step.command,
     done: step.id === "theme_chosen" ? !!state.themeChosen : !!state.reached[step.id]
@@ -293,6 +303,7 @@ export function whatsNew(currentVersion: string): { version: string; items: Arra
     .filter(release => compareVersions(release.version, state.updatedFrom!) > 0 && compareVersions(release.version, currentVersion) <= 0)
     .flatMap(release => release.items)
     .slice(0, 4)
+    .filter(item => !item.command || isCommandSupported(item.command))
     .map(item => ({ ...item, command: item.command ? COMMAND_PREFIX + item.command : undefined }));
   return items.length ? { version: currentVersion, items } : null;
 }

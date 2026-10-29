@@ -1,5 +1,6 @@
+import { canWriteResource } from "../platform/workspace";
 import * as vscode from "vscode";
-import * as path from "path";
+import { resourceName } from "../platform/environment";
 import { registerTrackedCommand } from "../utils/command-registry";
 import { DebugStatement, findDebugStatements, findDebugStatementsInFile, planRemovals } from "./find-logs";
 import { expressionAt, isSupportedLanguage, planDebugLog } from "./insert-log";
@@ -15,8 +16,17 @@ export function registerDebugLogCommands(context: vscode.ExtensionContext): void
   );
 }
 
-async function insertDebugLog(): Promise<void> {
+async function editableEditor(): Promise<vscode.TextEditor | undefined> {
   const editor = vscode.window.activeTextEditor;
+  if (!editor || canWriteResource(editor.document.uri)) return editor;
+  const document = await vscode.workspace.openTextDocument({ language: editor.document.languageId, content: editor.document.getText() });
+  const copy = await vscode.window.showTextDocument(document, { preview: false });
+  copy.selections = editor.selections;
+  return copy;
+}
+
+async function insertDebugLog(): Promise<void> {
+  const editor = await editableEditor();
   if (!editor) return;
   const document = editor.document;
   if (!isSupportedLanguage(document.languageId)) {
@@ -25,7 +35,7 @@ async function insertDebugLog(): Promise<void> {
   }
   const text = document.getText();
   const indentUnit = editor.options.insertSpaces === false ? "\t" : " ".repeat(Number(editor.options.tabSize) || 4);
-  const fileName = path.basename(document.fileName);
+  const fileName = resourceName(document.uri);
   const plans: Array<{ line: number; text: string; via: string }> = [];
   for (const selection of editor.selections) {
     let expression = document.getText(selection).trim();
@@ -54,7 +64,7 @@ async function insertDebugLog(): Promise<void> {
 }
 
 async function removeDebugLogsInFile(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
+  const editor = await editableEditor();
   if (!editor) return;
   const document = editor.document;
   const text = document.getText();
@@ -74,7 +84,7 @@ async function removeDebugLogsInFile(): Promise<void> {
   }
   const kinds = [...new Set(removable.map(statement => statement.kind))].join(", ");
   const choice = await vscode.window.showInformationMessage(
-    `Remove ${removable.length} debug statement${removable.length === 1 ? "" : "s"} (${kinds}) from ${path.basename(document.fileName)}?`,
+    `Remove ${removable.length} debug statement${removable.length === 1 ? "" : "s"} (${kinds}) from ${resourceName(document.uri)}?`,
     { modal: true, detail: review ? `${review} more need a manual review and are left in place.` : "You can undo this with Undo." },
     "Remove"
   );

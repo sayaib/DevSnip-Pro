@@ -1,3 +1,4 @@
+import { isCommandSupported } from "../platform/capabilities";
 /**
  * Daily activities in Redeem: the spin wheel, the daily dev challenge, the
  * Bit Sprint mini-game, the tip of the day, the weekly event, the check-in
@@ -189,8 +190,10 @@ function weekNumber(weekStart: string): number {
 
 /** The event running in the week that starts on `weekStart` (a Monday). Rotates through every event. */
 export function eventForWeek(weekStart: string): WeeklyEvent {
-  const index = ((weekNumber(weekStart) % WEEKLY_EVENTS.length) + WEEKLY_EVENTS.length) % WEEKLY_EVENTS.length;
-  return WEEKLY_EVENTS[index];
+  const required: Record<string, string> = { security_week: "securityAudit", snippet_week: "createCustomSnippet", api_week: "openGUI" };
+  const available = WEEKLY_EVENTS.filter(event => !required[event.id] || isCommandSupported(required[event.id]));
+  const index = ((weekNumber(weekStart) % available.length) + available.length) % available.length;
+  return available[index];
 }
 
 export function findEvent(id: string): WeeklyEvent | undefined {
@@ -230,7 +233,8 @@ export function quizForDate(date: string): QuizQuestion {
 }
 
 export function tipForDate(date: string): DevTip {
-  return TIPS[hash(`tip:${date}`) % TIPS.length];
+  const available = TIPS.filter(tip => isCommandSupported(tip.command));
+  return available[hash(`tip:${date}`) % available.length];
 }
 
 export function findQuiz(id: string): QuizQuestion | undefined {

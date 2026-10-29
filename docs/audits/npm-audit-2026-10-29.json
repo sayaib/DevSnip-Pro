@@ -1,0 +1,131 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@azure/identity": {
+      "name": "@azure/identity",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@azure/msal-node"
+      ],
+      "effects": [
+        "@vscode/vsce",
+        "tedious"
+      ],
+      "range": ">=4.13.1",
+      "nodes": [
+        "node_modules/@azure/identity"
+      ],
+      "fixAvailable": {
+        "name": "ovsx",
+        "version": "1.2.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@azure/msal-node": {
+      "name": "@azure/msal-node",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1243111,
+          "name": "@azure/msal-node",
+          "dependency": "@azure/msal-node",
+          "title": "MSAL Node authorization code flow may disclose parameters to an attacker-controlled endpoint",
+          "url": "https://github.com/advisories/GHSA-xcx6-jx8p-x3h5",
+          "severity": "high",
+          "cwe": [
+            "CWE-346"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": ">=5.0.0-beta.0 <7.1.0"
+        }
+      ],
+      "effects": [
+        "@azure/identity"
+      ],
+      "range": "5.0.0-beta.0 - 7.0.2",
+      "nodes": [
+        "node_modules/@azure/msal-node"
+      ],
+      "fixAvailable": {
+        "name": "ovsx",
+        "version": "1.2.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@vscode/vsce": {
+      "name": "@vscode/vsce",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@azure/identity"
+      ],
+      "effects": [
+        "ovsx"
+      ],
+      "range": ">=3.9.3-0",
+      "nodes": [
+        "node_modules/ovsx/node_modules/@vscode/vsce"
+      ],
+      "fixAvailable": {
+        "name": "ovsx",
+        "version": "1.2.0",
+        "isSemVerMajor": true
+      }
+    },
+    "ovsx": {
+      "name": "ovsx",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@vscode/vsce"
+      ],
+      "effects": [],
+      "range": ">=1.3.0",
+      "nodes": [
+        "node_modules/ovsx"
+      ],
+      "fixAvailable": {
+        "name": "ovsx",
+        "version": "1.2.0",
+        "isSemVerMajor": true
+      }
+    },
+    "tedious": {
+      "name": "tedious",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@azure/identity"
+      ],
+      "effects": [],
+      "range": ">=20.0.0",
+      "nodes": [
+        "node_modules/tedious"
+      ],
+      "fixAvailable": true
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 5,
+      "critical": 0,
+      "total": 5
+    },
+    "dependencies": {
+      "prod": 163,
+      "dev": 603,
+      "optional": 86,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 766
+    }
+  }
+}

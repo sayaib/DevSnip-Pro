@@ -6,6 +6,8 @@
 
 Free · No account · Runs locally · 117 developer tools
 
+**Desktop and Web:** VS Code Desktop includes the full toolkit. On vscode.dev and github.dev, the same extension automatically shows browser-compatible tools, including formatters, generators, AI/RAG planners and OAuth PKCE. Live API/database clients and other Desktop-only tools are hidden. See the [platform compatibility inventory](docs/WEB_COMPATIBILITY.md).
+
 **[Install from the Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)** · [Website & documentation](https://devsnip.pro) · [Get started](#get-started-in-60-seconds) · [Guides](docs/guides/README.md) · [What's new](CHANGELOG.md) · [☕ Buy me a coffee](https://buymeacoffee.com/ssayaibj)
 
 ![DevSnip Pro REST API Client in VS Code: a GET request with formatted JSON response, status, time and size](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/rest-api-client.jpg)

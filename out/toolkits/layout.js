@@ -14,9 +14,10 @@
  * the tool, not the section it is shown in.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.findEntry = exports.HUB_COMMANDS = exports.COMMAND_PREFIX = exports.NAV = void 0;
+exports.findEntry = exports.HUB_COMMANDS = exports.COMMAND_PREFIX = exports.NAV = exports.navigationFor = exports.FULL_NAV = void 0;
+const capabilities_1 = require("../platform/capabilities");
 const e = (command, label, codicon, description, extra = {}) => ({ command, label, codicon, description, ...extra });
-exports.NAV = [
+exports.FULL_NAV = [
     {
         id: "api", title: "Backend & API", emoji: "🔌", codicon: "cloud", color: "terminal.ansiBrightBlue",
         description: "Send and debug HTTP requests, convert cURL, fix CORS, work with OpenAPI and GraphQL, and scaffold REST endpoints.",
@@ -232,6 +233,18 @@ exports.NAV = [
         ]
     }
 ];
+/** Drop empty sections, subcategories and journeys along with unsupported tools. */
+function navigationFor(web) {
+    return exports.FULL_NAV.map(section => {
+        const entries = section.entries.filter(e => (0, capabilities_1.isCommandSupported)(e.command, web));
+        return { ...section, entries,
+            categories: section.categories?.filter(c => entries.some(e => e.category === c)),
+            journey: section.journey?.filter(step => entries.some(e => e.command === step.command))
+        };
+    }).filter(section => section.entries.length > 0);
+}
+exports.navigationFor = navigationFor;
+exports.NAV = navigationFor(typeof process === "undefined" || !process.versions?.node);
 exports.COMMAND_PREFIX = "sayaib.hue-console.";
 /** Commands that open the "Browse all tools" hub; the old per-section hub commands open it on their section. */
 exports.HUB_COMMANDS = {

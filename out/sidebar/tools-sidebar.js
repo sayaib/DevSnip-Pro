@@ -24,8 +24,8 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ToolsSidebarProvider = exports.renderToolsSidebar = exports.cleanUsage = exports.themeColorVar = exports.sidebarStatus = exports.TOOLS_VIEW_ID = void 0;
+const capabilities_1 = require("../platform/capabilities");
 const vscode = __importStar(require("vscode"));
-const path = __importStar(require("path"));
 const webview_ui_1 = require("../utils/webview-ui");
 const command_dispatch_1 = require("../utils/command-dispatch");
 const milestoneTracker_1 = require("../commands/milestoneTracker");
@@ -260,13 +260,13 @@ class ToolsSidebarProvider {
         const usage = this.usage;
         const entry = usage[command] ?? { count: 0, last: 0 };
         usage[command] = { count: entry.count + 1, last: Date.now() };
-        void this.context.globalState.update(USAGE_KEY, usage);
+        void this.context.globalState.update(USAGE_KEY, { ...this.context.globalState.get(USAGE_KEY, {}), ...usage });
         this.post({ type: "usage", usage });
     }
     resolveWebviewView(view) {
         this.view = view;
-        const mediaRoot = vscode.Uri.file(path.join(this.context.extensionPath, "media"));
-        const codiconsRoot = vscode.Uri.file(path.join(this.context.extensionPath, "node_modules", "@vscode", "codicons", "dist"));
+        const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, "media");
+        const codiconsRoot = vscode.Uri.joinPath(this.context.extensionUri, "node_modules", "@vscode", "codicons", "dist");
         view.webview.options = { enableScripts: true, localResourceRoots: [mediaRoot, codiconsRoot] };
         (0, service_1.setWebviewHtml)(view.webview, renderToolsSidebar({
             cspSource: view.webview.cspSource,
@@ -333,7 +333,7 @@ class ToolsSidebarProvider {
             const favorites = message.favorites
                 .filter((command) => typeof command === "string" && this.known.has(command))
                 .slice(0, 100);
-            await this.context.globalState.update(FAVORITES_KEY, Array.from(new Set(favorites)));
+            await this.context.globalState.update(FAVORITES_KEY, Array.from(new Set([...this.context.globalState.get(FAVORITES_KEY, []).filter(c => !(0, capabilities_1.isCommandSupported)(c)), ...favorites])));
         }
     }
 }

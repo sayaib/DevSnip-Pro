@@ -7,6 +7,7 @@
   const vscode = acquireVsCodeApi(); // may only be called once per page
   const data = JSON.parse(document.getElementById("tool-data").textContent);
   const tool = data.tool;
+  const capabilities = Object.assign({ writeWorkspace: true, insert: true, saveAs: true }, data.outputCapabilities);
   const icons = data.icons;
   const saved = vscode.getState() || {};
   const MAX_SHOWN = 200000;
@@ -295,10 +296,10 @@
   function codeActions(content, language, fileName, title) {
     return [
       button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: content }), "ghost"),
-      button("Insert", "insert", () => vscode.postMessage({ type: "insert", text: content, language }), "ghost", "Insert at the cursor in your editor"),
+      capabilities.insert ? button("Insert", "insert", () => vscode.postMessage({ type: "insert", text: content, language }), "ghost", "Insert at the cursor in your editor") : null,
       button("Open", "open", () => vscode.postMessage({ type: "open", text: content, language }), "ghost", "Open in a new editor tab"),
-      fileName ? button("Save", "save", () => vscode.postMessage({ type: "save", files: [{ path: fileName, content, language }] }), "ghost", `Save as ${fileName} in the workspace`) : null,
-      button("", "download", () => vscode.postMessage({ type: "download", text: content, language, fileName: fileName || title || "" }), "ghost", "Save as… (choose where to save the file)")
+      fileName && capabilities.writeWorkspace ? button("Save", "save", () => vscode.postMessage({ type: "save", files: [{ path: fileName, content, language }] }), "ghost", `Save as ${fileName} in the workspace`) : null,
+      capabilities.saveAs ? button("", "download", () => vscode.postMessage({ type: "download", text: content, language, fileName: fileName || title || "" }), "ghost", "Save as… (choose where to save the file)") : null
     ];
   }
 
@@ -307,14 +308,14 @@
       return h("section", { class: "panel out" }, outHead(o.title, o.fileName && o.fileName !== o.title ? o.fileName : null, codeActions(o.content, o.language, o.fileName, o.title)), h("pre", { class: "code", tabindex: "0", text: shown(o.content) }), truncatedNote(o.content));
     }
     if (o.kind === "text") {
-      return h("section", { class: "panel out" }, outHead(o.title, null, [button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: o.content }), "ghost"), button("", "download", () => vscode.postMessage({ type: "download", text: o.content, language: "text", fileName: o.title }), "ghost", "Save as…")]), h("div", { class: "textout", text: shown(o.content) }), truncatedNote(o.content));
+      return h("section", { class: "panel out" }, outHead(o.title, null, [button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: o.content }), "ghost"), capabilities.saveAs ? button("", "download", () => vscode.postMessage({ type: "download", text: o.content, language: "text", fileName: o.title }), "ghost", "Save as…") : null]), h("div", { class: "textout", text: shown(o.content) }), truncatedNote(o.content));
     }
     if (o.kind === "table") {
       const csv = [o.columns, ...o.rows].map(r => r.map(c => { const s = String(c); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(",")).join("\n");
       const md = [`| ${o.columns.join(" | ")} |`, `| ${o.columns.map(() => "---").join(" | ")} |`, ...o.rows.map(r => `| ${r.map(c => String(c).replace(/\|/g, "\\|").replace(/\n/g, " ")).join(" | ")} |`)].join("\n");
       const body = o.rows.slice(0, 2000).map(r => h("tr", null, r.map(c => h("td", { class: typeof c === "number" ? "num" : "", text: typeof c === "number" ? c.toLocaleString(undefined, { maximumFractionDigits: 6 }) : String(c) }))));
       return h("section", { class: "panel out" },
-        outHead(o.title, `${o.rows.length} row${o.rows.length === 1 ? "" : "s"}`, [button("CSV", "copy", () => vscode.postMessage({ type: "copy", text: csv }), "ghost", "Copy as CSV"), button("Markdown", "copy", () => vscode.postMessage({ type: "copy", text: md }), "ghost", "Copy as a Markdown table"), button("", "download", () => vscode.postMessage({ type: "download", text: csv, language: "csv", fileName: `${o.title}.csv` }), "ghost", "Save as CSV…")]),
+        outHead(o.title, `${o.rows.length} row${o.rows.length === 1 ? "" : "s"}`, [button("CSV", "copy", () => vscode.postMessage({ type: "copy", text: csv }), "ghost", "Copy as CSV"), button("Markdown", "copy", () => vscode.postMessage({ type: "copy", text: md }), "ghost", "Copy as a Markdown table"), capabilities.saveAs ? button("", "download", () => vscode.postMessage({ type: "download", text: csv, language: "csv", fileName: `${o.title}.csv` }), "ghost", "Save as CSV…") : null]),
         h("div", { class: "tablewrap" }, h("table", null, h("thead", null, h("tr", null, o.columns.map(c => h("th", { scope: "col", text: c })))), h("tbody", null, body))),
         o.rows.length > 2000 ? h("div", { class: "truncated", text: `Showing 2,000 of ${o.rows.length.toLocaleString()} rows; copy to get all of them.` }) : null);
     }
@@ -323,12 +324,12 @@
         const size = new Blob([file.content]).size;
         const details = h("details", { class: "file" },
           h("summary", null, icon("chevron", "chev"), icon("file"), h("span", { class: "path", text: file.path }), h("span", { class: "meta", text: `${file.mode === "append" ? "append · " : ""}${size < 1024 ? size + " B" : (size / 1024).toFixed(1) + " KB"}` }),
-            h("span", { class: "out-actions", onclick: e => e.preventDefault() }, codeActions(file.content, file.language, null).slice(0, 1).concat([button("", "open", () => vscode.postMessage({ type: "open", text: file.content, language: file.language }), "ghost", `Open ${file.path} in a new tab`), button("", "save", () => vscode.postMessage({ type: "save", files: [file] }), "ghost", `Save ${file.path} to the workspace`)]))),
+            h("span", { class: "out-actions", onclick: e => e.preventDefault() }, codeActions(file.content, file.language, null).slice(0, 1).concat([button("", "open", () => vscode.postMessage({ type: "open", text: file.content, language: file.language }), "ghost", `Open ${file.path} in a new tab`), capabilities.writeWorkspace ? button("", "save", () => vscode.postMessage({ type: "save", files: [file] }), "ghost", `Save ${file.path} to the workspace`) : null]))),
           h("pre", { class: "code", tabindex: "0", text: shown(file.content) }));
         if (i === 0 && o.files.length <= 3) details.open = true;
         return details;
       }));
-      return h("section", { class: "panel out" }, outHead(o.title, `${o.files.length} file${o.files.length === 1 ? "" : "s"}`, [button(o.files.length > 1 ? `Write all ${o.files.length}` : "Write to workspace", "save", () => vscode.postMessage({ type: "writeAll", files: o.files }), "ghost", "Write the files into the workspace (asks before overwriting)")]), list);
+      return h("section", { class: "panel out" }, outHead(o.title, `${o.files.length} file${o.files.length === 1 ? "" : "s"}`, [capabilities.writeWorkspace ? button(o.files.length > 1 ? `Write all ${o.files.length}` : "Write to workspace", "save", () => vscode.postMessage({ type: "writeAll", files: o.files }), "ghost", "Write the files into the workspace (asks before overwriting)") : null]), list);
     }
     if (o.kind === "chart") return h("section", { class: "panel out" }, outHead(o.title, null, []), chart(o));
     return h("div");

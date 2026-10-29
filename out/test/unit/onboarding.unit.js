@@ -70,6 +70,68 @@ function state(context) {
         assert.strictEqual(await vscode.commands.executeCommand(id), "loaded");
         assert.strictEqual(attempt, 2);
     });
+    (0, run_unit_tests_1.test)("calls during loading share one load and preserve arguments", async () => {
+        const ids = ["lazyConcurrentA", "lazyConcurrentB"].map(id => command_registry_1.COMMAND_PREFIX + id);
+        const subscriptions = [];
+        let release;
+        const gate = new Promise(resolve => { release = resolve; });
+        let loads = 0;
+        (0, command_registry_1.registerLazyCommands)(subscriptions, ids, async () => {
+            loads++;
+            await gate;
+            for (const id of ids)
+                (0, command_registry_1.registerTrackedCommand)(id, (value) => value);
+        });
+        const first = vscode.commands.executeCommand(ids[0], "first");
+        await Promise.resolve();
+        const second = vscode.commands.executeCommand(ids[1], "second");
+        release();
+        assert.deepStrictEqual(await Promise.all([first, second]), ["first", "second"]);
+        assert.strictEqual(loads, 1);
+        subscriptions.forEach(s => s.dispose());
+        assert.ok(ids.every(id => !(0, command_registry_1.isKnownCommand)(id)));
+    });
+    (0, run_unit_tests_1.test)("partial registration is rolled back and can retry", async () => {
+        const ids = ["lazyPartialA", "lazyPartialB"].map(id => command_registry_1.COMMAND_PREFIX + id);
+        let attempts = 0;
+        (0, command_registry_1.registerLazyCommands)([], ids, async () => {
+            (0, command_registry_1.registerTrackedCommand)(ids[0], () => "a");
+            if (++attempts === 1)
+                throw new Error("partial failure");
+            (0, command_registry_1.registerTrackedCommand)(ids[1], () => "b");
+        });
+        await assert.rejects(Promise.resolve(vscode.commands.executeCommand(ids[0])), /partial failure/);
+        assert.strictEqual(await vscode.commands.executeCommand(ids[1]), "b");
+        assert.strictEqual(await vscode.commands.executeCommand(ids[0]), "a");
+    });
+    (0, run_unit_tests_1.test)("a synchronous load failure retries without retaining a rejected promise", async () => {
+        const id = command_registry_1.COMMAND_PREFIX + "lazySynchronousFailure";
+        let attempts = 0;
+        (0, command_registry_1.registerLazyCommands)([], [id], () => {
+            if (++attempts === 1)
+                throw new Error("synchronous failure");
+            (0, command_registry_1.registerTrackedCommand)(id, () => "recovered");
+            return Promise.resolve();
+        });
+        await assert.rejects(Promise.resolve(vscode.commands.executeCommand(id)), /synchronous failure/);
+        assert.strictEqual(await vscode.commands.executeCommand(id), "recovered");
+    });
+    (0, run_unit_tests_1.test)("disposal during loading prevents commands from surviving shutdown", async () => {
+        const id = command_registry_1.COMMAND_PREFIX + "lazyDisposed";
+        const subscriptions = [];
+        let release;
+        const gate = new Promise(resolve => { release = resolve; });
+        (0, command_registry_1.registerLazyCommands)(subscriptions, [id], async () => {
+            await gate;
+            (0, command_registry_1.registerTrackedCommand)(id, () => "unreachable");
+        });
+        const pending = vscode.commands.executeCommand(id);
+        await Promise.resolve();
+        subscriptions.forEach(s => s.dispose());
+        release();
+        await assert.rejects(Promise.resolve(pending), /disposed while loading/);
+        assert.strictEqual((0, command_registry_1.isKnownCommand)(id), false);
+    });
 });
 (0, run_unit_tests_1.suite)("activation and onboarding", () => {
     (0, run_unit_tests_1.test)("a new install sees the guide and no What's new card", async () => {

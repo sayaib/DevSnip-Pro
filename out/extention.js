@@ -37,7 +37,7 @@ const command_registry_1 = require("./utils/command-registry");
 const analytics_1 = require("./analytics");
 const activation_1 = require("./onboarding/activation");
 const commands_1 = require("./onboarding/commands");
-const command_dispatch_1 = require("./utils/command-dispatch");
+const toolSearch_1 = require("./commands/toolSearch");
 const webview_ui_1 = require("./utils/webview-ui");
 const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
@@ -143,7 +143,7 @@ function activate(context) {
         ["appearance themes", () => (0, service_1.registerThemeCommand)(context)],
         ["onboarding", () => (0, commands_1.registerOnboardingCommands)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],
-        ["tool search", () => registerUniversalToolSearch(context)],
+        ["tool search", () => (0, toolSearch_1.registerUniversalToolSearch)(context)],
     ];
     for (const [name, register] of registrations) {
         try {
@@ -171,56 +171,6 @@ async function restoreSnippetsAfterUpdate(liveFolder, backup, extensionPath) {
     catch (error) {
         console.error("DevSnip Pro: could not restore snippets.", error);
     }
-}
-/** Every tool in the navigation, in section order: section, sub-group and keywords make it findable. */
-async function searchableTools() {
-    const { NAV, COMMAND_PREFIX } = await Promise.resolve().then(() => __importStar(require("./toolkits/layout")));
-    const { findTool } = await Promise.resolve().then(() => __importStar(require("./toolkits/registry")));
-    const tools = NAV.flatMap(section => section.entries.map(entry => {
-        const tool = entry.tool ? findTool(entry.tool) : undefined;
-        const keywords = (tool?.keywords ?? entry.keywords ?? []).slice(0, 5);
-        return {
-            label: tool?.title ?? entry.label,
-            description: [section.title, entry.category, ...keywords].filter(Boolean).join(" / "),
-            command: COMMAND_PREFIX + entry.command
-        };
-    }));
-    return [
-        ...tools,
-        { label: "Browse All Tools", description: "All sections, with search and pinning", command: `${COMMAND_PREFIX}advancedToolsHub` },
-        { label: "Security Hub", description: "Security & Auth / every security scan in one panel", command: `${COMMAND_PREFIX}securityHub` },
-        { label: "Milestone & Points Tracker", description: "Progress", command: `${COMMAND_PREFIX}milestoneTracker` }
-    ];
-}
-function registerUniversalToolSearch(context) {
-    const searchCommand = (0, command_registry_1.registerTrackedCommand)("sayaib.hue-console.searchTools", async () => {
-        const pattern = await vscode.window.showInputBox({
-            title: "Search DevSnip Pro Tools",
-            prompt: "Enter a regular expression to match tool names, categories, or commands",
-            placeHolder: "e.g. json|schema|rag|calculator",
-            value: "",
-        });
-        if (pattern === undefined)
-            return;
-        let matcher;
-        try {
-            matcher = new RegExp(pattern || ".*", "i");
-        }
-        catch (error) {
-            vscode.window.showErrorMessage(`Invalid regular expression: ${error instanceof Error ? error.message : String(error)}`);
-            return;
-        }
-        const tools = await searchableTools();
-        const matches = tools.filter(tool => matcher.test(`${tool.label} ${tool.description} ${tool.command}`));
-        if (!matches.length) {
-            vscode.window.showInformationMessage("No DevSnip Pro tools matched that regular expression.");
-            return;
-        }
-        const selected = await vscode.window.showQuickPick(matches.map(tool => ({ label: tool.label, description: tool.description, detail: tool.command, command: tool.command })), { title: `${matches.length} matching DevSnip Pro tool${matches.length === 1 ? "" : "s"}`, matchOnDescription: true, matchOnDetail: true });
-        if (selected)
-            await (0, command_dispatch_1.executeQueuedCommand)(selected.command);
-    });
-    context.subscriptions.push(searchCommand);
 }
 async function deactivate() {
     // Panels opened through the shared registry are not in context.subscriptions.

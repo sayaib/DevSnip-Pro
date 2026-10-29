@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.82.1",
+  "version": "11.83.2",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -327,7 +327,8 @@
       },
       {
         "command": "sayaib.hue-console.openGUI",
-        "title": "🔌 DevSnip Pro: REST API Client"
+        "title": "🔌 DevSnip Pro: REST API Client",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.curlConverter",
@@ -399,7 +400,8 @@
       },
       {
         "command": "sayaib.hue-console.mobileLocalApi",
-        "title": "📱 DevSnip Pro: Local API Access from Devices"
+        "title": "📱 DevSnip Pro: Local API Access from Devices",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.appEnvironments",
@@ -423,31 +425,38 @@
       },
       {
         "command": "sayaib.hue-console.showSnippets",
-        "title": "⚡ DevSnip Pro: Saved Snippets"
+        "title": "⚡ DevSnip Pro: Saved Snippets",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.createCustomSnippet",
-        "title": "⚡ DevSnip Pro: Create Snippet"
+        "title": "⚡ DevSnip Pro: Create Snippet",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-        "title": "🐞 DevSnip Pro: Clean Debug Logs"
+        "title": "🐞 DevSnip Pro: Clean Debug Logs",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.removeUnusedImports",
-        "title": "⚡ DevSnip Pro: Remove Unused Imports"
+        "title": "⚡ DevSnip Pro: Remove Unused Imports",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.dependencyManager",
-        "title": "⚡ DevSnip Pro: Dependencies & Installation"
+        "title": "⚡ DevSnip Pro: Dependencies & Installation",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.readmeManager",
-        "title": "⚡ DevSnip Pro: README Viewer & Manager"
+        "title": "⚡ DevSnip Pro: README Viewer & Manager",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.frameworkSnippets",
-        "title": "⚡ DevSnip Pro: Framework Snippets"
+        "title": "⚡ DevSnip Pro: Framework Snippets",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.unusedDependencies",
@@ -507,7 +516,8 @@
       },
       {
         "command": "sayaib.hue-console.databaseClient",
-        "title": "🗄️ DevSnip Pro: Database Client"
+        "title": "🗄️ DevSnip Pro: Database Client",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.sparkSqlFormatter",
@@ -527,17 +537,20 @@
       },
       {
         "command": "sayaib.hue-console.csvViewer",
-        "title": "📊 DevSnip Pro: CSV / TSV Viewer"
+        "title": "📊 DevSnip Pro: CSV / TSV Viewer",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.excelViewer",
-        "title": "📊 DevSnip Pro: Excel Viewer (.xlsx)"
+        "title": "📊 DevSnip Pro: Excel Viewer (.xlsx)",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.openInSpreadsheetViewer",
         "title": "Open in CSV & Excel Viewer",
         "category": "DevSnip Pro",
-        "icon": "$(table)"
+        "icon": "$(table)",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.buildErrorExplainer",
@@ -557,7 +570,8 @@
       },
       {
         "command": "sayaib.hue-console.networkTools",
-        "title": "🐞 DevSnip Pro: Port & Network Toolkit"
+        "title": "🐞 DevSnip Pro: Port & Network Toolkit",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.insertDebugLog",
@@ -637,15 +651,18 @@
       },
       {
         "command": "sayaib.hue-console.jwtDecoder",
-        "title": "🛡️ DevSnip Pro: JWT Decoder & Signer"
+        "title": "🛡️ DevSnip Pro: JWT Decoder & Signer",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.securityAudit",
-        "title": "🛡️ DevSnip Pro: Workspace Security Audit"
+        "title": "🛡️ DevSnip Pro: Workspace Security Audit",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.hashGenerator",
-        "title": "🛡️ DevSnip Pro: Hash, HMAC & Webhook Signatures"
+        "title": "🛡️ DevSnip Pro: Hash, HMAC & Webhook Signatures",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.oauthPkce",
@@ -657,7 +674,8 @@
       },
       {
         "command": "sayaib.hue-console.endpointSecurityScan",
-        "title": "🛡️ DevSnip Pro: Endpoint Security Scan"
+        "title": "🛡️ DevSnip Pro: Endpoint Security Scan",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.cookieInspector",
@@ -665,37 +683,45 @@
       },
       {
         "command": "sayaib.hue-console.dependencyAudit",
-        "title": "🛡️ DevSnip Pro: Dependency & Config Check"
+        "title": "🛡️ DevSnip Pro: Dependency & Config Check",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.osvScanner",
-        "title": "🛡️ DevSnip Pro: OSV Vulnerability Scanner"
+        "title": "🛡️ DevSnip Pro: OSV Vulnerability Scanner",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.osvScanWorkspace",
-        "title": "🛡️ DevSnip Pro: Scan Workspace Dependencies for Vulnerabilities (OSV)"
+        "title": "🛡️ DevSnip Pro: Scan Workspace Dependencies for Vulnerabilities (OSV)",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.scaScanner",
-        "title": "🛡️ DevSnip Pro: SCA Scanner"
+        "title": "🛡️ DevSnip Pro: SCA Scanner",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.scaScanWorkspace",
-        "title": "🛡️ DevSnip Pro: Scan Dependencies (SCA: vulnerabilities, exploited CVEs, dependency health)"
+        "title": "🛡️ DevSnip Pro: Scan Dependencies (SCA: vulnerabilities, exploited CVEs, dependency health)",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.osvScanFile",
         "title": "Scan for Vulnerabilities (OSV)",
         "category": "DevSnip Pro",
-        "icon": "$(shield)"
+        "icon": "$(shield)",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.certInspector",
-        "title": "🛡️ DevSnip Pro: Certificate & SSL Pinning Inspector"
+        "title": "🛡️ DevSnip Pro: Certificate & SSL Pinning Inspector",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.cloudSecurityAudit",
-        "title": "🛡️ DevSnip Pro: Cloud & Container Audit"
+        "title": "🛡️ DevSnip Pro: Cloud & Container Audit",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.promptTemplate",
@@ -723,7 +749,8 @@
       },
       {
         "command": "sayaib.hue-console.llmApiTester",
-        "title": "🤖 DevSnip Pro: LLM API Tester"
+        "title": "🤖 DevSnip Pro: LLM API Tester",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.jsonToToon",
@@ -851,7 +878,8 @@
       },
       {
         "command": "sayaib.hue-console.securityHub",
-        "title": "🛡️ DevSnip Pro: Security Hub"
+        "title": "🛡️ DevSnip Pro: Security Hub",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.milestoneTracker",
@@ -859,11 +887,13 @@
       },
       {
         "command": "sayaib.hue-console.premiumStatus",
-        "title": "⭐ DevSnip Pro: Points & Premium Features"
+        "title": "⭐ DevSnip Pro: Points & Premium Features",
+        "enablement": "!isWeb && !devsnip.webHost"
       },
       {
         "command": "sayaib.hue-console.resetFeatureUsage",
-        "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)"
+        "title": "🧪 DevSnip Pro: Reset Feature Usage Counters (development)",
+        "enablement": "!isWeb && !devsnip.webHost"
       }
     ],
     "keybindings": [
@@ -970,7 +1000,11 @@
         },
         "devsnip.osvScanner.buildToolResolution": {
           "type": "string",
-          "enum": ["ask", "always", "never"],
+          "enum": [
+            "ask",
+            "always",
+            "never"
+          ],
           "enumDescriptions": [
             "Run Maven (dependency:tree) and Gradle (a read-only dependency task) in trusted workspaces after asking once per workspace.",
             "Run them in trusted workspaces without asking.",
@@ -993,7 +1027,11 @@
         },
         "devsnip.sca.healthChecks": {
           "type": "string",
-          "enum": ["direct", "all", "off"],
+          "enum": [
+            "direct",
+            "all",
+            "off"
+          ],
           "enumDescriptions": [
             "Check direct dependencies in their registries (latest release, deprecated, yanked, abandoned).",
             "Check every dependency, including transitive ones (more registry requests).",
@@ -1054,7 +1092,7 @@
         {
           "command": "sayaib.hue-console.createCustomSnippet",
           "group": "1_snippets@1",
-          "when": "editorHasSelection"
+          "when": "(editorHasSelection) && !isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.jsonFormatter",
@@ -1077,11 +1115,13 @@
         },
         {
           "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
-          "group": "2_tools@2"
+          "group": "2_tools@2",
+          "when": "!isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.removeUnusedImports",
-          "group": "2_tools@3"
+          "group": "2_tools@3",
+          "when": "!isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.observabilityAnalyze",
@@ -1095,7 +1135,7 @@
         {
           "command": "sayaib.hue-console.jwtDecoder",
           "group": "2_tools@6",
-          "when": "editorHasSelection"
+          "when": "(editorHasSelection) && !isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.yamlJsonTool",
@@ -1145,31 +1185,31 @@
       "explorer/context": [
         {
           "command": "sayaib.hue-console.osvScanFile",
-          "when": "explorerResourceIsFolder",
+          "when": "(explorerResourceIsFolder) && !isWeb && !devsnip.webHost",
           "group": "navigation@21"
         },
         {
           "command": "sayaib.hue-console.osvScanFile",
-          "when": "resourceFilename =~ /^(package-lock\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lock|package\\.json|requirements.*\\.txt|.*[-_]requirements\\.txt|Pipfile|Pipfile\\.lock|poetry\\.lock|uv\\.lock|pdm\\.lock|pyproject\\.toml|pom\\.xml|build\\.gradle|build\\.gradle\\.kts|gradle\\.lockfile|libs\\.versions\\.toml|go\\.mod|Cargo\\.lock|Cargo\\.toml|Gemfile|Gemfile\\.lock|gems\\.rb|gems\\.locked|packages\\.lock\\.json|project\\.assets\\.json|.*\\.(cs|fs|vb)proj|packages\\.config|composer\\.json|composer\\.lock|pubspec\\.yaml|pubspec\\.lock|mix\\.lock|Package\\.resolved|renv\\.lock)$/ && !explorerResourceIsFolder",
+          "when": "(resourceFilename =~ /^(package-lock\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lock|package\\.json|requirements.*\\.txt|.*[-_]requirements\\.txt|Pipfile|Pipfile\\.lock|poetry\\.lock|uv\\.lock|pdm\\.lock|pyproject\\.toml|pom\\.xml|build\\.gradle|build\\.gradle\\.kts|gradle\\.lockfile|libs\\.versions\\.toml|go\\.mod|Cargo\\.lock|Cargo\\.toml|Gemfile|Gemfile\\.lock|gems\\.rb|gems\\.locked|packages\\.lock\\.json|project\\.assets\\.json|.*\\.(cs|fs|vb)proj|packages\\.config|composer\\.json|composer\\.lock|pubspec\\.yaml|pubspec\\.lock|mix\\.lock|Package\\.resolved|renv\\.lock)$/ && !explorerResourceIsFolder) && !isWeb && !devsnip.webHost",
           "group": "navigation@21"
         },
         {
           "command": "sayaib.hue-console.openInSpreadsheetViewer",
-          "when": "resourceExtname =~ /^\\.(csv|tsv|tab|xlsx|xlsm)$/i && !explorerResourceIsFolder",
+          "when": "(resourceExtname =~ /^\\.(csv|tsv|tab|xlsx|xlsm)$/i && !explorerResourceIsFolder) && !isWeb && !devsnip.webHost",
           "group": "navigation@20"
         }
       ],
       "editor/title": [
         {
           "command": "sayaib.hue-console.openInSpreadsheetViewer",
-          "when": "resourceExtname =~ /^\\.(csv|tsv|tab)$/i && activeEditor == workbench.editors.files.textFileEditor",
+          "when": "(resourceExtname =~ /^\\.(csv|tsv|tab)$/i && activeEditor == workbench.editors.files.textFileEditor) && !isWeb && !devsnip.webHost",
           "group": "navigation@20"
         }
       ],
       "commandPalette": [
         {
           "command": "sayaib.hue-console.resetFeatureUsage",
-          "when": "isDevelopment"
+          "when": "isDevelopment && !isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.webDevHub",
@@ -1205,11 +1245,11 @@
         },
         {
           "command": "sayaib.hue-console.openInSpreadsheetViewer",
-          "when": "false"
+          "when": "(false) && !isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.osvScanFile",
-          "when": "resourceFilename =~ /^(package-lock\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lock|package\\.json|requirements.*\\.txt|.*[-_]requirements\\.txt|Pipfile|Pipfile\\.lock|poetry\\.lock|uv\\.lock|pdm\\.lock|pyproject\\.toml|pom\\.xml|build\\.gradle|build\\.gradle\\.kts|gradle\\.lockfile|libs\\.versions\\.toml|go\\.mod|Cargo\\.lock|Cargo\\.toml|Gemfile|Gemfile\\.lock|gems\\.rb|gems\\.locked|packages\\.lock\\.json|project\\.assets\\.json|.*\\.(cs|fs|vb)proj|packages\\.config|composer\\.json|composer\\.lock|pubspec\\.yaml|pubspec\\.lock|mix\\.lock|Package\\.resolved|renv\\.lock)$/"
+          "when": "(resourceFilename =~ /^(package-lock\\.json|npm-shrinkwrap\\.json|yarn\\.lock|pnpm-lock\\.yaml|bun\\.lock|package\\.json|requirements.*\\.txt|.*[-_]requirements\\.txt|Pipfile|Pipfile\\.lock|poetry\\.lock|uv\\.lock|pdm\\.lock|pyproject\\.toml|pom\\.xml|build\\.gradle|build\\.gradle\\.kts|gradle\\.lockfile|libs\\.versions\\.toml|go\\.mod|Cargo\\.lock|Cargo\\.toml|Gemfile|Gemfile\\.lock|gems\\.rb|gems\\.locked|packages\\.lock\\.json|project\\.assets\\.json|.*\\.(cs|fs|vb)proj|packages\\.config|composer\\.json|composer\\.lock|pubspec\\.yaml|pubspec\\.lock|mix\\.lock|Package\\.resolved|renv\\.lock)$/) && !isWeb && !devsnip.webHost"
         },
         {
           "command": "sayaib.hue-console.insertDebugLog",
@@ -1218,6 +1258,114 @@
         {
           "command": "sayaib.hue-console.removeDebugLogsInFile",
           "when": "editorIsOpen"
+        },
+        {
+          "command": "sayaib.hue-console.openGUI",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.mobileLocalApi",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.showSnippets",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.createCustomSnippet",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.listAndRemoveConsoleLogs",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.removeUnusedImports",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.dependencyManager",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.readmeManager",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.frameworkSnippets",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.databaseClient",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.csvViewer",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.excelViewer",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.networkTools",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.jwtDecoder",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.securityAudit",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.hashGenerator",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.endpointSecurityScan",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.dependencyAudit",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.osvScanner",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.osvScanWorkspace",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.scaScanner",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.scaScanWorkspace",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.certInspector",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.cloudSecurityAudit",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.llmApiTester",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.securityHub",
+          "when": "!isWeb && !devsnip.webHost"
+        },
+        {
+          "command": "sayaib.hue-console.premiumStatus",
+          "when": "!isWeb && !devsnip.webHost"
         }
       ]
     },
@@ -1247,7 +1395,8 @@
             },
             "completionEvents": [
               "onCommand:sayaib.hue-console.openGUI"
-            ]
+            ],
+            "when": "!isWeb && !devsnip.webHost"
           },
           {
             "id": "ai",
@@ -1269,7 +1418,8 @@
             },
             "completionEvents": [
               "onCommand:sayaib.hue-console.securityHub"
-            ]
+            ],
+            "when": "!isWeb && !devsnip.webHost"
           },
           {
             "id": "database",
@@ -1280,7 +1430,8 @@
             },
             "completionEvents": [
               "onCommand:sayaib.hue-console.databaseClient"
-            ]
+            ],
+            "when": "!isWeb && !devsnip.webHost"
           },
           {
             "id": "theme",
@@ -1314,7 +1465,7 @@
   "main": "./out/extention.js",
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
-    "compile": "npm run clean && tsc -p ./",
+    "compile": "npm run clean && tsc -p ./ && npm run compile:web",
     "compile:dev": "tsc -p ./ --incremental --tsBuildInfoFile .tsbuildinfo",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
@@ -1322,7 +1473,12 @@
     "test": "node ./out/test/runTest.js",
     "test:unit": "node ./out/test/unit/run-unit-tests.js",
     "package": "vsce package",
-    "vscode:prepublish": "node scripts/write-analytics-config.js && npm run compile"
+    "vscode:prepublish": "node scripts/write-analytics-config.js && npm run compile",
+    "compile:web": "node scripts/build-web.js",
+    "test:web:smoke": "node scripts/test-web-smoke.js",
+    "test:web": "npm run compile && node scripts/run-web-tests.js",
+    "package:openvsx": "node scripts/openvsx.js prepare",
+    "publish:openvsx": "node scripts/openvsx.js publish"
   },
   "devDependencies": {
     "@types/glob": "^7.1.3",
@@ -1335,15 +1491,19 @@
     "@typescript-eslint/eslint-plugin": "^4.26.0",
     "@typescript-eslint/parser": "^4.26.0",
     "@vscode/test-electron": "^3.1.0",
+    "@vscode/test-web": "^0.0.81",
     "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.25.12",
     "eslint": "^7.27.0",
     "glob": "^7.1.7",
     "mocha": "^12.0.1",
+    "ovsx": "^1.3.0",
     "typescript": "^4.3.2"
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.36",
     "axios": "^1.8.3",
+    "buffer": "^5.7.1",
     "ioredis": "^5.11.1",
     "mongodb": "^6.21.0",
     "mssql": "^12.7.2",
@@ -1360,7 +1520,8 @@
     },
     "virtualWorkspaces": {
       "supported": "limited",
-      "description": "Tools that spawn processes, such as dependency installs, are unavailable in virtual workspaces."
+      "description": "Browser-safe formatters, generators, planners and editor tools run in virtual workspaces. Database connections, unrestricted requests, local networking and process-based tools require the Desktop host."
     }
-  }
+  },
+  "browser": "./out/browser/extension.js"
 }
