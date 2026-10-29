@@ -50,6 +50,7 @@ const SECURITY_COMMANDS = ["securityHub", "endpointSecurityScan", "securityAudit
 const OSV_COMMANDS = ["osvScanner", "osvScanWorkspace", "osvScanFile"].map(id => `sayaib.hue-console.${id}`);
 const SCA_COMMANDS = ["scaScanner", "scaScanWorkspace"].map(id => `sayaib.hue-console.${id}`);
 function activate(context) {
+    (0, webview_ui_1.setToolPanelLogo)(context.extensionUri);
     // Before anything writes state, so an existing user is never treated as a new install.
     const installSnapshot = (0, analytics_1.snapshotInstall)(context);
     const snippetsFolderPath = path.join(context.extensionPath, "custom");

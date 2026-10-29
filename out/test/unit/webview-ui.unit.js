@@ -53,6 +53,30 @@ const run_unit_tests_1 = require("./run-unit-tests");
             console.warn = warn;
         }
     });
+    (0, run_unit_tests_1.test)("every shared tool tab receives the brand logo, including reused tabs", () => {
+        const vscode = require("vscode");
+        const original = vscode.window.createWebviewPanel;
+        const callbacks = [];
+        vscode.window.createWebviewPanel = () => ({
+            iconPath: undefined,
+            reveal() { },
+            onDidDispose(callback) { callbacks.push(callback); },
+            dispose() { callbacks.forEach(callback => callback()); }
+        });
+        try {
+            (0, webview_ui_1.setToolPanelLogo)(vscode.Uri.file("/extension"));
+            const first = (0, webview_ui_1.openToolPanel)("logo-test", "Test", {});
+            assert.ok(first.panel.iconPath);
+            assert.match(String(first.panel.iconPath), /logo\.png$/);
+            assert.strictEqual((0, webview_ui_1.openToolPanel)("logo-test", "Test", {}).panel, first.panel);
+            const second = (0, webview_ui_1.openToolPanel)("logo-test-second", "Test", {});
+            assert.strictEqual(second.panel.iconPath, first.panel.iconPath);
+        }
+        finally {
+            (0, webview_ui_1.disposeAllToolPanels)();
+            vscode.window.createWebviewPanel = original;
+        }
+    });
     (0, run_unit_tests_1.test)("nonces are 32 characters and not reused", () => {
         const first = (0, webview_ui_1.getNonce)();
         const second = (0, webview_ui_1.getNonce)();

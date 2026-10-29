@@ -12,7 +12,7 @@ import { classifyInstall, initAnalytics, shutdownAnalytics, snapshotInstall, tra
 import { initActivation, noteCommand } from "./onboarding/activation";
 import { registerOnboardingCommands } from "./onboarding/commands";
 import { registerUniversalToolSearch } from "./commands/toolSearch";
-import { disposeAllToolPanels } from "./utils/webview-ui";
+import { disposeAllToolPanels, setToolPanelLogo } from "./utils/webview-ui";
 import { FeatureAccessService } from "./premium/feature-access";
 import { CollectionStore } from "./services/collections";
 import { registerPremiumCommands } from "./premium/premium-commands";
@@ -26,6 +26,7 @@ const OSV_COMMANDS = ["osvScanner", "osvScanWorkspace", "osvScanFile"].map(id =>
 const SCA_COMMANDS = ["scaScanner", "scaScanWorkspace"].map(id => `sayaib.hue-console.${id}`);
 
 export function activate(context: vscode.ExtensionContext) {
+  setToolPanelLogo(context.extensionUri);
   // Before anything writes state, so an existing user is never treated as a new install.
   const installSnapshot = snapshotInstall(context);
   const snippetsFolderPath = path.join(context.extensionPath, "custom");

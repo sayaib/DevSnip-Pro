@@ -2,6 +2,7 @@
 
 ## 11.83.2 - Tool organization, security navigation and reliability (2026-10-29)
 
+- Show the DevSnip Pro logo on all tool editor tabs, including database, security scanners and spreadsheet custom editors.
 - Organize all 118 tools into purpose-based subsections shared by the sidebar, tool browser and search. Move HTTP caching to Backend & API and network utilities to DevOps & Cloud.
 - Use consistent tool names across navigation, panels and the Command Palette; hide seven duplicate legacy mode aliases from the palette while keeping their commands and functionality available. See the [tool organization guide](docs/TOOL_ORGANIZATION.md).
 

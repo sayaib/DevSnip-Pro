@@ -86,7 +86,6 @@ export async function openScaScanner(context: vscode.ExtensionContext, options: 
     panel = opened.panel;
     ready = false;
     queue.length = 0;
-    panel.iconPath = { light: vscode.Uri.joinPath(mediaRoot, "osv-light.svg"), dark: vscode.Uri.joinPath(mediaRoot, "osv-dark.svg") };
     setWebviewHtml(panel.webview, renderScaPage({
       cspSource: panel.webview.cspSource,
       modelUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "sca-model.js")).toString(),

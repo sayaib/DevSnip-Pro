@@ -63,10 +63,6 @@ export function openDatabaseClient(context: vscode.ExtensionContext): void {
     localResourceRoots: [mediaRoot, codiconsRoot]
   });
   if (!created) return;
-  panel.iconPath = {
-    light: vscode.Uri.joinPath(mediaRoot, "database-light.svg"),
-    dark: vscode.Uri.joinPath(mediaRoot, "database-dark.svg")
-  };
 
   const store = new ConnectionStore(context.globalState, context.secrets);
   const service: DatabaseService = new DatabaseService(store, hostUi, () => safePostMessage(panel, { type: "connections", connections: service.views() }));

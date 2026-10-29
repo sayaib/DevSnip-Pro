@@ -7,11 +7,12 @@ import { initActivation, noteCommand } from "../onboarding/activation";
 import { autoRecordToolUsage, buyReward, getUserStats, grantKeptTheme, recordDiscovery, registerMilestoneTrackerCommand, setMilestoneContext, setTreeRefreshCallback, themeLockFor, Discovery } from "../commands/milestoneTracker";
 import { initThemes, registerThemeCommand, setThemeAccess } from "../theme/service";
 import { COMMAND_PREFIX, registerLazyCommands, setUsageRecorder } from "../utils/command-registry";
-import { disposeAllToolPanels } from "../utils/webview-ui";
+import { disposeAllToolPanels, setToolPanelLogo } from "../utils/webview-ui";
 import { registerUniversalToolSearch } from "../commands/toolSearch";
 
 /** Browser activation never imports the Desktop activation graph or its drivers. */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  setToolPanelLogo(context.extensionUri);
   await vscode.commands.executeCommand("setContext", "devsnip.webHost", true);
   setMilestoneContext(context);
   setThemeAccess({

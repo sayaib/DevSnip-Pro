@@ -37,6 +37,7 @@ const webview_ui_1 = require("../utils/webview-ui");
 const toolSearch_1 = require("../commands/toolSearch");
 /** Browser activation never imports the Desktop activation graph or its drivers. */
 async function activate(context) {
+    (0, webview_ui_1.setToolPanelLogo)(context.extensionUri);
     await vscode.commands.executeCommand("setContext", "devsnip.webHost", true);
     (0, milestoneTracker_1.setMilestoneContext)(context);
     (0, service_1.setThemeAccess)({

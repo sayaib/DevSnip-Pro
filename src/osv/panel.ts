@@ -73,7 +73,6 @@ export async function openOsvScanner(context: vscode.ExtensionContext, options: 
     panel = opened.panel;
     ready = false;
     queue.length = 0;
-    panel.iconPath = { light: vscode.Uri.joinPath(mediaRoot, "osv-light.svg"), dark: vscode.Uri.joinPath(mediaRoot, "osv-dark.svg") };
     setWebviewHtml(panel.webview, renderOsvPage({
       cspSource: panel.webview.cspSource,
       scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, "osv-scanner.js")).toString(),

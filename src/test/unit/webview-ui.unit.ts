@@ -1,5 +1,5 @@
 import * as assert from "assert";
-import { embedJson, escapeHtml, getNonce, safePostMessage } from "../../utils/webview-ui";
+import { embedJson, escapeHtml, getNonce, safePostMessage, setToolPanelLogo, openToolPanel, disposeAllToolPanels } from "../../utils/webview-ui";
 import { isKnownCommand, knownCommands, registerTrackedCommand, setUsageRecorder } from "../../utils/command-registry";
 import { executeQueuedCommand } from "../../utils/command-dispatch";
 import { suite, test } from "./run-unit-tests";
@@ -27,6 +27,30 @@ suite("webview helpers", () => {
       await new Promise(resolve => setImmediate(resolve));
       assert.strictEqual(warnings.length, 1);
     } finally { console.warn = warn; }
+  });
+
+  test("every shared tool tab receives the brand logo, including reused tabs", () => {
+    const vscode = require("vscode");
+    const original = vscode.window.createWebviewPanel;
+    const callbacks: Array<() => void> = [];
+    vscode.window.createWebviewPanel = () => ({
+      iconPath: undefined,
+      reveal() {},
+      onDidDispose(callback: () => void) { callbacks.push(callback); },
+      dispose() { callbacks.forEach(callback => callback()); }
+    });
+    try {
+      setToolPanelLogo(vscode.Uri.file("/extension"));
+      const first = openToolPanel("logo-test", "Test", {});
+      assert.ok(first.panel.iconPath);
+      assert.match(String(first.panel.iconPath), /logo\.png$/);
+      assert.strictEqual(openToolPanel("logo-test", "Test", {}).panel, first.panel);
+      const second = openToolPanel("logo-test-second", "Test", {});
+      assert.strictEqual(second.panel.iconPath, first.panel.iconPath);
+    } finally {
+      disposeAllToolPanels();
+      vscode.window.createWebviewPanel = original;
+    }
   });
 
   test("nonces are 32 characters and not reused", () => {

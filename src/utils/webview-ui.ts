@@ -474,6 +474,13 @@ export const THEME_TOKENS = `
 `;
 
 const openPanels = new Map<string, vscode.WebviewPanel>();
+let toolPanelLogo: vscode.Uri | undefined;
+
+/** Use the extension brand for every tool tab in Desktop and browser hosts. */
+export function setToolPanelLogo(extensionUri: vscode.Uri): void {
+  toolPanelLogo = vscode.Uri.joinPath(extensionUri, "logo.png");
+  for (const panel of openPanels.values()) panel.iconPath = toolPanelLogo;
+}
 
 /**
  * Opens a tool panel, reusing the panel already open for that tool.
@@ -494,6 +501,7 @@ export function openToolPanel(
     return { panel: existing, created: false };
   }
   const panel = vscode.window.createWebviewPanel(viewType, title, column, options);
+  if (toolPanelLogo) panel.iconPath = toolPanelLogo;
   openPanels.set(viewType, panel);
   panel.onDidDispose(() => {
     if (openPanels.get(viewType) === panel) openPanels.delete(viewType);

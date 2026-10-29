@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.confirmAction = exports.disposeAllToolPanels = exports.openToolPanel = exports.THEME_TOKENS = exports.toastScript = exports.UTILITY_CSS = exports.TOOL_CSS = exports.safePostMessage = exports.embedJson = exports.escapeHtml = exports.getNonce = void 0;
+exports.confirmAction = exports.disposeAllToolPanels = exports.openToolPanel = exports.setToolPanelLogo = exports.THEME_TOKENS = exports.toastScript = exports.UTILITY_CSS = exports.TOOL_CSS = exports.safePostMessage = exports.embedJson = exports.escapeHtml = exports.getNonce = void 0;
 const vscode = __importStar(require("vscode"));
 const random_1 = require("../platform/random");
 /** Cryptographically-random nonce for webview CSP script tags. */
@@ -497,6 +497,14 @@ exports.THEME_TOKENS = `
   body { color-scheme: light dark; }
 `;
 const openPanels = new Map();
+let toolPanelLogo;
+/** Use the extension brand for every tool tab in Desktop and browser hosts. */
+function setToolPanelLogo(extensionUri) {
+    toolPanelLogo = vscode.Uri.joinPath(extensionUri, "logo.png");
+    for (const panel of openPanels.values())
+        panel.iconPath = toolPanelLogo;
+}
+exports.setToolPanelLogo = setToolPanelLogo;
 /**
  * Opens a tool panel, reusing the panel already open for that tool.
  *
@@ -511,6 +519,8 @@ function openToolPanel(viewType, title, options, column = vscode.ViewColumn.One)
         return { panel: existing, created: false };
     }
     const panel = vscode.window.createWebviewPanel(viewType, title, column, options);
+    if (toolPanelLogo)
+        panel.iconPath = toolPanelLogo;
     openPanels.set(viewType, panel);
     panel.onDidDispose(() => {
         if (openPanels.get(viewType) === panel)

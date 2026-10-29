@@ -89,10 +89,6 @@ function openDatabaseClient(context) {
     });
     if (!created)
         return;
-    panel.iconPath = {
-        light: vscode.Uri.joinPath(mediaRoot, "database-light.svg"),
-        dark: vscode.Uri.joinPath(mediaRoot, "database-dark.svg")
-    };
     const store = new store_1.ConnectionStore(context.globalState, context.secrets);
     const service = new service_1.DatabaseService(store, hostUi, () => (0, webview_ui_1.safePostMessage)(panel, { type: "connections", connections: service.views() }));
     (0, service_2.setWebviewHtml)(panel.webview, (0, page_1.renderDatabasePage)({

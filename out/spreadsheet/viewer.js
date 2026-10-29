@@ -441,7 +441,7 @@ function attach(context, panel, doc) {
     const mediaRoot = vscode.Uri.file(path.join(context.extensionPath, "media"));
     const codiconsRoot = vscode.Uri.file(path.join(context.extensionPath, "node_modules", "@vscode", "codicons", "dist"));
     panel.webview.options = { enableScripts: true, localResourceRoots: [mediaRoot, codiconsRoot] };
-    panel.iconPath = { light: vscode.Uri.joinPath(mediaRoot, "spreadsheet-light.svg"), dark: vscode.Uri.joinPath(mediaRoot, "spreadsheet-dark.svg") };
+    panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "logo.png");
     const session = new ViewerSession(context, panel, doc);
     const attached = doc?.attach(session);
     (0, service_1.setWebviewHtml)(panel.webview, (0, page_1.renderSpreadsheetPage)({
