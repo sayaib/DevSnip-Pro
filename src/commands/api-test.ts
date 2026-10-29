@@ -978,7 +978,7 @@ export function apiTest(context: vscode.ExtensionContext, services: ApiClientSer
         {
           enableScripts: true,
           retainContextWhenHidden: true,
-          localResourceRoots: [vscode.Uri.file(context.extensionPath)]
+          localResourceRoots: []
         }
       );
 

@@ -59,6 +59,7 @@ const GUIDE = [
 ];
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
+    { version: "11.83.3", items: [{ title: "Hardened webview resource permissions and improved VS Code guideline alignment", command: "advancedToolsHub" }] },
     { version: "11.83.2", items: [{ title: "Click security findings to open the source file and highlight the reported line", command: "securityHub" }] },
     { version: "11.83.1", items: [{ title: "Read-only repository support for github1s and gitlab1s: copy/open generated output and edit debug logs in scratch documents", command: "advancedToolsHub" }] },
     {

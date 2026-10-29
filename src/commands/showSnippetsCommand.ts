@@ -59,7 +59,7 @@ export function registerShowSnippetsCommand(
       "showSnippets",
       "DevSnip Pro - Custom Snippets",
       vscode.ViewColumn.One,
-      { enableScripts: true }
+      { enableScripts: true, localResourceRoots: [] }
     );
     activePanel = panel;
     panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, "logo.png"));

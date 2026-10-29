@@ -863,7 +863,7 @@ function apiTest(context, services) {
         const panel = vscode.window.createWebviewPanel("apiTester", "REST API Client", vscode.ViewColumn.One, {
             enableScripts: true,
             retainContextWhenHidden: true,
-            localResourceRoots: [vscode.Uri.file(context.extensionPath)]
+            localResourceRoots: []
         });
         activePanel = panel;
         const iconPath = path.resolve(context.extensionPath, "logo.png");

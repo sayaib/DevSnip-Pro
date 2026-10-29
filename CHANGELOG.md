@@ -1,5 +1,14 @@
 # Development Changelog of DevSnip Pro
 
+## 11.83.3 - VS Code guideline and webview hardening (2026-10-29)
+
+- Deny local resource access by default in tool webviews. Preserve explicit media/font allow-lists and restrict the REST client, README preview and saved-snippet panels to their required capabilities.
+- Remove the donation promotion from the milestones page while preserving points, rewards and existing tool functionality.
+- Add the recommended `usesOnlineServices` analytics setting tag; continue respecting VS Code telemetry preferences.
+- Localize workspace trust and virtual workspace descriptions through `package.nls.json`.
+- Verify compilation, lint, 858 unit cases, 82 desktop integration tests, browser integration and VSIX packaging. See the [guideline review](docs/audits/VSCODE_GUIDELINES_2026-10-29.md) for scope and remaining recommendations.
+- The previously documented five high-severity Azure/MSAL dependency findings remain unresolved; this release does not claim a clean dependency security audit.
+
 ## 11.83.2 - Tool organization, security navigation and reliability (2026-10-29)
 
 - Show the DevSnip Pro logo on all tool editor tabs, including database, security scanners and spreadsheet custom editors.

@@ -33,12 +33,15 @@ suite("webview helpers", () => {
     const vscode = require("vscode");
     const original = vscode.window.createWebviewPanel;
     const callbacks: Array<() => void> = [];
-    vscode.window.createWebviewPanel = () => ({
+    const roots: unknown[] = [];
+    vscode.window.createWebviewPanel = (_type: string, _title: string, _column: number, options: { localResourceRoots: unknown }) => {
+      roots.push(options.localResourceRoots);
+      return ({
       iconPath: undefined,
       reveal() {},
       onDidDispose(callback: () => void) { callbacks.push(callback); },
       dispose() { callbacks.forEach(callback => callback()); }
-    });
+    }); };
     try {
       setToolPanelLogo(vscode.Uri.file("/extension"));
       const first = openToolPanel("logo-test", "Test", {});
@@ -47,6 +50,10 @@ suite("webview helpers", () => {
       assert.strictEqual(openToolPanel("logo-test", "Test", {}).panel, first.panel);
       const second = openToolPanel("logo-test-second", "Test", {});
       assert.strictEqual(second.panel.iconPath, first.panel.iconPath);
+      assert.deepStrictEqual(roots, [[], []], "panels deny local resources by default");
+      const media = [vscode.Uri.file("/extension/media")];
+      openToolPanel("logo-test-media", "Test", { localResourceRoots: media });
+      assert.strictEqual(roots[2], media, "explicit resource allow-lists are preserved");
     } finally {
       disposeAllToolPanels();
       vscode.window.createWebviewPanel = original;

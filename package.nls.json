@@ -1,0 +1,4 @@
+{
+  "capabilities.untrustedWorkspaces.description": "DevSnip Pro scans workspace files and can run npm commands, so it requires a trusted workspace.",
+  "capabilities.virtualWorkspaces.description": "Browser-safe formatters, generators, planners and editor tools run in virtual workspaces. Database connections, unrestricted requests, local networking and process-based tools require the Desktop host."
+}

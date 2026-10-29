@@ -1391,9 +1391,8 @@ function registerMilestoneTrackerCommand(context) {
         trackerPanel = panel;
         trackerReady = false;
         const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'milestone-tracker.js'));
-        const coffeeUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'bmc-button.png'));
         const effectsUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'reward-effects.js'));
-        (0, service_1.setWebviewHtml)(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri), String(coffeeUri), String(effectsUri)));
+        (0, service_1.setWebviewHtml)(panel.webview, getMilestoneTrackerHtml(panel.webview.cspSource, String(scriptUri), "", String(effectsUri)));
         let ready = false;
         let pending;
         const post = (message) => (0, webview_ui_1.safePostMessage)(panel, message);
@@ -1624,10 +1623,10 @@ function registerMilestoneTrackerCommand(context) {
 }
 exports.registerMilestoneTrackerCommand = registerMilestoneTrackerCommand;
 /**
- * `coffeeSrc` is the bundled Buy Me a Coffee button (the same image as in the README);
+ * The third argument is retained for compatibility; webviews no longer contain donation promotions.
  * `effectsSrc` is the shared celebration effects script.
  */
-function getMilestoneTrackerHtml(cspSource, scriptSrc, coffeeSrc, effectsSrc) {
+function getMilestoneTrackerHtml(cspSource, scriptSrc, _coffeeSrc, effectsSrc) {
     const icon = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
     return `<!DOCTYPE html>
 <html lang="en">
@@ -1651,7 +1650,6 @@ function getMilestoneTrackerHtml(cspSource, scriptSrc, coffeeSrc, effectsSrc) {
             </div>
         </div>
         <div class="top-actions">
-            <button class="coffee" id="coffeeBtn" type="button" title="Support DevSnip Pro on Buy Me a Coffee (opens in your browser)"><img src="${coffeeSrc}" alt="Buy Me a Coffee" width="128" height="36"></button>
             <button class="xbtn primary" id="spendBtn" type="button">${icon("M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2zM16 14h.01")}<span>Spend points</span></button>
             <div class="more-wrap">
                 <button class="xbtn icon" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" aria-label="More actions" title="More actions">${icon("M5 12h.01M12 12h.01M19 12h.01").replace('class="ico"', 'class="ico dots-ico"')}</button>
@@ -1718,10 +1716,6 @@ button { font: inherit; }
 .xbtn.primary:hover { background: var(--vscode-button-hoverBackground, var(--accent)); }
 .xbtn.gold { background: var(--gold); color: #1d1606; border-color: transparent; }
 /* The official Buy Me a Coffee button image, as in the README, scaled to the header's height. */
-.coffee { display: inline-flex; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer; line-height: 0; transition: transform .1s, filter .15s; }
-.coffee img { display: block; height: 36px; width: auto; border-radius: 8px; }
-.coffee:hover { filter: brightness(1.04); }
-.coffee:active { transform: translateY(1px); }
 .xbtn.gold:hover { background: color-mix(in srgb, var(--gold) 88%, #fff); }
 .xbtn.icon { width: 32px; padding: 0; }
 .xbtn.sm { height: 28px; padding: 0 11px; font-size: 12px; }
@@ -2396,7 +2390,6 @@ body.redeem-open { overflow: hidden; }
     .redeem-heading p { display: none; }
     .redeem-body { padding: 4px 16px 20px; }
     .top p { display: none; }
-    .coffee img { height: 32px; }
     .page { padding: 14px 16px 32px; }
     .rank { flex-direction: column; text-align: center; padding: 20px 16px; }
     .rank-info { width: 100%; }

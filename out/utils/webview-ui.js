@@ -518,7 +518,7 @@ function openToolPanel(viewType, title, options, column = vscode.ViewColumn.One)
         existing.reveal(column);
         return { panel: existing, created: false };
     }
-    const panel = vscode.window.createWebviewPanel(viewType, title, column, options);
+    const panel = vscode.window.createWebviewPanel(viewType, title, column, { ...options, localResourceRoots: options.localResourceRoots ?? [] });
     if (toolPanelLogo)
         panel.iconPath = toolPanelLogo;
     openPanels.set(viewType, panel);

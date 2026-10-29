@@ -63,7 +63,7 @@ function registerShowSnippetsCommand(context, snippetsFolderPath) {
             activePanel.reveal(vscode.ViewColumn.One);
             return;
         }
-        const panel = vscode.window.createWebviewPanel("showSnippets", "DevSnip Pro - Custom Snippets", vscode.ViewColumn.One, { enableScripts: true });
+        const panel = vscode.window.createWebviewPanel("showSnippets", "DevSnip Pro - Custom Snippets", vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [] });
         activePanel = panel;
         panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, "logo.png"));
         let loaded = await loadSnippets(snippetsFolderPath);

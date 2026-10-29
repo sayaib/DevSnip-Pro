@@ -94,7 +94,7 @@ export function registerReadmeManagerCommand(context: vscode.ExtensionContext): 
       "readmePreview",
       `README Preview - ${path.basename(target.fsPath)}`,
       vscode.ViewColumn.Two,
-      { enableScripts: true, retainContextWhenHidden: true }
+      { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] }
     );
     activePanel = panel;
     panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, "logo.png"));

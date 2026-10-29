@@ -102,7 +102,7 @@ function registerReadmeManagerCommand(context) {
         await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preview: false });
         // Only one preview at a time, so switching READMEs does not stack panels.
         activePanel?.dispose();
-        const panel = vscode.window.createWebviewPanel("readmePreview", `README Preview - ${path.basename(target.fsPath)}`, vscode.ViewColumn.Two, { enableScripts: true, retainContextWhenHidden: true });
+        const panel = vscode.window.createWebviewPanel("readmePreview", `README Preview - ${path.basename(target.fsPath)}`, vscode.ViewColumn.Two, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] });
         activePanel = panel;
         panel.iconPath = vscode.Uri.file(path.join(context.extensionPath, "logo.png"));
         const readCurrentText = async () => {

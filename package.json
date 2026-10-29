@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.83.2",
+  "version": "11.83.3",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -969,6 +969,7 @@
           "default": true,
           "tags": [
             "telemetry",
+            "usesOnlineServices",
             "usage"
           ],
           "markdownDescription": "Send anonymous usage analytics (which DevSnip Pro tools are opened and used, and a once-a-day active ping, under one anonymous id per computer) to help improve the extension. No code, file contents or names, paths, keystrokes, tool input or output, URLs, credentials or personal data are ever sent. Also respects VS Code's `#telemetry.telemetryLevel#`: nothing is sent unless it is `all`. See docs/ANALYTICS.md."
@@ -1536,11 +1537,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "DevSnip Pro scans workspace files and can run npm commands, so it requires a trusted workspace."
+      "description": "%capabilities.untrustedWorkspaces.description%"
     },
     "virtualWorkspaces": {
       "supported": "limited",
-      "description": "Browser-safe formatters, generators, planners and editor tools run in virtual workspaces. Database connections, unrestricted requests, local networking and process-based tools require the Desktop host."
+      "description": "%capabilities.virtualWorkspaces.description%"
     }
   },
   "browser": "./out/browser/extension.js"
