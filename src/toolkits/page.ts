@@ -153,7 +153,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; padding: 1px 5px; border: 1px
 
 /* Results */
 .results { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.results.stale > * { opacity: .55; transition: opacity .2s; }
+.results.stale > :not(.ds-execution) { opacity: .55; transition: opacity .2s; }
 .empty { padding: 36px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--card-line); border-radius: 10px; }
 .empty svg.i { width: 26px; height: 26px; opacity: .7; margin-bottom: 8px; }
 .empty .t { font-weight: 600; color: var(--text); margin-bottom: 4px; }

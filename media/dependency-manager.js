@@ -398,6 +398,8 @@
             running ? null : button('Dismiss', 'btn-ghost btn-sm', function () { state.job = null; state.log = ''; renderJob(); })
         ]);
         el.job.appendChild(head);
+        el.job.setAttribute('aria-busy', String(running));
+        window.DevSnipExecution(el.job, running ? 'running' : job.state === 'success' ? 'completed' : job.state === 'cancelled' ? 'cancelled' : 'failed', running ? 'Running…' : job.state === 'success' ? 'Completed' : job.state === 'cancelled' ? 'Cancelled' : 'Failed', job.finishedAt);
         if (job.command) el.job.appendChild(h('div', { className: 'job-cmd', text: '$ ' + job.command }));
         if (running) el.job.appendChild(h('div', { className: 'progress', role: 'progressbar', 'aria-label': 'Running' }));
         if (job.message) el.job.appendChild(h('div', { className: 'job-msg' }, [richText(job.message)]));
@@ -414,6 +416,8 @@
         renderStats();
         if (state.phase === 'local' || state.phase === 'done') renderProjects();
         renderJob();
+        if (state.scanState) window.DevSnipExecution(el.projects, state.scanState,
+            state.scanState === 'running' ? 'Scanning dependencies… Any results below are from the previous scan.' : state.scanState === 'failed' ? 'Failed · dependency results could not be refreshed.' : 'Completed · dependency results refreshed', state.scanFinishedAt);
     }
 
     function showBanner(message, kind) {
@@ -436,10 +440,14 @@
         var message = event.data || {};
         switch (message.type) {
             case 'scanning':
+                state.scanState = 'running';
+                state.scanFinishedAt = null;
                 if (!state.projects.length) showLoading(message.message);
                 else el.subtitle.textContent = message.message;
+                window.DevSnipExecution(el.projects, 'running', message.message || 'Scanning dependencies…');
                 break;
             case 'empty':
+                state.scanState = 'completed'; state.scanFinishedAt = Date.now();
                 state.projects = [];
                 state.phase = 'empty';
                 el.projects.textContent = '';
@@ -447,12 +455,16 @@
                 render();
                 break;
             case 'error':
+                state.scanState = 'failed'; state.scanFinishedAt = null;
                 showBanner(message.message, 'error');
+                window.DevSnipExecution(el.projects, 'failed', 'Failed · ' + message.message);
                 if (!state.projects.length) el.projects.textContent = '';
                 break;
             case 'projects':
                 state.projects = message.projects || [];
                 state.phase = message.phase;
+                state.scanState = message.phase === 'done' ? 'completed' : 'running';
+                state.scanFinishedAt = message.phase === 'done' ? Date.now() : null;
                 state.busy = Boolean(message.busy);
                 state.trusted = message.trusted !== false;
                 if (!state.trusted) showBanner('This workspace is not trusted, so installs and updates are disabled. Commands can still be copied.', 'error');
@@ -464,6 +476,7 @@
                 break;
             case 'job':
                 if (message.state === 'running' && (!state.job || state.job.state !== 'running' || state.job.step !== message.step)) state.log = '';
+                if (message.state !== 'running') message.finishedAt = Date.now();
                 state.job = message;
                 renderJob();
                 break;

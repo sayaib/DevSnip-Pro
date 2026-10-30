@@ -2829,6 +2829,8 @@ function sendCurrentRequest() {
         toast(missing.map(function (n) { return '{{' + n + '}}'; }).join(', ') + ' is not defined and will be sent as typed', 'warning');
     }
 
+    window.__lastResponse = null;
+    window.__lastResponseText = '';
     inflightTabId = tab.id;
     tab.response = { state: 'pending', startedAt: Date.now(), method: tab.req.method, url: fixed };
     setRequestState(true);
@@ -3253,6 +3255,19 @@ function renderResponse() {
             : (window.__lastResponseText || '');
     }
     renderResponseViews(response && response.state === 'ok' ? response : null);
+    var outputHost = $('responseScroll');
+    var executionBar = outputHost.querySelector(':scope > .ds-execution');
+    if (executionBar) executionBar.remove();
+    outputHost.setAttribute('aria-busy', String(!!response && response.state === 'pending'));
+    if (response && response.state === 'ok' && response.completedAt) {
+        window.DevSnipExecution(outputHost, 'completed', 'Completed · response received', response.completedAt);
+    } else if (response && response.state === 'pending') {
+        window.DevSnipExecution(outputHost, 'running', 'Sending request…');
+    } else if (response && response.state === 'error') {
+        window.DevSnipExecution(outputHost, 'failed', 'Failed · no successful response', response.completedAt);
+    } else if (response && response.state === 'cancelled') {
+        window.DevSnipExecution(outputHost, 'cancelled', 'Request cancelled');
+    }
     showRespTab(activeRespTab);
     if ($('responseSearch').value) applyResponseSearch();
 }
@@ -4226,7 +4241,7 @@ window.addEventListener('message', function (e) {
         case 'apiResponse': {
             var okTab = tabById(inflightTabId) || activeTab();
             var okResponse = {
-                state: 'ok', status: d.status, statusText: d.statusText, headers: d.headers || {}, data: d.data,
+                completedAt: Date.now(), state: 'ok', status: d.status, statusText: d.statusText, headers: d.headers || {}, data: d.data,
                 responseTime: d.responseTime, size: d.size, truncated: d.truncated, attempts: d.attempts
             };
             if (okTab) okTab.response = okResponse;
@@ -4247,7 +4262,7 @@ window.addEventListener('message', function (e) {
             var errorTab = tabById(inflightTabId) || activeTab();
             if (errorTab) {
                 errorTab.response = {
-                    state: 'error', error: d.error, title: d.title, hint: d.hint, action: d.action, code: d.code,
+                    completedAt: Date.now(), state: 'error', error: d.error, title: d.title, hint: d.hint, action: d.action, code: d.code,
                     status: d.status || 0, data: d.response, responseTime: d.responseTime, attempts: d.attempts
                 };
             }
@@ -4475,7 +4490,7 @@ window.addEventListener('message', function (e) {
 (function restoreTabs() {
     if (restoredState && Array.isArray(restoredState.tabs) && restoredState.tabs.length) {
         tabs = restoredState.tabs.map(function (saved) {
-            var tab = createTab({ req: saved.req, name: saved.name, savedId: saved.savedId, folder: saved.folder, configTab: saved.configTab, response: saved.response });
+            var tab = createTab({ req: saved.req, name: saved.name, savedId: saved.savedId, folder: saved.folder, configTab: saved.configTab });
             tab.id = saved.id || tab.id;
             tab.baseline = saved.baseline === undefined ? signature(tab) : saved.baseline;
             return tab;

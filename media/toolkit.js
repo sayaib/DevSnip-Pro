@@ -25,7 +25,11 @@
   let seq = 0;
   let running = false;
   let hasResult = false;
+  let inputRevision = 0;
+  let runRevision = 0;
+  let lastAction;
   let liveTimer;
+  let liveEnabled = false;
   let tabTrap = true;
   const controls = {};
   const rows = {};
@@ -127,10 +131,12 @@
   }
 
   function onChange(id, value) {
+    inputRevision++;
+    if (hasResult || running) execution(running ? "running" : "stale", running ? "Running for earlier inputs… Run again after completion to use your changes." : "Inputs changed · previous result. Run again to update.");
     setValue(id, value, true);
     updateVisibility();
     persist();
-    if (tool.live) {
+    if (liveEnabled) {
       clearTimeout(liveTimer);
       liveTimer = setTimeout(() => runIfReady("live"), 350);
     }
@@ -192,10 +198,12 @@
       const example = examples[Number(select.value)];
       select.value = "";
       if (!example) return;
+      ++inputRevision;
       for (const f of tool.fields) setValue(f.id, Object.prototype.hasOwnProperty.call(example.values, f.id) ? example.values[f.id] : defaults[f.id], false);
       updateVisibility();
       persist();
-      runIfReady("preset");
+      if (hasResult || running) execution(running ? "running" : "stale", "Inputs changed · results belong to earlier inputs.");
+      if (liveEnabled) runIfReady("live");
     });
     return select;
   }
@@ -214,17 +222,29 @@
       toast("warning", `Enter ${missing.map(f => f.label).join(", ")} first.`);
       return;
     }
+    if (running && !liveEnabled) return;
+    clearTimeout(liveTimer);
+    lastAction = action;
+    runRevision = inputRevision;
     const requestId = ++seq;
     setRunning(true);
+    execution("running", tool.network ? (hasResult ? "Running · waiting for response… Results below are from the previous run." : "Running · waiting for response…") : (hasResult ? "Running… Results below are from the previous run." : "Running…"));
     vscode.postMessage({ type: "run", requestId, values: visibleValues(), trigger, action });
+  }
+
+  function execution(state, text, at) {
+    window.DevSnipExecution(document.getElementById("results"), state, text, at);
   }
 
   function setRunning(on) {
     running = on;
     const results = document.getElementById("results");
-    if (results) results.classList.toggle("stale", on && hasResult);
+    if (results) {
+      results.classList.toggle("stale", on && hasResult);
+      for (const b of results.querySelectorAll("button")) b.disabled = on;
+    }
     if (runButton) {
-      runButton.disabled = on && !tool.live;
+      runButton.disabled = on && !liveEnabled;
       runButton.replaceChildren(on ? h("span", { class: "spinner", "aria-hidden": "true" }) : icon("play"), h("span", { text: on ? (tool.network ? "Waiting for response…" : "Running…") : (tool.runLabel || "Run") }));
     }
     for (const b of actionButtons) b.disabled = on;
@@ -236,9 +256,14 @@
   function renderEmpty(missing) {
     const results = document.getElementById("results");
     const needs = missing && missing.length ? missing.map(f => f.label).join(", ") : "";
+    results.classList.remove("stale");
+    results.style.minHeight = "";
+    delete results.dataset.dsReserved;
+    delete results.dataset.dsHeight;
+    results.setAttribute("aria-busy", "false");
     results.replaceChildren(h("div", { class: "empty" },
       icon("spark"),
-      h("div", { class: "t", text: needs ? `Add ${needs} to get started` : tool.live ? "Results appear here as you type" : `Press ${tool.runLabel || "Run"} to see results` }),
+      h("div", { class: "t", text: needs ? `Add ${needs} to get started` : liveEnabled ? "Live preview enabled · edit an input to preview" : `Press ${tool.runLabel || "Run"} to see results` }),
       h("div", { text: examples.length ? "Or pick one of the Presets to try it with sample data." : "Everything runs locally in VS Code unless the tool says otherwise." })));
   }
 
@@ -251,6 +276,9 @@
     if (msg.error) {
       nodes.push(h("div", { class: "msgs" }, h("div", { class: "msg " + (msg.outcome === "input_error" ? "warning" : "error") }, icon(msg.outcome === "input_error" ? "warn" : "error"), h("span", { text: msg.error }))));
       results.replaceChildren(...nodes);
+      hasResult = true;
+      execution("failed", "Failed · no new result generated.", Date.now());
+      resultActions(results);
       return;
     }
     const r = msg.result || {};
@@ -279,6 +307,19 @@
     if (nodes.length === 1) nodes.push(h("div", { class: "empty" }, h("div", { class: "t", text: "Nothing to show" })));
     results.replaceChildren(...nodes);
     hasResult = true;
+    const changed = inputRevision !== runRevision;
+    results.classList.toggle("stale", changed);
+    execution(changed ? "stale" : "completed", changed ? "Completed for earlier inputs · run again to update." : "Completed · new result", Date.now());
+    resultActions(results);
+  }
+
+  function resultActions(results) {
+    results.append(h("div", { class: "run-row" },
+      button("Run again", "play", () => runIfReady("run", lastAction), "secondary"),
+      button("Clear results", "reset", () => {
+        ++seq; clearTimeout(liveTimer); setRunning(false); hasResult = false;
+        renderEmpty(missingRequired());
+      }, "ghost")));
   }
 
   function outHead(title, sub, actions) {
@@ -375,7 +416,7 @@
         h("p", { class: "summary", text: tool.summary }),
         h("div", { class: "badges" },
           tool.network ? h("span", { class: "badge net", title: "This tool sends a request over the network when you run it" }, icon("globe"), "Uses the network") : h("span", { class: "badge", title: "Runs entirely on your machine" }, icon("lock"), "Runs locally"),
-          tool.live ? h("span", { class: "badge" }, icon("spark"), "Live results") : null)));
+          tool.live ? h("span", { class: "badge" }, icon("spark"), "Live preview available") : null)));
     const guide = tool.guide ? h("details", { class: "guide" }, h("summary", null, icon("chevron"), "How it works"), h("p", { text: tool.guide })) : null;
 
     runButton = h("button", { type: "button", class: "btn", onclick: () => runIfReady("run") });
@@ -383,9 +424,10 @@
     const mod = data.mac ? "⌘" : "Ctrl";
     const form = h("section", { class: "panel form", "aria-label": "Inputs" },
       h("div", { class: "toolbar" }, presetsSelect(), h("span", { class: "grow" }), button("Reset", "reset", () => {
+        ++seq; ++inputRevision; clearTimeout(liveTimer); setRunning(false);
         for (const f of tool.fields) setValue(f.id, defaults[f.id], false);
         updateVisibility(); persist(); hasResult = false; renderEmpty(missingRequired());
-        if (tool.live) runIfReady("live");
+        // Reset leaves the output empty, including in live preview mode.
       }, "ghost", "Reset every field to its default")),
       h("div", { class: "fields" }, tool.fields.flatMap(f => {
         const row = (rows[f.id] = buildField(f));
@@ -393,7 +435,12 @@
         const heading = (groupHeadings[f.id] = h("div", { class: "group-heading", role: "heading", "aria-level": "3", text: f.group }));
         return [heading, row];
       })),
-      h("div", { class: "run-row" }, runButton, actionButtons, h("span", { class: "hint" }, h("kbd", { text: mod }), " ", h("kbd", { text: "Enter" }), tool.live ? "  · updates as you type" : "")));
+      h("div", { class: "run-row" }, runButton, actionButtons, h("span", { class: "hint" }, h("kbd", { text: mod }), " ", h("kbd", { text: "Enter" }), tool.live ? h("label", { class: "hint" }, h("input", { type: "checkbox", "aria-label": "Live preview", onchange: event => {
+        liveEnabled = event.target.checked;
+        clearTimeout(liveTimer);
+        if (!liveEnabled && running) { ++seq; setRunning(false); hasResult = false; renderEmpty(missingRequired()); }
+        if (!hasResult && !running) renderEmpty(missingRequired());
+      } }), " Live preview (updates on input changes)") : "")));
     const results = h("section", { class: "results", id: "results", "aria-live": "polite", "aria-label": "Results" });
     app.replaceChildren(head, guide || "", h("div", { class: "layout split" }, form, results));
     updateVisibility();
@@ -409,7 +456,7 @@
     if (!msg || typeof msg !== "object") return;
     switch (msg.type) {
       case "result":
-        if (msg.requestId !== seq) return; // an older run finished late
+        if (!running || msg.requestId !== seq) return; // an older run finished late
         setRunning(false);
         renderResult(msg);
         break;
@@ -418,13 +465,15 @@
         setValue(msg.field, msg.text, false);
         onChange(msg.field, msg.text);
         toast("success", `Loaded ${msg.source}.`);
-        if (!tool.live) runIfReady("run");
+
         break;
       case "setValues":
+        ++inputRevision;
+        if (hasResult || running) execution(running ? "running" : "stale", running ? "Running for earlier inputs… Run again after completion to use your changes." : "Inputs changed · previous result. Run again to update.");
         for (const [k, v] of Object.entries(pickKnown(msg.values))) setValue(k, v, false);
         updateVisibility();
         persist();
-        if (msg.run) runIfReady(tool.live ? "live" : "run");
+        // Incoming values populate inputs; only Run or opted-in live edits execute.
         break;
       case "examples": {
         examples = msg.examples || [];
@@ -449,6 +498,5 @@
   });
 
   build();
-  const hasInitial = data.initial && Object.keys(data.initial).length > 0;
-  if (tool.live || hasInitial) runIfReady(tool.live ? "live" : "run");
+  // Always start empty, even when defaults or editor input are provided.
 })();

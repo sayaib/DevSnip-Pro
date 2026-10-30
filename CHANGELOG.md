@@ -1,5 +1,16 @@
 # Development Changelog of DevSnip Pro
 
+## 11.84.0 - Interactive tools and predictable results (2026-10-30)
+
+- Add an expandable category explorer, recently opened tools, collapsible tool groups and a persistent compact view to tool hubs.
+- Refine shared panel spacing, controls, keyboard focus states and responsive layouts while respecting VS Code appearance themes.
+- Start toolkit pages with empty results. Defaults, presets, editor imports and incoming input values no longer trigger execution automatically; supported tools offer an explicit Live preview option.
+- Stop restoring saved API responses and previous scanner results into newly opened pages. Keep explicit Run actions and execution shortcuts available.
+- Show execution status and completion timestamps across toolkit tools, API and database clients, security scanners and dependency management. Mark results stale when toolkit inputs change and ignore superseded replies, including replies received after Reset.
+- Add Run again and Clear results actions to toolkit output panels while preserving existing Copy, Open and Save actions.
+- Animate fresh output with lightweight fade and slide transitions, a subtle success highlight and smoother toolkit panel resizing. Prevent repeat renders and stale output from replaying freshness animations; honor reduced-motion preferences.
+- Add browser regression checks for manual execution, live-preview opt-in, execution states, stale replies, result animations and mobile layout.
+
 ## 11.83.3 - VS Code guideline and webview hardening (2026-10-29)
 
 - Deny local resource access by default in tool webviews. Preserve explicit media/font allow-lists and restrict the REST client, README preview and saved-snippet panels to their required capabilities.

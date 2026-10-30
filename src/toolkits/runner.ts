@@ -62,7 +62,7 @@ export async function openTool(context: vscode.ExtensionContext, tool: ToolDefin
   const mediaRoot = vscode.Uri.joinPath(context.extensionUri, "media");
   const { panel, created } = openToolPanel(`devsnip.tool.${tool.id}`, tool.title, { enableScripts: true, localResourceRoots: [mediaRoot] });
   if (!created) {
-    if (initial) safePostMessage(panel, { type: "setValues", values: initial, run: true });
+    if (initial) safePostMessage(panel, { type: "setValues", values: initial });
     return;
   }
   const ctx = createToolContext(context);

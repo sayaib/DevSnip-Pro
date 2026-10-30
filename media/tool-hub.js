@@ -11,7 +11,10 @@
     query: typeof saved.query === "string" ? saved.query : "",
     // A section requested by the command that opened the hub wins over the last saved filter.
     category: data.initialCategory || (data.categories.includes(saved.category) || saved.category === "Pinned" ? saved.category : "All"),
-    pinned: new Set(data.pinned)
+    pinned: new Set(data.pinned),
+    compact: saved.compact === true,
+    recent: Array.isArray(saved.recent) ? saved.recent.filter(c => data.tools.some(t => t.command === c)).slice(0, 6) : [],
+    collapsed: new Set(Array.isArray(saved.collapsed) ? saved.collapsed : [])
   };
 
   const el = {
@@ -115,7 +118,7 @@
     foot.append(tag, open);
 
     button.append(head, desc, foot);
-    button.addEventListener("click", () => vscode.postMessage({ command: "openTool", toolCommand: tool.command }));
+    button.addEventListener("click", () => openTool(tool.command));
 
     const pinned = state.pinned.has(tool.command);
     const pin = document.createElement("button");
@@ -135,10 +138,15 @@
   }
 
   function group(title, tools, terms, color) {
-    const section = document.createElement("section");
+    const section = document.createElement("details");
     section.className = "group";
+    section.open = terms.length > 0 || !state.collapsed.has(title);
+    section.addEventListener("toggle", () => {
+      if (section.open) state.collapsed.delete(title); else state.collapsed.add(title);
+      persist();
+    });
     section.style.setProperty("--cat", color);
-    const heading = document.createElement("h2");
+    const heading = document.createElement("summary");
     heading.className = "group-title";
     heading.append(title + " ");
     const n = document.createElement("span");
@@ -186,6 +194,8 @@
       matches.sort((a, b) => b.s - a.s || a.index - b.index);
       if (matches.length) sections.push(group(`Results`, matches.map(m => m.tool), terms, "var(--accent)"));
     } else if (state.category === "All") {
+      const recent = state.recent.map(c => data.tools.find(t => t.command === c)).filter(Boolean);
+      if (recent.length) sections.push(group("Recently opened", recent, terms, "var(--accent)"));
       const pinned = data.tools.filter(t => state.pinned.has(t.command));
       if (pinned.length) sections.push(group("Pinned", pinned, terms, "var(--vscode-charts-yellow, #cca700)"));
       for (const category of data.categories) {
@@ -243,15 +253,58 @@
       d.className = "step-text";
       d.textContent = step.text;
       b.append(t, d);
-      b.addEventListener("click", () => vscode.postMessage({ command: "openTool", toolCommand: step.command }));
+      b.addEventListener("click", () => openTool(step.command));
       item.append(b);
       list.append(item);
     }
     box.append(head, list);
   }
 
+  function persist() {
+    vscode.setState({ query: state.query, category: state.category, compact: state.compact, recent: state.recent, collapsed: [...state.collapsed] });
+  }
+
+  function openTool(command) {
+    state.recent = [command, ...state.recent.filter(c => c !== command)].slice(0, 6);
+    persist();
+    vscode.postMessage({ command: "openTool", toolCommand: command });
+  }
+
+  function renderOverview() {
+    const overview = document.getElementById("overview");
+    overview.hidden = !!state.query.trim() || state.category !== "All";
+    overview.replaceChildren(...data.categories.map(category => {
+      const count = data.tools.filter(t => t.category === category).length;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "category-preview";
+      b.style.setProperty("--cat", colorOf(category));
+      const label = document.createElement("span");
+      label.textContent = category;
+      const value = document.createElement("strong");
+      value.textContent = String(count);
+      const track = document.createElement("span");
+      track.className = "category-track";
+      const fill = document.createElement("span");
+      fill.style.width = (count / Math.max(1, data.tools.length) * 100) + "%";
+      track.append(fill);
+      b.append(label, value, track);
+      b.setAttribute("aria-label", `Explore ${category}, ${count} tools`);
+      b.addEventListener("click", () => { state.category = category; update(); });
+      return b;
+    }));
+  }
+
+  document.getElementById("density").addEventListener("click", () => {
+    state.compact = !state.compact;
+    update();
+  });
+
   function update() {
-    vscode.setState({ query: state.query, category: state.category });
+    persist();
+    document.getElementById("results").classList.toggle("compact", state.compact);
+    document.getElementById("density").setAttribute("aria-pressed", String(state.compact));
+    renderOverview();
     renderChips();
     renderJourney();
     render();

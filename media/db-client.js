@@ -1999,6 +1999,7 @@
       t.running = false;
       t.cancelling = false;
       t.lastElapsed = Date.now() - t.runStarted;
+      t.finishedAt = Date.now();
       paintEditor(t);
       updateQueryBar(t);
       renderQueryResult(t);
@@ -2031,6 +2032,8 @@
   function renderQueryResult(t) {
     var box = t.ui.result;
     clear(box);
+    box.setAttribute("aria-busy", String(!!t.running));
+    if (t.finishedAt && !t.running) window.DevSnipExecution(box, t.error ? "failed" : t.cancelled ? "cancelled" : "completed", t.error ? "Failed · no new result" : t.cancelled ? "Cancelled" : "Completed · query result", t.finishedAt);
     var c = conn(t.connId);
     if (t.running) {
       box.append(h("div", { class: "qstatus" }, icon("loading", "codicon-modifier-spin"), t.cancelling ? "Cancelling…" : "Running…", h("span", { class: "run-elapsed", text: fmtElapsed(Date.now() - t.runStarted) }),

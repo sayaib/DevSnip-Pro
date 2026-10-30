@@ -90,7 +90,7 @@ async function openTool(context, tool, initial) {
     const { panel, created } = (0, webview_ui_1.openToolPanel)(`devsnip.tool.${tool.id}`, tool.title, { enableScripts: true, localResourceRoots: [mediaRoot] });
     if (!created) {
         if (initial)
-            (0, webview_ui_1.safePostMessage)(panel, { type: "setValues", values: initial, run: true });
+            (0, webview_ui_1.safePostMessage)(panel, { type: "setValues", values: initial });
         return;
     }
     const ctx = createToolContext(context);

@@ -550,6 +550,15 @@ function selectTab(scope) {
 function setBusy(scope, busy, message) {
   var config = SCOPES[scope];
   state[scope].busy = busy;
+  var output = el(config.results);
+  if (output) {
+    output.inert = busy;
+    output.setAttribute('aria-busy', String(busy));
+    if (busy) {
+      state[scope].execution = { status: 'running', text: state[scope].report ? 'Running… Results below are from the previous scan.' : 'Running…' };
+      window.DevSnipExecution(output, 'running', state[scope].execution.text);
+    }
+  }
   var runButton = el(config.run);
   if (runButton) runButton.disabled = busy;
   if (config.cancel) { var cancelButton = el(config.cancel); if (cancelButton) cancelButton.disabled = !busy; }
@@ -662,6 +671,7 @@ function render(scope) {
   var container = el(SCOPES[scope].results);
   var current = state[scope];
   container.innerHTML = '';
+  if (current.execution) window.DevSnipExecution(container, current.execution.status, current.execution.text, current.execution.at);
   if (!current.report) return;
 
   var report = current.report;
@@ -907,6 +917,7 @@ window.addEventListener('message', function (event) {
     state[scope].filter = 'all';
     setBusy(scope, false);
     showBanner(scope, '', '');
+    state[scope].execution = { status: message.cancelled ? 'cancelled' : 'completed', text: message.cancelled ? 'Cancelled · partial results' : 'Completed · new scan results', at: Date.now() };
     render(scope);
     var summary = message.report.summary;
     toast(SCOPES[scope].label + ': ' + summary.failed + ' failed, ' + summary.warnings + ' warning, ' + summary.passed + ' passed.');
@@ -915,6 +926,8 @@ window.addEventListener('message', function (event) {
   if (message.type === 'error' && SCOPES[scope]) {
     setBusy(scope, false);
     showBanner(scope, 'error', message.message);
+    state[scope].execution = { status: 'failed', text: 'Failed · no new result. Any results below are from the previous scan.', at: Date.now() };
+    render(scope);
     return;
   }
   if (message.type === 'toast') { toast(message.message); }
@@ -1117,6 +1130,7 @@ function registerSecurityToolsCommands(context) {
             send(panel, {
                 type: "result",
                 scope: "endpoint",
+                cancelled: cancellation.token.isCancellationRequested,
                 report: { ...report, checks: toWire(report.checks) }
             });
         }
@@ -1157,7 +1171,7 @@ function registerSecurityToolsCommands(context) {
             const folder = vscode.workspace.workspaceFolders[0].name;
             const report = buildReport(folder, checks, started);
             scans.set(scope, { report, cancel: undefined });
-            send(panel, { type: "result", scope, report: { ...report, checks: toWire(report.checks, resources) } });
+            send(panel, { type: "result", scope, cancelled: cancellation.token.isCancellationRequested, report: { ...report, checks: toWire(report.checks, resources) } });
         }
         catch (error) {
             send(panel, { type: "error", scope, message: error instanceof Error ? error.message : String(error) });

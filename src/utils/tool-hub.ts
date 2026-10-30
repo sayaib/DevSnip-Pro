@@ -161,13 +161,17 @@ export function renderToolHub(config: HubConfig, options: { cspSource: string; s
     <p class="hub-count" id="hubCount">${config.tools.length} tools · ${categoryCount} categories</p>
   </header>
   <div class="hub-toolbar" role="search">
+    <div class="toolbar-top">
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true">${HUB_ICONS.search}</svg>
       <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="${escapeHtml(config.searchPlaceholder ?? "Search tools")}" aria-label="Search tools">
       <kbd aria-hidden="true">/</kbd>
     </label>
+    <button type="button" id="density" class="btn btn-secondary" aria-pressed="false">Compact view</button>
+    </div>
     <div class="chips" id="chips" role="group" aria-label="Filter by category"></div>
   </div>
+  <details class="category-explorer"><summary>Explore ${categoryCount} categories <span>Find the right tool for your workflow</span></summary><section id="overview" class="overview" aria-label="Explore categories"></section></details>
   <p class="sr-only" id="status" role="status" aria-live="polite"></p>
   <section class="journey" id="journey" hidden aria-label="Start here"></section>
   <main id="results" class="results"></main>
@@ -245,9 +249,35 @@ body {
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .hub { max-width: 1180px; margin: 0 auto; padding: 28px 28px 48px; }
 
+.category-explorer { margin-top: 16px; border: 1px solid var(--card-line); border-radius: 12px; padding: 14px; }
+.category-explorer > summary { cursor: pointer; font-weight: 600; }
+.category-explorer > summary span { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin: 4px 0 0 16px; }
+.category-explorer:has(.overview[hidden]) { display: none; }
+.category-explorer[open] > summary { margin-bottom: 16px; }
+.overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; margin-bottom: 24px; }
+.overview[hidden] { display: none; }
+.category-preview { text-align: left; color: var(--text); background: var(--card-bg); border: 1px solid var(--card-line); border-radius: 12px; padding: 16px; font: inherit; cursor: pointer; transition: border-color .18s, background .18s; }
+.category-preview:hover { border-color: var(--cat); background: var(--card-bg-hover); }
+.category-preview strong { display: block; font-size: 28px; letter-spacing: -.04em; margin: 8px 0; font-variant-numeric: tabular-nums; }
+.category-track { display: block; height: 4px; background: var(--card-line); border-radius: 8px; overflow: hidden; }
+.category-track > span { display: block; height: 100%; background: var(--cat); border-radius: inherit; }
+.toolbar-top { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.toolbar-top .search { flex: 1; }
+#density[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.group > summary { cursor: pointer; padding: 8px 0; list-style: none; }
+.group > summary::after { content: "−"; margin-left: auto; font-size: 16px; }
+.group:not([open]) > summary::after { content: "+"; }
+.group > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.compact .grid { grid-template-columns: 1fr; gap: 6px; }
+.compact .card { min-height: 0; grid-template-columns: minmax(180px, 1fr) 2fr auto; grid-template-rows: auto; align-items: center; padding: 12px 44px 12px 14px; }
+.compact .card-head { padding: 0; }
+.compact .card-desc { -webkit-line-clamp: 1; }
+.compact .pin { top: 16px; }
+.compact .open { opacity: 1; transform: none; }
+@media (max-width: 640px) { .compact .card { grid-template-columns: 1fr; } .compact .card-desc, .compact .card-foot { display: none; } .toolbar-top { flex-wrap: wrap; } }
 /* Header */
 .hub-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
-.hub-header h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+.hub-header h1 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 650; letter-spacing: -.01em; }
 .hub-subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 .hub-count { margin: 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 

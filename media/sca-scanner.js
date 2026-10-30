@@ -349,6 +349,15 @@
 
   function renderContent() {
     clear(slots.content);
+    slots.content.setAttribute("aria-busy", String(!!model.running));
+    if (model.running) {
+      window.DevSnipExecution(slots.content, "running", "Scanning… Previous results are hidden until this scan finishes.");
+      return;
+    }
+    if (model.result) window.DevSnipExecution(slots.content,
+      model.error ? "failed" : model.cancelled || model.result.cancelled || model.result.status === "cancelled" ? "cancelled" : "completed",
+      model.error ? "Failed · results below are from the previous scan." : model.cancelled ? "Cancelled · results below are from the previous scan." : model.result.cancelled || model.result.status === "cancelled" ? "Cancelled · partial results" : "Completed · scan results",
+      model.result.finishedAt);
     var r = model.result;
     if (!r) { renderEmpty(); return; }
     if (r.scan.summary.files === 0) {
@@ -878,7 +887,7 @@
         model.workspace = m.workspace || model.workspace;
         model.settings = m.settings || {};
         model.projects = m.projects || null;
-        model.result = m.result || null;
+        model.result = null; // A newly loaded page waits for a user-requested scan.
         model.running = m.running || null;
         model.progress = m.progress || null;
         model.error = m.error || null;
@@ -905,7 +914,7 @@
         model.error = null;
         model.cancelled = false;
         renderHeader(); renderProjects(); renderStatus();
-        if (!model.result) renderContent();
+        renderContent();
         return;
       case "progress":
         model.progress = m.progress;

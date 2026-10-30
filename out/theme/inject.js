@@ -12,8 +12,47 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.injectTheme = exports.extendCsp = exports.themeMessage = exports.THEME_MESSAGE = void 0;
+const execution_1 = require("./execution");
 const random_1 = require("../platform/random");
 const themes_1 = require("./themes");
+/** Shared interaction and layout treatment, scoped to existing panel components. */
+const EXPERIENCE_CSS = `
+:root { --ds-control-radius: 8px; }
+:where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #007fd4); outline-offset: 3px;
+}
+:where(button, input, select, textarea) { font: inherit; }
+:where(button):disabled { cursor: not-allowed; opacity: .5; }
+body .tool-body { width: 100%; padding: clamp(16px, 3vw, 32px); }
+body .section { border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+body .tool-header { flex-wrap: wrap; row-gap: 6px; }
+body .tool-header h1 { letter-spacing: -.025em; white-space: normal; }
+body .btn { min-height: 32px; border-radius: var(--ds-control-radius); }
+:where(.input, textarea, select, input[type="text"], input[type="number"]) { border-radius: var(--ds-control-radius); }
+body .panels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:where(.panels > *, .layout > *) { min-width: 0; }
+:where(.stat) { border-radius: 12px; font-variant-numeric: tabular-nums; }
+:where(.stat .v) { letter-spacing: -.035em; }
+body .result-block { overflow-wrap: anywhere; word-break: normal; }
+:where(.out, .section) { transition: border-color .18s ease; }
+:where(.out, .section):focus-within { border-color: var(--vscode-focusBorder, #007fd4); }
+@media (hover: hover) {
+  :where(.btn:not(:disabled)):hover { filter: brightness(1.08); }
+  :where(.btn:not(:disabled)):active { transform: translateY(1px); }
+}
+@media (max-width: 600px) {
+  body .panels { grid-template-columns: minmax(0, 1fr); }
+  body .tool-header { padding: 14px 16px; }
+  :where(.btn-row) { gap: 8px; }
+  :where(.toast-container) { max-width: calc(100vw - 24px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  :where(.card, .section, .stat, .category-preview) { border: 1px solid CanvasText; }
+}
+`;
 exports.THEME_MESSAGE = "devsnip:theme";
 function themeMessage(themeId, surface) {
     const id = (0, themes_1.validThemeId)(themeId);
@@ -109,7 +148,8 @@ function injectTheme(html, themeId, surface = "panel") {
     const state = JSON.stringify({ id: message.id, kind: message.kind }).replace(/</g, "\\u003c");
     const block = `<style id="devsnip-theme" nonce="${n}">${message.rules.join("\n")}</style>` +
         `<style id="devsnip-theme-motion" nonce="${n}">${themes_1.TRANSITION_RULES.join("\n")}</style>` +
-        `<script nonce="${n}">${RUNTIME.replace("__STATE__", () => state)}</script>`;
+        `<style id="devsnip-experience" nonce="${n}">${EXPERIENCE_CSS}${execution_1.EXECUTION_CSS}</style>` +
+        `<script nonce="${n}">${execution_1.EXECUTION_RUNTIME}${RUNTIME.replace("__STATE__", () => state)}</script>`;
     // Function replacements, so a "$" in the injected text is never read as a replacement pattern.
     if (/<\/head>/i.test(out))
         out = out.replace(/<\/head>/i, () => `${block}</head>`);
