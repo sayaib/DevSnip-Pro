@@ -47,6 +47,8 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  { version: "11.85.0", items: [{ title: "Send a bug report, feature idea or feedback from the Milestones & Points header", command: "milestoneTracker" }] },
+  { version: "11.84.0", items: [{ title: "Tool pages now start empty, run only when you ask and show when results are out of date", command: "advancedToolsHub" }] },
   { version: "11.83.3", items: [{ title: "Hardened webview resource permissions and improved VS Code guideline alignment", command: "advancedToolsHub" }] },
   { version: "11.83.2", items: [{ title: "Click security findings to open the source file and highlight the reported line", command: "securityHub" }] },
   { version: "11.83.1", items: [{ title: "Read-only repository support for github1s and gitlab1s: copy/open generated output and edit debug logs in scratch documents", command: "advancedToolsHub" }] },

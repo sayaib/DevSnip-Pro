@@ -8,6 +8,7 @@ import { TrackerView, buildTrackerView, levelIndexFor, toolNamesFromManifest } f
 import { currentThemeId, endLockedPreview, lockedPreviewTheme, onDidChangeLockedPreview, onDidChangeTheme, previewLockedTheme, setTheme, setWebviewHtml } from "../theme/service";
 import { swatches, THEMES } from "../theme/themes";
 import { profileCss } from "../services/profile-style";
+import { FEEDBACK_FORM, submitFeedback } from "../feedback";
 import {
     CHECKIN_CHEST_EVERY, CHECKIN_CHEST_POINTS, LUCKY_CHANCE, LUCKY_POINTS, QUIZ_CORRECT_POINTS, QUIZ_TRY_POINTS, SPRINT_MAX_SCORE,
     TIP_POINTS, WHEEL, WHEEL_FALLBACK_POINTS, WheelSegment, eventForWeek, findEvent, quizForDate, spinWheel, sprintPoints, tipForDate
@@ -1523,7 +1524,7 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
         const pushState = () => {
             if (!ready) return;
             try {
-                post({ type: 'state', view: buildMilestoneView(context) });
+                post({ type: 'state', view: { ...buildMilestoneView(context), feedback: FEEDBACK_FORM } });
             } catch (error) {
                 post({ type: 'error', message: `Could not load your progress: ${error instanceof Error ? error.message : String(error)}` });
             }
@@ -1707,6 +1708,9 @@ export function registerMilestoneTrackerCommand(context: vscode.ExtensionContext
                         case 'endPreview':
                             await endLockedPreview('ended');
                             break;
+                        case 'submitFeedback':
+                            post({ type: 'result', action, ...await submitFeedback(context, message.form) });
+                            break;
                         case 'openSpend':
                             await executeQueuedCommand(`${COMMAND_PREFIX}premiumStatus`);
                             break;
@@ -1768,6 +1772,7 @@ export function getMilestoneTrackerHtml(cspSource: string, scriptSrc: string, _c
             </div>
         </div>
         <div class="top-actions">
+            <button class="xbtn" id="feedbackBtn" type="button" aria-haspopup="dialog" title="Report a bug, suggest a feature or send feedback">${icon("M4 5h16v11H10l-6 4z")}<span>Feedback</span></button>
             <button class="xbtn primary" id="spendBtn" type="button">${icon("M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2zM16 14h.01")}<span>Spend points</span></button>
             <div class="more-wrap">
                 <button class="xbtn icon" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" aria-label="More actions" title="More actions">${icon("M5 12h.01M12 12h.01M19 12h.01").replace('class="ico"', 'class="ico dots-ico"')}</button>
@@ -2177,6 +2182,20 @@ ${profileCss({ medal: [".ring-medal", ".pv-medal"], banner: [".hero", ".pv-card"
 .rank-redeem { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 .rank-redeem .xbtn { height: 36px; padding: 0 18px; font-size: 13.5px; box-shadow: 0 4px 14px color-mix(in srgb, var(--gold) 30%, transparent); }
 .rank-redeem .xbtn .ico { width: 17px; height: 17px; }
+.feedback-sheet { max-width: 560px; }
+.feedback-form { display: grid; gap: 14px; padding: 18px 20px 20px; }
+.feedback-field { display: grid; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--fg-0); }
+.feedback-field .optional { font-weight: 400; color: var(--fg-1); }
+.feedback-form input, .feedback-form select, .feedback-form textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg-0); font: inherit; font-size: 13px; font-weight: 400; }
+.feedback-form input, .feedback-form select { height: 34px; padding-block: 0; }
+.feedback-form textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
+.feedback-form option { background: var(--bg-1); color: var(--fg-0); }
+.feedback-form :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.feedback-form [aria-invalid="true"] { border-color: var(--danger); }
+.feedback-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--fg-1); }
+.feedback-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+.feedback-error[hidden] { display: none; }
+.feedback-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rank-redeem-sub { font-size: 12px; color: var(--fg-1); }
 .rank-redeem-sub strong { color: var(--gold-text); font-weight: 700; }
 .redeem { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding: 28px 20px; overflow-y: auto; background: color-mix(in srgb, var(--bg-0) 55%, rgba(0,0,0,.5)); backdrop-filter: blur(3px); animation: fade .16s ease-out; }

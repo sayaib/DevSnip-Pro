@@ -213,6 +213,7 @@ Using DevSnip Pro earns points that move you from Bronze to Grandmaster. No lice
 - **Play:** the **Redeem** button on your rank card opens a daily spin, a dev challenge, the Bit Sprint mini-game, a weekly event and a streak check-in chest.
 - **Spend:** advanced REST tools marked † cost 8–35 points per run, charged **only after a run succeeds**. Points also unlock themes, streak freezes, and profile items — avatars, titles, badge frames, banners and celebration effects.
 - **Quieter notifications:** set `devsnip.rewards.notifications` to `levelsOnly` or `off`.
+- **Tell us what you think:** press **Feedback** at the top of the page to send a bug report, feature idea or general feedback.
 
 Free without points: the full REST and GraphQL workflow, history, environments, unlimited collections, cURL, code generation, JSON and JWT tools, and single AI requests with streaming and schema validation (up to 25 AI requests, 25 prompt runs and 10 streamed responses a day).
 
@@ -266,7 +267,7 @@ In the REST API Client, switch **HTTP** to **GraphQL**, set the method to `POST`
 No. Requests are built in a form and saved to collections.
 
 **Does it send my code anywhere?**
-No. Tools run locally, and network requests go only to the URLs and databases you enter. See [Privacy](#privacy-and-analytics).
+No. Tools run locally, and network requests go only to the URLs and databases you enter. The Feedback form sends what you type, plus your version numbers and operating system, and only when you press Send. See [Privacy](#privacy-and-analytics).
 
 **Does it work offline?**
 Yes, except for things that need a network by definition: API requests, database connections, the endpoint scan, and AI provider calls.
@@ -306,7 +307,7 @@ Remote and WSL work. vscode.dev isn't supported because several tools use Node A
 
 ## Privacy and analytics
 
-- **No backend, no account.** Requests go only to the URLs and databases you enter.
+- **No account.** Requests go only to the URLs and databases you enter. The one exception is the **Feedback** form in Milestones & Points: when you press Send, your message, optional email, DevSnip Pro and VS Code versions and operating system are saved to the DevSnip Pro feedback database. Nothing is sent until you press Send.
 - **Your secrets stay put.** API keys you type aren't written to history or disk, credential-looking URL values are redacted from history, and connection strings stay in your OS keychain.
 - **Anonymous analytics only:** which DevSnip Pro tools you open and use, a once-a-day "active" ping, and the country PostHog derives from the connection. Each computer gets one anonymous ID (a salted hash, so it can't be traced back). Never code, file contents or names, paths, keystrokes, anything you type into a tool, URLs, credentials or anything that identifies you.
 - **You're in control:** nothing is sent unless VS Code's `telemetry.telemetryLevel` is `all`. Set `devsnip.analytics.enabled` to `false` to opt out, or `devsnip.analytics.debug` to see every event. Full list: [docs/ANALYTICS.md](docs/ANALYTICS.md).
@@ -315,7 +316,7 @@ Of the toolbox tools, only the LLM API Tester uses the network, and it's marked 
 
 ## Support & feedback
 
-- 🐛 [Report a bug or request a feature](https://github.com/sayaib/DevSnip-Pro/issues/new/choose)
+- 🐛 [Report a bug or request a feature](https://github.com/sayaib/DevSnip-Pro/issues/new/choose), or press **Feedback** in Milestones & Points
 - 🌐 [devsnip.pro](https://devsnip.pro): [documentation](https://devsnip.pro/docs), [guides](https://devsnip.pro/guides) and [feature overviews](https://devsnip.pro/features)
 - 📖 [Guides](docs/guides/README.md) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 - ⭐ A rating or review on the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console) helps other developers find DevSnip Pro.

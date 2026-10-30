@@ -53,7 +53,8 @@
         play: 'M7 4.5v15l12-7.5z',
         clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
         refresh: 'M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4',
-        x: 'M6 6l12 12M18 6 6 18'
+        x: 'M6 6l12 12M18 6 6 18',
+        chat: 'M4 5h16v11H10l-6 4z'
     };
     // Category colours, all from theme tokens.
     var TINT = { Core: 'var(--info)', Snippets: 'var(--purple)', Activity: 'var(--streak)', Security: 'var(--success)', AI: 'var(--purple)', Milestone: 'var(--gold)', Discovery: 'var(--accent)', Quests: 'var(--accent)', Learning: 'var(--info)', Events: 'var(--streak)' };
@@ -70,6 +71,10 @@
         shopShow: saved.shopShow || 'all',
         redeemOpen: saved.redeemOpen === true,
         redeemView: saved.redeemView || 'play',
+        feedbackOpen: saved.feedbackOpen === true,
+        // Kept in the page state: the webview reloads when you switch tabs, say to copy an error message.
+        feedbackDraft: saved.feedbackDraft || {},
+        feedbackReturn: null,
         spinning: false,
         wheelAngle: null,
         // Play cards keep the order they had when the sheet opened, so nothing jumps after you play.
@@ -159,7 +164,7 @@
     }
 
     function persist() {
-        vscode.setState({ tab: ui.tab, filter: ui.filter, shopKind: ui.shopKind, shopShow: ui.shopShow, redeemOpen: ui.redeemOpen, redeemView: ui.redeemView });
+        vscode.setState({ tab: ui.tab, filter: ui.filter, shopKind: ui.shopKind, shopShow: ui.shopShow, redeemOpen: ui.redeemOpen, redeemView: ui.redeemView, feedbackOpen: ui.feedbackOpen, feedbackDraft: ui.feedbackDraft });
     }
 
     function toast(message, kind) {
@@ -228,17 +233,7 @@
                 els.redeemBody
             ])
         ]);
-        els.redeem.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') { event.preventDefault(); closeRedeem(); return; }
-            if (event.key !== 'Tab') return;
-            // Keep keyboard focus inside the sheet while it is open.
-            var focusable = Array.prototype.slice.call(els.redeem.querySelectorAll('button:not([disabled])'));
-            if (!focusable.length) return;
-            var first = focusable[0];
-            var last = focusable[focusable.length - 1];
-            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-        });
+        els.redeem.addEventListener('keydown', function (event) { sheetKeys(event, els.redeem, closeRedeem); });
         document.body.appendChild(els.redeem);
         replace(app, [
             els.hero,
@@ -255,6 +250,159 @@
         ui.built = true;
         selectTab(ui.tab, false);
         if (ui.redeemOpen) openRedeem(false);
+        else if (ui.feedbackOpen) openFeedback(false);
+    }
+
+    /** Esc closes a sheet, and keyboard focus stays inside it while it is open. */
+    function sheetKeys(event, sheet, close) {
+        if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+        if (event.key !== 'Tab') return;
+        var focusable = Array.prototype.slice.call(sheet.querySelectorAll('button:not([disabled]), input, select, textarea'));
+        if (!focusable.length) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+
+    // ------------------------------------------------------------------
+    // Feedback: a sheet like Redeem, opened from the button in the page header. The extension saves the message.
+    // ------------------------------------------------------------------
+
+    function feedbackRow(label, control, optional) {
+        return h('label', { className: 'feedback-field' }, [
+            h('span', {}, [label, optional ? h('span', { className: 'optional', text: ' (optional)' }) : null]),
+            control
+        ]);
+    }
+
+    function feedbackHints() {
+        var category = ui.view.feedback.categories.find(function (item) { return item.id === els.fbCategory.value; });
+        if (!category) return;
+        els.fbTitle.placeholder = category.titleHint;
+        els.fbMessage.placeholder = category.messageHint;
+    }
+
+    function saveFeedbackDraft() {
+        ui.feedbackDraft = feedbackValues();
+        persist();
+    }
+
+    function feedbackValues() {
+        return { category: els.fbCategory.value, title: els.fbTitle.value, message: els.fbMessage.value, email: els.fbEmail.value };
+    }
+
+    function feedbackError(message, field) {
+        [els.fbCategory, els.fbTitle, els.fbMessage, els.fbEmail].forEach(function (control) { control.removeAttribute('aria-invalid'); });
+        els.fbError.textContent = message || '';
+        els.fbError.hidden = !message;
+        var control = field && { category: els.fbCategory, title: els.fbTitle, message: els.fbMessage, email: els.fbEmail }[field];
+        if (control) { control.setAttribute('aria-invalid', 'true'); control.focus(); }
+    }
+
+    function buildFeedback() {
+        var form = ui.view.feedback;
+        var draft = ui.feedbackDraft;
+        els.fbCategory = h('select', { id: 'fbCategory', onchange: function () { feedbackHints(); saveFeedbackDraft(); } }, form.categories.map(function (item) {
+            return h('option', { value: item.id, text: item.label });
+        }));
+        if (form.categories.some(function (item) { return item.id === draft.category; })) els.fbCategory.value = draft.category;
+        els.fbTitle = h('input', { type: 'text', id: 'fbTitle', maxlength: form.limits.titleMax, autocomplete: 'off', required: true });
+        els.fbTitle.value = draft.title || '';
+        els.fbMessage = h('textarea', { id: 'fbMessage', maxlength: form.limits.messageMax, required: true });
+        els.fbMessage.value = draft.message || '';
+        els.fbEmail = h('input', { type: 'email', id: 'fbEmail', maxlength: form.limits.emailMax, autocomplete: 'email', placeholder: 'So we can reply' });
+        els.fbEmail.value = draft.email || '';
+        els.fbError = h('p', { className: 'feedback-error', role: 'alert', hidden: true });
+        els.fbSend = h('button', { type: 'submit', className: 'xbtn primary', id: 'fbSend', text: 'Send' });
+        els.feedback = h('div', { className: 'redeem', id: 'feedback', hidden: true, onclick: function (event) { if (event.target === els.feedback) closeFeedback(); } }, [
+            h('section', { className: 'redeem-sheet feedback-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'feedbackTitle' }, [
+                h('header', { className: 'redeem-head' }, [
+                    h('span', { className: 'redeem-icon', 'aria-hidden': 'true' }, [icon('chat')]),
+                    h('div', { className: 'redeem-heading' }, [
+                        h('h2', { id: 'feedbackTitle', text: 'Send feedback' }),
+                        h('p', { text: 'Report a bug, suggest a feature or tell us what you think.' })
+                    ]),
+                    h('button', { type: 'button', className: 'xbtn icon', id: 'feedbackClose', 'aria-label': 'Close', title: 'Close (Esc)', onclick: function () { closeFeedback(); } }, [icon('x')])
+                ]),
+                h('form', {
+                    className: 'feedback-form', novalidate: true,
+                    oninput: saveFeedbackDraft,
+                    onsubmit: function (event) {
+                        event.preventDefault();
+                        if (els.fbSend.disabled) return;
+                        feedbackError('');
+                        els.fbSend.disabled = true;
+                        els.fbSend.textContent = 'Sending…';
+                        vscode.postMessage({ command: 'submitFeedback', form: feedbackValues() });
+                    }
+                }, [
+                    feedbackRow('Type', els.fbCategory),
+                    feedbackRow('Title', els.fbTitle),
+                    feedbackRow('Details', els.fbMessage),
+                    feedbackRow('Email', els.fbEmail, true),
+                    h('p', { className: 'feedback-note', text: 'Sent with your DevSnip Pro version, VS Code version and operating system. Please leave out secrets and private code.' }),
+                    els.fbError,
+                    h('div', { className: 'feedback-actions' }, [
+                        h('button', { type: 'button', className: 'xbtn', text: 'Cancel', onclick: function () { closeFeedback(); } }),
+                        els.fbSend
+                    ])
+                ])
+            ])
+        ]);
+        els.feedback.addEventListener('keydown', function (event) { sheetKeys(event, els.feedback, closeFeedback); });
+        document.body.appendChild(els.feedback);
+        feedbackHints();
+    }
+
+    function openFeedback(focus) {
+        if (!ui.view) return;
+        if (!els.feedback) buildFeedback();
+        if (els.feedback.hidden && focus !== false) ui.feedbackReturn = document.activeElement;
+        els.feedback.hidden = false;
+        document.body.classList.add('redeem-open');
+        ui.feedbackOpen = true;
+        persist();
+        if (focus !== false) els.fbCategory.focus();
+    }
+
+    function closeFeedback() {
+        if (!els.feedback || els.feedback.hidden) return;
+        els.feedback.hidden = true;
+        document.body.classList.remove('redeem-open');
+        ui.feedbackOpen = false;
+        persist();
+        var back = ui.feedbackReturn && document.contains(ui.feedbackReturn) ? ui.feedbackReturn : document.getElementById('feedbackBtn');
+        ui.feedbackReturn = null;
+        if (back) back.focus();
+    }
+
+    function feedbackDone(result) {
+        // The page can reload while a message is sending, so the form may not exist yet.
+        var open = els.feedback && !els.feedback.hidden;
+        if (els.feedback) {
+            els.fbSend.disabled = false;
+            els.fbSend.textContent = 'Send';
+        }
+        if (!result.ok) {
+            if (!open) { toast(result.message, 'info'); return; }
+            feedbackError(result.message, result.field);
+            // Send was disabled while waiting, which drops focus out of the sheet.
+            if (!result.field) els.fbSend.focus();
+            return;
+        }
+        ui.feedbackDraft = {};
+        if (els.feedback) {
+            els.fbCategory.selectedIndex = 0;
+            els.fbTitle.value = '';
+            els.fbMessage.value = '';
+            els.fbEmail.value = '';
+            feedbackError('');
+            feedbackHints();
+        }
+        closeFeedback();
+        persist();
+        toast(result.message, 'success');
     }
 
     function openRedeem(focus) {
@@ -1916,6 +2064,7 @@
         els.tabsRow.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
     });
     document.getElementById('spendBtn').addEventListener('click', function () { vscode.postMessage({ command: 'openSpend' }); });
+    document.getElementById('feedbackBtn').addEventListener('click', function () { openFeedback(); });
     document.getElementById('resetBtn').addEventListener('click', function (event) {
         closeMenu(false);
         event.currentTarget.disabled = true;
@@ -1956,10 +2105,13 @@
         if (message.type === 'state' && message.view) {
             render(message.view);
         } else if (message.type === 'openRedeem') {
+            closeFeedback();
             ui.redeemView = 'play';
             ui.keys.rewards = null;
             if (ui.view) renderRewards(ui.view);
             openRedeem();
+        } else if (message.type === 'result' && message.action === 'submitFeedback') {
+            feedbackDone(message);
         } else if (message.type === 'result' && message.action === 'spinWheel') {
             var finishSpin = function () {
                 ui.spinning = false;

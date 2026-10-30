@@ -1,5 +1,12 @@
 # Development Changelog of DevSnip Pro
 
+## 11.85.0 - Send feedback from Milestones & Points (2026-10-31)
+
+- Add a Feedback button to the Milestones & Points header. The form offers Bug report, Feature addition and Feedback, keeps your draft if the page reloads, and saves to a write-only Supabase table only when you press Send. See [Privacy](README.md#privacy-and-analytics) for what is sent.
+- Show "We received your message and will get back to you shortly" after a successful send. Keep the message in the form and explain what happened if sending fails.
+- Add the `write-feedback-config.js` build step, which accepts only a publishable Supabase key, and the database migrations in `supabase/migrations`.
+- Add release highlights for 11.84.0 and 11.85.0 to What's New.
+
 ## 11.84.0 - Interactive tools and predictable results (2026-10-30)
 
 - Add an expandable category explorer, recently opened tools, collapsible tool groups and a persistent compact view to tool hubs.

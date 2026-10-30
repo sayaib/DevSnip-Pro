@@ -3,6 +3,7 @@ access_token.txt
 .vscode-test
 .tsbuildinfo
 analytics.config.json
+feedback.config.json
 .env.posthog
 
 .vscode-test-web/

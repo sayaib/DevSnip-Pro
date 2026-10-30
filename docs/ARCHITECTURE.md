@@ -1,6 +1,6 @@
 # DevSnip Pro architecture
 
-DevSnip Pro is a single VS Code extension written in TypeScript. It has no backend: every feature runs in the extension host or in a webview, and network traffic goes only to endpoints the user enters, to the AI provider they choose, and to the opt-out analytics described in [ANALYTICS.md](ANALYTICS.md).
+DevSnip Pro is a single VS Code extension written in TypeScript. Every feature runs in the extension host or in a webview, and network traffic goes only to endpoints the user enters, to the AI provider they choose, to the opt-out analytics described in [ANALYTICS.md](ANALYTICS.md), and, when the user presses Send in the Feedback form, to a write-only Supabase table (`src/feedback`, `supabase/migrations`).
 
 ```
 src/

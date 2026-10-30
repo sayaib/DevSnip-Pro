@@ -30,6 +30,7 @@ async function main() {
     require("./markdown.unit");
     require("./webview-ui.unit");
     require("./milestone.unit");
+    require("./feedback.unit");
     require("./rewards.unit");
     require("./snippets.unit");
     require("./analysis.unit");

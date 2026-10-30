@@ -23,6 +23,7 @@ vsc-extension-quickstart.md
 .gitignore
 .tsbuildinfo
 scripts/**
+supabase/**
 docs/**
 .env.posthog*
 
