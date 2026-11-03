@@ -1,3 +1,4 @@
+import { sidebarUpdate } from "../../updates/sidebar";
 import * as assert from "assert";
 import * as fs from "fs";
 import * as path from "path";
@@ -348,7 +349,7 @@ suite("update manager", () => {
   test("contributes its settings and a Desktop-only command", () => {
     const properties = manifest.contributes.configuration.properties;
     assert.strictEqual(properties["devsnip.updates.notifications"].default, true);
-    assert.deepStrictEqual(properties["devsnip.updates.checkFrequency"].enum, ["daily", "weekly", "manual"]);
+    assert.deepStrictEqual(properties["devsnip.updates.checkFrequency"].enum, ["hourly", "daily", "weekly", "manual"]);
     assert.strictEqual(properties["devsnip.updates.remindLaterHours"].default, 24);
     const command = manifest.contributes.commands.find((c: { command: string }) => c.command === CHECK_COMMAND);
     assert.ok(command?.enablement.includes("!isWeb"), "the web build does not register it");
@@ -358,6 +359,7 @@ suite("update manager", () => {
 
   test("checks once a day, shows the indicator and notifies once", async () => {
     const { manager, item, notices, requests, advance } = setup();
+    settings()["devsnip.updates.checkFrequency"] = "daily";
     const before = shownMessages.length;
     try {
       await manager.tick();
@@ -421,6 +423,7 @@ suite("update manager", () => {
       assert.strictEqual(auto.requests(), 1);
       assert.strictEqual(auto.notices(), 0, "VS Code reports and installs the update itself");
       assert.ok(!statusBarItems.some(i => i.visible), "no indicator during the grace period");
+      assert.strictEqual(sidebarUpdate()?.version, "11.86.0", "the sidebar shows the update immediately even with auto-update enabled");
     } finally {
       shownMessages.splice(before);
       teardown(auto.manager);

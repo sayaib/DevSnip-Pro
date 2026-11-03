@@ -1,3 +1,4 @@
+import { reactTool } from "./react";
 import { GeneratedFile, ToolSpec, ToolInputError, ToolResult, bool, fmtBytes, num, required, str } from "../types";
 import { CURL_TARGETS, CurlTarget, curlWarnings, generateFromCurl, parseCurl, toCurl } from "../engines/web-curl";
 import { ArrayFormat, AssetKind, CACHE_PRESETS, buildCookie, buildUrl, cacheConfigs, explainCacheControl, objectToQuery, parseCookieHeader, parseSetCookie, parseUrlReport, queryToObject } from "../engines/web-http";
@@ -5,7 +6,7 @@ import { analyzeCsp, auditHeaders, buildCsp, checkCors, corsConfigs, explainCors
 import { OAUTH_PROVIDERS, parseCallback, pkcePair, randomToken } from "../../platform/oauth";
 import { curlExamples, formatGraphql, graphqlOperations, lintSpec, minifyGraphql, openApiFromSample, operations, parseSpec, sampleForGqlType, sdlToTypeScript, specClient, specTypes } from "../engines/web-apispec";
 import { TYPE_RATIOS, convertUnits, fluidClamp, htmlToJsx, metaTags, typeScale } from "../engines/web-frontend";
-import { ApiDatabase, ApiFramework, DbKind, ReactKind, buildConnectionUrl, connectionSnippets, connectionWarnings, parseConnectionUrl, parseFields, reactScaffold, scaffoldResource, sqlToMongo } from "../engines/web-scaffold";
+import { ApiDatabase, ApiFramework, DbKind, buildConnectionUrl, connectionSnippets, connectionWarnings, parseConnectionUrl, parseFields, scaffoldResource, sqlToMongo } from "../engines/web-scaffold";
 import { BumpKind, COMMIT_TYPES, GITIGNORE, GITIGNORE_MARKERS, GIT_RECIPES, GitParams, MAX_VERSION_CODE, buildGitignore, bump, commitMessage, compareVersions, derivedVersionCode, describeRange, formatVersion, missingIgnores, parseRange, parseVersion, satisfies } from "../engines/web-git";
 import { SqlDatabase, aspnetResource, fastapiResource, springResource } from "../engines/web-scaffold-backend";
 import { inspectApiResponse } from "../engines/data-inspect";
@@ -592,30 +593,6 @@ const htmlJsxTool: ToolSpec = {
   }
 };
 
-const reactTool: ToolSpec = {
-  id: "web.react",
-  command: "reactGenerator",
-  title: "React / Next.js Generator",
-  summary: "Scaffold the pieces you write every week: a component with test and story, a Next.js App Router page with loading/error, a route handler, a server action with form, a data hook, a context provider, a Zustand store or a React Native screen.",
-  guide: "Output follows current conventions: React 19 (useActionState), Next.js 15 (async params, Server Components by default), Vitest + Testing Library, Storybook CSF3.",
-  keywords: ["react component", "next.js page", "app router", "route handler", "server action", "custom hook", "context", "zustand", "react native screen", "storybook", "vitest"],
-  icon: "layers",
-  fields: [
-    f.select("kind", "Generate", opts(["component", "Component"], ["next-page", "Next.js page (+ loading, error)"], ["next-route", "Next.js route handler"], ["server-action", "Server action + form"], ["hook", "Data-fetching hook"], ["context", "Context provider"], ["store", "Zustand store"], ["rn-screen", "React Native screen"])),
-    f.text("name", "Name", { width: "narrow", default: "UserCard" }),
-    f.text("route", "Route", { width: "narrow", default: "users/[id]", showIf: { field: "kind", equals: ["next-page", "next-route", "server-action"] } }),
-    f.toggle("typescript", "TypeScript", true),
-    f.select("styling", "Styling", opts(["css-module", "CSS module"], ["tailwind", "Tailwind"], ["none", "None"]), { showIf: { field: "kind", equals: ["component"] } }),
-    f.toggle("tests", "Tests", true, { showIf: { field: "kind", equals: ["component", "hook"] } }),
-    f.toggle("story", "Storybook story", false, { showIf: { field: "kind", equals: ["component"] } })
-  ],
-  run(values) {
-    const name = required(values, "name", "Name");
-    if (!/^[A-Za-z][A-Za-z0-9 _-]*$/.test(name)) throw new ToolInputError("Use a name like UserCard or user-card.");
-    const files = reactScaffold({ kind: str(values, "kind", "component") as ReactKind, name, typescript: bool(values, "typescript", true), styling: str(values, "styling", "css-module") as "css-module" | "tailwind" | "none", tests: bool(values, "tests", true), story: bool(values, "story"), route: str(values, "route", "") });
-    return { outputs: [{ kind: "files", title: "Files", files }] };
-  }
-};
 
 const metaTool: ToolSpec = {
   id: "web.meta",

@@ -1,3 +1,4 @@
+import { publishSidebarUpdate } from "./sidebar";
 import * as vscode from "vscode";
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 import {
@@ -76,7 +77,8 @@ export class UpdateManager implements vscode.Disposable {
       vscode.extensions.onDidChange(() => this.render())
     );
     this.timer = setInterval(() => void this.tick(), TICK_MS);
-    void this.tick();
+    this.render();
+    void this.tick(true);
   }
 
   dispose(): void {
@@ -92,7 +94,7 @@ export class UpdateManager implements vscode.Disposable {
     const hours = Number(config.get<number>("remindLaterHours", 24));
     return {
       enabled: config.get<boolean>("notifications", true) !== false,
-      intervalMs: checkIntervalMs(config.get<string>("checkFrequency", "daily")),
+      intervalMs: checkIntervalMs(config.get<string>("checkFrequency", "hourly")),
       remindLaterMs: (Number.isFinite(hours) ? Math.min(720, Math.max(1, hours)) : 24) * HOUR,
       ...builtInPolicy(extensions.get("autoUpdate", true), extensions.get("autoCheckUpdates", true))
     };
@@ -113,12 +115,12 @@ export class UpdateManager implements vscode.Disposable {
   }
 
   /** Checks when one is due, then updates what is shown. Never throws. */
-  async tick(): Promise<void> {
+  async tick(startup = false): Promise<void> {
     try {
       const settings = this.settings;
       const automatic = settings.enabled && settings.automaticChecks && settings.intervalMs !== undefined
         && this.context.extensionMode !== vscode.ExtensionMode.Test;
-      if (automatic && isCheckDue(this.read(), this.deps.now(), settings.intervalMs!)) await this.check();
+      if (automatic && isCheckDue(this.read(), this.deps.now(), startup ? 0 : settings.intervalMs!)) await this.check();
       this.render();
     } catch (error) {
       log("update check failed.", error);
@@ -143,6 +145,11 @@ export class UpdateManager implements vscode.Disposable {
   /** Shows or hides the status bar item, and the one notification per version. */
   render(): void {
     const settings = this.settings;
+    const sidebar = present(this.read(), this.installed, this.deps.now(), { deferToBuiltIn: false });
+    const preview = this.context.extensionMode === vscode.ExtensionMode.Development
+      && process.env.DEVSNIP_PREVIEW_UPDATE === "1";
+    publishSidebarUpdate(preview ? { version: this.installed, preview: true }
+      : settings.enabled && sidebar.indicator && !this.installing ? sidebar.available : undefined);
     const view = present(this.read(), this.installed, this.deps.now(), { deferToBuiltIn: settings.deferToBuiltIn });
     if (!settings.enabled || !view.indicator || !view.available || this.installing) {
       this.item?.hide();

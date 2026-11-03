@@ -315,7 +315,7 @@ exports.builtInPolicy = builtInPolicy;
 function checkIntervalMs(frequency) {
     if (frequency === "manual")
         return undefined;
-    return frequency === "weekly" ? 7 * exports.DAY : exports.DAY;
+    return frequency === "hourly" ? exports.HOUR : frequency === "weekly" ? 7 * exports.DAY : exports.DAY;
 }
 exports.checkIntervalMs = checkIntervalMs;
 //# sourceMappingURL=core.js.map

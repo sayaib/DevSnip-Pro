@@ -15,6 +15,6 @@ export function registerUpdateNotifications(context: vscode.ExtensionContext): v
   registerLazyCommands(context.subscriptions, UPDATE_COMMANDS, async () => { await load(); });
   const timer = setTimeout(() => {
     load().then(manager => manager.start(), error => console.error("DevSnip Pro: update notifications could not start.", error));
-  }, STARTUP_DELAY_MS);
+  }, context.extensionMode === vscode.ExtensionMode.Development && process.env.DEVSNIP_PREVIEW_UPDATE === "1" ? 0 : STARTUP_DELAY_MS);
   context.subscriptions.push({ dispose: () => clearTimeout(timer) });
 }

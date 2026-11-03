@@ -341,3 +341,7 @@ If DevSnip Pro saves you time, consider buying me a coffee ❤️
 </a>
 
 Made by Sayaib Sarkar — [LinkedIn](https://www.linkedin.com/in/sayaib/) · [GitHub](https://github.com/sayaib/DevSnip-Pro)
+
+### React / Next.js Generator
+
+Generate React 19 or Next.js 15/16 components, routes, state providers, API clients, tests and complete projects. Includes both Next.js routers, configurable UI libraries, searchable templates, live previews and saved presets. See the [generator guide](docs/react-next-generator.md) for the supported matrix and integration steps.

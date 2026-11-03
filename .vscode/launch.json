@@ -2,6 +2,16 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Preview Sidebar Update Alert",
+      "noDebug": true,
+      "preLaunchTask": "npm: compile:dev",
+      "runtimeExecutable": "${execPath}",
+      "env": { "DEVSNIP_PREVIEW_UPDATE": "1" },
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "--disable-extensions", "--new-window"]
+    },
+    {
       // F5 default. "noDebug" starts the Extension Development Host without
       // --inspect-brk-extensions, so it never waits for a debugger to attach and
       // cannot hit "Extension host did not start in 10 seconds". Use it to run

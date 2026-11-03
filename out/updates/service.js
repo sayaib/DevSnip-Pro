@@ -24,6 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUpdateManager = exports.UpdateManager = exports.ACTIONS_COMMAND = exports.CHECK_COMMAND = exports.EXTENSION_ID = void 0;
+const sidebar_1 = require("./sidebar");
 const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 const core_1 = require("./core");
@@ -65,7 +66,8 @@ class UpdateManager {
         // An update installed from the Extensions view (or by VS Code) hides the indicator.
         vscode.extensions.onDidChange(() => this.render()));
         this.timer = setInterval(() => void this.tick(), TICK_MS);
-        void this.tick();
+        this.render();
+        void this.tick(true);
     }
     dispose() {
         if (this.timer)
@@ -81,7 +83,7 @@ class UpdateManager {
         const hours = Number(config.get("remindLaterHours", 24));
         return {
             enabled: config.get("notifications", true) !== false,
-            intervalMs: (0, core_1.checkIntervalMs)(config.get("checkFrequency", "daily")),
+            intervalMs: (0, core_1.checkIntervalMs)(config.get("checkFrequency", "hourly")),
             remindLaterMs: (Number.isFinite(hours) ? Math.min(720, Math.max(1, hours)) : 24) * core_1.HOUR,
             ...(0, core_1.builtInPolicy)(extensions.get("autoUpdate", true), extensions.get("autoCheckUpdates", true))
         };
@@ -98,12 +100,12 @@ class UpdateManager {
         await this.context.globalState.update(STATE_KEY, state);
     }
     /** Checks when one is due, then updates what is shown. Never throws. */
-    async tick() {
+    async tick(startup = false) {
         try {
             const settings = this.settings;
             const automatic = settings.enabled && settings.automaticChecks && settings.intervalMs !== undefined
                 && this.context.extensionMode !== vscode.ExtensionMode.Test;
-            if (automatic && (0, core_1.isCheckDue)(this.read(), this.deps.now(), settings.intervalMs))
+            if (automatic && (0, core_1.isCheckDue)(this.read(), this.deps.now(), startup ? 0 : settings.intervalMs))
                 await this.check();
             this.render();
         }
@@ -129,6 +131,11 @@ class UpdateManager {
     /** Shows or hides the status bar item, and the one notification per version. */
     render() {
         const settings = this.settings;
+        const sidebar = (0, core_1.present)(this.read(), this.installed, this.deps.now(), { deferToBuiltIn: false });
+        const preview = this.context.extensionMode === vscode.ExtensionMode.Development
+            && process.env.DEVSNIP_PREVIEW_UPDATE === "1";
+        (0, sidebar_1.publishSidebarUpdate)(preview ? { version: this.installed, preview: true }
+            : settings.enabled && sidebar.indicator && !this.installing ? sidebar.available : undefined);
         const view = (0, core_1.present)(this.read(), this.installed, this.deps.now(), { deferToBuiltIn: settings.deferToBuiltIn });
         if (!settings.enabled || !view.indicator || !view.available || this.installing) {
             this.item?.hide();

@@ -23,6 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const sidebar_1 = require("../../updates/sidebar");
 const assert = __importStar(require("assert"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -314,7 +315,7 @@ function response(status, body, headers = {}) {
     (0, run_unit_tests_1.test)("contributes its settings and a Desktop-only command", () => {
         const properties = manifest.contributes.configuration.properties;
         assert.strictEqual(properties["devsnip.updates.notifications"].default, true);
-        assert.deepStrictEqual(properties["devsnip.updates.checkFrequency"].enum, ["daily", "weekly", "manual"]);
+        assert.deepStrictEqual(properties["devsnip.updates.checkFrequency"].enum, ["hourly", "daily", "weekly", "manual"]);
         assert.strictEqual(properties["devsnip.updates.remindLaterHours"].default, 24);
         const command = manifest.contributes.commands.find((c) => c.command === service_1.CHECK_COMMAND);
         assert.ok(command?.enablement.includes("!isWeb"), "the web build does not register it");
@@ -323,6 +324,7 @@ function response(status, body, headers = {}) {
     });
     (0, run_unit_tests_1.test)("checks once a day, shows the indicator and notifies once", async () => {
         const { manager, item, notices, requests, advance } = setup();
+        settings()["devsnip.updates.checkFrequency"] = "daily";
         const before = vscode_stub_1.shownMessages.length;
         try {
             await manager.tick();
@@ -387,6 +389,7 @@ function response(status, body, headers = {}) {
             assert.strictEqual(auto.requests(), 1);
             assert.strictEqual(auto.notices(), 0, "VS Code reports and installs the update itself");
             assert.ok(!vscode_stub_1.statusBarItems.some(i => i.visible), "no indicator during the grace period");
+            assert.strictEqual((0, sidebar_1.sidebarUpdate)()?.version, "11.86.0", "the sidebar shows the update immediately even with auto-update enabled");
         }
         finally {
             vscode_stub_1.shownMessages.splice(before);

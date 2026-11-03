@@ -54,6 +54,7 @@
         clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
         refresh: 'M20 11a8 8 0 0 0-14.9-4M4 4v4h4M4 13a8 8 0 0 0 14.9 4M20 20v-4h-4',
         x: 'M6 6l12 12M18 6 6 18',
+        bug: 'M8 3l2 3m6-3l-2 3M9 7h6a3 3 0 0 1 3 3v5a6 6 0 0 1-12 0v-5a3 3 0 0 1 3-3zm3 0v13M3 9l3 2m15-2l-3 2M2 15h4m16 0h-4M4 21l3-3m13 3l-3-3',
         chat: 'M4 5h16v11H10l-6 4z'
     };
     // Category colours, all from theme tokens.
@@ -269,10 +270,11 @@
     // Feedback: a sheet like Redeem, opened from the button in the page header. The extension saves the message.
     // ------------------------------------------------------------------
 
-    function feedbackRow(label, control, optional) {
+    function feedbackRow(label, control, optional, hint) {
         return h('label', { className: 'feedback-field' }, [
             h('span', {}, [label, optional ? h('span', { className: 'optional', text: ' (optional)' }) : null]),
-            control
+            control,
+            hint ? h('span', { className: 'feedback-hint', id: control.id + 'Hint', text: hint }) : null
         ]);
     }
 
@@ -285,6 +287,7 @@
 
     function saveFeedbackDraft() {
         ui.feedbackDraft = feedbackValues();
+        if (els.fbCount) els.fbCount.textContent = els.fbMessage.value.length.toLocaleString() + ' / ' + ui.view.feedback.limits.messageMax.toLocaleString();
         persist();
     }
 
@@ -307,49 +310,72 @@
             return h('option', { value: item.id, text: item.label });
         }));
         if (form.categories.some(function (item) { return item.id === draft.category; })) els.fbCategory.value = draft.category;
-        els.fbTitle = h('input', { type: 'text', id: 'fbTitle', maxlength: form.limits.titleMax, autocomplete: 'off', required: true });
+        els.fbTitle = h('input', { type: 'text', id: 'fbTitle', maxlength: form.limits.titleMax, autocomplete: 'off', required: true, 'aria-describedby': 'fbTitleHint' });
         els.fbTitle.value = draft.title || '';
-        els.fbMessage = h('textarea', { id: 'fbMessage', maxlength: form.limits.messageMax, required: true });
+        els.fbMessage = h('textarea', { id: 'fbMessage', maxlength: form.limits.messageMax, required: true, 'aria-describedby': 'fbMessageHint fbCount', rows: 8 });
         els.fbMessage.value = draft.message || '';
-        els.fbEmail = h('input', { type: 'email', id: 'fbEmail', maxlength: form.limits.emailMax, autocomplete: 'email', placeholder: 'So we can reply' });
+        els.fbEmail = h('input', { type: 'email', id: 'fbEmail', maxlength: form.limits.emailMax, autocomplete: 'email', placeholder: 'you@example.com', 'aria-describedby': 'fbEmailHint' });
         els.fbEmail.value = draft.email || '';
-        els.fbError = h('p', { className: 'feedback-error', role: 'alert', hidden: true });
-        els.fbSend = h('button', { type: 'submit', className: 'xbtn primary', id: 'fbSend', text: 'Send' });
+        els.fbCount = h('span', { id: 'fbCount', className: 'feedback-count' });
+        els.fbError = h('p', { id: 'fbError', className: 'feedback-error', role: 'alert', hidden: true });
+        els.fbSend = h('button', { type: 'submit', className: 'xbtn primary', id: 'fbSend', text: 'Submit report' });
         els.feedback = h('div', { className: 'redeem', id: 'feedback', hidden: true, onclick: function (event) { if (event.target === els.feedback) closeFeedback(); } }, [
-            h('section', { className: 'redeem-sheet feedback-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'feedbackTitle' }, [
+            h('section', { className: 'redeem-sheet feedback-sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'feedbackTitle', 'aria-describedby': 'feedbackIntro' }, [
                 h('header', { className: 'redeem-head' }, [
-                    h('span', { className: 'redeem-icon', 'aria-hidden': 'true' }, [icon('chat')]),
+                    h('span', { className: 'redeem-icon', 'aria-hidden': 'true' }, [icon('bug')]),
                     h('div', { className: 'redeem-heading' }, [
-                        h('h2', { id: 'feedbackTitle', text: 'Send feedback' }),
-                        h('p', { text: 'Report a bug, suggest a feature or tell us what you think.' })
+                        h('h2', { id: 'feedbackTitle', text: 'Bug report' }),
+                        h('p', { id: 'feedbackIntro', text: 'Help us understand what happened so we can improve DevSnip Pro.' })
                     ]),
                     h('button', { type: 'button', className: 'xbtn icon', id: 'feedbackClose', 'aria-label': 'Close', title: 'Close (Esc)', onclick: function () { closeFeedback(); } }, [icon('x')])
                 ]),
                 h('form', {
                     className: 'feedback-form', novalidate: true,
-                    oninput: saveFeedbackDraft,
+                    oninput: function (event) {
+                        if (event.target.getAttribute('aria-invalid') === 'true') feedbackError('');
+                        saveFeedbackDraft();
+                    },
                     onsubmit: function (event) {
                         event.preventDefault();
                         if (els.fbSend.disabled) return;
                         feedbackError('');
+                        var values = feedbackValues();
+                        if (values.title.trim().length < form.limits.titleMin) { feedbackError('Add a short summary (at least ' + form.limits.titleMin + ' characters).', 'title'); return; }
+                        if (values.message.trim().length < form.limits.messageMin) { feedbackError('Add a little more detail (at least ' + form.limits.messageMin + ' characters).', 'message'); return; }
+                        if (values.email.trim() && !els.fbEmail.validity.valid) { feedbackError('Enter a valid email address, or leave it blank.', 'email'); return; }
                         els.fbSend.disabled = true;
+                        els.fbForm.setAttribute('aria-busy', 'true');
+                        [els.fbCategory, els.fbTitle, els.fbMessage, els.fbEmail].forEach(function (control) { control.disabled = true; });
                         els.fbSend.textContent = 'Sending…';
-                        vscode.postMessage({ command: 'submitFeedback', form: feedbackValues() });
+                        vscode.postMessage({ command: 'submitFeedback', form: values });
                     }
                 }, [
-                    feedbackRow('Type', els.fbCategory),
-                    feedbackRow('Title', els.fbTitle),
-                    feedbackRow('Details', els.fbMessage),
-                    feedbackRow('Email', els.fbEmail, true),
-                    h('p', { className: 'feedback-note', text: 'Sent with your DevSnip Pro version, VS Code version and operating system. Please leave out secrets and private code.' }),
+                    h('div', { className: 'feedback-intro' }, [
+                        h('span', { className: 'feedback-eyebrow', text: 'REPORT DETAILS' }),
+                        h('span', { className: 'feedback-hint', text: 'Required fields are marked *' })
+                    ]),
+                    feedbackRow('Report type *', els.fbCategory),
+                    feedbackRow('Summary *', els.fbTitle, false, 'A short, specific description of the issue.'),
+                    feedbackRow('What happened? *', els.fbMessage, false, 'Include steps to reproduce, the expected result, and what happened instead.'),
+                    h('div', { className: 'feedback-meta' }, [h('span', { text: 'Your draft is saved in this panel.' }), els.fbCount]),
+                    feedbackRow('Contact email', els.fbEmail, true, 'Add your email if you would like us to follow up.'),
+                    h('div', { className: 'feedback-context' }, [
+                        icon('info'), h('div', {}, [
+                            h('strong', { text: 'Included automatically' }),
+                            h('p', { text: 'DevSnip Pro version, VS Code version, and operating system.' }),
+                            h('p', { text: 'Please leave out passwords, API keys, and private code.' })
+                        ])
+                    ]),
                     els.fbError,
                     h('div', { className: 'feedback-actions' }, [
-                        h('button', { type: 'button', className: 'xbtn', text: 'Cancel', onclick: function () { closeFeedback(); } }),
+                        h('button', { type: 'button', className: 'xbtn', text: 'Save & close', onclick: function () { closeFeedback(); } }),
                         els.fbSend
                     ])
                 ])
             ])
         ]);
+        els.fbForm = els.feedback.querySelector('form');
+        saveFeedbackDraft();
         els.feedback.addEventListener('keydown', function (event) { sheetKeys(event, els.feedback, closeFeedback); });
         document.body.appendChild(els.feedback);
         feedbackHints();
@@ -363,7 +389,7 @@
         document.body.classList.add('redeem-open');
         ui.feedbackOpen = true;
         persist();
-        if (focus !== false) els.fbCategory.focus();
+        if (focus !== false) els.fbTitle.focus();
     }
 
     function closeFeedback() {
@@ -382,7 +408,9 @@
         var open = els.feedback && !els.feedback.hidden;
         if (els.feedback) {
             els.fbSend.disabled = false;
-            els.fbSend.textContent = 'Send';
+            els.fbSend.textContent = 'Submit report';
+            els.fbForm.removeAttribute('aria-busy');
+            [els.fbCategory, els.fbTitle, els.fbMessage, els.fbEmail].forEach(function (control) { control.disabled = false; });
         }
         if (!result.ok) {
             if (!open) { toast(result.message, 'info'); return; }
@@ -399,6 +427,7 @@
             els.fbEmail.value = '';
             feedbackError('');
             feedbackHints();
+            saveFeedbackDraft();
         }
         closeFeedback();
         persist();

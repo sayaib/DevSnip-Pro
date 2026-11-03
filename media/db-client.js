@@ -2319,8 +2319,11 @@
   // ------------------------------------------------------------------ Connection modal
   /** The host's stand-in for a saved password; saving it back keeps the stored one. */
   var MASK = "********";
-  /** The Cosmos DB emulator's published, fixed key (the same on every machine). */
-  var COSMOS_EMULATOR_KEY = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
+  /**
+   * Where Microsoft publishes the Cosmos DB emulator's fixed key. The key is not
+   * shipped: Marketplace rejects packages containing it, so the user pastes it.
+   */
+  var COSMOS_EMULATOR_KEY_DOCS = "https://learn.microsoft.com/azure/cosmos-db/emulator#authentication";
   var TLS_CHOICES = {
     postgres: [["", "Off"], ["require", "On, no certificate check"], ["verify-full", "On, verify certificate"]],
     mysql: [["", "Off"], ["REQUIRED", "On, no certificate check"], ["VERIFY_IDENTITY", "On, verify certificate"]],
@@ -2389,7 +2392,7 @@
       return "dynamodb://" + cred + (f.region.trim() || (f.auth === "emulator" ? "us-east-1" : "")) + "?" + dq.join("&");
     }
     if (kind === "cosmosdb") {
-      var key = pw || (f.auth === "emulator" ? COSMOS_EMULATOR_KEY : "");
+      var key = pw;
       var endpoint = f.endpoint.trim() || (f.auth === "emulator" ? EMULATOR_ENDPOINT.cosmosdb : "");
       if (endpoint && !/^[a-z]+:\/\//i.test(endpoint)) endpoint = "https://" + endpoint;
       return "AccountEndpoint=" + endpoint + (/\/$/.test(endpoint) ? "" : "/") + ";AccountKey=" + key + ";" + (f.database.trim() ? "Database=" + adoValue(f.database.trim()) + ";" : "");
@@ -2498,7 +2501,7 @@
       } else if (k === "cosmosdb") {
         f.endpoint = s.endpoint || "";
         f.database = s.database || "";
-        if (/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(f.endpoint)) { f.auth = "emulator"; if (f.password === COSMOS_EMULATOR_KEY) f.password = ""; }
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(f.endpoint)) f.auth = "emulator";
       } else {
         f.project = s.project || "";
         f.instance = s.instance || "";
@@ -2545,7 +2548,7 @@
     }
     if (k === "cosmosdb") {
       if (f.auth !== "emulator" && !f.endpoint.trim()) return { key: "endpoint", message: "Enter the account URI, e.g. https://myaccount.documents.azure.com:443/." };
-      if (f.auth !== "emulator" && !f.password && !f.savedPassword) return { key: "password", message: "Enter the account key." };
+      if (!f.password && !f.savedPassword) return { key: "password", message: f.auth === "emulator" ? "Paste the emulator's key from Microsoft's Cosmos DB emulator documentation." : "Enter the account key." };
       return null;
     }
     if (GOOGLE_KINDS[k]) {
@@ -2836,7 +2839,8 @@
       authField(f, ["account-key", "emulator"]);
       formBox.append(field("Account URI", textInput("endpoint", { class: "input mono", placeholder: f.auth === "emulator" ? EMULATOR_ENDPOINT.cosmosdb : "https://myaccount.documents.azure.com:443/", "aria-label": "Account URI" }), "span2"));
       if (f.auth !== "emulator") formBox.append(field("Account key", secretInput("password", "savedPassword", "Account key", "PRIMARY KEY from Keys in the portal"), "span2", f.savedPassword ? "Leave empty to keep the saved key. A read-only key makes a read-only connection." : "A read-only key makes a read-only connection."));
-      else formBox.append(h("div", { class: "help span2", text: "Uses the emulator's published key. Its self-signed certificate is accepted for localhost." }));
+      else formBox.append(field("Emulator key", secretInput("password", "savedPassword", "Emulator key", "The emulator's fixed key"), "span2",
+        (f.savedPassword ? "Leave empty to keep the saved key. " : "") + "Every Cosmos DB emulator uses the same key; copy it from " + COSMOS_EMULATOR_KEY_DOCS + ". Its self-signed certificate is accepted for localhost."));
       formBox.append(field("Database", textInput("database", { placeholder: "Optional: opens this database first", "aria-label": "Database" }), "span2"));
     }
     function renderGoogleForm(f) {

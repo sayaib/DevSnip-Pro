@@ -345,5 +345,5 @@ export function builtInPolicy(autoUpdate: unknown, autoCheckUpdates: unknown): {
 
 export function checkIntervalMs(frequency: unknown): number | undefined {
   if (frequency === "manual") return undefined;
-  return frequency === "weekly" ? 7 * DAY : DAY;
+  return frequency === "hourly" ? HOUR : frequency === "weekly" ? 7 * DAY : DAY;
 }

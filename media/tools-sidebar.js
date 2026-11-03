@@ -1095,9 +1095,17 @@
 
   renderOnboarding();
 
+  $("updateNow").addEventListener("click", () => vscode.postMessage({ type: "installUpdate" }));
   /* ------------------------------------------------------------ messages */
   window.addEventListener("message", event => {
     const message = event.data || {};
+    if (message.type === "update") {
+      $("updateAlert").hidden = !message.update;
+      const preview = Boolean(message.update && message.update.preview);
+      $("updateVersion").textContent = preview ? "Development preview — this is how a new update will appear." : message.update ? "DevSnip Pro " + message.update.version + " is available." : "";
+      $("updateNow").disabled = preview;
+      $("updateNow").textContent = preview ? "Preview only" : "Update now";
+    }
     if (message.type === "onboarding" && message.onboarding) {
       onboarding = message.onboarding;
       renderOnboarding();
@@ -1118,4 +1126,5 @@
 
   renderStatus(status);
   render();
+  vscode.postMessage({ type: "updateReady" });
 })();

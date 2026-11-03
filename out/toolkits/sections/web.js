@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WEB_TOOLS = void 0;
+const react_1 = require("./react");
 const types_1 = require("../types");
 const web_curl_1 = require("../engines/web-curl");
 const web_http_1 = require("../engines/web-http");
@@ -598,31 +599,6 @@ const htmlJsxTool = {
         return { messages: r.warnings.map(t => ({ kind: "info", text: t })), outputs: [(0, helpers_1.code)(wrap === "component" ? `${name}.${ts ? "tsx" : "jsx"}` : "JSX", ts || wrap === "none" ? "tsx" : "jsx", r.code, wrap === "component" ? `src/components/${name}.${ts ? "tsx" : "jsx"}` : undefined)] };
     }
 };
-const reactTool = {
-    id: "web.react",
-    command: "reactGenerator",
-    title: "React / Next.js Generator",
-    summary: "Scaffold the pieces you write every week: a component with test and story, a Next.js App Router page with loading/error, a route handler, a server action with form, a data hook, a context provider, a Zustand store or a React Native screen.",
-    guide: "Output follows current conventions: React 19 (useActionState), Next.js 15 (async params, Server Components by default), Vitest + Testing Library, Storybook CSF3.",
-    keywords: ["react component", "next.js page", "app router", "route handler", "server action", "custom hook", "context", "zustand", "react native screen", "storybook", "vitest"],
-    icon: "layers",
-    fields: [
-        helpers_1.f.select("kind", "Generate", (0, helpers_1.opts)(["component", "Component"], ["next-page", "Next.js page (+ loading, error)"], ["next-route", "Next.js route handler"], ["server-action", "Server action + form"], ["hook", "Data-fetching hook"], ["context", "Context provider"], ["store", "Zustand store"], ["rn-screen", "React Native screen"])),
-        helpers_1.f.text("name", "Name", { width: "narrow", default: "UserCard" }),
-        helpers_1.f.text("route", "Route", { width: "narrow", default: "users/[id]", showIf: { field: "kind", equals: ["next-page", "next-route", "server-action"] } }),
-        helpers_1.f.toggle("typescript", "TypeScript", true),
-        helpers_1.f.select("styling", "Styling", (0, helpers_1.opts)(["css-module", "CSS module"], ["tailwind", "Tailwind"], ["none", "None"]), { showIf: { field: "kind", equals: ["component"] } }),
-        helpers_1.f.toggle("tests", "Tests", true, { showIf: { field: "kind", equals: ["component", "hook"] } }),
-        helpers_1.f.toggle("story", "Storybook story", false, { showIf: { field: "kind", equals: ["component"] } })
-    ],
-    run(values) {
-        const name = (0, types_1.required)(values, "name", "Name");
-        if (!/^[A-Za-z][A-Za-z0-9 _-]*$/.test(name))
-            throw new types_1.ToolInputError("Use a name like UserCard or user-card.");
-        const files = (0, web_scaffold_1.reactScaffold)({ kind: (0, types_1.str)(values, "kind", "component"), name, typescript: (0, types_1.bool)(values, "typescript", true), styling: (0, types_1.str)(values, "styling", "css-module"), tests: (0, types_1.bool)(values, "tests", true), story: (0, types_1.bool)(values, "story"), route: (0, types_1.str)(values, "route", "") });
-        return { outputs: [{ kind: "files", title: "Files", files }] };
-    }
-};
 const metaTool = {
     id: "web.meta",
     command: "metaTagsGenerator",
@@ -1003,5 +979,5 @@ const semverTool = {
         };
     }
 };
-exports.WEB_TOOLS = [curlTool, apiResponse, urlTool, openApiTool, graphqlTool, oauthTool, corsTool, headersTool, cookieTool, htmlJsxTool, reactTool, metaTool, cssUnitsTool, cacheTool, scaffoldTool, dbTool, sqlMongoTool, gitTool, gitignoreTool, semverTool];
+exports.WEB_TOOLS = [curlTool, apiResponse, urlTool, openApiTool, graphqlTool, oauthTool, corsTool, headersTool, cookieTool, htmlJsxTool, react_1.reactTool, metaTool, cssUnitsTool, cacheTool, scaffoldTool, dbTool, sqlMongoTool, gitTool, gitignoreTool, semverTool];
 //# sourceMappingURL=web.js.map

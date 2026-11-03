@@ -123,6 +123,10 @@ input[type=text], input[type=password], input[type=number], select, textarea {
   padding: 6px 9px; min-height: 30px;
 }
 textarea { resize: vertical; line-height: 1.5; }
+.syntax-keyword { color: var(--vscode-debugTokenExpression-name, #c586c0); }
+.syntax-string { color: var(--vscode-debugTokenExpression-string, #ce9178); }
+.syntax-number { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
+.syntax-comment { color: var(--vscode-descriptionForeground, #8b949e); font-style: italic; }
 textarea.code { font-family: var(--mono); font-size: 12.5px; tab-size: 2; white-space: pre; }
 select { padding-right: 24px; }
 input:focus, select:focus, textarea:focus { outline: 1px solid var(--focus); outline-offset: -1px; border-color: var(--focus); }

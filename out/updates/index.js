@@ -24,6 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerUpdateNotifications = void 0;
+const vscode = __importStar(require("vscode"));
 const command_registry_1 = require("../utils/command-registry");
 /** The check starts this long after activation, so it never competes with startup. */
 const STARTUP_DELAY_MS = 30000;
@@ -38,7 +39,7 @@ function registerUpdateNotifications(context) {
     (0, command_registry_1.registerLazyCommands)(context.subscriptions, UPDATE_COMMANDS, async () => { await load(); });
     const timer = setTimeout(() => {
         load().then(manager => manager.start(), error => console.error("DevSnip Pro: update notifications could not start.", error));
-    }, STARTUP_DELAY_MS);
+    }, context.extensionMode === vscode.ExtensionMode.Development && process.env.DEVSNIP_PREVIEW_UPDATE === "1" ? 0 : STARTUP_DELAY_MS);
     context.subscriptions.push({ dispose: () => clearTimeout(timer) });
 }
 exports.registerUpdateNotifications = registerUpdateNotifications;

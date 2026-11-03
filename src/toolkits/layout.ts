@@ -73,6 +73,18 @@ export const FULL_NAV: NavSection[] = [
     ]
   },
   {
+    id: "database", title: "Database", emoji: "🗄️", codicon: "database", color: "terminal.ansiBrightGreen",
+    description: "Connect to and edit your databases, format SQL, build queries and connection strings, and translate SQL to MongoDB.",
+    categories: ["Connections & data", "SQL & queries"],
+    entries: [
+      e("databaseClient", "Database Client", "database", "Browse and edit Postgres, MySQL, SQL Server, MongoDB, Redis and AWS, Azure or Google Cloud databases.", { hubIcon: "database", keywords: ["database", "sql", "postgres", "mysql", "mongodb", "redis", "sqlite", "sql server", "crud", "table", "query", "db client", "rds", "aurora", "dynamodb", "redshift", "azure sql", "cosmos db", "cloud sql", "spanner", "firestore", "bigquery", "alloydb"], category: "Connections & data" }),
+      e("connectionString", "Database Connection Strings", "plug", "Build or fix Postgres, MySQL, MongoDB and Redis URLs with driver setup.", { tool: "web.db-url", category: "Connections & data" }),
+      e("sparkSqlFormatter", "SQL Formatter & Linter", "database", "Format SQL for Postgres, MySQL, SQL Server, Spark and Trino, and flag risky patterns.", { tool: "data.sql", category: "SQL & queries" }),
+      e("sqlQueryHelper", "SQL Query Helper", "list-ordered", "Parameterised SELECT, INSERT, UPDATE, UPSERT, DELETE and pagination queries.", { tool: "data.sql-helper", category: "SQL & queries" }),
+      e("sqlToMongo", "SQL → MongoDB Query", "symbol-namespace", "Translate SELECTs into MongoDB find() or aggregation pipelines.", { tool: "web.sql-mongo", category: "SQL & queries" })
+    ]
+  },
+  {
     id: "frontend", title: "Web & Frontend", emoji: "🎨", codicon: "browser", color: "terminal.ansiBrightCyan",
     description: "React and Next.js scaffolding, HTML to JSX, CSS units, colours and SEO metadata.",
     categories: ["React & components", "Styling & accessibility", "SEO & metadata"],
@@ -136,18 +148,6 @@ export const FULL_NAV: NavSection[] = [
       e("idGenerator", "UUID & ID Generator", "symbol-key", "UUID v4/v7, ULID, Nano ID, ObjectId and passwords; decode an ID's timestamp.", { tool: "dev.ids", category: "Identifiers" }),
       e("jsonToTypes", "JSON to Types", "symbol-interface", "TypeScript, Zod, Dart, Kotlin, Swift, Pydantic, Java, Go or JSON Schema from sample JSON.", { tool: "data.types", category: "Data formats & types" }),
       e("dataConverter", "Data Converter", "table", "Convert between CSV, JSON, JSON Lines, YAML, Markdown tables and SQL inserts.", { tool: "data.convert", category: "Data formats & types" })
-    ]
-  },
-  {
-    id: "database", title: "Database", emoji: "🗄️", codicon: "database", color: "terminal.ansiBrightGreen",
-    description: "Connect to and edit your databases, format SQL, build queries and connection strings, and translate SQL to MongoDB.",
-    categories: ["Connections & data", "SQL & queries"],
-    entries: [
-      e("databaseClient", "Database Client", "database", "Browse and edit Postgres, MySQL, SQL Server, MongoDB, Redis and AWS, Azure or Google Cloud databases.", { hubIcon: "database", keywords: ["database", "sql", "postgres", "mysql", "mongodb", "redis", "sqlite", "sql server", "crud", "table", "query", "db client", "rds", "aurora", "dynamodb", "redshift", "azure sql", "cosmos db", "cloud sql", "spanner", "firestore", "bigquery", "alloydb"], category: "Connections & data" }),
-      e("connectionString", "Database Connection Strings", "plug", "Build or fix Postgres, MySQL, MongoDB and Redis URLs with driver setup.", { tool: "web.db-url", category: "Connections & data" }),
-      e("sparkSqlFormatter", "SQL Formatter & Linter", "database", "Format SQL for Postgres, MySQL, SQL Server, Spark and Trino, and flag risky patterns.", { tool: "data.sql", category: "SQL & queries" }),
-      e("sqlQueryHelper", "SQL Query Helper", "list-ordered", "Parameterised SELECT, INSERT, UPDATE, UPSERT, DELETE and pagination queries.", { tool: "data.sql-helper", category: "SQL & queries" }),
-      e("sqlToMongo", "SQL → MongoDB Query", "symbol-namespace", "Translate SELECTs into MongoDB find() or aggregation pipelines.", { tool: "web.sql-mongo", category: "SQL & queries" })
     ]
   },
   {

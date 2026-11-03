@@ -144,11 +144,19 @@
 
   function buildField(f) {
     const id = "f_" + f.id;
+    let search;
     let control;
     if (f.kind === "select") {
       control = h("select", { id }, (f.options || []).map(o => h("option", { value: o.value, text: o.label })));
       control.value = String(values[f.id]);
       control.addEventListener("change", () => onChange(f.id, control.value));
+      if (f.searchable) {
+        search = h("input", { type: "search", placeholder: "Search templates…", "aria-label": `Search ${f.label.toLowerCase()}`, "aria-controls": id });
+        search.addEventListener("input", () => {
+          const query = search.value.trim().toLowerCase();
+          for (const option of control.options) option.hidden = option.value !== control.value && !option.textContent.toLowerCase().includes(query);
+        });
+      }
     } else if (f.kind === "toggle") {
       control = h("input", { id, type: "checkbox" });
       control.checked = Boolean(values[f.id] === true || values[f.id] === "true");
@@ -186,7 +194,7 @@
       f.fromEditor ? button("Use editor", "editor", () => vscode.postMessage({ type: "readEditor", field: f.id }), "ghost", `Fill ${f.label} from the active editor (selection, or the whole file)`) : null);
     // A narrow select with long option labels would truncate them; give it two columns.
     const longOptions = f.kind === "select" && (f.options || []).some(o => o.label.length > 24);
-    return h("div", { class: "field" + (f.width === "narrow" ? " narrow" : "") + (longOptions ? " span2" : "") }, labelRow, control, f.help ? h("div", { class: "help", text: f.help }) : null);
+    return h("div", { class: "field" + (f.width === "narrow" ? " narrow" : "") + (longOptions ? " span2" : "") }, labelRow, search, control, f.help ? h("div", { class: "help", text: f.help }) : null);
   }
 
   function presetsSelect() {
@@ -344,9 +352,26 @@
     ];
   }
 
+  // Small bounded lexer. All source is inserted as text nodes, never HTML.
+  function codePreview(content, language) {
+    const pre = h("pre", { class: "code", tabindex: "0" });
+    const source = shown(content);
+    if (!["typescript", "javascript", "tsx", "jsx", "json"].includes(language)) { pre.textContent = source; return pre; }
+    const tokens = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\b(?:import|from|export|default|function|async|await|return|const|let|if|else|throw|new|type|interface|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g;
+    let offset = 0, match, count = 0;
+    while ((match = tokens.exec(source)) && count++ < 4000) {
+      pre.append(document.createTextNode(source.slice(offset, match.index)));
+      const token = match[0];
+      pre.append(h("span", { class: /^\//.test(token) ? "syntax-comment" : /^["'`]/.test(token) ? "syntax-string" : /^\d/.test(token) ? "syntax-number" : "syntax-keyword", text: token }));
+      offset = tokens.lastIndex;
+    }
+    pre.append(document.createTextNode(source.slice(offset)));
+    return pre;
+  }
+
   function renderOutput(o) {
     if (o.kind === "code") {
-      return h("section", { class: "panel out" }, outHead(o.title, o.fileName && o.fileName !== o.title ? o.fileName : null, codeActions(o.content, o.language, o.fileName, o.title)), h("pre", { class: "code", tabindex: "0", text: shown(o.content) }), truncatedNote(o.content));
+      return h("section", { class: "panel out" }, outHead(o.title, o.fileName && o.fileName !== o.title ? o.fileName : null, codeActions(o.content, o.language, o.fileName, o.title)), codePreview(o.content, o.language), truncatedNote(o.content));
     }
     if (o.kind === "text") {
       return h("section", { class: "panel out" }, outHead(o.title, null, [button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: o.content }), "ghost"), capabilities.saveAs ? button("", "download", () => vscode.postMessage({ type: "download", text: o.content, language: "text", fileName: o.title }), "ghost", "Save as…") : null]), h("div", { class: "textout", text: shown(o.content) }), truncatedNote(o.content));
@@ -366,7 +391,11 @@
         const details = h("details", { class: "file" },
           h("summary", null, icon("chevron", "chev"), icon("file"), h("span", { class: "path", text: file.path }), h("span", { class: "meta", text: `${file.mode === "append" ? "append · " : ""}${size < 1024 ? size + " B" : (size / 1024).toFixed(1) + " KB"}` }),
             h("span", { class: "out-actions", onclick: e => e.preventDefault() }, codeActions(file.content, file.language, null).slice(0, 1).concat([button("", "open", () => vscode.postMessage({ type: "open", text: file.content, language: file.language }), "ghost", `Open ${file.path} in a new tab`), capabilities.writeWorkspace ? button("", "save", () => vscode.postMessage({ type: "save", files: [file] }), "ghost", `Save ${file.path} to the workspace`) : null]))),
-          h("pre", { class: "code", tabindex: "0", text: shown(file.content) }));
+          h("div", { class: "file-preview" }));
+        details.addEventListener("toggle", () => {
+          const preview = details.querySelector(".file-preview");
+          if (details.open && !preview.childNodes.length) preview.append(codePreview(file.content, file.language), truncatedNote(file.content) || document.createTextNode(""));
+        });
         if (i === 0 && o.files.length <= 3) details.open = true;
         return details;
       }));

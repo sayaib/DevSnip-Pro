@@ -1,5 +1,21 @@
 # Development Changelog of DevSnip Pro
 
+## 11.86.4 - Update alert startup and debug preview (2026-11-03)
+
+- Refresh the sidebar update alert from cached update state when the update manager starts, before the network check finishes.
+- Add the **Preview Sidebar Update Alert** launch configuration for testing the alert in the Extension Development Host without publishing a newer release. The card is labeled as a preview and its update button is disabled.
+- Restrict the preview to development mode; installed releases show the alert only for a detected newer version.
+
+## 11.86.3 - Sidebar update alerts (2026-11-03)
+
+- Show an available-update alert in the Tools sidebar with access to update actions, immediately after detection even when VS Code auto-update is enabled.
+- Check after startup and hourly by default; retain daily, weekly and manual options, snooze, skip and disabled automatic checks.
+
+## 11.86.2 - Database navigation and emulator setup (2026-11-03)
+
+- Move Database to the second category, immediately after Backend & API, in the Tools sidebar, All Tools hub and shared navigation.
+- Connect to the Azure Cosmos DB emulator by pasting its fixed key from [Microsoft's emulator documentation](https://learn.microsoft.com/azure/cosmos-db/emulator#authentication). The key isn't bundled: the Marketplace's secret scan rejects packages that contain it, even though it is public.
+
 ## 11.86.0 - Cloud databases, large-table performance and update notifications (2026-11-03)
 
 - Add cloud databases to the Database Client, grouped by provider in the connection form, the explorer and the welcome page. AWS: Amazon RDS (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle), Aurora, DynamoDB and Redshift. Azure: Azure SQL Database, Cosmos DB (NoSQL and MongoDB APIs), and Azure Database for PostgreSQL and MySQL. Google Cloud: Cloud SQL, Cloud Spanner, Firestore, BigQuery and AlloyDB. See [Cloud databases](docs/DATABASE-CLIENT.md#cloud-databases).

@@ -47,6 +47,15 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  { version: "11.86.4", items: [{ title: "The Tools sidebar refreshes cached update alerts immediately at startup", command: "checkForUpdates" }] },
+  { version: "11.86.3", items: [{ title: "Available updates now appear in the Tools sidebar, with hourly checks", command: "checkForUpdates" }] },
+  {
+    version: "11.86.2",
+    items: [
+      { title: "Database is now the second category in the Tools sidebar and All Tools hub", command: "databaseClient" },
+      { title: "Cosmos DB emulator connections now accept the key copied from Microsoft’s documentation", command: "databaseClient" }
+    ]
+  },
   {
     version: "11.86.0",
     items: [

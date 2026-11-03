@@ -30,6 +30,8 @@ export interface FieldSpec {
   /** One line under the field. */
   help?: string;
   options?: FieldOption[];
+  /** Adds a local filter above long template selectors. */
+  searchable?: boolean;
   rows?: number;
   min?: number;
   max?: number;

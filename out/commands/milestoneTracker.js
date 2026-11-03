@@ -1654,7 +1654,7 @@ function getMilestoneTrackerHtml(cspSource, scriptSrc, _coffeeSrc, effectsSrc) {
             </div>
         </div>
         <div class="top-actions">
-            <button class="xbtn" id="feedbackBtn" type="button" aria-haspopup="dialog" title="Report a bug, suggest a feature or send feedback">${icon("M4 5h16v11H10l-6 4z")}<span>Feedback</span></button>
+            <button class="xbtn" id="feedbackBtn" type="button" aria-haspopup="dialog" title="Report a bug">${icon("M8 3l2 3m6-3l-2 3M9 7h6a3 3 0 0 1 3 3v5a6 6 0 0 1-12 0v-5a3 3 0 0 1 3-3zm3 0v13M3 9l3 2m15-2l-3 2M2 15h4m16 0h-4M4 21l3-3m13 3l-3-3")}<span>Bug Report</span></button>
             <button class="xbtn primary" id="spendBtn" type="button">${icon("M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2zM16 14h.01")}<span>Spend points</span></button>
             <div class="more-wrap">
                 <button class="xbtn icon" id="moreBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" aria-label="More actions" title="More actions">${icon("M5 12h.01M12 12h.01M19 12h.01").replace('class="ico"', 'class="ico dots-ico"')}</button>
@@ -2064,20 +2064,40 @@ ${(0, profile_style_1.profileCss)({ medal: [".ring-medal", ".pv-medal"], banner:
 .rank-redeem { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 .rank-redeem .xbtn { height: 36px; padding: 0 18px; font-size: 13.5px; box-shadow: 0 4px 14px color-mix(in srgb, var(--gold) 30%, transparent); }
 .rank-redeem .xbtn .ico { width: 17px; height: 17px; }
-.feedback-sheet { max-width: 560px; }
-.feedback-form { display: grid; gap: 14px; padding: 18px 20px 20px; }
+.redeem-sheet.feedback-sheet { max-width: 620px; }
+.feedback-form { display: grid; gap: 18px; padding: 24px; }
 .feedback-field { display: grid; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--fg-0); }
 .feedback-field .optional { font-weight: 400; color: var(--fg-1); }
 .feedback-form input, .feedback-form select, .feedback-form textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg-0); font: inherit; font-size: 13px; font-weight: 400; }
-.feedback-form input, .feedback-form select { height: 34px; padding-block: 0; }
-.feedback-form textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
+.feedback-form input, .feedback-form select { height: 40px; padding-block: 0; }
+.feedback-form textarea { min-height: 170px; resize: vertical; line-height: 1.5; }
 .feedback-form option { background: var(--bg-1); color: var(--fg-0); }
 .feedback-form :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
 .feedback-form [aria-invalid="true"] { border-color: var(--danger); }
 .feedback-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--fg-1); }
 .feedback-error { margin: 0; font-size: 12.5px; color: var(--danger); }
 .feedback-error[hidden] { display: none; }
-.feedback-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.feedback-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+.feedback-actions .xbtn { min-height: 38px; padding-inline: 16px; }
+.feedback-intro, .feedback-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.feedback-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--fg-1); }
+.feedback-hint, .feedback-meta { font-size: 11.5px; font-weight: 400; color: var(--fg-1); line-height: 1.5; }
+.feedback-meta { margin-top: -12px; }
+.feedback-count { flex: none; font-variant-numeric: tabular-nums; }
+.feedback-context { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); font-size: 11.5px; line-height: 1.6; color: var(--fg-1); }
+.feedback-context > .ico { flex: none; margin-top: 2px; color: var(--accent); }
+.feedback-context strong { color: var(--fg-0); font-weight: 600; }
+.feedback-context p { margin: 3px 0 0; }
+.feedback-sheet .redeem-icon { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+.feedback-sheet .redeem-heading p { line-height: 1.5; }
+.feedback-form :is(input, select, textarea):disabled { opacity: .65; cursor: wait; }
+.feedback-error { padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+@media (max-width: 560px) {
+    .feedback-form { padding: 20px 16px; gap: 16px; }
+    .feedback-sheet .redeem-heading p { display: block; font-size: 11px; }
+    .feedback-intro { flex-wrap: wrap; gap: 4px; }
+    .feedback-actions .xbtn { flex: 1; justify-content: center; }
+}
 .rank-redeem-sub { font-size: 12px; color: var(--fg-1); }
 .rank-redeem-sub strong { color: var(--gold-text); font-weight: 700; }
 .redeem { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding: 28px 20px; overflow-y: auto; background: color-mix(in srgb, var(--bg-0) 55%, rgba(0,0,0,.5)); backdrop-filter: blur(3px); animation: fade .16s ease-out; }

@@ -24,6 +24,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ToolsSidebarProvider = exports.renderToolsSidebar = exports.cleanUsage = exports.themeColorVar = exports.sidebarStatus = exports.TOOLS_VIEW_ID = void 0;
+const sidebar_1 = require("../updates/sidebar");
 const capabilities_1 = require("../platform/capabilities");
 const vscode = __importStar(require("vscode"));
 const webview_ui_1 = require("../utils/webview-ui");
@@ -117,10 +118,16 @@ function renderToolsSidebar(options) {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${options.cspSource}; style-src ${options.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${(0, webview_ui_1.escapeHtml)(options.codiconsUri)}">
-<style nonce="${nonce}">${SIDEBAR_CSS}</style>
+<style nonce="${nonce}">${SIDEBAR_CSS}
+.update-alert{margin:8px 0;padding:12px;border:1px solid var(--vscode-focusBorder);border-radius:6px;background:var(--vscode-editorWidget-background)}.update-alert p{margin:6px 0}.update-alert button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;padding:6px 10px;cursor:pointer}.update-alert[hidden]{display:none}</style>
 <title>Tools</title>
 </head>
 <body>
+<section id="updateAlert" class="update-alert" role="status" hidden>
+  <strong>Update available</strong>
+  <p id="updateVersion"></p>
+  <button type="button" id="updateNow">Update now</button>
+</section>
 <div class="appearance" id="appearance">
   <button type="button" class="theme-btn" id="themeBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="themePanel" title="Change how DevSnip Pro looks">
     <span class="codicon codicon-symbol-color theme-icon" aria-hidden="true"></span>
@@ -282,6 +289,7 @@ class ToolsSidebarProvider {
         }), "sidebar");
         const groupNames = new Set(tool_groups_1.SIDEBAR_GROUPS.map(group => group.name));
         const themeIds = new Set((0, service_1.themeChoices)().map(choice => choice.id));
+        const updateSubscription = (0, sidebar_1.onSidebarUpdate)(() => this.post({ type: "update", update: (0, sidebar_1.sidebarUpdate)() }));
         const activationSubscription = (0, activation_1.onDidChangeActivation)(() => this.post({ type: "onboarding", onboarding: this.onboarding() }));
         const subscription = view.webview.onDidReceiveMessage(async (message) => {
             try {
@@ -297,12 +305,21 @@ class ToolsSidebarProvider {
         view.onDidDispose(() => {
             subscription.dispose();
             activationSubscription.dispose();
+            updateSubscription.dispose();
             if (this.view === view)
                 this.view = undefined;
         });
     }
     /** Handles one message from the sidebar page. Every id it acts on is checked first. */
     async onMessage(message, groupNames, themeIds) {
+        if (message?.type === "updateReady") {
+            this.post({ type: "update", update: (0, sidebar_1.sidebarUpdate)() });
+            return;
+        }
+        if (message?.type === "installUpdate" && (0, capabilities_1.isCommandSupported)("sayaib.hue-console.checkForUpdates")) {
+            await (0, command_dispatch_1.executeQueuedCommand)("sayaib.hue-console.checkForUpdates");
+            return;
+        }
         if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
             // A locked theme explains how to unlock it instead; nothing is stored unless it is unlocked.
             await (0, service_1.chooseThemeOrUnlock)(message.id);

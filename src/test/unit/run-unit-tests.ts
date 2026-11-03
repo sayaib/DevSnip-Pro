@@ -49,6 +49,7 @@ async function main(): Promise<void> {
   require("./tool-hub.unit");
   require("./toolkit.unit");
   require("./web-mobile.unit");
+  require("./react-generator.unit");
   require("./sidebar.unit");
   require("./database.unit");
   require("./database-engines.unit");
