@@ -26,11 +26,14 @@ function readPem(file: string | undefined, label: string): string | undefined {
 }
 
 /**
- * PostgreSQL, and CockroachDB through the same wire protocol. CockroachDB is
- * recognised from its version string, so a postgresql:// URL works too.
+ * PostgreSQL, and CockroachDB and Amazon Redshift through the same wire
+ * protocol. CockroachDB is recognised from its version string, so a
+ * postgresql:// URL works too; Redshift from its host or redshift:// scheme.
+ * Redshift (PostgreSQL 8.0 underneath) has no jsonb, indexes or ctid, so its
+ * catalog queries are its own.
  */
 export class PostgresAdapter extends SqlAdapter {
-  readonly kind: "postgres" | "cockroachdb";
+  readonly kind: "postgres" | "cockroachdb" | "redshift";
   protected readonly dialect = "postgres" as const;
   private readonly pools = new Map<string, Pool>();
   private defaultDb = "postgres";
@@ -38,9 +41,13 @@ export class PostgresAdapter extends SqlAdapter {
 
   constructor(private readonly spec: ConnectionSpec, private readonly readOnly = false) {
     super();
-    this.kind = spec.kind === "cockroachdb" ? "cockroachdb" : "postgres";
+    this.kind = spec.kind === "cockroachdb" ? "cockroachdb" : spec.kind === "redshift" ? "redshift" : "postgres";
     this.cockroach = this.kind === "cockroachdb";
-    this.defaultDb = spec.database || (this.cockroach ? "defaultdb" : spec.user || "postgres");
+    this.defaultDb = spec.database || (this.cockroach ? "defaultdb" : this.redshift ? "dev" : spec.user || "postgres");
+  }
+
+  private get redshift(): boolean {
+    return this.kind === "redshift";
   }
 
   private ssl(): PoolConfig["ssl"] {
@@ -83,7 +90,8 @@ export class PostgresAdapter extends SqlAdapter {
       query_timeout: LIMITS.queryTimeoutMs + 5_000,
       application_name: this.spec.options.application_name || "DevSnip Pro",
       // Read-only connections are read-only on the server too, so a write hidden in a function call still fails.
-      options: [this.spec.options.options, this.readOnly ? "-c default_transaction_read_only=on" : ""].filter(Boolean).join(" ") || undefined,
+      // Redshift rejects startup options, so there the statement check alone guards writes.
+      options: this.redshift ? undefined : [this.spec.options.options, this.readOnly ? "-c default_transaction_read_only=on" : ""].filter(Boolean).join(" ") || undefined,
       types: { getTypeParser: ((oid: number, format?: string) => PARSED_OIDS.has(oid) ? pg.types.getTypeParser(oid, format as "text") : (value: string) => value) as typeof pg.types.getTypeParser }
     });
     // An idle client dropped by the server must not crash the extension host.
@@ -104,7 +112,8 @@ export class PostgresAdapter extends SqlAdapter {
     this.defaultDb = db;
     const version = this.cockroach
       ? raw.replace(/^CockroachDB (?:CCL |OSS )?(v[\d.]+\S*).*$/s, "CockroachDB $1")
-      : raw.replace(/^PostgreSQL ([\d.]+).*$/s, "PostgreSQL $1");
+      : /Redshift/i.test(raw) ? raw.replace(/^.*Redshift ([\d.]+).*$/s, "Amazon Redshift $1")
+        : raw.replace(/^PostgreSQL ([\d.]+).*$/s, "PostgreSQL $1");
     return { version, defaultDatabase: this.defaultDb };
   }
 
@@ -124,11 +133,18 @@ export class PostgresAdapter extends SqlAdapter {
   }
 
   async listDatabases(): Promise<string[]> {
-    const result = await this.pool().query("SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn ORDER BY datname");
+    // padb_harvest is Redshift's internal database.
+    const result = await this.pool().query("SELECT datname FROM pg_database WHERE NOT datistemplate AND datallowconn AND datname <> 'padb_harvest' ORDER BY datname");
     return result.rows.map(r => String(r.datname));
   }
 
   async listSchemas(database: string): Promise<string[]> {
+    if (this.redshift) {
+      const r = await this.pool(database).query(
+        "SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg\\_%' AND nspname NOT IN ('information_schema', 'catalog_history') AND has_schema_privilege(nspname, 'USAGE') ORDER BY nspname = 'public' DESC, nspname"
+      );
+      return r.rows.map(row => String(row.nspname));
+    }
     const result = await this.pool(database).query(
       "SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg\\_%' AND nspname NOT IN ('information_schema', 'crdb_internal') AND has_schema_privilege(oid, 'USAGE') ORDER BY nspname = 'public' DESC, nspname"
     );
@@ -151,7 +167,66 @@ export class PostgresAdapter extends SqlAdapter {
     }));
   }
 
+  /** Redshift: information_schema for columns, pg_constraint for the (informational) primary key. */
+  private async introspectRedshift(target: DbTarget): Promise<TableMeta> {
+    const schema = target.schema || "public";
+    const pool = this.pool(target.database);
+    const [columns, kind] = await Promise.all([
+      pool.query(
+        `SELECT column_name AS name, data_type AS type, character_maximum_length AS len, numeric_precision AS prec, numeric_scale AS scale, is_nullable AS nullable, column_default AS def
+           FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
+        [schema, target.object]
+      ),
+      pool.query("SELECT table_type FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2", [schema, target.object])
+    ]);
+    const pk = new Set<string>();
+    try {
+      const r = await pool.query(
+        `SELECT a.attname AS name FROM pg_constraint c
+           JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+           JOIN pg_attribute a ON a.attrelid = t.oid
+          WHERE c.contype = 'p' AND n.nspname = $1 AND t.relname = $2 AND a.attnum > 0 AND a.attnum = ANY(c.conkey)`,
+        [schema, target.object]
+      );
+      for (const row of r.rows) pk.add(String(row.name));
+    } catch { /* no key information: rows stay read-only */ }
+    const isView = /VIEW/i.test(String(kind.rows[0]?.table_type ?? ""));
+    return {
+      columns: columns.rows.map(r => {
+        const base = String(r.type);
+        const dataType = r.len ? `${base}(${r.len})` : /numeric/.test(base) && r.prec ? `${base}(${r.prec},${r.scale ?? 0})` : base;
+        const category = categorize(dataType);
+        const def = r.def === null ? null : String(r.def);
+        return {
+          name: String(r.name), dataType, category,
+          nullable: r.nullable === "YES",
+          primaryKey: pk.has(String(r.name)),
+          autoIncrement: /identity/i.test(def ?? ""),
+          defaultValue: def,
+          editable: category !== "binary" && !/identity/i.test(def ?? "")
+        };
+      }),
+      isView,
+      hasRowid: false,
+      noCtid: true,
+      readOnly: "Redshift has no row ids, so rows of a table without a declared primary key cannot be edited here. Inserting works; use the Query tab to change rows.",
+      dropKeyword: isView ? "VIEW" : "TABLE"
+    };
+  }
+
+  /** pg_class.reltuples, kept by ANALYZE and autovacuum; -1 (never analyzed) and partitioned parents count instead. */
+  protected override async estimateRows(target: DbTarget): Promise<number | undefined> {
+    if (this.cockroach || this.redshift) return undefined;
+    const r = await this.pool(target.database).query(
+      "SELECT c.reltuples::float8 AS n, c.relkind AS kind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2",
+      [target.schema || "public", target.object]
+    );
+    const row = r.rows[0];
+    return row && row.kind === "r" && Number(row.n) >= 0 ? Number(row.n) : undefined;
+  }
+
   protected async introspect(target: DbTarget): Promise<TableMeta> {
+    if (this.redshift) return this.introspectRedshift(target);
     // to_jsonb(a) reads attidentity/attgenerated without failing on servers that predate them.
     const result = await this.pool(target.database).query(
       `SELECT a.attname AS name,
@@ -209,6 +284,8 @@ export class PostgresAdapter extends SqlAdapter {
   }
 
   override async indexes(target: DbTarget): Promise<IndexInfo[]> {
+    // Redshift has sort and distribution keys instead of indexes.
+    if (this.redshift) return [];
     const schema = target.schema || "public";
     if (this.cockroach) {
       const r = await this.pool(target.database).query(

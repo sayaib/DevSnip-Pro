@@ -43,6 +43,14 @@ const hostUi: HostUi = {
     });
     return picked?.[0]?.fsPath;
   },
+  pickKeyFile: async () => {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: "Use key file",
+      filters: { "Service account keys": ["json"], "All files": ["*"] }
+    });
+    return picked?.[0]?.fsPath;
+  },
   copy: text => Promise.resolve(vscode.env.clipboard.writeText(text)),
   openDocument: async (content, language) => {
     const doc = await vscode.workspace.openTextDocument({ content, language });

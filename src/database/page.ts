@@ -220,6 +220,9 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .grid tbody tr:hover td { background: var(--hover); }
 .grid tbody tr.sel td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .grid tbody tr { cursor: default; }
+/* Spacer rows that stand in for the rows scrolled out of view (row virtualization). */
+.grid tbody tr.vspace td { height: 0; padding: 0; border: 0; background: none; }
+.grid tbody tr.vspace:hover td { background: none; }
 .grid .rn { width: 1%; color: var(--muted); text-align: right; font-size: 11px; padding: 0 6px; position: sticky; left: 0; z-index: 1; background: var(--bg); }
 .grid thead .rn { z-index: 3; background: var(--surface-2); }
 .grid tbody tr:hover .rn { background: var(--hover); }
@@ -414,6 +417,34 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .form-grid .field .input, .form-grid .field .select { width: 100%; }
 .inline-check { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
 @media (max-width: 520px) { .form-grid, .form-grid .pair { grid-template-columns: 1fr; } }
+
+/* Where the database runs: self-hosted, or a cloud provider's service */
+.where { display: flex; flex-direction: column; gap: 8px; }
+.provider-switch { align-self: flex-start; flex-wrap: wrap; }
+.prov-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.svc-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.svc-card { display: flex; gap: 8px; align-items: flex-start; padding: 7px 9px; border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--surface); color: var(--text); cursor: pointer; text-align: left; font-size: 12px; }
+.svc-card:hover { border-color: var(--focus); }
+.svc-card.on { border-color: var(--focus); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--focus); }
+.svc-card .kind-icon { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font-size: 8.5px; font-weight: 800; color: #fff; flex: none; }
+.svc-card b { display: block; font-weight: 600; }
+.svc-card small { display: block; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.svc-note { display: flex; gap: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.45; padding: 7px 9px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--hairline); }
+.svc-note .codicon { margin-top: 1px; }
+.svc-note a { color: var(--vscode-textLink-foreground, var(--focus)); }
+.form-grid .help.span2 { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.with-btn.top { align-items: flex-start; }
+.with-btn .textarea { flex: 1; width: 100%; }
+/* A pasted key stays masked until shown, like a password. */
+.secret-text:not(.revealed) { -webkit-text-security: disc; }
+.tree-group { display: flex; align-items: center; gap: 7px; padding: 10px 10px 3px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tree-group .codicon { font-size: 12px; }
+.tree-group .count { font-weight: 500; letter-spacing: 0; }
+.node .kind-icon { position: relative; }
+.prov-badge { position: absolute; right: -3px; bottom: -3px; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--side-bg); }
+.kinds-title { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+.kinds-title + .kinds { margin-top: 8px; margin-bottom: 18px; }
+.foot-note { max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
 
 /* Menus */
 .menu { position: fixed; z-index: 60; min-width: 200px; padding: 4px; border-radius: 6px; background: var(--vscode-menu-background, var(--surface-2)); color: var(--vscode-menu-foreground, var(--text)); border: 1px solid var(--vscode-menu-border, var(--hairline)); box-shadow: 0 8px 24px rgba(0,0,0,.4); animation: fade .08s; }

@@ -306,6 +306,13 @@ export class OracleAdapter extends SqlAdapter {
     return rows.map(r => ({ name: String(r.NAME), type: r.KIND === "view" ? "view" : "table", rows: r.ROW_COUNT === null || r.ROW_COUNT === undefined ? undefined : Number(r.ROW_COUNT) }));
   }
 
+  /** NUM_ROWS from the optimizer statistics; null until the table is analyzed. */
+  protected override async estimateRows(target: DbTarget): Promise<number | undefined> {
+    const r = await this.exec(target.database, "SELECT num_rows AS n FROM all_tables WHERE owner = :1 AND table_name = :2", [target.schema || this.currentSchema, target.object]);
+    const n = r.rows[0]?.N ?? r.rows[0]?.n;
+    return n === null || n === undefined ? undefined : Number(n);
+  }
+
   protected async introspect(target: DbTarget): Promise<TableMeta> {
     const owner = target.schema || this.currentSchema;
     const [columns, objects] = await Promise.all([

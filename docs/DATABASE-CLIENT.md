@@ -1,23 +1,25 @@
 # Database Client
 
-The Database Client in DevSnip Pro connects to ten kinds of databases, lets you browse and edit their data, and runs queries — inside VS Code, with credentials kept in your operating system's keychain.
+The Database Client in DevSnip Pro connects to ten kinds of self-hosted databases and to the managed databases of AWS, Azure and Google Cloud, lets you browse and edit their data, and runs queries — inside VS Code, with credentials kept in your operating system's keychain.
 
 Open it from the **Database** section of the DevSnip Pro sidebar, or run **DevSnip Pro: Database Client** from the Command Palette.
 
 - [Supported databases](#supported-databases)
+- [Cloud databases](#cloud-databases)
 - [Prerequisites](#prerequisites)
 - [Connect](#connect)
 - [Browse and edit data](#browse-and-edit-data)
 - [Query console](#query-console)
 - [Security](#security)
 - [Limits](#limits)
+- [Large tables](#large-tables)
 - [Troubleshooting](#troubleshooting)
 - [Test it locally](#test-it-locally)
 - [Add a database (for contributors)](#add-a-database-for-contributors)
 
 ## Supported databases
 
-Every database below is covered by end-to-end tests against a real server (see [Test it locally](#test-it-locally)). The "tested with" column lists the versions those tests ran against.
+The self-hosted databases below are covered by end-to-end tests against a real server (see [Test it locally](#test-it-locally)); the "tested with" column lists the versions those tests ran against. The cloud services are covered by tests against mock APIs; see [Cloud databases](#cloud-databases).
 
 | Database | Driver (bundled) | Tested with | Edit rows | Indexes | Cancel queries | Server-side read-only |
 | :-- | :-- | :-- | :-: | :-: | :-: | :-: |
@@ -27,10 +29,16 @@ Every database below is covered by end-to-end tests against a real server (see [
 | MariaDB | `mysql2` | 11.4 | ✓ | ✓ | ✓ | ✓ |
 | SQL Server | `mssql` (tedious) | 2022 | ✓ | ✓ | ✓ | — |
 | Oracle Database | `oracledb` (Thin mode) | 23ai Free | ✓ | ✓ | ✓ | ✓ |
-| SQLite | `node:sqlite`, or `sql.js` on older Node | 3.x | ✓ | ✓ | — | ✓ |
+| SQLite | `node:sqlite` on a worker thread, or `sql.js` on older Node | 3.x | ✓ | ✓ | ✓ (not on `sql.js`) | ✓ |
 | ClickHouse | HTTP interface (no driver) | 24.8 | insert only | ✓ | ✓ | ✓ |
 | MongoDB | `mongodb` | 7.0 | ✓ | ✓ | ✓ (`find`, `aggregate`) | — |
 | Redis / Valkey | `ioredis` | 7.4 | ✓ | — | — | — |
+| Amazon Redshift | `pg` | not yet live-tested | ✓ (tables with a primary key) | — | ✓ | — |
+| Amazon DynamoDB | DynamoDB API (SigV4) | mock API | ✓ | ✓ (keys, GSIs, LSIs) | — | — |
+| Azure Cosmos DB (NoSQL) | REST API | mock API | ✓ | ✓ (indexing policy) | — | — |
+| Cloud Spanner | REST API | mock API | ✓ | ✓ | — | — |
+| Firestore | REST API | mock API | ✓ | — | — | — |
+| BigQuery | REST API | mock API | — (console DML only) | — | ✓ | — |
 
 What the columns mean:
 
@@ -45,10 +53,63 @@ Notes per database:
 - **MariaDB** — `mariadb://` connections were saved as "MySQL" by earlier versions. They are relabelled the next time they connect.
 - **SQL Server** — SQL Server logins only. Windows (integrated) authentication is not supported.
 - **Oracle** — Oracle Database 12.1 or later. Thin mode is pure JavaScript, so no Oracle Instant Client is needed. Wallets, Kerberos and LDAP naming are not supported; connect with a user and password.
-- **SQLite** — queries run inside VS Code, so a running query cannot be cancelled. `:memory:` databases cannot be opened from another process.
+- **SQLite** — queries run on a worker thread, so a long one never freezes VS Code, stops after 30 seconds, and can be cancelled. VS Code builds without `node:sqlite` (Node older than 22.5) fall back to `sql.js`, which copies the file into memory: it opens files up to 512 MB and cannot cancel. `:memory:` databases cannot be opened from another process.
 - **ClickHouse** — uses the HTTP interface (port 8123, or 8443 with TLS), not the native protocol (port 9000). ClickHouse rows have no unique key, so the grid can insert rows but not edit or delete them; use `ALTER TABLE … UPDATE` or `ALTER TABLE … DELETE` in a query tab.
 - **MongoDB** — cancelling stops `find` and `aggregate` cursors on the server. Other commands stop waiting at once and finish within the 30-second server time limit.
 - **Redis** — Valkey and other Redis-compatible servers work too. Commands that block, subscribe or change the connection (`SUBSCRIBE`, `MONITOR`, `SELECT`, `MULTI`, …) are not available in the console.
+
+## Cloud databases
+
+In the **New connection** dialog, pick where the database runs — **Self-hosted**, **AWS**, **Azure** or **Google Cloud** — then the service. The explorer groups saved connections the same way.
+
+| Provider | Service | Connects through | Authentication |
+| :-- | :-- | :-- | :-- |
+| AWS | Amazon RDS (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle) | the engine's driver | password; IAM database authentication (PostgreSQL, MySQL, MariaDB) |
+| AWS | Amazon Aurora (PostgreSQL, MySQL) | the engine's driver | password; IAM database authentication |
+| AWS | Amazon DynamoDB | the DynamoDB API, signed with SigV4 | access key (and session token); a profile in `~/.aws`; environment; DynamoDB Local |
+| AWS | Amazon Redshift (provisioned and Serverless) | `pg`, with Redshift's catalog queries | password |
+| Azure | Azure SQL Database | `mssql` | SQL login; Microsoft Entra ID through `az login` |
+| Azure | Azure Cosmos DB | NoSQL API over REST; the MongoDB API through `mongodb` | account key; emulator |
+| Azure | Azure Database for PostgreSQL / MySQL (Flexible Server) | the engine's driver | password; Microsoft Entra ID through `az login` |
+| Google Cloud | Cloud SQL (PostgreSQL, MySQL, SQL Server) | the engine's driver | password; IAM database authentication (PostgreSQL, MySQL) |
+| Google Cloud | AlloyDB | `pg` | password; IAM database authentication |
+| Google Cloud | Cloud Spanner (GoogleSQL) | the Spanner REST API | Application Default Credentials; a pasted service account key; a key file; emulator |
+| Google Cloud | Firestore (Native mode) | the Firestore REST API | as Spanner |
+| Google Cloud | BigQuery | the BigQuery REST API | as Spanner |
+
+Services that speak an engine's protocol reuse that engine's driver with the service's defaults: the usual port, TLS on, the endpoint format as a hint, and warnings for common mistakes (an Aurora reader endpoint, Azure SQL without encryption, TLS through the Cloud SQL Auth Proxy). DynamoDB, Cosmos DB, Spanner, Firestore and BigQuery are reached over HTTPS without an SDK, so nothing extra is installed and nothing loads until you connect.
+
+**Credentials.** Passwords, account keys, secret access keys and session tokens live in the connection string, which is kept in VS Code SecretStorage and shown masked (`********`). A pasted Google service account key gets a SecretStorage entry of its own; it is deleted when the connection stops using it or is removed, and only its account email is ever shown. Key files are read from disk at each connect; only their path is saved. Tokens for IAM / Entra ID authentication are made at connect time (an RDS token lasts 15 minutes, so sessions reconnect every 10 minutes) and are redacted from errors.
+
+**Signing in with provider tools.** IAM authentication for RDS and Aurora uses your AWS credentials (the named profile, `AWS_ACCESS_KEY_ID` and friends, or the default profile); SSO and role profiles are resolved through the AWS CLI (`aws configure export-credentials`). Entra ID uses the Azure CLI's signed-in account (`az account get-access-token`). Google services use Application Default Credentials (`gcloud auth application-default login`), then `gcloud auth print-access-token`.
+
+Connection string forms:
+
+| Service | Example |
+| :-- | :-- |
+| Amazon RDS / Aurora | `postgresql://postgres:password@mydb.abc123xyz789.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require` |
+| RDS with IAM | `postgresql://app_user@mydb.abc123xyz789.us-east-1.rds.amazonaws.com/app?sslmode=require&auth=aws-iam&profile=dev` |
+| Amazon Redshift | `redshift://awsuser:password@examplecluster.abc123xyz789.us-west-2.redshift.amazonaws.com:5439/dev` |
+| DynamoDB | `dynamodb://AKIA…:SECRET@us-east-1`, `dynamodb://us-east-1?profile=dev`, `dynamodb://localhost:8000` |
+| Azure SQL with Entra ID | `Server=tcp:myserver.database.windows.net,1433;Database=app;User Id=me@contoso.com;Encrypt=true;auth=azure-ad` |
+| Cosmos DB (NoSQL) | `AccountEndpoint=https://myaccount.documents.azure.com:443/;AccountKey=…;Database=app;` |
+| Cosmos DB (MongoDB API) | `mongodb://myaccount:KEY@myaccount.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false` |
+| Cloud SQL through the Auth Proxy | `postgresql://postgres:password@127.0.0.1:5432/postgres` |
+| Cloud SQL with IAM | `postgresql://me%40example.com@34.123.45.67/app?sslmode=require&auth=gcp-iam` |
+| Cloud Spanner | `spanner://my-project/my-instance/my-database`, `jdbc:cloudspanner:/projects/p/instances/i/databases/d` |
+| Firestore | `firestore://my-project` (or `firestore://my-project/other-db`) |
+| BigQuery | `bigquery://my-project/default_dataset?location=EU&maxbytesbilled=1000000000` |
+| Emulators | add `?endpoint=http://localhost:9020` (Spanner), `:8080` (Firestore), `:9050` (BigQuery) |
+
+How the API services browse:
+
+- **DynamoDB** — the region is the database; tables page through PartiQL `SELECT`s with continuation tokens, so there is no total count (the footer shows DynamoDB's own estimate) and no sorting. The filter box takes a PartiQL condition. Items are JSON; sets, binary and numbers beyond double precision use markers such as `{"$SS": [...]}` so they survive an edit. Inserts never overwrite and saves never recreate a deleted item. The console runs PartiQL.
+- **Cosmos DB** — databases and containers; the filter box takes a `WHERE` condition on `c`. Queries run per physical partition so `ORDER BY` and `OFFSET`/`LIMIT` work; edits address the document's partition key. The console runs SQL queries and picks the container from the name after `FROM`. Queries cost request units.
+- **Spanner** — GoogleSQL databases browse and edit like any SQL database; DML commits right away; `CREATE`/`ALTER`/`DROP` run as schema operations. PostgreSQL-dialect databases work in the console only.
+- **Firestore** — root collections; a subcollection opens from the console (`SELECT * FROM users/alice/orders`). Filters cover equality, comparisons, `IN`, null checks and *starts with*; there is no text search. Timestamps, references and whole doubles keep their type through edits.
+- **BigQuery** — the project's datasets and tables, read-only in the grid. An unfiltered table pages with `tabledata.list`, which costs nothing; filters, sorting, views and the console run query jobs, and the result says how many bytes were scanned. Set **Max bytes billed** to cap a single query. Running queries can be cancelled.
+
+The cloud paths are covered by unit tests against local mock APIs (`database-cloud.unit.ts`): request signing (including AWS's published SigV4 test vector), paging, writes and error handling. They have not been run against live cloud accounts or the Docker emulators yet.
 
 ## Prerequisites
 
@@ -283,11 +344,28 @@ Other recommendations:
 | :-- | :-- |
 | Connect timeout | 10 seconds |
 | Query timeout | 30 seconds (enforced by the server where it supports one) |
-| Rows per page in the grid | 500 |
-| Rows shown in the console | 1,000 (the rest is never fetched) |
+| Rows per page in the grid | 500 (only the rows in view are drawn) |
+| Rows shown in the console | 1,000 (the rest is never fetched; only the rows in view are drawn) |
+| Table size shown as an estimate | 1,000,000 rows and up, unfiltered (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle) |
+| Searches not counted automatically | on tables of 100,000 rows and up |
+| SQLite file size with `sql.js` | 512 MB |
 | Redis keys scanned per page | 10,000 |
 | MongoDB documents sampled to infer fields | 200 |
 | Saved connections | 100 |
+
+## Large tables
+
+The client is built to stay responsive on tables with millions of rows:
+
+- **Bounded fetching.** The grid reads one page with `LIMIT`/`OFFSET` (or `OFFSET … FETCH`); the console stops reading after 1,000 rows, through a server cursor or stream where the driver has one. Nothing loads a whole table.
+- **Counting.** A page's total is counted once and reused for the next pages of the same filter (for 30 seconds, or until you change data). An unfiltered table of a million rows or more shows the estimate the database keeps in its statistics ("about 12,400,000 rows") instead of running `COUNT(*)`; **Count rows** in the footer counts exactly. A text search of a large table is not counted at all, because it cannot use an index and counting would scan the table a second time: the grid shows whether another page follows.
+- **Searching.** On tables of 100,000 rows and up, the search box runs when you press Enter rather than as you type.
+- **Time limits.** Grid and console queries stop on the server after 30 seconds: PostgreSQL `statement_timeout`, MySQL `max_execution_time`, MariaDB `max_statement_time`, SQL Server and Oracle call timeouts, ClickHouse `max_execution_time`, and SQLite by stopping its worker thread.
+- **Rendering.** Pages and results over 120 rows draw only the rows in view, so a 1,000-row result costs about as much as a 60-row one.
+
+What stays slow on very large tables is what the database itself has to scan: a jump to a deep page (`OFFSET` reads and skips every row before it), sorting by a column without an index, and searching across all columns. Filter or sort by indexed columns to reach rows deep in a table.
+
+`scripts/db-benchmark.js` measures these paths on generated SQLite tables of any size (`node --expose-gc scripts/db-benchmark.js 100000 1000000 10000000` after `npm run compile`).
 
 ## Troubleshooting
 

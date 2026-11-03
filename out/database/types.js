@@ -2,7 +2,8 @@
 /**
  * Shared contract of the Database Client: every adapter (PostgreSQL,
  * CockroachDB, MySQL, MariaDB, SQL Server, Oracle, SQLite, ClickHouse,
- * MongoDB, Redis) speaks this shape, so the panel and the webview never
+ * MongoDB, Redis, and the cloud services Redshift, DynamoDB, Cosmos DB,
+ * Spanner, Firestore and BigQuery) speaks this shape, so the panel and the webview never
  * branch on driver details - only on `kind`, `family` and `features`.
  *
  * Everything that crosses into the webview is plain JSON: driver values are
@@ -31,9 +32,9 @@ exports.DB_KINDS = {
         notes: "Oracle Database 12.1 or later. No Oracle Client install is needed."
     },
     sqlite: {
-        label: "SQLite", family: "sql", schemas: false, driver: "node:sqlite or sql.js", features: { ...ALL, cancel: false },
+        label: "SQLite", family: "sql", schemas: false, driver: "node:sqlite (worker thread) or sql.js", features: ALL,
         example: "sqlite:///Users/me/project/dev.db",
-        notes: "Queries run inside VS Code, so a running query cannot be cancelled."
+        notes: "Queries run on a worker thread, so a long one never freezes VS Code and can be cancelled. On VS Code builds without node:sqlite, sql.js opens files up to 512 MB and cannot cancel."
     },
     clickhouse: {
         label: "ClickHouse", family: "sql", schemas: false, defaultPort: 8123, driver: "HTTP interface", features: { ...ALL, editRows: false },
@@ -45,6 +46,40 @@ exports.DB_KINDS = {
         label: "Redis", family: "keyvalue", schemas: false, defaultPort: 6379, driver: "ioredis", features: { editRows: true, indexes: false, cancel: false, serverReadOnly: false },
         example: "redis://:password@localhost:6379/0",
         notes: "Valkey and other Redis-compatible servers work too."
+    },
+    redshift: {
+        label: "Amazon Redshift", family: "sql", schemas: true, defaultPort: 5439, driver: "pg", cloud: "aws", features: { ...ALL, indexes: false, serverReadOnly: false },
+        example: "redshift://awsuser:password@examplecluster.abc123xyz789.us-west-2.redshift.amazonaws.com:5439/dev",
+        notes: "Redshift tables have no enforced primary keys: rows of tables without a declared key are read-only here."
+    },
+    dynamodb: {
+        label: "Amazon DynamoDB", family: "document", schemas: false, driver: "HTTPS API (SigV4)", cloud: "aws", features: { editRows: true, indexes: true, cancel: false, serverReadOnly: false },
+        example: "dynamodb://AKIAIOSFODNN7EXAMPLE:secret@us-east-1",
+        filterHint: "PartiQL WHERE: status = 'active' AND age > 21",
+        noSearch: "DynamoDB has no text search. Use Filter, or a PartiQL condition.",
+        notes: "Browsing scans the table page by page; each page costs read capacity. Sorting is not available on scans."
+    },
+    cosmosdb: {
+        label: "Azure Cosmos DB", family: "document", schemas: false, driver: "HTTPS API (NoSQL)", cloud: "azure", features: { editRows: true, indexes: true, cancel: false, serverReadOnly: false },
+        example: "AccountEndpoint=https://myaccount.documents.azure.com:443/;AccountKey=secret;",
+        filterHint: "WHERE: c.status = 'active' AND c.age > 21",
+        notes: "NoSQL API. For the MongoDB API, connect with the account's mongodb:// connection string instead."
+    },
+    spanner: {
+        label: "Cloud Spanner", family: "sql", schemas: false, driver: "REST API", cloud: "gcp", features: { editRows: true, indexes: true, cancel: false, serverReadOnly: false },
+        example: "spanner://my-project/my-instance/my-database",
+        notes: "GoogleSQL databases. Schema changes (CREATE, ALTER, DROP) run as DDL operations and can take a while."
+    },
+    firestore: {
+        label: "Firestore", family: "document", schemas: false, driver: "REST API", cloud: "gcp", features: { editRows: true, indexes: false, cancel: false, serverReadOnly: false },
+        example: "firestore://my-project",
+        noSearch: "Firestore has no text search. Use Filter: equals, starts with, or a comparison.",
+        notes: "Native-mode databases. Root collections are listed; open subcollections with a query (collection path)."
+    },
+    bigquery: {
+        label: "BigQuery", family: "sql", schemas: true, driver: "REST API", cloud: "gcp", features: { editRows: false, indexes: false, cancel: true, serverReadOnly: false },
+        example: "bigquery://my-project?location=US",
+        notes: "Browsing an unfiltered table is free. Filters, sorting and queries run as query jobs, billed by bytes scanned."
     }
 };
 exports.FILTER_OPS = ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "starts", "ends", "null", "notnull", "in"];

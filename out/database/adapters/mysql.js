@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MysqlAdapter = exports.mysqlErrorPosition = void 0;
+const tokens_1 = require("../cloud-auth/tokens");
 const sql_builder_1 = require("../sql-builder");
 const types_1 = require("../types");
 const sql_base_1 = require("./sql-base");
@@ -101,12 +102,23 @@ class MysqlAdapter extends sql_base_1.SqlAdapter {
             supportBigNumbers: true,
             bigNumberStrings: true,
             multipleStatements: false,
-            charset: "utf8mb4"
+            charset: "utf8mb4",
+            // IAM / Entra ID tokens travel as a cleartext password, which these servers only accept over TLS.
+            ...(tokens_1.TOKEN_AUTH.includes(this.spec.options.auth ?? "") && this.spec.ssl ? { enableCleartextPlugin: true } : {})
         });
-        if (this.readOnly) {
+        const seconds = Math.ceil(types_1.LIMITS.queryTimeoutMs / 1000);
+        this.poolInstance.on("connection", connection => {
+            const set = (sql) => connection.query(sql, () => undefined);
+            // The client-side timeout only stops waiting; these stop the statement on the server, so an
+            // abandoned scan does not keep a pooled connection (and the server) busy. MySQL limits SELECTs
+            // (max_execution_time, ms); MariaDB every statement (max_statement_time, s). Each server rejects
+            // the other's variable, harmlessly.
+            set(`SET SESSION max_execution_time = ${seconds * 1000}`);
+            set(`SET SESSION max_statement_time = ${seconds}`);
             // Read-only connections are read-only on the server too, so a write hidden in a procedure call still fails.
-            this.poolInstance.on("connection", connection => { connection.query("SET SESSION TRANSACTION READ ONLY"); });
-        }
+            if (this.readOnly)
+                set("SET SESSION TRANSACTION READ ONLY");
+        });
         return this.poolInstance;
     }
     async connect() {
@@ -145,6 +157,12 @@ class MysqlAdapter extends sql_base_1.SqlAdapter {
             type: /VIEW/i.test(String(r.type)) ? "view" : "table",
             rows: r.row_count === null || r.row_count === undefined ? undefined : Number(r.row_count)
         }));
+    }
+    /** InnoDB's TABLE_ROWS estimate (from index statistics). */
+    async estimateRows(target) {
+        const [rows] = await this.pool().query("SELECT TABLE_ROWS AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'", [target.database ?? this.defaultDb, target.object]);
+        const n = rows[0]?.n;
+        return n === null || n === undefined ? undefined : Number(n);
     }
     async introspect(target) {
         if (!target.database)

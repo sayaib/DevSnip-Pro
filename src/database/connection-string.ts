@@ -10,6 +10,7 @@
 
 import * as os from "os";
 import * as path from "path";
+import { AWS_ACCESS_KEY_ID, AWS_REGION, GCP_PROJECT_ID, SPANNER_ID } from "./cloud";
 import { DB_KINDS, DbError, DbKind } from "./types";
 
 /** Stands in for a password in the UI; saving it back keeps the stored one. */
@@ -31,6 +32,19 @@ export interface ConnectionSpec {
   url?: string;
   /** Oracle: Easy Connect string or connect descriptor, without credentials. */
   connectString?: string;
+  /** DynamoDB: AWS region. BigQuery: job location. */
+  region?: string;
+  /** Spanner, Firestore, BigQuery: Google Cloud project id. */
+  project?: string;
+  /** Spanner: instance id. */
+  instance?: string;
+  /** Cloud APIs: the endpoint requests go to (emulators, DynamoDB Local, private endpoints), without a trailing slash. */
+  endpoint?: string;
+  /**
+   * A credentials file kept in SecretStorage next to the connection string
+   * (a Google service-account key). Set by the service, never parsed from the string.
+   */
+  credentials?: string;
 }
 
 const defaultPort = (kind: DbKind): number | undefined => DB_KINDS[kind]?.defaultPort;
@@ -44,10 +58,19 @@ const SCHEMES: Record<string, DbKind> = {
   sqlite: "sqlite", sqlite3: "sqlite", file: "sqlite",
   clickhouse: "clickhouse", ch: "clickhouse",
   mongodb: "mongodb", "mongodb+srv": "mongodb",
-  redis: "redis", rediss: "redis", valkey: "redis", valkeys: "redis"
+  redis: "redis", rediss: "redis", valkey: "redis", valkeys: "redis",
+  redshift: "redshift",
+  dynamodb: "dynamodb", ddb: "dynamodb",
+  cosmosdb: "cosmosdb", cosmos: "cosmosdb",
+  spanner: "spanner", cloudspanner: "spanner",
+  firestore: "firestore",
+  bigquery: "bigquery", bq: "bigquery"
 };
 
-const SUPPORTED_HINT = "Supported: postgresql://, cockroachdb://, mysql://, mariadb://, sqlserver:// (or Server=...;), oracle:// (or jdbc:oracle:thin:@...), sqlite:///path/to/file.db, clickhouse://, mongodb://, mongodb+srv://, redis://, rediss://.";
+const SUPPORTED_HINT = "Supported: postgresql://, cockroachdb://, mysql://, mariadb://, sqlserver:// (or Server=...;), oracle:// (or jdbc:oracle:thin:@...), sqlite:///path/to/file.db, clickhouse://, mongodb://, mongodb+srv://, redis://, rediss://, redshift://, dynamodb://, AccountEndpoint=... (Cosmos DB), spanner://, firestore://, bigquery://.";
+
+/** Redshift endpoints, which speak the PostgreSQL protocol but need Redshift's catalog queries. */
+const REDSHIFT_HOST = /\.redshift(-serverless)?\.amazonaws\.com(\.cn)?$/i;
 
 const SQLITE_EXT = /\.(db|sqlite|sqlite3|db3|s3db|sl3)$/i;
 
@@ -64,6 +87,8 @@ export function normalizeConnectionString(raw: string): string {
 export function detectKind(raw: string): DbKind | undefined {
   const text = normalizeConnectionString(raw);
   if (!text) return undefined;
+  // Azure Cosmos DB (NoSQL API) connection strings, as copied from the portal.
+  if (/^(accountendpoint|accountkey)\s*=/i.test(text) || (!/^[a-z][a-z0-9+]*:\/\//i.test(text) && /(^|;)\s*accountendpoint\s*=/i.test(text))) return "cosmosdb";
   if (/^(server|data source|address|addr|network address)\s*=/i.test(text)) return "sqlserver";
   // ADO.NET key=value strings, even when the Server part is missing.
   if (!/^[a-z][a-z0-9+]*:\/\//i.test(text) && /(^|;)\s*(initial catalog|database|user id|uid|trusted_connection|integrated security)\s*=/i.test(text)) return "sqlserver";
@@ -94,6 +119,18 @@ export function parseConnection(raw: string, baseDir?: string): ConnectionSpec {
     case "sqlserver": return parseSqlServer(text);
     case "oracle": return parseOracle(text);
     case "clickhouse": return parseClickHouse(text);
+    case "redshift": return parseRedshift(text);
+    case "dynamodb": return parseDynamo(text);
+    case "cosmosdb": return parseCosmos(text);
+    case "spanner":
+    case "firestore":
+    case "bigquery": return parseGoogle(text, kind);
+    case "postgres": {
+      const spec = parseUrl(text, kind);
+      // A postgresql:// URL that points at Redshift still needs Redshift's catalog queries.
+      if (REDSHIFT_HOST.test(spec.host ?? "")) return parseRedshift(text);
+      return spec;
+    }
     default: return parseUrl(text, kind);
   }
 }
@@ -318,85 +355,311 @@ function parseClickHouse(text: string): ConnectionSpec {
   return spec;
 }
 
+/** Redshift: PostgreSQL protocol on port 5439, TLS on unless sslmode=disable. */
+function parseRedshift(text: string): ConnectionSpec {
+  if (/^redshift:iam:/i.test(text)) throw new DbError("Redshift IAM JDBC URLs are not supported.", "Use a database user and password: redshift://user:password@host:5439/dev");
+  const spec = parseUrl(text, "redshift");
+  spec.kind = "redshift";
+  if (spec.host?.includes(",")) throw new DbError("Use one Redshift endpoint.");
+  const mode = (spec.options.sslmode ?? "").toLowerCase();
+  // Redshift accepts TLS everywhere and requires it on new clusters.
+  spec.ssl = mode !== "disable" && !(mode === "" && /^(localhost|127\.0\.0\.1)$/i.test(spec.host ?? "") && !truthy(spec.options.ssl));
+  if (!spec.database) spec.database = "dev";
+  return spec;
+}
+
+/** Splits a query string into lower-cased keys and decoded values. */
+function queryOptions(query: string): Record<string, string> {
+  const dec = (v: string) => { try { return decodeURIComponent(v.replace(/\+/g, " ")); } catch { return v; } };
+  const options: Record<string, string> = {};
+  for (const pair of query.split("&").filter(Boolean)) {
+    const i = pair.indexOf("=");
+    options[dec(i < 0 ? pair : pair.slice(0, i)).toLowerCase()] = dec(i < 0 ? "" : pair.slice(i + 1));
+  }
+  return options;
+}
+
+/** An http(s) endpoint as the cloud adapters use it: origin plus path, no trailing slash. */
+function endpointUrl(raw: string, label: string, defaultScheme = "http"): string {
+  const text = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `${defaultScheme}://${raw}`;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    throw new DbError(`The ${label} "${raw.slice(0, 80)}" is not a valid URL.`, "Example: http://localhost:8000");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new DbError(`The ${label} must be an http:// or https:// URL.`);
+  if (url.username || url.password) throw new DbError(`Put credentials in their own fields, not in the ${label}.`);
+  return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+}
+
+const isLocalEndpoint = (endpoint: string | undefined) => !!endpoint && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|host\.docker\.internal|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(endpoint);
+
+/**
+ * DynamoDB: dynamodb://ACCESS_KEY_ID:SECRET@us-east-1, or @dynamodb.us-east-1.amazonaws.com,
+ * or @localhost:8000 for DynamoDB Local. Options: region, endpoint, profile, sessiontoken, auth.
+ * Without keys the credentials come from ?profile=, the environment, or ~/.aws (default profile).
+ */
+function parseDynamo(text: string): ConnectionSpec {
+  const spec = parseUrl(text, "dynamodb");
+  spec.kind = "dynamodb";
+  const o = spec.options;
+  const host = (spec.host ?? "").toLowerCase();
+  if (host.includes(",")) throw new DbError("Use one DynamoDB region or endpoint.");
+  const named = /^dynamodb(-fips)?\.([a-z0-9-]+)\.amazonaws\.com(\.cn)?$/.exec(host);
+  if (AWS_REGION.test(host)) spec.region = host;
+  else if (named) spec.region = named[2];
+  // A dotless name is a region typed wrong, not a host (localhost aside).
+  else if (host && host !== "aws" && !host.includes(".") && !spec.port && !/^(localhost|::1)$/.test(host)) spec.region = host;
+  else if (host && host !== "aws") spec.endpoint = endpointUrl(spec.port ? `${host}:${spec.port}` : host, "endpoint", /^(localhost|127\.|::1|host\.docker\.internal)/.test(host) ? "http" : "https");
+  if (o.endpoint) spec.endpoint = endpointUrl(o.endpoint, "endpoint");
+  if (named && !o.endpoint) spec.endpoint = `https://${host}`;
+  spec.region = (o.region || spec.region || (isLocalEndpoint(spec.endpoint) ? "us-east-1" : "")).toLowerCase();
+  if (!spec.region) throw new DbError("Add the AWS region.", "Example: dynamodb://ACCESS_KEY_ID:SECRET@us-east-1");
+  if (!AWS_REGION.test(spec.region)) throw new DbError(`"${spec.region.slice(0, 40)}" is not an AWS region.`, "Regions look like us-east-1, eu-west-2 or ap-southeast-1.");
+  if (spec.user && !spec.password && !isLocalEndpoint(spec.endpoint)) throw new DbError("Enter the secret access key for this access key ID.");
+  const auth = (o.auth || (spec.user ? "access-key" : o.profile ? "profile" : isLocalEndpoint(spec.endpoint) ? "emulator" : "env")).toLowerCase();
+  if (!["access-key", "profile", "env", "emulator"].includes(auth)) throw new DbError(`Unknown DynamoDB auth "${auth}".`, "Use access-key, profile, env or emulator.");
+  if (auth === "access-key" && !spec.user) throw new DbError("Enter the access key ID and secret access key.");
+  o.auth = auth;
+  spec.ssl = !spec.endpoint || spec.endpoint.startsWith("https:");
+  spec.port = undefined;
+  spec.database = spec.region;
+  spec.url = undefined;
+  return spec;
+}
+
+/**
+ * Azure Cosmos DB (NoSQL API), as the portal shows it:
+ * AccountEndpoint=https://myaccount.documents.azure.com:443/;AccountKey=...;[Database=app;]
+ */
+function parseCosmos(text: string): ConnectionSpec {
+  let body = text;
+  // cosmosdb://myaccount.documents.azure.com?key=... is accepted as a shorthand.
+  const url = /^(cosmosdb|cosmos):\/\/(.*)$/i.exec(text);
+  if (url) {
+    const [head, query = ""] = url[2].split("?");
+    const at = head.lastIndexOf("@");
+    const hostPath = at >= 0 ? head.slice(at + 1) : head;
+    const [hostPort, database = ""] = hostPath.split("/");
+    const o = queryOptions(query);
+    const key = at >= 0 ? decodeURIComponentSafe(head.slice(0, at).replace(/^[^:]*:/, "")) : o.accountkey ?? o.key ?? "";
+    body = `AccountEndpoint=${/^(localhost|127\.)/i.test(hostPort) ? "http" : "https"}://${hostPort}/;AccountKey=${key};${database ? `Database=${database};` : ""}`;
+  }
+  const kv: Record<string, string> = {};
+  for (const { key, value } of splitKeyValues(body)) kv[key] = value;
+  const rawEndpoint = kv.accountendpoint ?? "";
+  if (!rawEndpoint) throw new DbError("The Cosmos DB connection string has no AccountEndpoint.", "Copy the PRIMARY CONNECTION STRING from Keys in the portal: AccountEndpoint=https://myaccount.documents.azure.com:443/;AccountKey=...;");
+  const endpoint = endpointUrl(rawEndpoint, "AccountEndpoint", "https");
+  const parsed = new URL(endpoint);
+  const key = kv.accountkey ?? "";
+  if (!key) throw new DbError("The Cosmos DB connection string has no AccountKey.", "Copy the PRIMARY KEY (or the whole connection string) from Keys in the portal.");
+  if (key !== PASSWORD_MASK && !/^[A-Za-z0-9+/]+={0,2}$/.test(key)) throw new DbError("The AccountKey is not a valid key.", "Account keys are base64 text ending in ==. Copy it again from Keys in the portal.");
+  const options: Record<string, string> = {};
+  for (const [k, v] of Object.entries(kv)) if (!["accountendpoint", "accountkey"].includes(k)) options[k] = v;
+  return {
+    kind: "cosmosdb",
+    host: parsed.hostname,
+    port: parsed.port ? Number(parsed.port) : parsed.protocol === "https:" ? 443 : 80,
+    password: key,
+    database: kv.database ?? "",
+    endpoint: `${parsed.protocol}//${parsed.host}`,
+    ssl: parsed.protocol === "https:",
+    options
+  };
+}
+
+function decodeURIComponentSafe(text: string): string {
+  try { return decodeURIComponent(text); } catch { return text; }
+}
+
+/**
+ * Google Cloud APIs:
+ *   spanner://PROJECT/INSTANCE[/DATABASE], spanner://projects/P/instances/I/databases/D,
+ *   jdbc:cloudspanner:/projects/P/instances/I/databases/D;
+ *   firestore://PROJECT[/DATABASE];
+ *   bigquery://PROJECT[/DATASET], or the Simba JDBC form with ProjectId=...;
+ * Options: endpoint (emulators), keyfile (a service-account key path), auth, location, maxbytesbilled.
+ */
+function parseGoogle(text: string, kind: "spanner" | "firestore" | "bigquery"): ConnectionSpec {
+  const m = /^([a-z][a-z0-9+]*):(?:\/\/)?(.*)$/is.exec(text);
+  if (!m) throw new DbError(`A ${DB_KINDS[kind].label} connection string must start with ${kind}://`);
+  let rest = m[2];
+  let options: Record<string, string> = {};
+  let segments: string[];
+  let host: string | undefined;
+  // Simba BigQuery JDBC: bigquery://https://www.googleapis.com/bigquery/v2:443;ProjectId=p;DefaultDataset=d
+  if (kind === "bigquery" && /^https?:/i.test(rest)) {
+    const kv: Record<string, string> = {};
+    for (const { key, value } of splitKeyValues(rest.slice(rest.indexOf(";") + 1))) kv[key] = value;
+    segments = [kv.projectid ?? "", kv.defaultdataset ?? ""].filter(Boolean);
+    if (kv.location) options.location = kv.location;
+  } else {
+    // JDBC Spanner options follow a ";": cloudspanner:/projects/p/...;autoConfigEmulator=true
+    const semi = rest.indexOf(";");
+    if (semi >= 0) {
+      for (const { key, value } of splitKeyValues(rest.slice(semi + 1))) options[key] = value;
+      rest = rest.slice(0, semi);
+    }
+    const q = rest.indexOf("?");
+    if (q >= 0) { options = { ...options, ...queryOptions(rest.slice(q + 1)) }; rest = rest.slice(0, q); }
+    // jdbc:cloudspanner://localhost:9010/projects/... names the emulator's host.
+    const hostMatch = /^\/\/([^/]+)(\/.*)?$/.exec(m[2].startsWith("//") ? rest : "");
+    if (m[1].toLowerCase() === "cloudspanner" && hostMatch) { host = hostMatch[1]; rest = hostMatch[2] ?? ""; }
+    segments = rest.split("/").map(decodeURIComponentSafe).filter(Boolean);
+    if (segments[0] === "projects") {
+      // Resource names: projects/P/instances/I/databases/D (Spanner) or projects/P/databases/D (Firestore, BigQuery datasets).
+      const named: Record<string, string> = {};
+      for (let i = 0; i + 1 < segments.length; i += 2) named[segments[i]] = segments[i + 1];
+      segments = [named.projects, named.instances, named.databases ?? named.datasets].filter((v): v is string => !!v);
+      if (kind !== "spanner") segments = [named.projects, named.databases ?? named.datasets].filter((v): v is string => !!v);
+    }
+  }
+  const spec: ConnectionSpec = { kind, ssl: true, options };
+  const [project = "", second = "", third = ""] = segments;
+  spec.project = project;
+  if (options.endpoint || options.emulatorhost || options.emulator_host) spec.endpoint = endpointUrl(options.endpoint || options.emulatorhost || options.emulator_host, "endpoint");
+  else if (host || truthy(options.autoconfigemulator) || truthy(options.useplaintext)) {
+    // The JDBC driver talks gRPC (9010); this client uses the emulator's REST port.
+    spec.endpoint = `http://${(host ?? "localhost:9010").replace(/:9010$/, ":9020")}`;
+  }
+  const emulator = isLocalEndpoint(spec.endpoint) || (!!spec.endpoint && spec.endpoint.startsWith("http:"));
+  if (!project) throw new DbError("Add the Google Cloud project ID.", `Example: ${DB_KINDS[kind].example}`);
+  if (!GCP_PROJECT_ID.test(project) && !emulator) throw new DbError(`"${project.slice(0, 60)}" is not a valid project ID.`, "Project IDs are 6-30 characters: lower-case letters, digits and hyphens, starting with a letter. Use the ID, not the project name.");
+  if (kind === "spanner") {
+    if (!second) throw new DbError("Add the Spanner instance ID.", "Example: spanner://my-project/my-instance/my-database");
+    if (!SPANNER_ID.test(second)) throw new DbError(`"${second.slice(0, 60)}" is not a valid instance ID.`, "Instance IDs use lower-case letters, digits and hyphens.");
+    if (third && !SPANNER_ID.test(third)) throw new DbError(`"${third.slice(0, 60)}" is not a valid database ID.`, "Database IDs use lower-case letters, digits, hyphens and underscores.");
+    spec.instance = second;
+    spec.database = third;
+  } else if (kind === "firestore") {
+    if (second && second !== "(default)" && !/^[a-z][a-z0-9-]{2,62}$/.test(second)) throw new DbError(`"${second.slice(0, 60)}" is not a valid Firestore database ID.`, "Leave it empty for the (default) database.");
+    spec.database = second || "(default)";
+  } else {
+    if (second && !/^[A-Za-z0-9_]{1,1024}$/.test(second)) throw new DbError(`"${second.slice(0, 60)}" is not a valid dataset ID.`, "Dataset IDs use letters, digits and underscores.");
+    spec.database = project;
+    if (second) options.dataset = second;
+    spec.region = options.location || undefined;
+    if (options.maxbytesbilled && !/^\d{1,19}$/.test(options.maxbytesbilled)) throw new DbError("Max bytes billed must be a whole number of bytes.", "For example 1000000000 for 1 GB.");
+  }
+  const auth = (options.auth || (emulator ? "emulator" : options.keyfile ? "key-file" : "adc")).toLowerCase();
+  if (!["adc", "service-account", "key-file", "emulator"].includes(auth)) throw new DbError(`Unknown Google Cloud auth "${auth}".`, "Use adc, service-account, key-file or emulator.");
+  if (auth === "key-file" && !options.keyfile) throw new DbError("Add the path of the service-account key file.", "Or choose Application Default Credentials.");
+  if (auth === "emulator" && !spec.endpoint) throw new DbError("Set the emulator endpoint.", kind === "spanner" ? "The Spanner emulator's REST endpoint is http://localhost:9020" : kind === "firestore" ? "The Firestore emulator usually runs on http://localhost:8080" : "For example http://localhost:9050");
+  options.auth = auth;
+  spec.ssl = !spec.endpoint || spec.endpoint.startsWith("https:");
+  return spec;
+}
+
 /** Advice shown after a successful parse; never blocks saving. */
 export function connectionWarnings(spec: ConnectionSpec): string[] {
   const warnings: string[] = [];
   const local = /^(localhost|127\.0\.0\.1|::1|host\.docker\.internal|0\.0\.0\.0)$/i.test(spec.host ?? "");
-  if (spec.kind !== "sqlite" && !spec.ssl && spec.host && !local && !spec.host.includes(",")) {
+  // Cloud APIs with an endpoint are checked below, by the endpoint's scheme.
+  if (spec.kind !== "sqlite" && !spec.ssl && spec.host && !local && !spec.host.includes(",") && !spec.endpoint) {
     warnings.push("TLS is off for a remote host, so credentials and data travel unencrypted.");
   }
-  if (!["sqlite", "redis", "mongodb", "clickhouse"].includes(spec.kind) && !spec.user) warnings.push("No user name is set.");
+  if (["postgres", "cockroachdb", "mysql", "mariadb", "sqlserver", "oracle", "redshift"].includes(spec.kind) && !spec.user && !spec.options.auth) warnings.push("No user name is set.");
+  if (spec.endpoint && spec.endpoint.startsWith("http:") && !isLocalEndpoint(spec.endpoint)) warnings.push("The endpoint uses plain http://, so credentials and data travel unencrypted.");
+  if (spec.kind === "dynamodb" && spec.user && !AWS_ACCESS_KEY_ID.test(spec.user) && !isLocalEndpoint(spec.endpoint)) warnings.push("The access key ID does not look like an AWS key (AKIA… or ASIA…).");
+  if (spec.kind === "dynamodb" && /^ASIA/.test(spec.user ?? "") && !spec.options.sessiontoken) warnings.push("Temporary keys (ASIA…) also need the session token.");
   if (spec.kind === "postgres" && /:6543$|pooler|pgbouncer/i.test(`${spec.host}:${spec.port}`)) warnings.push("This looks like a transaction pooler. Browsing works, but session settings do not persist between queries.");
   return warnings;
 }
 
-/** Where the password sits in the raw text, so it can be masked or restored without re-serialising. */
-function passwordSpan(raw: string): { start: number; end: number } | undefined {
+/** Query options and key=value entries whose values are secrets, masked like the password. */
+const SECRET_KEY = /^(password|pwd|accountkey|sessiontoken|session_token|x-amz-security-token|secretaccesskey|secret_access_key|accesstoken|access_token|sig|.*password)$/i;
+
+/**
+ * Where the secrets sit in the raw text (the password, an account key, a
+ * session token), so they can be masked or restored without re-serialising.
+ * `key` tells them apart when a masked string is saved back.
+ */
+function secretSpans(raw: string): Array<{ key: string; start: number; end: number }> {
   const text = raw;
   const kind = detectKind(text);
-  if (!kind || kind === "sqlite") return undefined;
-  const isKv = kind === "sqlserver" && (/^(server|data source|address|addr|network address)\s*=/i.test(text.trim()) || /^(jdbc:)?(sqlserver|mssql):\/\/[^/@]*;/i.test(text.trim()));
+  if (!kind || kind === "sqlite") return [];
+  const isKv = (kind === "cosmosdb" && !/^[a-z][a-z0-9+]*:\/\//i.test(text.trim())) ||
+    (kind === "sqlserver" && (/^(server|data source|address|addr|network address)\s*=/i.test(text.trim()) || /^(jdbc:)?(sqlserver|mssql):\/\/[^/@]*;/i.test(text.trim())));
   if (isKv) {
-    // In sqlserver://host;k=v the first "key" swallows the host; only the password key matters here.
-    for (const kv of splitKeyValues(text)) {
-      if (/(^|;)\s*(password|pwd)$/.test(kv.key) && kv.end > kv.start) return { start: kv.start, end: kv.end };
-    }
-    return undefined;
+    // In sqlserver://host;k=v the first "key" swallows the host; only the secret keys matter here.
+    return splitKeyValues(text)
+      .map(kv => ({ ...kv, key: kv.key.split(";").pop()!.trim() }))
+      .filter(kv => SECRET_KEY.test(kv.key) && kv.end > kv.start)
+      .map(kv => ({ key: kv.key === "pwd" ? "password" : kv.key, start: kv.start, end: kv.end }));
   }
   const thin = /^(?:jdbc:)?oracle:thin:/i.exec(text);
   if (thin) {
     // jdbc:oracle:thin:user/password@host
     const at = text.lastIndexOf("@");
     const slash = text.indexOf("/", thin[0].length);
-    if (at < 0 || slash < 0 || slash > at || slash + 1 === at) return undefined;
-    return { start: slash + 1, end: at };
+    if (at < 0 || slash < 0 || slash > at || slash + 1 === at) return [];
+    return [{ key: "password", start: slash + 1, end: at }];
   }
   const m = /[a-z][a-z0-9+]*:\/\//i.exec(text);
-  if (!m) return undefined;
+  if (!m) return [];
+  const spans: Array<{ key: string; start: number; end: number }> = [];
   const base = m.index + m[0].length;
   const rest = text.slice(base);
   const q = rest.indexOf("?");
   const head = q < 0 ? rest : rest.slice(0, q);
   const at = head.lastIndexOf("@");
-  if (at < 0) return undefined;
-  const colon = rest.slice(0, at).indexOf(":");
-  if (colon < 0 || colon + 1 === at) return undefined;
-  return { start: base + colon + 1, end: base + at };
+  if (at >= 0) {
+    const colon = rest.slice(0, at).indexOf(":");
+    if (colon >= 0 && colon + 1 !== at) spans.push({ key: "password", start: base + colon + 1, end: base + at });
+  }
+  if (q >= 0) {
+    let pos = base + q + 1;
+    for (const pair of text.slice(pos).split("&")) {
+      const eq = pair.indexOf("=");
+      const key = decodeURIComponentSafe(eq < 0 ? pair : pair.slice(0, eq)).toLowerCase();
+      if (eq >= 0 && eq + 1 < pair.length && SECRET_KEY.test(key)) spans.push({ key, start: pos + eq + 1, end: pos + pair.length });
+      pos += pair.length + 1;
+    }
+  }
+  return spans;
 }
 
-/** The connection string with its password replaced by PASSWORD_MASK. */
+const isMask = (value: string) => value === PASSWORD_MASK || value === `{${PASSWORD_MASK}}`;
+
+/** Replaces `spans` of `text` (in order, non-overlapping) with what `fill` returns. */
+function replaceSpans(text: string, spans: Array<{ key: string; start: number; end: number }>, fill: (value: string, key: string, index: number) => string): string {
+  let out = "";
+  let last = 0;
+  spans.forEach((span, i) => {
+    out += text.slice(last, span.start) + fill(text.slice(span.start, span.end), span.key, i);
+    last = span.end;
+  });
+  return out + text.slice(last);
+}
+
+/** The connection string with its password and other secrets replaced by PASSWORD_MASK. */
 export function maskConnectionString(raw: string): string {
   const text = normalizeConnectionString(raw);
-  const span = passwordSpan(text);
-  if (!span) return text;
-  const value = text.slice(span.start, span.end);
-  const braced = value.startsWith("{") && value.endsWith("}");
-  return text.slice(0, span.start) + (braced ? `{${PASSWORD_MASK}}` : PASSWORD_MASK) + text.slice(span.end);
+  return replaceSpans(text, secretSpans(text), value => (value.startsWith("{") && value.endsWith("}") ? `{${PASSWORD_MASK}}` : PASSWORD_MASK));
 }
 
 /**
- * When an edited string still carries the mask, puts the stored password back.
+ * When an edited string still carries masks, puts the stored secrets back.
  * Anything else the user changed (host, database, options) is kept.
  */
 export function restoreMaskedPassword(edited: string, stored: string | undefined): string {
   const text = normalizeConnectionString(edited);
-  const span = passwordSpan(text);
-  if (!span || !stored) return text;
-  const value = text.slice(span.start, span.end);
-  if (value !== PASSWORD_MASK && value !== `{${PASSWORD_MASK}}`) return text;
+  const spans = secretSpans(text);
+  if (!spans.length || !stored) return text;
   const original = normalizeConnectionString(stored);
-  const old = passwordSpan(original);
-  const replacement = old ? original.slice(old.start, old.end) : "";
-  return text.slice(0, span.start) + replacement + text.slice(span.end);
+  const old = secretSpans(original);
+  return replaceSpans(text, spans, (value, key) => {
+    if (!isMask(value)) return value;
+    const match = old.find(o => o.key === key);
+    return match ? original.slice(match.start, match.end) : "";
+  });
 }
 
-/** True when the edited string still uses the masked placeholder. */
+/** True when the edited string still uses a masked placeholder. */
 export function hasMaskedPassword(text: string): boolean {
   const normalized = normalizeConnectionString(text);
-  const span = passwordSpan(normalized);
-  if (!span) return false;
-  const value = normalized.slice(span.start, span.end);
-  return value === PASSWORD_MASK || value === `{${PASSWORD_MASK}}`;
+  return secretSpans(normalized).some(span => isMask(normalized.slice(span.start, span.end)));
 }
 
 /** Every form a credential could take inside a driver message. */
@@ -405,14 +668,35 @@ export function secretsOf(raw: string, spec?: ConnectionSpec): string[] {
   const text = normalizeConnectionString(raw);
   if (text) out.add(text);
   if (raw && raw.trim()) out.add(raw.trim());
-  const span = passwordSpan(text);
-  if (span) out.add(text.slice(span.start, span.end).replace(/^\{|\}$/g, ""));
+  for (const span of secretSpans(text)) {
+    const value = text.slice(span.start, span.end).replace(/^\{|\}$/g, "");
+    out.add(value);
+    out.add(decodeURIComponentSafe(value));
+  }
   const password = spec?.password;
   if (password) {
     out.add(password);
     out.add(encodeURIComponent(password));
   }
+  for (const value of credentialSecrets(spec?.credentials)) out.add(value);
   return [...out].filter(s => s.length >= 3).sort((a, b) => b.length - a.length);
+}
+
+/** The secret parts of a credentials file (a service-account key or a gcloud user credential). */
+export function credentialSecrets(credentials: string | undefined): string[] {
+  if (!credentials) return [];
+  const out = [credentials.trim()];
+  try {
+    const json = JSON.parse(credentials) as Record<string, unknown>;
+    for (const key of ["private_key", "client_secret", "refresh_token", "private_key_id"]) {
+      const value = json[key];
+      if (typeof value !== "string" || !value) continue;
+      out.push(value);
+      // The PEM body travels in 64-character lines; any one of them would identify the key.
+      if (key === "private_key") out.push(...value.split(/\r?\n/).filter(line => line.length >= 32 && !line.startsWith("-----")));
+    }
+  } catch { /* not JSON: the whole text is the secret */ }
+  return out;
 }
 
 export function redact(text: string, secrets: string[]): string {
@@ -421,7 +705,7 @@ export function redact(text: string, secrets: string[]): string {
     if (secret) out = out.split(secret).join("***");
   }
   // Belt and braces: credentials in any URL the driver echoes back.
-  return out.replace(/([a-z][a-z0-9+]*:\/\/[^:/@\s]*:)[^@\s]+@/gi, "$1***@").replace(/((?:password|pwd)\s*=\s*)(\{[^}]*\}|[^;\s]+)/gi, "$1***");
+  return out.replace(/([a-z][a-z0-9+]*:\/\/[^:/@\s]*:)[^@\s]+@/gi, "$1***@").replace(/((?:password|pwd|accountkey|sessiontoken|x-amz-security-token)\s*=\s*)(\{[^}]*\}|[^;&\s]+)/gi, "$1***");
 }
 
 /**
@@ -464,6 +748,10 @@ export function friendlyError(error: unknown, secrets: string[] = []): DbError {
   if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/.test(text)) return say("The database host could not be found.", "Check the host name, VPN and DNS.");
   if (/EHOSTUNREACH|ENETUNREACH/.test(text)) return say("The database host is unreachable.", "Check your network, VPN or firewall rules.");
   if (/ORA-12514|ORA-12505|DPY-6001|DPY-6003/.test(text)) return say(message, "The listener does not know that service name or SID. Check the name after the port, e.g. /FREEPDB1 or /ORCLPDB1.");
+  // Server-side time limits (MySQL max_execution_time, MariaDB max_statement_time) word themselves like a cancel.
+  if (/maximum statement execution time exceeded|max_statement_time exceeded|ER_QUERY_TIMEOUT|ER_STATEMENT_TIMEOUT/i.test(text)) {
+    return say("The query took longer than the 30-second limit and was stopped by the server.", "Add a filter or a LIMIT, or an index on the columns you filter and sort by.");
+  }
   if (/ORA-01013|57014.*user request|canceling statement due to user request|Query execution was interrupted|QUERY_WAS_CANCELLED|Code: 394|operation was aborted(?! due to timeout)|^AbortError/i.test(text)) return say("The query was cancelled.");
   if (/ECONNRESET|EPIPE|socket hang up|Connection is closed|Connection lost|NJS-500|DPI-1080/i.test(text)) return say(`The connection was closed by the server. ${message}`, "Reconnect and try again. If it keeps happening, the server may require TLS or reject your IP.");
   if (/self[- ]signed|SELF_SIGNED|DEPTH_ZERO|UNABLE_TO_VERIFY|certificate/i.test(text)) return say(`TLS certificate problem: ${message}`, "For local servers with self-signed certificates, add sslmode=no-verify (PostgreSQL), TrustServerCertificate=true (SQL Server) or tlsAllowInvalidCertificates=true (MongoDB).");

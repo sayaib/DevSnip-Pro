@@ -2,7 +2,7 @@
 
 <a href="https://buymeacoffee.com/ssayaibj"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="42"></a>
 
-**Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and more, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
+**Send HTTP and GraphQL requests, browse PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and cloud databases on AWS, Azure and Google Cloud, estimate LLM costs and catch hard-coded secrets — without leaving VS Code.**
 
 Free · No account · Runs locally · 117 developer tools
 
@@ -17,7 +17,7 @@ Free · No account · Runs locally · 117 developer tools
 |                                                                                        |                                                                          |
 | :------------------------------------------------------------------------------------- | :----------------------------------------------------------------------- |
 | 🚀 **[REST API client](#rest-api-client-in-vs-code)**                                   | HTTP, GraphQL, environments, collections, cURL import, code generation   |
-| 🗄️ **[Database client](#database-client-for-postgresql-mysql-mongodb-and-redis)**       | PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, SQLite, MongoDB, Redis and more |
+| 🗄️ **[Database client](#database-client-for-postgresql-mysql-mongodb-and-redis)**       | PostgreSQL, MySQL, SQL Server, Oracle, SQLite, MongoDB, Redis, plus AWS, Azure and Google Cloud databases |
 | 🤖 **[AI tools](#llm-token-counter-cost-estimates-and-ai-tools)**                       | Token and cost estimates for 18 models, prompt builder, RAG helpers      |
 | 🔒 **[Security scans](#security-scan-hard-coded-secrets-containers-dependencies-and-endpoints)** | Known CVEs in dependencies, hard-coded secrets, containers and live endpoints |
 | 📊 **[CSV & Excel viewer](#csv-and-excel-viewer)**                                     | View and edit .csv, .tsv and .xlsx files in a searchable, sortable grid |
@@ -53,7 +53,7 @@ Build a request, send it and inspect the response — all in one panel.
 
 ## Database client for PostgreSQL, MySQL, MongoDB and Redis
 
-Fill in a short form or paste a connection string — DevSnip Pro detects the database and shows its schemas, tables, views, collections or keys.
+Fill in a short form or paste a connection string — DevSnip Pro detects the database and shows its schemas, tables, views, collections or keys. Pick **Self-hosted**, **AWS**, **Azure** or **Google Cloud** in the connection form to get each service's defaults.
 
 ![DevSnip Pro Database Client in VS Code browsing a PostgreSQL table with pagination and filters](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/database.jpg)
 
@@ -65,17 +65,27 @@ Fill in a short form or paste a connection string — DevSnip Pro detects the da
 | MariaDB           | `mariadb://user:pass@host:3306/db`                        | SQL            | ✓         | ✓              |
 | SQL Server        | `Server=host,1433;Database=db;…` or `sqlserver://…`       | T-SQL          | ✓         | ✓              |
 | Oracle            | `oracle://user:pass@host:1521/SERVICE` or `jdbc:oracle:thin:@…` | SQL, PL/SQL | ✓       | ✓              |
-| SQLite            | `sqlite:///path/to/app.db` (or **Browse…**)               | SQL            | ✓         | —              |
+| SQLite            | `sqlite:///path/to/app.db` (or **Browse…**)               | SQL            | ✓         | ✓              |
 | ClickHouse        | `clickhouse://user:pass@host:8123/db`                     | SQL            | insert only | ✓            |
 | MongoDB           | `mongodb://…` or `mongodb+srv://…`                        | mongosh-style  | ✓         | ✓ (find, aggregate) |
 | Redis / Valkey    | `redis://…` or `rediss://…`                               | Redis commands | ✓         | —              |
+| Amazon Redshift   | `redshift://user:pass@cluster.….redshift.amazonaws.com:5439/dev` | SQL     | ✓ (tables with a primary key) | ✓ |
+| Amazon DynamoDB   | `dynamodb://ACCESS_KEY:SECRET@us-east-1` or `?profile=dev` | PartiQL       | ✓         | —              |
+| Azure Cosmos DB   | `AccountEndpoint=https://….documents.azure.com:443/;AccountKey=…;` | SQL queries | ✓     | —              |
+| Cloud Spanner     | `spanner://project/instance/database`                     | GoogleSQL      | ✓         | —              |
+| Firestore         | `firestore://project`                                     | SQL-like queries | ✓       | —              |
+| BigQuery          | `bigquery://project/dataset`                              | GoogleSQL      | —         | ✓              |
+
+Amazon RDS and Aurora, Azure SQL Database, Azure Database for PostgreSQL and MySQL, Cloud SQL and AlloyDB connect through the matching engine above, with TLS on and their usual ports; the Cosmos DB MongoDB API connects as MongoDB.
 
 - **Data grid:** pagination, sorting, search, filters and resizable columns — including MongoDB filters like `{ age: { $gt: 21 } }` and Redis patterns like `user:*`.
 - **Edit anything:** type-aware row editor (NULL, DEFAULT), Extended JSON documents (`ObjectId()`, `ISODate()`), and an editor for every Redis type with TTLs. Tables without a primary key are edited through PostgreSQL's `ctid`, Oracle's `ROWID`, CockroachDB's hidden `rowid` or SQLite's `rowid`.
 - **Query editor:** syntax highlighting, line numbers, **Format**, and errors underlined where the server found them. <kbd>Ctrl/Cmd</kbd>+<kbd>Enter</kbd> runs the selection; a long query can be **cancelled** on the server. Sort, filter and copy results as JSON or CSV.
 - **Structure:** columns with types, keys and defaults, plus the table's **indexes**.
-- **Safe by default:** passwords live in your OS keychain. Destructive statements ask first, dropping a table asks you to type its name, and **read-only** connections refuse every write — on most databases the server enforces it too.
-- **No extra installs:** every driver ships with the extension. Oracle uses node-oracledb Thin mode, so no Oracle Client is needed.
+- **Cloud sign-in:** passwords and keys, IAM database authentication for RDS, Aurora and Cloud SQL, Microsoft Entra ID through `az login`, AWS profiles from `~/.aws`, gcloud Application Default Credentials or a pasted service account key. You can also point a connection at a local emulator (DynamoDB Local, Spanner, Firestore, BigQuery, Cosmos DB).
+- **Large tables:** pages and console results are fetched in bounded chunks and only the visible rows are drawn. Totals are counted once per filter; tables with millions of rows show the database's estimate, with **Count rows** for the exact number. SQLite queries run on a worker thread, so a long scan never freezes VS Code, and queries are stopped after 30 seconds.
+- **Safe by default:** passwords, keys and tokens live in your OS keychain. Destructive statements ask first, dropping a table asks you to type its name, and **read-only** connections refuse every write — on most databases the server enforces it too.
+- **No extra installs:** every driver ships with the extension. Oracle uses node-oracledb Thin mode, so no Oracle Client is needed, and the cloud APIs need no SDK.
 
 📖 [Database Client reference: setup, examples, security and troubleshooting](docs/DATABASE-CLIENT.md) · 📖 [Connect to PostgreSQL, MySQL, MongoDB and Redis in VS Code](docs/guides/connect-to-postgresql-mysql-mongodb-redis-in-vscode.md) · 🌐 [Database client for VS Code](https://devsnip.pro/databases)
 
@@ -273,7 +283,7 @@ No. Tools run locally, and network requests go only to the URLs and databases yo
 Yes, except for things that need a network by definition: API requests, database connections, the endpoint scan, and AI provider calls.
 
 **Will it slow down VS Code?**
-No. Heavy features load only when you first open them, and database drivers load when you connect.
+No. Heavy features load only when you first open them, database drivers load when you connect, and SQLite queries run off the main thread.
 
 **Does it work in Remote, WSL or vscode.dev?**
 Remote and WSL work. vscode.dev isn't supported because several tools use Node APIs.

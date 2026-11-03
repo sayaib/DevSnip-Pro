@@ -108,6 +108,7 @@
     ready: false,
     connections: [],
     kinds: {},
+    cloud: { providers: {}, services: [], auth: {} },
     filterOps: [],
     limits: { maxPageSize: 500, maxQueryRows: 1000 },
     tree: {},
@@ -124,16 +125,23 @@
     eq: "=", neq: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤",
     contains: "contains", starts: "starts with", ends: "ends with", null: "is null", notnull: "is not null", in: "in list"
   };
-  var KIND_ABBR = { postgres: "PG", cockroachdb: "CR", mysql: "MY", mariadb: "MA", sqlserver: "MS", oracle: "OR", sqlite: "SL", clickhouse: "CH", mongodb: "MG", redis: "RD" };
-  var KIND_COLOR = { postgres: "#336791", cockroachdb: "#6933ff", mysql: "#00758f", mariadb: "#a5563b", sqlserver: "#a91d22", oracle: "#c74634", sqlite: "#0f80cc", clickhouse: "#8a7a00", mongodb: "#13aa52", redis: "#d82c20" };
+  var KIND_ABBR = { postgres: "PG", cockroachdb: "CR", mysql: "MY", mariadb: "MA", sqlserver: "MS", oracle: "OR", sqlite: "SL", clickhouse: "CH", mongodb: "MG", redis: "RD", redshift: "RS", dynamodb: "DY", cosmosdb: "CO", spanner: "SP", firestore: "FS", bigquery: "BQ" };
+  var KIND_COLOR = { postgres: "#336791", cockroachdb: "#6933ff", mysql: "#00758f", mariadb: "#a5563b", sqlserver: "#a91d22", oracle: "#c74634", sqlite: "#0f80cc", clickhouse: "#8a7a00", mongodb: "#13aa52", redis: "#d82c20", redshift: "#8c4fff", dynamodb: "#4d27aa", cosmosdb: "#0078d4", spanner: "#4285f4", firestore: "#e37400", bigquery: "#3b78e7" };
+  var PROVIDER_COLOR = { aws: "#ff9900", azure: "#0078d4", gcp: "#34a853" };
+  var SERVICE_ABBR = { "aws-rds": "RDS", "aws-aurora": "AU", "aws-dynamodb": "DY", "aws-redshift": "RS", "azure-sql": "SQL", "azure-cosmos": "CO", "azure-postgres": "PG", "azure-mysql": "MY", "gcp-cloudsql": "SQL", "gcp-spanner": "SP", "gcp-firestore": "FS", "gcp-bigquery": "BQ", "gcp-alloydb": "AL" };
   var FEATURE_LABELS = [["editRows", "Edit rows"], ["indexes", "Indexes"], ["cancel", "Cancel queries"], ["serverReadOnly", "Server read-only"]];
   var COLORS = ["blue", "green", "orange", "red", "purple", "teal", "gray"];
   var REDIS_TYPES = ["string", "hash", "list", "set", "zset"];
-  var HIDDEN_COLS = { __rowid: 1, __ctid: 1 };
+  // __pk: the Cosmos DB partition key value that addresses a document; never shown.
+  var HIDDEN_COLS = { __rowid: 1, __ctid: 1, __pk: 1 };
 
   function conn(id) { return S.connections.find(function (c) { return c.id === id; }); }
   function colorVar(c) { return c && c.color ? "var(--c-" + c.color + ")" : "var(--c-blue)"; }
   function family(c) { return c ? c.family : "sql"; }
+  function kindMeta(c) { return (c && S.kinds[c.kind]) || {}; }
+  /** What one record is called: row, document, item (DynamoDB) or key. */
+  function recordNoun(c) { return c && c.kind === "dynamodb" ? "item" : family(c) === "document" ? "document" : family(c) === "keyvalue" ? "key" : "row"; }
+  function cloudSvc(id) { return (S.cloud.services || []).find(function (x) { return x.id === id; }); }
   function tabById(id) { return S.tabs.find(function (t) { return t.id === id; }); }
 
   function persist() {
@@ -278,11 +286,22 @@
     if (!S.connections.length) {
       els.tree.append(h("div", { class: "empty-side" },
         h("div", { text: "No saved connections yet." }),
-        h("div", { text: "Connect to PostgreSQL, CockroachDB, MySQL, MariaDB, SQL Server, Oracle, SQLite, ClickHouse, MongoDB or Redis." }),
+        h("div", { text: "Connect to PostgreSQL, MySQL, SQL Server, Oracle, SQLite, MongoDB, Redis and more, or to cloud databases on AWS, Azure and Google Cloud." }),
         btn("New connection", "add", function () { openConnectionModal(null); }, "primary")));
       return;
     }
-    S.connections.forEach(function (c) { els.tree.append(connNode(c)); });
+    // Grouped by where the database runs, once any cloud connection exists.
+    if (!S.connections.some(function (c) { return c.provider; })) S.connections.forEach(function (c) { els.tree.append(connNode(c)); });
+    else {
+      [["", "Self-hosted"]].concat(Object.keys(S.cloud.providers).map(function (p) { return [p, S.cloud.providers[p].short]; })).forEach(function (g) {
+        var list = S.connections.filter(function (c) { return (c.provider || "") === g[0]; });
+        if (!list.length) return;
+        els.tree.append(h("div", { class: "tree-group", role: "presentation" },
+          g[0] ? h("span", { class: "prov-dot", style: { background: PROVIDER_COLOR[g[0]] } }) : icon("server"),
+          h("span", { class: "grow", text: g[1] }), h("span", { class: "count", text: String(list.length) })));
+        list.forEach(function (c) { els.tree.append(connNode(c)); });
+      });
+    }
     els.tree.scrollTop = scroll;
   }
 
@@ -313,7 +332,7 @@
     if (c.status === "connecting") return "Connecting…";
     if (c.status === "connected") return c.version || "Connected";
     if (c.status === "error") return "Connection failed";
-    return c.kindLabel;
+    return c.cloudLabel && c.cloudLabel !== c.kindLabel ? c.cloudLabel + " · " + c.kindLabel : c.kindLabel;
   }
 
   function connMenu(c) {
@@ -333,7 +352,8 @@
   function connNode(c) {
     var t = treeOf(c.id);
     var wrap = h("div", { role: "group" });
-    var lead = h("span", { class: "kind-icon", title: c.kindLabel, style: { "--conn-color": KIND_COLOR[c.kind] } }, KIND_ABBR[c.kind] || "DB");
+    var lead = h("span", { class: "kind-icon", title: c.cloudLabel ? c.cloudLabel + " · " + c.kindLabel : c.kindLabel, style: { "--conn-color": KIND_COLOR[c.kind] } }, KIND_ABBR[c.kind] || "DB",
+      c.provider ? h("i", { class: "prov-badge", style: { background: PROVIDER_COLOR[c.provider] }, "aria-hidden": "true" }) : null);
     var label = h("span", { class: "label" }, h("div", { text: c.name }), h("div", { class: "sub", text: statusText(c) }));
     var trail = [
       c.readOnly ? h("span", { title: "Read-only connection" }, icon("lock", "lock")) : null,
@@ -437,7 +457,7 @@
   function appendObjects(wrap, c, db, schema, objects, depth) {
     var f = S.sideFilter;
     var list = f ? objects.filter(function (o) { return o.name.toLowerCase().indexOf(f) >= 0; }) : objects;
-    if (!objects.length) { wrap.append(h("div", { class: "node-msg info", style: { marginLeft: (20 + depth * 14) + "px" }, text: c.kind === "mongodb" ? "No collections." : "No tables." })); return; }
+    if (!objects.length) { wrap.append(h("div", { class: "node-msg info", style: { marginLeft: (20 + depth * 14) + "px" }, text: family(c) === "document" && c.kind !== "dynamodb" ? (c.kind === "cosmosdb" ? "No containers." : "No collections.") : "No tables." })); return; }
     if (!list.length) { wrap.append(h("div", { class: "node-msg info", style: { marginLeft: (20 + depth * 14) + "px" }, text: "No match for “" + f + "”." })); return; }
     var activeTab = tabById(S.active);
     list.slice(0, 2000).forEach(function (o) {
@@ -448,7 +468,7 @@
         cls: isActive ? "active" : "",
         lead: icon(iconName, "obj-icon obj-" + o.type),
         label: h("span", { class: "label", text: o.name }),
-        trail: typeof o.rows === "number" ? h("span", { class: "badge", title: "About " + fmtNum(o.rows) + (c.kind === "mongodb" ? " documents" : " rows"), text: compact(o.rows) }) : null,
+        trail: typeof o.rows === "number" ? h("span", { class: "badge", title: "About " + fmtNum(o.rows) + " " + recordNoun(c) + "s", text: compact(o.rows) }) : null,
         acts: [iconBtn("terminal", "Query " + o.name, function () { openQueryTab(c.id, { database: db.name, schema: target.schema, text: starterQuery(c, target) }); }),
           iconBtn("ellipsis", "More actions", function (e) { showMenu(objectMenu(c, target, o), e.currentTarget); })],
         menu: function () { return objectMenu(c, target, o); },
@@ -459,7 +479,7 @@
 
   function objectMenu(c, target, o) {
     var writable = !c.readOnly && o.type !== "view";
-    var noun = c.kind === "mongodb" ? "collection" : o.type === "view" ? "view" : "table";
+    var noun = o.type === "collection" ? (c.kind === "cosmosdb" ? "container" : "collection") : o.type === "view" ? "view" : "table";
     return [
       { label: "Open data", icon: "table", run: function () { openDataTab(c.id, target, o.type); } },
       { label: "View structure", icon: "symbol-structure", run: function () { openDataTab(c.id, target, o.type, "structure"); } },
@@ -475,19 +495,23 @@
 
   function quoteIdent(kind, name) {
     if (kind === "mysql") return "`" + name.replace(/`/g, "``") + "`";
+    if (kind === "spanner" || kind === "bigquery") return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : "`" + name.replace(/[\\`]/g, "\\$&") + "`";
     if (kind === "sqlserver") return "[" + name.replace(/]/g, "]]") + "]";
     return /^[a-z_][a-z0-9_]*$/.test(name) ? name : '"' + name.replace(/"/g, '""') + '"';
   }
   function qualify(c, t) {
-    if (c.kind === "mongodb" || c.kind === "redis") return t.object;
+    if (family(c) !== "sql") return t.object;
     var parts = [];
-    if (t.schema && (c.kind === "postgres" ? t.schema !== "public" : c.kind === "sqlserver")) parts.push(quoteIdent(c.kind, t.schema));
+    if (t.schema && (c.kind === "postgres" || c.kind === "redshift" ? t.schema !== "public" : c.kind === "sqlserver" || c.kind === "bigquery")) parts.push(quoteIdent(c.kind, t.schema));
     parts.push(quoteIdent(c.kind, t.object));
     return parts.join(".");
   }
   function starterQuery(c, t) {
     if (c.kind === "mongodb") return (/^[A-Za-z_][A-Za-z0-9_]*$/.test(t.object) ? "db." + t.object : "db.getCollection(" + JSON.stringify(t.object) + ")") + ".find({}).limit(20)";
     if (c.kind === "redis") return "SCAN 0 MATCH * COUNT 100";
+    if (c.kind === "dynamodb") return "SELECT * FROM \"" + t.object + "\"";
+    if (c.kind === "cosmosdb") return "SELECT TOP 100 * FROM " + (/^[A-Za-z_][\w-]*$/.test(t.object) ? t.object : "c") + " c";
+    if (c.kind === "firestore") return "SELECT * FROM " + t.object + " LIMIT 100";
     if (c.kind === "sqlserver") return "SELECT TOP 100 * FROM " + qualify(c, t) + ";";
     return "SELECT * FROM " + qualify(c, t) + " LIMIT 100;";
   }
@@ -771,18 +795,35 @@
     var view = h("div", { class: "view welcome-view" });
     var inner = h("div", { class: "welcome-inner" },
       h("h1", null, icon("database"), "Database Client"),
-      h("p", { class: "lead", text: "Connect with a connection string, browse databases, schemas and tables, and read, insert, edit and delete data — for SQL, document and key-value stores." }),
+      h("p", { class: "lead", text: "Connect with a connection string, browse databases, schemas and tables, and read, insert, edit and delete data — for SQL, document and key-value stores, self-hosted or on AWS, Azure and Google Cloud." }),
       btn("New connection", "add", function () { openConnectionModal(null); }, "primary"));
+    inner.append(h("div", { class: "section-title kinds-title", text: "Self-hosted" }));
     var kinds = h("div", { class: "kinds" });
     Object.keys(S.kinds).forEach(function (k) {
       var meta = S.kinds[k];
+      if (meta.cloud) return;
       var b = h("button", { class: "kind-card", type: "button", title: "New " + meta.label + " connection\n" + meta.example + (meta.notes ? "\n\n" + meta.notes : "") },
         h("span", { class: "kind-icon", style: { background: KIND_COLOR[k] } }, KIND_ABBR[k]),
         h("span", null, meta.label, h("small", { text: meta.family === "sql" ? "SQL" : meta.family === "document" ? "Documents" : "Key-value" })));
       b.addEventListener("click", function () { openConnectionModal(null, { kind: k }); });
       kinds.append(b);
     });
-    inner.append(kinds, capabilityTable());
+    inner.append(kinds);
+    Object.keys(S.cloud.providers).forEach(function (p) {
+      var services = S.cloud.services.filter(function (x) { return x.provider === p; });
+      if (!services.length) return;
+      inner.append(h("div", { class: "section-title kinds-title" }, h("span", { class: "prov-dot", style: { background: PROVIDER_COLOR[p] } }), S.cloud.providers[p].label));
+      var grid = h("div", { class: "kinds" });
+      services.forEach(function (svc) {
+        var b = h("button", { class: "kind-card", type: "button", title: "New " + svc.label + " connection\n" + svc.description + (svc.notes ? "\n\n" + svc.notes : "") },
+          h("span", { class: "kind-icon", style: { background: PROVIDER_COLOR[p] } }, SERVICE_ABBR[svc.id] || "DB"),
+          h("span", null, svc.label, h("small", { text: svc.engines.map(function (e) { return e.label; }).join(", ") })));
+        b.addEventListener("click", function () { openConnectionModal(null, { cloud: svc.id }); });
+        grid.append(b);
+      });
+      inner.append(grid);
+    });
+    inner.append(capabilityTable());
     if (S.connections.length) {
       var recent = S.connections.slice().sort(function (a, b) { return (b.lastConnectedAt || 0) - (a.lastConnectedAt || 0); }).slice(0, 6);
       inner.append(h("div", { class: "section-title", text: "Your connections" }));
@@ -799,7 +840,8 @@
     }
     inner.append(h("div", { class: "section-title", text: "Good to know" }),
       h("div", { class: "tips" },
-        h("div", { class: "tip" }, h("b", null, icon("lock"), "Secure by default"), "Connection strings live in your OS keychain. Passwords are never shown again or logged."),
+        h("div", { class: "tip" }, h("b", null, icon("lock"), "Secure by default"), "Connection strings and cloud keys live in your OS keychain. Passwords are never shown again or logged."),
+        h("div", { class: "tip" }, h("b", null, icon("cloud"), "Cloud sign-in"), "Use IAM tokens for RDS and Cloud SQL, az login for Azure, ~/.aws profiles, gcloud credentials or service account keys."),
         h("div", { class: "tip" }, h("b", null, icon("shield"), "Read-only mode"), "Mark a connection read-only to block every write, including from the query console."),
         h("div", { class: "tip" }, h("b", null, icon("terminal"), "Query console"), "SQL, mongosh-style commands or Redis commands. " + MOD + "Enter runs the selection or everything; long queries can be cancelled."),
         h("div", { class: "tip" }, h("b", null, icon("warning"), "Safe deletes"), "Deleting rows, dropping tables and destructive statements always ask first.")));
@@ -1004,14 +1046,20 @@
       return;
     }
     t.ui.foot.classList.remove("hidden");
-    var search = h("input", { class: "input", type: "search", value: t.search, placeholder: fam === "keyvalue" ? "Search key names…" : fam === "document" ? "Search text fields…" : "Search all columns…", "aria-label": "Search" });
-    var runSearch = debounce(function () { if (search.value === t.search) return; t.search = search.value; t.page = 1; persistSoon(); loadTab(t); }, 400);
-    search.addEventListener("input", runSearch);
-    search.addEventListener("keydown", function (e) { if (e.key === "Enter") { t.search = search.value; t.page = 1; loadTab(t); } });
-    t.ui.toolbar.append(h("div", { class: "search" }, icon("search"), search));
+    var meta = kindMeta(c);
+    // Stores without text search (DynamoDB, Firestore) get no search box.
+    if (!meta.noSearch) {
+      // Searching a large table scans all of it: wait for Enter instead of searching as you type.
+      var big = !!t.result && (t.result.countable || (typeof t.result.total === "number" && t.result.total >= 100000));
+      var search = h("input", { class: "input", type: "search", value: t.search, placeholder: (fam === "keyvalue" ? "Search key names" : fam === "document" ? "Search text fields" : "Search all columns") + (big ? " (Enter)…" : "…"), "aria-label": "Search" });
+      var runSearch = debounce(function () { if (search.value === t.search) return; t.search = search.value; t.page = 1; persistSoon(); loadTab(t); }, 400);
+      search.addEventListener("input", function () { if (!big || !search.value) runSearch(); });
+      search.addEventListener("keydown", function (e) { if (e.key === "Enter") { t.search = search.value; t.page = 1; loadTab(t); } });
+      t.ui.toolbar.append(h("div", { class: "search" }, icon("search"), search));
+    } else if (t.search) t.search = "";
 
-    if (fam === "document") {
-      var q = h("input", { class: "input query-input", value: t.query, placeholder: "Filter: { status: \"active\", age: { $gt: 21 } }", spellcheck: "false", "aria-label": "MongoDB filter" });
+    if (fam === "document" && (c.kind === "mongodb" || meta.filterHint)) {
+      var q = h("input", { class: "input query-input", value: t.query, placeholder: c.kind === "mongodb" ? "Filter: { status: \"active\", age: { $gt: 21 } }" : meta.filterHint, spellcheck: "false", "aria-label": c.kind === "mongodb" ? "MongoDB filter" : "Filter condition" });
       q.addEventListener("keydown", function (e) { if (e.key === "Enter") { t.query = q.value; t.page = 1; persistSoon(); loadTab(t); } });
       q.addEventListener("blur", function () { if (q.value !== t.query) { t.query = q.value; t.page = 1; persistSoon(); loadTab(t); } });
       t.ui.toolbar.append(q);
@@ -1030,10 +1078,10 @@
       t.ui.toolbar.append(fbtn);
     }
     t.ui.toolbar.append(h("span", { class: "divider" }), btn("Refresh", "refresh", function () { loadTab(t); }, "ghost", { title: "Reload rows" }));
-    if (canInsertTab(t)) t.ui.toolbar.append(btn(fam === "document" ? "Insert document" : fam === "keyvalue" ? "Add key" : "Insert row", "add", function () { openEditor(t, null); }, "primary"));
+    if (canInsertTab(t)) t.ui.toolbar.append(btn(fam === "keyvalue" ? "Add key" : "Insert " + recordNoun(c), "add", function () { openEditor(t, null); }, "primary"));
     if (writableTab(t)) {
       var n = t.selected.size;
-      var del = btn(n ? "Delete (" + n + ")" : "Delete", "trash", function () { deleteSelected(t); }, "danger", { disabled: !n, title: n ? "Delete the selected " + (fam === "keyvalue" ? "keys" : fam === "document" ? "documents" : "rows") : "Select rows to delete" });
+      var del = btn(n ? "Delete (" + n + ")" : "Delete", "trash", function () { deleteSelected(t); }, "danger", { disabled: !n, title: n ? "Delete the selected " + recordNoun(c) + "s" : "Select " + recordNoun(c) + "s to delete" });
       t.ui.toolbar.append(del);
     }
     t.ui.toolbar.append(iconBtn("ellipsis", "More actions", function (e) { showMenu(dataMenu(t), e.currentTarget); }));
@@ -1044,7 +1092,7 @@
     var c = conn(t.connId);
     var rows = (t.result && t.result.rows) || [];
     var cols = t.result ? t.result.columns.map(function (x) { return x.name; }) : [];
-    var noun = c.kind === "mongodb" ? "collection" : t.objectType === "view" ? "view" : "table";
+    var noun = t.objectType === "collection" ? (c.kind === "cosmosdb" ? "container" : "collection") : t.objectType === "view" ? "view" : "table";
     var sel = selectedRows(t);
     var subset = sel.length ? sel : rows;
     var which = sel.length ? "selected" : "page";
@@ -1141,6 +1189,7 @@
       t.loading = false;
       var hadResult = !!t.result;
       t.result = result;
+      t.lastRequest = request;
       t.selected = new Set();
       var conn2 = conn(t.connId);
       if (result.readOnly && !(conn2 && conn2.readOnly)) setBanner(t, "info", result.readOnly);
@@ -1149,7 +1198,11 @@
       renderGrid(t);
       renderFoot(t);
       // Past the last page after a delete or a new filter: go back to the last real page.
-      if (!result.rows.length && t.page > 1 && typeof result.total === "number" && result.total > 0) { t.page = Math.max(1, Math.ceil(result.total / t.pageSize)); loadTab(t); }
+      // An estimated total can overshoot, so only an exact one says where the last page is.
+      if (!result.rows.length && t.page > 1 && typeof result.total === "number" && result.total > 0 && !result.totalEstimated) {
+        var lastPage = Math.max(1, Math.ceil(result.total / t.pageSize));
+        if (lastPage < t.page) { t.page = lastPage; loadTab(t); }
+      }
     }).catch(function (err) {
       if (t.loadToken !== token) return;
       t.loading = false;
@@ -1205,6 +1258,75 @@
     return t.result.rows.filter(function (r) { return t.selected.has(keyId(rowKey(t, r))); });
   }
 
+  // ------------------------------------------------------------------ Row virtualization
+  /** Results up to this size render whole; larger ones render only the rows near the viewport. */
+  var VIRTUAL_MIN = 120;
+  var OVERSCAN = 12;
+
+  /**
+   * Fills `body` with `count` rows made by makeRow(i). Large counts render a
+   * window around the scroll position between two spacer rows, so a
+   * 1,000-row result costs about as much as a 60-row one. Rows have a fixed
+   * height (.grid td), measured from the first one rendered.
+   */
+  function virtualRows(scroller, table, body, count, colspan, makeRow) {
+    if (scroller.__vrows) { scroller.removeEventListener("scroll", scroller.__vrows); scroller.__vrows = null; }
+    clear(body);
+    if (count <= VIRTUAL_MIN) {
+      for (var i = 0; i < count; i++) body.append(makeRow(i));
+      return;
+    }
+    function spacer() { return h("tr", { class: "vspace", "aria-hidden": "true" }, h("td", { colspan: String(colspan) })); }
+    var top = spacer(), bottom = spacer();
+    var rowH = 0, from = -1, to = -1, frame = 0;
+    var headCells = table.tHead ? table.tHead.rows[0].cells : [];
+    function sized(tr) {
+      // New rows take the widths the user dragged columns to.
+      for (var c = 0; c < headCells.length; c++) {
+        var w = headCells[c].style.width;
+        if (w && tr.cells[c]) { tr.cells[c].style.width = w; tr.cells[c].style.minWidth = w; tr.cells[c].style.maxWidth = w; }
+      }
+      return tr;
+    }
+    function paint() {
+      frame = 0;
+      var headH = table.tHead ? table.tHead.offsetHeight : 0;
+      var height = rowH || 29;
+      var first = Math.max(0, Math.floor((scroller.scrollTop - headH) / height) - OVERSCAN);
+      var last = Math.min(count, Math.ceil((scroller.scrollTop + (scroller.clientHeight || 800)) / height) + OVERSCAN);
+      if (first === from && last === to) return;
+      from = first; to = last;
+      clear(body);
+      top.firstChild.style.height = first * height + "px";
+      bottom.firstChild.style.height = (count - last) * height + "px";
+      body.append(top);
+      for (var i = first; i < last; i++) body.append(sized(makeRow(i)));
+      body.append(bottom);
+      if (!rowH && last > first) {
+        rowH = body.children[1].getBoundingClientRect().height || 29;
+        // Columns keep at least their first width, so they do not jump while scrolling.
+        // All widths are read before any is written: interleaving would force a layout per column.
+        var widths = Array.prototype.map.call(headCells, function (th) { return th.style.width ? 0 : th.offsetWidth; });
+        Array.prototype.forEach.call(headCells, function (th, c) { if (widths[c]) th.style.minWidth = widths[c] + "px"; });
+        if (Math.abs(rowH - height) > 0.5) { from = -1; paint(); }
+      }
+    }
+    // Animation frames pause in a hidden webview, so a timer backs each one up.
+    function soon() {
+      if (frame) return;
+      frame = 1;
+      var done = false;
+      function run() { if (done) return; done = true; paint(); }
+      requestAnimationFrame(run);
+      setTimeout(run, 50);
+    }
+    scroller.__vrows = soon;
+    scroller.addEventListener("scroll", soon, { passive: true });
+    paint();
+    // The scroller may be laid out after this call (a tab shown later); repaint once it has a size.
+    if (!scroller.clientHeight) setTimeout(function () { from = -1; paint(); }, 0);
+  }
+
   function renderGrid(t) {
     var res = t.result;
     var wrap = t.ui.gridWrap;
@@ -1217,8 +1339,8 @@
     if (!res.rows.length) {
       var filtered = (t.filters && t.filters.length) || t.search || t.query || t.keyType;
       wrap.append(h("div", { class: "grid-empty" }, icon(filtered ? "search" : "inbox"),
-        h("div", { text: filtered ? "No matching " + (isRedis ? "keys" : c.kind === "mongodb" ? "documents" : "rows") + "." : isRedis ? "This database has no keys." : c.kind === "mongodb" ? "This collection is empty." : "This table is empty." }),
-        canInsertTab(t) && !filtered ? h("div", { style: { marginTop: "12px" } }, btn(isRedis ? "Add key" : c.kind === "mongodb" ? "Insert document" : "Insert row", "add", function () { openEditor(t, null); }, "primary")) : null));
+        h("div", { text: filtered ? "No matching " + recordNoun(c) + "s." : isRedis ? "This database has no keys." : family(c) === "document" ? "This " + (c.kind === "dynamodb" ? "table" : c.kind === "cosmosdb" ? "container" : "collection") + " is empty." : "This table is empty." }),
+        canInsertTab(t) && !filtered ? h("div", { style: { marginTop: "12px" } }, btn(isRedis ? "Add key" : "Insert " + recordNoun(c), "add", function () { openEditor(t, null); }, "primary")) : null));
       return;
     }
     var table = h("table", { class: "grid", role: "grid", "aria-rowcount": String(res.rows.length) });
@@ -1229,7 +1351,14 @@
       all.checked = res.rows.length > 0 && res.rows.every(function (r) { return t.selected.has(keyId(rowKey(t, r))); });
       all.addEventListener("change", function () {
         res.rows.forEach(function (r) { var k = keyId(rowKey(t, r)); if (all.checked) t.selected.add(k); else t.selected.delete(k); });
-        renderGrid(t); updateDataChrome(t);
+        // Only the rendered rows need their marks updated; the rest read t.selected when they scroll in.
+        Array.prototype.forEach.call(body.querySelectorAll("tr[data-key]"), function (tr) {
+          var on = t.selected.has(tr.getAttribute("data-key"));
+          tr.classList.toggle("sel", on);
+          var box = tr.querySelector("td.ck input");
+          if (box) box.checked = on;
+        });
+        updateDataChrome(t);
       });
       hr.append(h("th", { class: "ck" }, all));
     } else {
@@ -1254,9 +1383,10 @@
     table.append(thead);
     var body = h("tbody");
     var offset = (t.page - 1) * t.pageSize;
-    res.rows.forEach(function (row, i) {
+    function makeRow(i) {
+      var row = res.rows[i];
       var key = canEdit || res.keyColumns.length ? keyId(rowKey(t, row)) : String(i);
-      var tr = h("tr", { class: t.selected.has(key) ? "sel" : "", "aria-rowindex": String(offset + i + 1) });
+      var tr = h("tr", { class: t.selected.has(key) ? "sel" : "", "aria-rowindex": String(offset + i + 1), "data-key": key });
       if (canEdit) {
         var ck = h("input", { type: "checkbox", checked: t.selected.has(key), "aria-label": "Select row " + (offset + i + 1) });
         ck.addEventListener("click", function (e) { e.stopPropagation(); });
@@ -1272,21 +1402,22 @@
         var td;
         if (isRedis && col.name === "type") td = h("td", null, h("span", { class: "v-type t-" + (REDIS_TYPES.indexOf(v) >= 0 || v === "stream" ? v : "other"), text: v }));
         else if (isRedis && col.name === "ttl") td = h("td", { class: v === null ? "muted" : "" }, fmtTtl(v));
-        else td = h("td", null, cellContent(v, missing && c.kind === "mongodb"));
+        else td = h("td", null, cellContent(v, missing && family(c) === "document"));
         var full = plainText(v);
         if (full.length > 40) td.title = full.length > 2000 ? full.slice(0, 2000) + "…" : full;
         td.addEventListener("contextmenu", function (e) { e.preventDefault(); showMenu(cellMenu(t, row, col, canEdit), { x: e.clientX, y: e.clientY }); });
         tr.append(td);
       });
       tr.addEventListener("dblclick", function () { openEditor(t, row); });
-      body.append(tr);
-    });
+      return tr;
+    }
     table.append(body);
     wrap.append(table);
     t.colWidths = t.colWidths || {};
     enableColumnResize(table, t.colWidths, persistSoon);
     wrap.scrollTop = scrollTop;
     wrap.scrollLeft = scrollLeft;
+    virtualRows(wrap, table, body, res.rows.length, hr.cells.length, makeRow);
   }
 
   function cellMenu(t, row, col, canEdit) {
@@ -1302,7 +1433,7 @@
         t.filters = (t.filters || []).concat([rule]); t.draftFilters = null; t.page = 1; persistSoon(); updateDataChrome(t); loadTab(t);
       } } : null,
       { label: canEdit ? "Edit row" : "View row", icon: canEdit ? "edit" : "eye", run: function () { openEditor(t, row); } },
-      canInsertTab(t) && c.kind !== "redis" ? { label: c.kind === "mongodb" ? "Duplicate document" : "Duplicate row", icon: "files", run: function () { openEditor(t, row, { duplicate: true }); } } : null,
+      canInsertTab(t) && c.kind !== "redis" ? { label: "Duplicate " + recordNoun(c), icon: "files", run: function () { openEditor(t, row, { duplicate: true }); } } : null,
       canEdit ? { label: "Delete row", icon: "trash", danger: true, run: function () { deleteRows(t, [row]); } } : null
     ];
   }
@@ -1313,17 +1444,34 @@
     clear(foot);
     if (!res) return;
     var c = conn(t.connId);
-    var noun = c.kind === "redis" ? "key" : c.kind === "mongodb" ? "document" : "row";
+    var noun = recordNoun(c);
     var start = res.rows.length ? (t.page - 1) * t.pageSize + 1 : 0;
     var end = (t.page - 1) * t.pageSize + res.rows.length;
-    var totalText = typeof res.total === "number" ? fmtNum(res.total) + (res.totalCapped ? "+" : "") : null;
+    var totalText = typeof res.total === "number" ? (res.totalEstimated ? "about " : "") + fmtNum(res.total) + (res.totalCapped ? "+" : "") : null;
     // "1 row", never "1 rows".
     var plural = res.total === 1 && !res.totalCapped ? noun : noun + "s";
     foot.append(h("span", null, res.rows.length ? (totalText ? fmtNum(start) + "–" + fmtNum(end) + " of " + totalText + " " + plural : noun.charAt(0).toUpperCase() + noun.slice(1) + "s " + fmtNum(start) + "–" + fmtNum(end)) : "0 " + noun + "s"));
     foot.append(h("span", { title: "Server round trip" }, icon("watch"), " " + res.elapsedMs + " ms"));
     if (res.totalCapped) foot.append(h("span", { class: "chip warn", title: "SCAN stopped after this many keys. Narrow the pattern to see the rest." }, icon("warning"), "first " + fmtNum(res.total) + " keys scanned"));
     if (t.selected.size) foot.append(h("span", { class: "chip" }, fmtNum(t.selected.size) + " selected"));
-    var pages = typeof res.total === "number" ? Math.max(1, Math.ceil(res.total / t.pageSize)) : null;
+    if (res.note) foot.append(h("span", { class: "muted foot-note", title: res.note, text: res.note }));
+    if (res.countable && t.lastRequest) {
+      // Large tables show the statistics estimate (or no count for a search); counting exactly is on request.
+      var countBtn = btn(t.counting ? "Counting…" : "Count rows", t.counting ? "loading" : "symbol-numeric", function () {
+        if (t.counting) return;
+        t.counting = true; renderFoot(t);
+        var asked = res;
+        call("countRows", { id: t.connId, request: t.lastRequest }).then(function (out) {
+          t.counting = false;
+          if (t.result !== asked) return;
+          res.total = out.total; res.totalEstimated = false; res.countable = false; res.hasMore = undefined;
+          renderFoot(t);
+        }).catch(function (err) { t.counting = false; renderFoot(t); fail(err); });
+      }, "ghost link-btn", { title: res.totalEstimated ? "The total is the database's estimate. Count the rows exactly (scans the table)." : "Count the matching rows (scans the table)." });
+      if (t.counting) countBtn.querySelector(".codicon").classList.add("codicon-modifier-spin");
+      foot.append(countBtn);
+    }
+    var pages = typeof res.total === "number" && !res.totalEstimated ? Math.max(1, Math.ceil(res.total / t.pageSize)) : null;
     var sizeSel = h("select", { class: "select", "aria-label": "Rows per page" }, [25, 50, 100, 200, 500].map(function (n) { return h("option", { value: String(n), text: n + " / page", selected: n === t.pageSize }); }));
     sizeSel.addEventListener("change", function () { t.pageSize = Number(sizeSel.value); t.page = 1; persistSoon(); loadTab(t); });
     var pageInput = h("input", { class: "input", value: String(t.page), "aria-label": "Page" });
@@ -1334,10 +1482,12 @@
       go(n);
     });
     function go(n) { if (n === t.page) return; t.page = n; loadTab(t); }
-    var hasNext = pages ? t.page < pages : res.rows.length === t.pageSize;
+    // Cursor-paged stores (DynamoDB) say whether more follows; the rest count.
+    var hasNext = typeof res.hasMore === "boolean" ? res.hasMore : pages ? t.page < pages : res.rows.length === t.pageSize;
+    var aboutPages = res.totalEstimated && typeof res.total === "number" ? Math.max(1, Math.ceil(res.total / t.pageSize)) : null;
     foot.append(h("div", { class: "pager" }, sizeSel,
       iconBtn("chevron-left", "Previous page", function () { go(Math.max(1, t.page - 1)); }, { disabled: t.page <= 1 }),
-      h("span", null, "Page "), pageInput, pages ? h("span", { text: " of " + fmtNum(pages) }) : null,
+      h("span", null, "Page "), pageInput, pages ? h("span", { text: " of " + fmtNum(pages) }) : aboutPages ? h("span", { text: " of about " + fmtNum(aboutPages) }) : null,
       iconBtn("chevron-right", "Next page", function () { go(t.page + 1); }, { disabled: !hasNext })));
   }
 
@@ -1348,13 +1498,13 @@
     var cols = t.structure || [];
     var box = h("div", { class: "struct" });
     var table = h("table", { class: "grid" });
-    var isDoc = c.kind === "mongodb";
+    var isDoc = family(c) === "document";
     table.append(h("thead", null, h("tr", null, h("th", { class: "rn", text: "#" }), h("th", { text: isDoc ? "Field" : "Column" }), h("th", { text: isDoc ? "Types seen" : "Type" }),
       isDoc ? h("th", { text: "Present in" }) : h("th", { text: "Nullable" }), isDoc ? null : h("th", { text: "Default" }), h("th", { text: "Notes" }))));
     var body = h("tbody");
     cols.forEach(function (col, i) {
       var notes = h("td", null,
-        col.primaryKey ? h("span", { class: "flag pk" }, icon("key"), isDoc ? "_id" : "primary key") : null,
+        col.primaryKey ? h("span", { class: "flag pk" }, icon("key"), isDoc ? (c.kind === "mongodb" ? "_id" : col.dataType.indexOf("(") >= 0 ? col.dataType.replace(/^.*\((.*)\)$/, "$1") : "key") : "primary key") : null,
         col.autoIncrement ? h("span", { class: "flag" }, icon("symbol-numeric"), "auto") : null,
         !col.editable && !col.primaryKey ? h("span", { class: "flag" }, icon("lock"), "read-only") : null);
       body.append(h("tr", null, h("td", { class: "rn", text: String(i + 1) }), h("td", null, h("b", { text: col.name })), h("td", { class: "mono", text: col.dataType }),
@@ -1363,7 +1513,7 @@
         notes));
     });
     table.append(body);
-    box.append(h("h4", { class: "struct-title" }, icon("symbol-field"), isDoc ? "Fields" : "Columns", h("span", { class: "muted", text: isDoc ? " · inferred from a random sample of up to 200 documents" : " · " + cols.length })), table);
+    box.append(h("h4", { class: "struct-title" }, icon("symbol-field"), isDoc ? "Fields" : "Columns", h("span", { class: "muted", text: isDoc ? " · inferred from " + (c.kind === "mongodb" ? "a random sample" : "the first") + " of up to 200 " + recordNoun(c) + "s" : " · " + cols.length })), table);
     if (t.indexes) box.append(renderIndexes(t.indexes, isDoc));
     wrap.append(box);
   }
@@ -1402,7 +1552,7 @@
     call("deleteRows", { id: t.connId, target: t.target, keys: keys }).then(function (res) {
       if (!res || res.cancelled) return;
       var c = conn(t.connId);
-      toast("success", "Deleted " + plural(res.affected, c.kind === "redis" ? "key" : c.kind === "mongodb" ? "document" : "row") + ".");
+      toast("success", "Deleted " + plural(res.affected, recordNoun(c)) + ".");
       t.selected = new Set();
       loadTab(t);
       if (c.kind === "redis") { var tr = treeOf(t.connId); if (tr.dbs) loadRedisCounts(c, tr); }
@@ -1434,9 +1584,8 @@
     var canEdit = row && !opts.duplicate ? writableTab(t) : canInsertTab(t);
     var isNew = !row || opts.duplicate;
     var readOnlyView = !canEdit;
-    var title = readOnlyView ? "View " + (fam === "keyvalue" ? "key" : fam === "document" ? "document" : "row")
-      : isNew ? (opts.duplicate ? "Duplicate " : "New ") + (fam === "keyvalue" ? "key" : fam === "document" ? "document" : "row")
-        : "Edit " + (fam === "keyvalue" ? "key" : fam === "document" ? "document" : "row");
+    var noun = recordNoun(c);
+    var title = readOnlyView ? "View " + noun : isNew ? (opts.duplicate ? "Duplicate " : "New ") + noun : "Edit " + noun;
     var body = h("div", { class: "dbody" });
     var errorBox = h("div");
     var saveBtn = btn(isNew ? "Insert" : "Save", "save", function () { save(); }, "primary", { title: MOD + "Enter" });
@@ -1587,16 +1736,32 @@
     return "YYYY-MM-DD HH:MM:SS";
   }
 
+  /** What the document editor says about types each document store cannot express in plain JSON. */
+  var DOC_TYPES_HINT = {
+    mongodb: "Use {\"$oid\": …} or ObjectId(\"…\"), {\"$date\": …} or ISODate(\"…\") for BSON types.",
+    dynamodb: "Sets are {\"$SS\": […]}, {\"$NS\": […]} or {\"$BS\": […]}; binary is {\"$binary\": {\"base64\": …}}. Keep the key attributes.",
+    cosmosdb: "Needs a string \"id\" and the partition key field. _etag and _ts are set by Cosmos DB.",
+    firestore: "Timestamps are {\"$date\": …}, references {\"$ref\": \"projects/…\"}, geopoints {\"$geo\": {\"latitude\": …, \"longitude\": …}}. Leave _id out for an automatic ID."
+  };
+  /** Fields a duplicate must not copy: the identity and what the server stamps. */
+  var DUPLICATE_DROPS = { mongodb: ["_id"], cosmosdb: ["id", "_etag", "_ts"], firestore: ["_id"] };
+
   function documentEditor(body, t, row, opts, isNew, readOnlyView, markDirty) {
+    var c = conn(t.connId);
+    var mongo = c.kind === "mongodb";
     var doc = row ? JSON.parse(JSON.stringify(row)) : null;
-    if (doc && opts.duplicate) delete doc._id;
+    if (doc) Object.keys(HIDDEN_COLS).forEach(function (k) { delete doc[k]; });
+    if (doc && opts.duplicate) (DUPLICATE_DROPS[c.kind] || []).forEach(function (k) { delete doc[k]; });
     var text = doc ? JSON.stringify(doc, null, 2) : "{\n  \n}";
-    var ta = h("textarea", { class: "textarea doc-editor", spellcheck: "false", readOnly: readOnlyView, "aria-label": "Document (Extended JSON)" });
+    var ta = h("textarea", { class: "textarea doc-editor", spellcheck: "false", readOnly: readOnlyView, "aria-label": mongo ? "Document (Extended JSON)" : "Document (JSON)" });
     ta.value = text;
     var status = h("div", { class: "muted", style: { fontSize: "11.5px" } });
     function check() {
-      try { JSON.parse(ta.value); ta.classList.remove("invalid"); status.textContent = "Valid JSON. Use {\"$oid\": …} or ObjectId(\"…\"), {\"$date\": …} or ISODate(\"…\") for BSON types."; }
-      catch (e) { status.textContent = "Not strict JSON — shell syntax such as ObjectId(\"…\") or unquoted keys is fine; the server checks it on save."; }
+      try { JSON.parse(ta.value); ta.classList.remove("invalid"); status.textContent = "Valid JSON. " + (DOC_TYPES_HINT[c.kind] || ""); }
+      catch (e) {
+        if (mongo) status.textContent = "Not strict JSON — shell syntax such as ObjectId(\"…\") or unquoted keys is fine; the server checks it on save.";
+        else { ta.classList.add("invalid"); status.textContent = "Not valid JSON: " + e.message; }
+      }
     }
     ta.addEventListener("input", function () { check(); markDirty(); });
     ta.addEventListener("keydown", function (e) {
@@ -1608,7 +1773,7 @@
         try { ta.value = JSON.stringify(JSON.parse(ta.value), null, 2); check(); } catch (e) { toast("info", "Format needs strict JSON.", "Shell helpers like ObjectId() are kept as typed."); }
       }, "ghost"),
       btn("Copy", "copy", function () { copy(ta.value); }, "ghost"),
-      !isNew && row && row._id ? h("span", { class: "chip", title: "_id cannot be changed" }, icon("key"), plainText(row._id)) : null);
+      !isNew && row && (row._id || (c.kind === "cosmosdb" && row.id)) ? h("span", { class: "chip", title: (row._id ? "_id" : "id") + " cannot be changed" }, icon("key"), plainText(row._id || row.id)) : null);
     body.append(tools, ta, status);
     return function collect() {
       var value = ta.value.trim();
@@ -1710,7 +1875,12 @@
     sqlserver: "SELECT TOP 100 *\nFROM dbo.users\nWHERE created_at > DATEADD(day, -7, SYSUTCDATETIME())\nORDER BY id DESC;",
     clickhouse: "SELECT toStartOfDay(ts) AS day, count() AS events\nFROM events\nWHERE ts > now() - INTERVAL 7 DAY\nGROUP BY day\nORDER BY day;",
     document: "db.users.find({ active: true }).sort({ createdAt: -1 }).limit(20)\n\n// Also: aggregate([...]), countDocuments({}), insertOne({...}),\n// updateMany({...}, { $set: {...} }), deleteOne({ _id: ObjectId(\"...\") }), show collections",
-    keyvalue: "SCAN 0 MATCH user:* COUNT 100\n\n# One command per line, e.g. HGETALL user:42, TTL session:abc, SET greeting \"hello world\""
+    keyvalue: "SCAN 0 MATCH user:* COUNT 100\n\n# One command per line, e.g. HGETALL user:42, TTL session:abc, SET greeting \"hello world\"",
+    dynamodb: "SELECT * FROM \"orders\" WHERE \"customerId\" = 'c-42' AND \"total\" > 100\n\n-- PartiQL: SELECT, INSERT INTO \"t\" VALUE {'pk': 'a'}, UPDATE \"t\" SET x = 1 WHERE pk = 'a',\n-- DELETE FROM \"t\" WHERE pk = 'a'. Separate statements with ;",
+    cosmosdb: "SELECT TOP 100 * FROM users u\nWHERE u.status = 'active' AND u.age > 21\nORDER BY u._ts DESC\n\n-- The name after FROM picks the container.",
+    firestore: "SELECT * FROM users\nWHERE age >= 21 AND city IN ('Oslo', 'Rome')\nORDER BY age DESC\nLIMIT 50\n\n-- Also: SELECT COUNT(*) FROM users/alice/orders WHERE status = 'open',\n-- tags ARRAY_CONTAINS 'new', email IS NOT NULL, or a structuredQuery as JSON.",
+    spanner: "SELECT *\nFROM Singers\nWHERE BirthDate > DATE '1990-01-01'\nORDER BY SingerId\nLIMIT 100;",
+    bigquery: "SELECT name, SUM(number) AS total\nFROM `bigquery-public-data.usa_names.usa_1910_2013`\nGROUP BY name\nORDER BY total DESC\nLIMIT 10;\n\n-- Billed by bytes scanned; the result says how much."
   };
 
   // ---- Syntax highlighting: tokens become spans under a transparent textarea.
@@ -1774,7 +1944,8 @@
 
   function editorMode(c) {
     if (!c) return "sql";
-    return c.family === "document" ? "document" : c.family === "keyvalue" ? "keyvalue" : "sql";
+    // DynamoDB (PartiQL), Cosmos DB and Firestore consoles take SQL-like text.
+    return c.kind === "mongodb" ? "document" : c.family === "keyvalue" ? "keyvalue" : "sql";
   }
 
   /** Repaints the highlight layer and the line numbers; marks the error range, if any. */
@@ -1975,10 +2146,13 @@
       t.result = res;
       t.resView = { sort: null, filter: "" };
       t.resWidths = {};
-      var hist = S.history[t.connId] = (S.history[t.connId] || []).filter(function (q) { return q !== text; });
-      hist.unshift(text);
-      if (hist.length > 30) hist.length = 30;
-      persistSoon();
+      // History is saved with the webview state on every change: huge scripts are run, not remembered.
+      if (text.length <= 20000) {
+        var hist = S.history[t.connId] = (S.history[t.connId] || []).filter(function (q) { return q !== text; });
+        hist.unshift(text);
+        if (hist.length > 30) hist.length = 30;
+        persistSoon();
+      }
       if (res.writes) {
         if (/\b(create|drop|alter|rename|createCollection|drop\(|renameCollection)\b/i.test(text)) refreshDb(t.connId, t.database);
         S.tabs.forEach(function (o) { if (o.type === "data" && o.connId === t.connId && o.result) o.needsLoad = true; });
@@ -2018,6 +2192,8 @@
     syncScroll(t);
   }
 
+  /** One collator for every comparison: localeCompare with options builds a new one per call. */
+  var COLLATOR = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }) : null;
   function compareValues(a, b) {
     if (a === b) return 0;
     if (a === null || a === undefined) return 1;
@@ -2026,7 +2202,7 @@
     var x = plainText(a), y = plainText(b);
     var nx = Number(x), ny = Number(y);
     if (x !== "" && y !== "" && !isNaN(nx) && !isNaN(ny)) return nx - ny;
-    return x.localeCompare(y, undefined, { numeric: true, sensitivity: "base" });
+    return COLLATOR ? COLLATOR.compare(x, y) : x.localeCompare(y);
   }
 
   function renderQueryResult(t) {
@@ -2054,7 +2230,7 @@
     var res = t.result;
     if (!res) {
       box.append(h("div", { class: "qplaceholder" }, h("div", null,
-        h("div", { style: { marginBottom: "6px" } }, "Write a ", c && c.family === "document" ? "mongosh command" : c && c.family === "keyvalue" ? "Redis command" : "SQL query", " and press ", h("kbd", { text: MOD + "Enter" }), "."),
+        h("div", { style: { marginBottom: "6px" } }, "Write a ", c && c.kind === "mongodb" ? "mongosh command" : c && c.kind === "dynamodb" ? "PartiQL statement" : c && c.family === "keyvalue" ? "Redis command" : c && c.family === "document" ? "query" : "SQL query", " and press ", h("kbd", { text: MOD + "Enter" }), "."),
         h("div", { text: "Destructive statements ask for confirmation first." + (c && c.features && c.features.cancel ? " Long-running queries can be cancelled." : "") }))));
       return;
     }
@@ -2063,6 +2239,7 @@
     var countEl = h("span");
     status.append(countEl);
     status.append(h("span", { title: "Server round trip" }, icon("watch"), " " + fmtElapsed(res.elapsedMs)));
+    if (res.note) status.append(h("span", { class: "muted", title: res.note, text: res.note }));
     if (res.columns.length && res.rows.length) {
       var filterInput = h("input", { class: "input", type: "search", placeholder: "Filter results…", value: view.filter, "aria-label": "Filter results" });
       filterInput.addEventListener("input", debounce(function () { view.filter = filterInput.value; paintRows(); }, 120));
@@ -2091,9 +2268,10 @@
       if (res.columns.length) countEl.append(plural(res.rows.length, "row") + (res.truncated ? " (first " + fmtNum(res.rows.length) + " shown)" : "") + (rows.length !== res.rows.length ? " · " + fmtNum(rows.length) + " match" : ""));
       else if (typeof res.affected === "number") countEl.append(plural(res.affected, "row") + " affected");
       else countEl.append("Done");
-      clear(body);
-      rows.forEach(function (row, i) {
-        var tr = h("tr", null, h("td", { class: "rn", text: String(i + 1) }));
+      if (!table) return;
+      virtualRows(wrap, table, body, rows.length, res.columns.length + 1, function (i) {
+        var row = rows[i];
+        var tr = h("tr", { "aria-rowindex": String(i + 1) }, h("td", { class: "rn", text: String(i + 1) }));
         res.columns.forEach(function (col) {
           var v = row[col];
           var td = h("td", null, cellContent(v, !(col in row)));
@@ -2102,9 +2280,9 @@
           td.addEventListener("contextmenu", function (e) { e.preventDefault(); showMenu([{ label: "Copy value", icon: "copy", run: function () { copy(full); } }, { label: "Copy row as JSON", icon: "json", run: function () { copy(toJson([row])); } }], { x: e.clientX, y: e.clientY }); });
           tr.append(td);
         });
-        body.append(tr);
+        return tr;
       });
-      if (table) applyAllWidths();
+      applyAllWidths();
     }
     var table = null;
     function applyAllWidths() {
@@ -2114,7 +2292,7 @@
       var wrap = h("div", { class: "grid-wrap" });
       if (!res.rows.length) wrap.append(h("div", { class: "grid-empty" }, icon("inbox"), "No rows."));
       else {
-        table = h("table", { class: "grid" });
+        table = h("table", { class: "grid", role: "grid", "aria-rowcount": String(res.rows.length) });
         var hr = h("tr", null, h("th", { class: "rn", text: "#" }));
         res.columns.forEach(function (col) {
           var sorted = view.sort && view.sort.column === col ? view.sort.dir : null;
@@ -2141,6 +2319,8 @@
   // ------------------------------------------------------------------ Connection modal
   /** The host's stand-in for a saved password; saving it back keeps the stored one. */
   var MASK = "********";
+  /** The Cosmos DB emulator's published, fixed key (the same on every machine). */
+  var COSMOS_EMULATOR_KEY = "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==";
   var TLS_CHOICES = {
     postgres: [["", "Off"], ["require", "On, no certificate check"], ["verify-full", "On, verify certificate"]],
     mysql: [["", "Off"], ["REQUIRED", "On, no certificate check"], ["VERIFY_IDENTITY", "On, verify certificate"]],
@@ -2151,17 +2331,41 @@
     redis: [["", "Off"], ["tls", "On (rediss://)"]]
   };
   TLS_CHOICES.cockroachdb = TLS_CHOICES.postgres;
+  TLS_CHOICES.redshift = TLS_CHOICES.postgres;
   TLS_CHOICES.mariadb = TLS_CHOICES.mysql;
-  var USER_HINT = { postgres: "postgres", cockroachdb: "root", mysql: "root", mariadb: "root", sqlserver: "sa", oracle: "app", clickhouse: "default", mongodb: "optional", redis: "optional (ACL user)" };
-  var DB_HINT = { postgres: "app", cockroachdb: "defaultdb", mysql: "app", mariadb: "app", sqlserver: "app", oracle: "FREEPDB1", clickhouse: "default", mongodb: "app", redis: "0" };
-  var KNOWN_OPTIONS = ["ssl", "tls", "sslmode", "ssl-mode", "secure", "encrypt", "trustservercertificate", "tlsallowinvalidcertificates", "user id", "uid", "user", "username", "database", "initial catalog", "databasename", "port"];
+  var USER_HINT = { postgres: "postgres", cockroachdb: "root", mysql: "root", mariadb: "root", sqlserver: "sa", oracle: "app", clickhouse: "default", mongodb: "optional", redis: "optional (ACL user)", redshift: "awsuser" };
+  var DB_HINT = { postgres: "app", cockroachdb: "defaultdb", mysql: "app", mariadb: "app", sqlserver: "app", oracle: "FREEPDB1", clickhouse: "default", mongodb: "app", redis: "0", redshift: "dev" };
+  var KNOWN_OPTIONS = ["ssl", "tls", "sslmode", "ssl-mode", "secure", "encrypt", "trustservercertificate", "tlsallowinvalidcertificates", "user id", "uid", "user", "username", "database", "initial catalog", "databasename", "port",
+    "auth", "profile", "region", "endpoint", "sessiontoken", "keyfile", "location", "maxbytesbilled", "dataset"];
+  /** Kinds with a form of their own; the rest share host, port, user, password and database. */
+  var API_KINDS = { dynamodb: 1, cosmosdb: 1, spanner: 1, firestore: 1, bigquery: 1 };
+  var GOOGLE_KINDS = { spanner: 1, firestore: 1, bigquery: 1 };
+  var EMULATOR_ENDPOINT = { dynamodb: "http://localhost:8000", cosmosdb: "https://localhost:8081", spanner: "http://localhost:9020", firestore: "http://localhost:8080", bigquery: "http://localhost:9050" };
+  var AWS_REGIONS = ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "ca-central-1", "sa-east-1", "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-central-2", "eu-north-1", "eu-south-1", "ap-south-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-east-1", "me-central-1", "af-south-1"];
+  var BQ_LOCATIONS = [["", "Automatic"], ["US", "US (multi-region)"], ["EU", "EU (multi-region)"], ["us-central1", "us-central1"], ["us-east1", "us-east1"], ["europe-west1", "europe-west1"], ["europe-west2", "europe-west2"], ["asia-northeast1", "asia-northeast1"], ["asia-southeast1", "asia-southeast1"], ["australia-southeast1", "australia-southeast1"]];
+  var MAX_BYTES = [["", "No limit"], ["100000000", "100 MB"], ["1000000000", "1 GB"], ["10000000000", "10 GB"], ["100000000000", "100 GB"], ["1000000000000", "1 TB"]];
 
   function truthyText(v) { return /^(true|yes|1)$/i.test(String(v || "").trim()); }
   function enc(v) { return encodeURIComponent(v); }
   function adoValue(v) { return /[;{}=\s'"]/.test(v) ? "{" + v.replace(/}/g, "}}") + "}" : v; }
 
-  function emptyForm(kind) {
-    return { kind: kind || "postgres", host: "localhost", port: "", user: "", password: "", savedPassword: false, database: "", tls: kind === "sqlserver" ? "false" : "", srv: false, file: "", extra: "" };
+  /** The engine preset of a cloud service for a kind, if the form is for a cloud service. */
+  function engineOf(svc, kind) { return svc ? svc.engines.find(function (e) { return e.kind === kind; }) : undefined; }
+
+  function emptyForm(kind, engine) {
+    kind = kind || "postgres";
+    var f = { kind: kind, host: engine || API_KINDS[kind] ? "" : "localhost", port: "", user: "", password: "", savedPassword: false, database: "", tls: kind === "sqlserver" ? "false" : "", srv: false, file: "", extra: "",
+      auth: "", region: "", endpoint: "", profile: "", sessionToken: "", savedSessionToken: false, project: "", instance: "", dataset: "", keyFile: "", location: "", maxBytes: "" };
+    if (engine) {
+      // A cloud endpoint has no sensible default; until it is typed there is nothing to detect.
+      f.needsHost = true;
+      f.tls = engine.tls;
+      f.auth = engine.auth[0] || "";
+      if (kind === "mongodb") f.extra = "retrywrites=false&maxIdleTimeMS=120000";
+    }
+    if (kind === "redshift" && !engine) f.tls = "require";
+    if (API_KINDS[kind] && !f.auth) f.auth = kind === "dynamodb" ? "access-key" : kind === "cosmosdb" ? "account-key" : "adc";
+    return f;
   }
 
   /** Builds the connection string the host parses, from the form fields. */
@@ -2174,47 +2378,89 @@
       if (/^[A-Za-z]:[\\/]/.test(file)) return "sqlite:///" + file.replace(/\\/g, "/");
       return "sqlite://" + (file.charAt(0) === "/" || file.charAt(0) === "~" ? "" : "./") + file.replace(/^\.\//, "");
     }
+    var extra = f.extra.trim().replace(/^[?&]+/, "");
+    if (kind === "dynamodb") {
+      var dq = ["auth=" + f.auth];
+      var cred = f.auth === "access-key" && (f.user || pw) ? enc(f.user.trim()) + (pw ? ":" + (pw === MASK ? MASK : enc(pw)) : "") + "@" : "";
+      if (f.auth === "profile" && f.profile.trim()) dq.push("profile=" + enc(f.profile.trim()));
+      if (f.auth === "access-key" && (f.sessionToken || f.savedSessionToken)) dq.push("sessiontoken=" + (f.sessionToken ? enc(f.sessionToken) : MASK));
+      if (f.endpoint.trim()) dq.push("endpoint=" + enc(f.endpoint.trim()));
+      if (extra) dq.push(extra);
+      return "dynamodb://" + cred + (f.region.trim() || (f.auth === "emulator" ? "us-east-1" : "")) + "?" + dq.join("&");
+    }
+    if (kind === "cosmosdb") {
+      var key = pw || (f.auth === "emulator" ? COSMOS_EMULATOR_KEY : "");
+      var endpoint = f.endpoint.trim() || (f.auth === "emulator" ? EMULATOR_ENDPOINT.cosmosdb : "");
+      if (endpoint && !/^[a-z]+:\/\//i.test(endpoint)) endpoint = "https://" + endpoint;
+      return "AccountEndpoint=" + endpoint + (/\/$/.test(endpoint) ? "" : "/") + ";AccountKey=" + key + ";" + (f.database.trim() ? "Database=" + adoValue(f.database.trim()) + ";" : "");
+    }
+    if (GOOGLE_KINDS[kind]) {
+      var parts = [f.project.trim()];
+      if (kind === "spanner") { parts.push(f.instance.trim()); if (f.database.trim()) parts.push(f.database.trim()); }
+      if (kind === "firestore" && f.database.trim() && f.database.trim() !== "(default)") parts.push(f.database.trim());
+      if (kind === "bigquery" && f.dataset.trim()) parts.push(f.dataset.trim());
+      var gq = ["auth=" + f.auth];
+      if (f.auth === "key-file" && f.keyFile.trim()) gq.push("keyfile=" + enc(f.keyFile.trim()));
+      if (f.endpoint.trim() || f.auth === "emulator") gq.push("endpoint=" + enc(f.endpoint.trim() || EMULATOR_ENDPOINT[kind]));
+      if (kind === "bigquery" && f.location) gq.push("location=" + enc(f.location));
+      if (kind === "bigquery" && f.maxBytes) gq.push("maxbytesbilled=" + enc(f.maxBytes));
+      if (extra) gq.push(extra);
+      return kind + "://" + parts.map(enc).join("/") + "?" + gq.join("&");
+    }
+    var token = f.auth && f.auth !== "password";
+    if (token) pw = "";
+    if (f.needsHost && !f.host.trim()) return "";
     var host = f.host.trim() || "localhost";
     if (kind === "sqlserver") {
-      var parts = ["Server=" + host + (f.port ? "," + f.port : "")];
-      if (f.database) parts.push("Database=" + adoValue(f.database));
-      if (f.user) parts.push("User Id=" + adoValue(f.user));
-      if (pw) parts.push("Password=" + (pw === MASK ? MASK : adoValue(pw)));
-      parts.push("Encrypt=" + (f.tls && f.tls !== "false" ? "true" : "false"));
-      if (f.tls === "trust") parts.push("TrustServerCertificate=true");
+      var kv = ["Server=" + host + (f.port ? "," + f.port : "")];
+      if (f.database) kv.push("Database=" + adoValue(f.database));
+      if (f.user) kv.push("User Id=" + adoValue(f.user));
+      if (pw) kv.push("Password=" + (pw === MASK ? MASK : adoValue(pw)));
+      kv.push("Encrypt=" + (f.tls && f.tls !== "false" ? "true" : "false"));
+      if (f.tls === "trust") kv.push("TrustServerCertificate=true");
+      if (token) kv.push("auth=" + f.auth);
       var extraKv = f.extra.trim().replace(/^;+|;+$/g, "");
-      if (extraKv) parts.push(extraKv);
-      return parts.join(";");
+      if (extraKv) kv.push(extraKv);
+      return kv.join(";");
     }
-    var scheme = { postgres: "postgresql", cockroachdb: "cockroachdb", mysql: "mysql", mariadb: "mariadb", oracle: "oracle", clickhouse: "clickhouse", mongodb: f.srv ? "mongodb+srv" : "mongodb", redis: f.tls ? "rediss" : "redis" }[kind] || kind;
+    var scheme = { postgres: "postgresql", cockroachdb: "cockroachdb", redshift: "redshift", mysql: "mysql", mariadb: "mariadb", oracle: "oracle", clickhouse: "clickhouse", mongodb: f.srv ? "mongodb+srv" : "mongodb", redis: f.tls ? "rediss" : "redis" }[kind] || kind;
     var auth = f.user || pw ? enc(f.user) + (pw ? ":" + (pw === MASK ? MASK : enc(pw)) : "") + "@" : "";
     if (host.indexOf(":") >= 0 && host.indexOf(",") < 0 && host.charAt(0) !== "[") host = "[" + host + "]";
     var port = f.port && !(kind === "mongodb" && f.srv) && host.indexOf(",") < 0 ? ":" + f.port : "";
     var path = f.database ? "/" + enc(f.database) : "";
     var q = [];
-    if ((kind === "postgres" || kind === "cockroachdb") && f.tls) q.push("sslmode=" + f.tls);
-    if (kind === "cockroachdb" && !f.tls) q.push("sslmode=disable");
+    if ((kind === "postgres" || kind === "cockroachdb" || kind === "redshift") && f.tls) q.push("sslmode=" + f.tls);
+    if ((kind === "cockroachdb" || kind === "redshift") && !f.tls) q.push("sslmode=disable");
     if ((kind === "mysql" || kind === "mariadb") && f.tls) q.push("ssl-mode=" + f.tls);
     if (kind === "oracle" && f.tls) q.push("ssl=true");
     if (kind === "clickhouse" && f.tls) q.push("secure=true");
     if (kind === "mongodb" && f.tls && !f.srv) q.push("tls=true");
     if (kind === "mongodb" && f.tls === "insecure") q.push("tlsAllowInvalidCertificates=true");
-    var extra = f.extra.trim().replace(/^[?&]+/, "");
+    if (token) {
+      q.push("auth=" + f.auth);
+      if (f.auth === "aws-iam" && f.profile.trim()) q.push("profile=" + enc(f.profile.trim()));
+      if (f.auth === "aws-iam" && f.region.trim()) q.push("region=" + enc(f.region.trim()));
+    }
     if (extra) q.push(extra);
     return scheme + "://" + auth + host + port + path + (q.length ? "?" + q.join("&") : "");
   }
 
-  /** The password as typed in a connection string, so switching to the form keeps it (it never leaves this page). */
-  function typedPassword(raw) {
+  /** The value of a secret as typed in a connection string, so switching to the form keeps it (it never leaves this page). */
+  function typedSecret(raw, names) {
     var text = String(raw || "").trim();
-    var kv = /(?:^|;)\s*(?:password|pwd)\s*=\s*(\{(?:[^}]|\}\})*\}|"[^"]*"|'[^']*'|[^;]*)/i.exec(text);
+    var kv = new RegExp("(?:^|;)\\s*(?:" + names + ")\\s*=\\s*(\\{(?:[^}]|\\}\\})*\\}|\"[^\"]*\"|'[^']*'|[^;]*)", "i").exec(text);
     if (kv && !/^[a-z][a-z0-9+]*:\/\/[^;]*@/i.test(text)) {
       var v = kv[1].trim();
       if (v.charAt(0) === "{") return v.slice(1, -1).replace(/}}/g, "}");
       if (/^["']/.test(v)) return v.slice(1, -1);
       return v;
     }
-    var m = /^[a-z][a-z0-9+]*:\/\/([^?]*)/i.exec(text);
+    return "";
+  }
+  function typedPassword(raw) {
+    var kv = typedSecret(raw, "password|pwd|accountkey");
+    if (kv) return kv;
+    var m = /^[a-z][a-z0-9+]*:\/\/([^?]*)/i.exec(String(raw || "").trim());
     if (!m) return "";
     var head = m[1];
     var at = head.lastIndexOf("@");
@@ -2224,21 +2470,54 @@
     if (colon < 0) return "";
     try { return decodeURIComponent(auth.slice(colon + 1)); } catch (e) { return auth.slice(colon + 1); }
   }
+  function typedQueryOption(raw, name) {
+    var m = new RegExp("[?&]" + name + "=([^&]*)", "i").exec(String(raw || ""));
+    if (!m) return "";
+    try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+  }
 
   /** Fills the form from what the host detected in a connection string. */
-  function formFromDetect(res, raw) {
+  function formFromDetect(res, raw, svc) {
     var s = res.summary || {}, o = res.options || {};
-    var f = emptyForm(res.kind);
-    if (res.kind === "sqlite") { f.file = s.file || ""; return f; }
+    var f = emptyForm(res.kind, engineOf(svc, res.kind));
+    var k = res.kind;
+    if (k === "sqlite") { f.file = s.file || ""; return f; }
+    var pw = typedPassword(raw);
+    if (pw === MASK) f.savedPassword = true; else f.password = pw;
+    if (o.auth) f.auth = o.auth;
+    f.profile = o.profile || "";
+    f.extra = "";
+    if (API_KINDS[k]) {
+      f.endpoint = s.endpoint && s.endpoint !== EMULATOR_ENDPOINT[k] ? s.endpoint : f.auth === "emulator" ? "" : s.endpoint || "";
+      if (k === "dynamodb") {
+        f.region = s.region || "";
+        f.user = f.auth === "access-key" ? s.user || "" : "";
+        var st = typedQueryOption(raw, "sessiontoken");
+        if (st === MASK) f.savedSessionToken = true; else f.sessionToken = st;
+        if (/^https:\/\/dynamodb\./.test(f.endpoint)) f.endpoint = "";
+      } else if (k === "cosmosdb") {
+        f.endpoint = s.endpoint || "";
+        f.database = s.database || "";
+        if (/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(f.endpoint)) { f.auth = "emulator"; if (f.password === COSMOS_EMULATOR_KEY) f.password = ""; }
+      } else {
+        f.project = s.project || "";
+        f.instance = s.instance || "";
+        f.database = k === "firestore" && s.database === "(default)" ? "" : k === "bigquery" ? "" : s.database || "";
+        f.dataset = o.dataset || "";
+        f.keyFile = o.keyfile || "";
+        f.location = o.location || "";
+        f.maxBytes = o.maxbytesbilled || "";
+      }
+      return f;
+    }
     f.host = s.host || "";
-    f.port = s.port && s.port !== (S.kinds[res.kind] || {}).defaultPort ? String(s.port) : "";
+    f.port = s.port && s.port !== (S.kinds[k] || {}).defaultPort ? String(s.port) : "";
     f.user = s.user || "";
     f.database = s.database || "";
     f.srv = /^mongodb\+srv:/i.test(String(raw).trim());
-    var pw = typedPassword(raw);
-    if (pw === MASK) f.savedPassword = true; else f.password = pw;
-    var k = res.kind;
-    if (k === "postgres" || k === "cockroachdb") f.tls = o.sslmode && o.sslmode !== "disable" ? (/verify/.test(o.sslmode) ? "verify-full" : "require") : s.ssl ? "require" : "";
+    f.region = o.region || "";
+    if (!o.auth) f.auth = engineOf(svc, k) ? "password" : "";
+    if (k === "postgres" || k === "cockroachdb" || k === "redshift") f.tls = o.sslmode && o.sslmode !== "disable" ? (/verify/.test(o.sslmode) ? "verify-full" : "require") : s.ssl ? "require" : "";
     else if (k === "mysql" || k === "mariadb") { var mode = String(o["ssl-mode"] || o.sslmode || "").toUpperCase(); f.tls = /VERIFY/.test(mode) ? "VERIFY_IDENTITY" : s.ssl ? "REQUIRED" : ""; }
     else if (k === "sqlserver") f.tls = s.ssl ? (truthyText(o.trustservercertificate) ? "trust" : "true") : "false";
     else if (k === "oracle") f.tls = s.ssl ? "tcps" : "";
@@ -2253,16 +2532,50 @@
     return f;
   }
 
+  /** The first required field that is empty or malformed, so the form can point at it before the host is asked. */
+  function formProblem(f, svc, credentials) {
+    var k = f.kind;
+    if (k === "sqlite") return f.file.trim() ? null : { key: "file", message: "Choose the database file." };
+    if (k === "dynamodb") {
+      if (f.auth !== "emulator" && !/^[a-z]{2}(-gov|-iso[a-z]?)?-[a-z]+-\d{1,2}$/.test(f.region.trim())) return { key: "region", message: "Choose the AWS region, e.g. us-east-1." };
+      if (f.auth === "access-key" && !f.user.trim()) return { key: "user", message: "Enter the access key ID." };
+      if (f.auth === "access-key" && !f.password && !f.savedPassword) return { key: "password", message: "Enter the secret access key." };
+      if (f.auth === "emulator" && f.endpoint.trim() && !/^https?:\/\//i.test(f.endpoint.trim())) return { key: "endpoint", message: "The endpoint is a URL, e.g. http://localhost:8000." };
+      return null;
+    }
+    if (k === "cosmosdb") {
+      if (f.auth !== "emulator" && !f.endpoint.trim()) return { key: "endpoint", message: "Enter the account URI, e.g. https://myaccount.documents.azure.com:443/." };
+      if (f.auth !== "emulator" && !f.password && !f.savedPassword) return { key: "password", message: "Enter the account key." };
+      return null;
+    }
+    if (GOOGLE_KINDS[k]) {
+      if (!f.project.trim()) return { key: "project", message: "Enter the Google Cloud project ID." };
+      if (k === "spanner" && !f.instance.trim()) return { key: "instance", message: "Enter the Spanner instance ID." };
+      if (f.auth === "service-account" && !credentials.text && !credentials.saved) return { key: "credentials", message: "Paste the service account key (JSON)." };
+      if (f.auth === "key-file" && !f.keyFile.trim()) return { key: "keyFile", message: "Choose the key file." };
+      return null;
+    }
+    if (svc && !f.host.trim()) return { key: "host", message: "Enter the " + svc.label + " endpoint." };
+    if (f.port && !/^\d{1,5}$/.test(f.port.trim())) return { key: "port", message: "The port is a number." };
+    if (f.auth && f.auth !== "password" && !f.user.trim()) return { key: "user", message: "Token sign-in needs the database user name." };
+    return null;
+  }
+
   function openConnectionModal(id, preset) {
     preset = preset || {};
     var editing = !!id;
+    var presetSvc = cloudSvc(preset.cloud);
     var state = {
-      mode: preset.kind ? "form" : (S.connMode || "form"),
-      form: emptyForm(preset.kind || "postgres"),
+      mode: preset.kind || presetSvc ? "form" : (S.connMode || "form"),
+      provider: presetSvc ? presetSvc.provider : "",
+      cloud: presetSvc ? presetSvc.id : null,
+      form: presetSvc ? emptyForm(presetSvc.engines[0].kind, presetSvc.engines[0]) : emptyForm(preset.kind || "postgres"),
+      credentials: { text: "", saved: false },
       readOnly: false,
       color: COLORS[S.connections.length % COLORS.length],
       detected: null
     };
+    function svc() { return cloudSvc(state.cloud); }
     var nameInput = h("input", { class: "input", placeholder: "e.g. Local Postgres", maxlength: "60", "aria-label": "Name" });
     var csInput = h("input", { class: "input mono", type: "password", placeholder: "postgresql://user:password@localhost:5432/app", spellcheck: "false", autocomplete: "off", "aria-label": "Connection string" });
     var reveal = iconBtn("eye", "Show connection string", function () {
@@ -2305,10 +2618,54 @@
       examples.append(b);
     });
 
+    // ---- Where the database runs: self-hosted, or a cloud provider and one of its services.
+    var whereBox = h("div", { class: "where" });
+    function renderWhere() {
+      clear(whereBox);
+      var provSeg = h("div", { class: "seg provider-switch", role: "tablist", "aria-label": "Where the database runs" });
+      [["", "server", "Self-hosted"]].concat(Object.keys(S.cloud.providers).map(function (p) { return [p, null, S.cloud.providers[p].short]; })).forEach(function (p) {
+        var b = h("button", { type: "button", role: "tab", class: state.provider === p[0] ? "on" : "", "aria-selected": String(state.provider === p[0]) },
+          p[1] ? icon(p[1]) : h("span", { class: "prov-dot", style: { background: PROVIDER_COLOR[p[0]] } }), p[2]);
+        b.addEventListener("click", function () { pickProvider(p[0]); });
+        provSeg.append(b);
+      });
+      whereBox.append(provSeg);
+      if (!state.provider) return;
+      var cards = h("div", { class: "svc-cards", role: "radiogroup", "aria-label": "Service" });
+      S.cloud.services.filter(function (x) { return x.provider === state.provider; }).forEach(function (x) {
+        var on = x.id === state.cloud;
+        var b = h("button", { type: "button", class: "svc-card" + (on ? " on" : ""), role: "radio", "aria-checked": String(on), title: x.description },
+          h("span", { class: "kind-icon", style: { background: PROVIDER_COLOR[x.provider] } }, SERVICE_ABBR[x.id] || "DB"),
+          h("span", { class: "grow" }, h("b", { text: x.label }), h("small", { text: x.description })));
+        b.addEventListener("click", function () { pickService(x.id); });
+        cards.append(b);
+      });
+      whereBox.append(cards);
+    }
+    function pickProvider(provider) {
+      if (provider === state.provider) return;
+      state.provider = provider;
+      if (!provider) { state.cloud = null; state.form = emptyForm("postgres"); }
+      else pickService(S.cloud.services.filter(function (x) { return x.provider === provider; })[0].id, true);
+      renderWhere(); renderForm(); showMode(); syncFromForm();
+    }
+    function pickService(serviceId, quiet) {
+      var next = cloudSvc(serviceId);
+      if (!next) return;
+      var keep = state.form;
+      state.cloud = next.id;
+      state.provider = next.provider;
+      var engine = engineOf(next, keep.kind) || next.engines[0];
+      state.form = emptyForm(engine.kind, engine);
+      // Credentials typed for the same kind of database carry over.
+      if (!API_KINDS[engine.kind] && !API_KINDS[keep.kind]) ["user", "password", "savedPassword", "database"].forEach(function (k) { state.form[k] = keep[k]; });
+      if (!quiet) { renderWhere(); renderForm(); showMode(); syncFromForm(); }
+    }
+
     // ---- Mode switch: form fields or a raw connection string, always kept in sync.
     var formBox = h("div", { class: "form-grid" });
     var stringBox = h("div", { class: "field" }, h("label", { text: "Connection string" }), h("div", { class: "with-btn" }, csInput, reveal, browse), examples,
-      h("div", { class: "help", text: editing ? "The saved password is shown as ******** — leave it to keep it, or type a new one." : "Also accepts DATABASE_URL=… lines, JDBC URLs (jdbc:postgresql://, jdbc:oracle:thin:@…) and SQL Server key=value strings." }));
+      h("div", { class: "help", text: editing ? "The saved password and keys are shown as ******** — leave them to keep them, or type new ones." : "Also accepts DATABASE_URL=… lines, JDBC URLs (jdbc:postgresql://, jdbc:oracle:thin:@…), SQL Server key=value strings and Cosmos DB AccountEndpoint=… strings." }));
     var seg = h("div", { class: "seg mode-switch", role: "tablist", "aria-label": "How to enter the connection" });
     function renderSeg() {
       clear(seg);
@@ -2322,11 +2679,12 @@
       if (mode === state.mode) return;
       if (mode === "form" && csInput.value.trim()) {
         // Parse what was typed so nothing is lost; a string the host cannot parse stays where it is.
-        call("detect", { connectionString: csInput.value, id: id || undefined }).then(function (res) {
+        call("detect", { connectionString: csInput.value, id: id || undefined, cloud: state.cloud || undefined }).then(function (res) {
           if (!res.ok) { toast("error", "Fix the connection string first.", res.error && res.error.message); return; }
-          state.form = formFromDetect(res, csInput.value);
+          adoptCloud(res);
+          state.form = formFromDetect(res, csInput.value, svc());
           state.mode = "form"; S.connMode = "form"; persistSoon();
-          renderSeg(); renderForm(); showMode();
+          renderSeg(); renderWhere(); renderForm(); showMode();
         }).catch(fail);
         return;
       }
@@ -2335,8 +2693,16 @@
       if (mode === "form") { renderForm(); syncFromForm(); }
       showMode();
     }
+    /** A pasted string decides the service when the user has not picked one that fits it. */
+    function adoptCloud(res) {
+      var current = svc();
+      if (current && engineOf(current, res.kind)) return;
+      state.cloud = res.cloud ? res.cloud.id : null;
+      state.provider = res.cloud ? res.cloud.provider : "";
+    }
     function showMode() {
       formBox.classList.toggle("hidden", state.mode !== "form");
+      whereBox.classList.toggle("hidden", state.mode !== "form");
       stringBox.classList.toggle("hidden", state.mode !== "string");
       browse.classList.toggle("hidden", !(state.form.kind === "sqlite" || /^(sqlite|file):/i.test(csInput.value) || (state.detected && state.detected.kind === "sqlite")));
     }
@@ -2346,55 +2712,170 @@
       detectSoon();
     }
     function field(label, input, cls, help) {
-      return h("div", { class: "field " + (cls || "") }, h("label", null, label), input, help ? h("div", { class: "help", text: help }) : null);
+      return h("div", { class: "field " + (cls || "") }, h("label", null, label), input, help ? (typeof help === "string" ? h("div", { class: "help", text: help }) : h("div", { class: "help" }, help)) : null);
     }
     function textInput(key, attrs) {
-      var input = h("input", Object.assign({ class: "input", value: state.form[key] || "", spellcheck: "false", autocomplete: "off" }, attrs || {}));
-      input.addEventListener("input", function () { state.form[key] = input.value; syncFromForm(); });
+      var input = h("input", Object.assign({ class: "input", value: state.form[key] || "", spellcheck: "false", autocomplete: "off", "data-key": key }, attrs || {}));
+      input.addEventListener("input", function () { state.form[key] = input.value; input.classList.remove("invalid"); syncFromForm(); });
       return input;
     }
+    function selectInput(key, choices, label, onChange) {
+      var sel = h("select", { class: "select", "aria-label": label, "data-key": key }, choices.map(function (c) { return h("option", { value: c[0], text: c[1], selected: c[0] === state.form[key] }); }));
+      sel.addEventListener("change", function () { state.form[key] = sel.value; if (onChange) onChange(); syncFromForm(); });
+      return sel;
+    }
+    function secretInput(key, savedKey, label, placeholder) {
+      var f = state.form;
+      var input = h("input", { class: "input", type: "password", value: f[key], autocomplete: "new-password", placeholder: f[savedKey] ? "Saved (unchanged)" : placeholder || "", "aria-label": label, "data-key": key });
+      input.addEventListener("input", function () { f[key] = input.value; input.classList.remove("invalid"); syncFromForm(); });
+      var eye = iconBtn("eye", "Show " + label.toLowerCase(), function () { input.type = input.type === "password" ? "text" : "password"; });
+      return h("div", { class: "with-btn" }, input, eye);
+    }
+    function authChoices(list) { return list.map(function (a) { return [a, S.cloud.auth[a] || a]; }); }
     function renderForm() {
       var f = state.form;
       var meta = S.kinds[f.kind] || {};
+      var service = svc();
+      var engine = engineOf(service, f.kind);
       clear(formBox);
-      var kindSel = h("select", { class: "select", "aria-label": "Database type" }, Object.keys(S.kinds).map(function (k) { return h("option", { value: k, text: S.kinds[k].label, selected: k === f.kind }); }));
-      kindSel.addEventListener("change", function () {
-        var next = emptyForm(kindSel.value);
-        // Keep what still applies when switching type.
-        ["host", "user", "password", "savedPassword", "database"].forEach(function (k) { if (kindSel.value !== "sqlite" && f.kind !== "sqlite") next[k] = f[k]; });
-        state.form = next;
-        renderForm(); showMode(); syncFromForm();
-      });
-      formBox.append(field("Database type", kindSel, "span2", meta.notes || null));
+      if (service) {
+        if (service.engines.length > 1) {
+          var engineSel = h("select", { class: "select", "aria-label": "Engine" }, service.engines.map(function (e) { return h("option", { value: e.kind, text: e.label, selected: e.kind === f.kind }); }));
+          engineSel.addEventListener("change", function () {
+            var next = emptyForm(engineSel.value, engineOf(service, engineSel.value));
+            if (!API_KINDS[engineSel.value] && !API_KINDS[f.kind]) ["host", "user", "password", "savedPassword", "database"].forEach(function (k) { next[k] = f[k]; });
+            state.form = next;
+            renderForm(); showMode(); syncFromForm();
+          });
+          formBox.append(field("Engine", engineSel, "span2", meta.notes || null));
+        } else if (meta.notes && API_KINDS[f.kind]) formBox.append(h("div", { class: "help span2", text: meta.notes }));
+      } else {
+        // Self-hosted: every kind that is not reached only through a cloud provider.
+        var kindSel = h("select", { class: "select", "aria-label": "Database type" }, Object.keys(S.kinds).filter(function (k) { return !S.kinds[k].cloud || k === f.kind; }).map(function (k) { return h("option", { value: k, text: S.kinds[k].label, selected: k === f.kind }); }));
+        kindSel.addEventListener("change", function () {
+          var next = emptyForm(kindSel.value);
+          // Keep what still applies when switching type.
+          ["host", "user", "password", "savedPassword", "database"].forEach(function (k) { if (kindSel.value !== "sqlite" && f.kind !== "sqlite") next[k] = f[k]; });
+          state.form = next;
+          renderForm(); showMode(); syncFromForm();
+        });
+        formBox.append(field("Database type", kindSel, "span2", meta.notes || null));
+      }
       if (f.kind === "sqlite") {
         formBox.append(field("Database file", h("div", { class: "with-btn" }, textInput("file", { class: "input mono", placeholder: "/Users/me/project/dev.db", "aria-label": "Database file" }), btn("Browse…", "folder-opened", pickFile)), "span2", "Relative paths resolve against the first workspace folder."));
         return;
       }
+      if (f.kind === "dynamodb") renderDynamoForm(f);
+      else if (f.kind === "cosmosdb") renderCosmosForm(f);
+      else if (GOOGLE_KINDS[f.kind]) renderGoogleForm(f);
+      else renderEngineForm(f, meta, service, engine);
+      if (service) {
+        formBox.append(h("div", { class: "svc-note span2" }, icon("info"),
+          h("div", null, service.notes || "", " ", h("a", { href: service.docs, title: service.docs, text: "Where to find these details" }))));
+      }
+    }
+    function authField(f, list, onChange) {
+      if (!list || list.length < 2) return;
+      formBox.append(field("Authentication", selectInput("auth", authChoices(list), "Authentication", function () { renderForm(); if (onChange) onChange(); }), "span2"));
+    }
+    /** Host, port, user, password, database: the engines a cloud service shares with self-hosted servers. */
+    function renderEngineForm(f, meta, service, engine) {
+      var hostHint = engine ? service.hostHint || "" : f.kind === "mongodb" && f.srv ? "cluster0.abcde.mongodb.net" : "localhost";
       formBox.append(
-        field(f.kind === "mongodb" && f.srv ? "Cluster host" : "Host", textInput("host", { placeholder: f.kind === "mongodb" && f.srv ? "cluster0.abcde.mongodb.net" : "localhost", "aria-label": "Host" })),
-        f.kind === "mongodb" && f.srv ? h("div") : field("Port", textInput("port", { placeholder: meta.defaultPort ? String(meta.defaultPort) : "", inputmode: "numeric", "aria-label": "Port" })));
+        field(f.kind === "mongodb" && f.srv ? "Cluster host" : service ? "Endpoint" : "Host", textInput("host", { placeholder: hostHint, "aria-label": "Host" })),
+        f.kind === "mongodb" && f.srv ? h("div") : field("Port", textInput("port", { placeholder: engine && engine.port ? String(engine.port) : meta.defaultPort ? String(meta.defaultPort) : "", inputmode: "numeric", "aria-label": "Port" })));
       if (f.kind === "mongodb") {
         var srv = h("input", { type: "checkbox", checked: f.srv });
         srv.addEventListener("change", function () { f.srv = srv.checked; if (f.srv) f.port = ""; renderForm(); syncFromForm(); });
         formBox.append(h("label", { class: "inline-check span2" }, srv, "DNS seed list (mongodb+srv://), as used by MongoDB Atlas"));
       }
-      var pass = h("input", { class: "input", type: "password", value: f.password, autocomplete: "new-password", placeholder: f.savedPassword ? "Saved password (unchanged)" : "", "aria-label": "Password" });
-      pass.addEventListener("input", function () { f.password = pass.value; syncFromForm(); });
-      var passReveal = iconBtn("eye", "Show password", function () { pass.type = pass.type === "password" ? "text" : "password"; });
-      formBox.append(
-        h("div", { class: "pair span2" },
-          field("User", textInput("user", { placeholder: USER_HINT[f.kind] || "", "aria-label": "User" })),
-          field("Password", h("div", { class: "with-btn" }, pass, passReveal), null, f.savedPassword ? "Leave empty to keep the saved password." : null)),
-        field(f.kind === "oracle" ? "Service name" : f.kind === "redis" ? "Database number" : "Database", textInput("database", { placeholder: DB_HINT[f.kind] || "", "aria-label": "Database" }), "span2",
-          f.kind === "oracle" ? "The PDB or service, e.g. FREEPDB1 or ORCLPDB1. For a SID, add sid=XE under Options." : f.kind === "postgres" || f.kind === "cockroachdb" ? "Other databases on the server appear in the explorer too." : null));
-      var tlsSel = h("select", { class: "select", "aria-label": "TLS" }, (TLS_CHOICES[f.kind] || [["", "Off"]]).map(function (c) { return h("option", { value: c[0], text: c[1], selected: c[0] === f.tls }); }));
+      if (engine) authField(f, engine.auth);
+      var token = f.auth && f.auth !== "password";
+      var userField = field("User", textInput("user", { placeholder: (engine && engine.user) || USER_HINT[f.kind] || "", "aria-label": "User" }));
+      if (token) {
+        formBox.append(h("div", { class: "pair span2" }, userField, f.auth === "aws-iam" ? field("AWS profile", textInput("profile", { placeholder: "default", "aria-label": "AWS profile" })) : h("div")));
+        if (f.auth === "aws-iam") formBox.append(field("Region", textInput("region", { placeholder: "read from the endpoint", list: "aws-regions", "aria-label": "Region" }), "span2"), regionList());
+        formBox.append(h("div", { class: "help span2", text: f.auth === "aws-iam" ? "A 15-minute token is made from your AWS credentials (the profile, or AWS_ACCESS_KEY_ID…) for this database user. The user needs the rds_iam role (PostgreSQL) or the AWSAuthenticationPlugin (MySQL)."
+          : f.auth === "azure-ad" ? "Signs in with the Azure CLI's account: run az login first. The user is your Entra ID user or group name."
+            : "Uses your Application Default Credentials (gcloud auth application-default login). The user is the IAM user, e.g. name@example.com, or a service account without .gserviceaccount.com." }));
+      } else {
+        var pass = h("input", { class: "input", type: "password", value: f.password, autocomplete: "new-password", placeholder: f.savedPassword ? "Saved password (unchanged)" : "", "aria-label": "Password", "data-key": "password" });
+        pass.addEventListener("input", function () { f.password = pass.value; pass.classList.remove("invalid"); syncFromForm(); });
+        var passReveal = iconBtn("eye", "Show password", function () { pass.type = pass.type === "password" ? "text" : "password"; });
+        formBox.append(h("div", { class: "pair span2" }, userField, field("Password", h("div", { class: "with-btn" }, pass, passReveal), null, f.savedPassword ? "Leave empty to keep the saved password." : null)));
+      }
+      formBox.append(field(f.kind === "oracle" ? "Service name" : f.kind === "redis" ? "Database number" : "Database", textInput("database", { placeholder: (engine && engine.database) || DB_HINT[f.kind] || "", "aria-label": "Database" }), "span2",
+        f.kind === "oracle" ? "The PDB or service, e.g. FREEPDB1 or ORCLPDB1. For a SID, add sid=XE under Options." : f.kind === "postgres" || f.kind === "cockroachdb" || f.kind === "redshift" ? "Other databases on the server appear in the explorer too." : null));
+      var tlsSel = h("select", { class: "select", "aria-label": "TLS" }, (TLS_CHOICES[f.kind] || [["", "Off"]]).map(function (c) { return h("option", { value: c[0], text: c[1] + (engine && c[0] === engine.tls && c[0] ? " (recommended)" : ""), selected: c[0] === f.tls }); }));
       tlsSel.addEventListener("change", function () { f.tls = tlsSel.value; syncFromForm(); });
       formBox.append(field("TLS / SSL", tlsSel, "span2", f.kind === "mongodb" && f.srv ? "mongodb+srv connections always use TLS." : null));
       formBox.append(field("Options", textInput("extra", { class: "input mono", placeholder: f.kind === "sqlserver" ? "ApplicationIntent=ReadOnly;MultiSubnetFailover=true" : f.kind === "mongodb" ? "authSource=admin&replicaSet=rs0" : f.kind === "postgres" ? "sslrootcert=/path/ca.pem&application_name=me" : "key=value&key2=value2", "aria-label": "Extra options" }), "span2",
         "Driver options, " + (f.kind === "sqlserver" ? "as key=value pairs separated by ;" : "as a query string") + ". Optional."));
     }
+    function regionList() {
+      return h("datalist", { id: "aws-regions" }, AWS_REGIONS.map(function (r) { return h("option", { value: r }); }));
+    }
+    function renderDynamoForm(f) {
+      authField(f, ["access-key", "profile", "env", "emulator"]);
+      if (f.auth !== "emulator") formBox.append(field("Region", textInput("region", { placeholder: "us-east-1", list: "aws-regions", "aria-label": "Region" }), "span2"), regionList());
+      if (f.auth === "access-key") {
+        formBox.append(
+          h("div", { class: "pair span2" },
+            field("Access key ID", textInput("user", { class: "input mono", placeholder: "AKIA…", "aria-label": "Access key ID" })),
+            field("Secret access key", secretInput("password", "savedPassword", "Secret access key"), null, f.savedPassword ? "Leave empty to keep the saved key." : null)),
+          field("Session token", secretInput("sessionToken", "savedSessionToken", "Session token", "Only for temporary (ASIA…) keys"), "span2"));
+      } else if (f.auth === "profile") {
+        formBox.append(field("Profile", textInput("profile", { placeholder: "default", "aria-label": "Profile" }), "span2", "A profile from ~/.aws/credentials or ~/.aws/config. SSO and role profiles work through the AWS CLI (sign in with aws sso login)."));
+      } else if (f.auth === "env") {
+        formBox.append(h("div", { class: "help span2", text: "Uses AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from VS Code's environment, else the default profile in ~/.aws." }));
+      }
+      formBox.append(field("Endpoint", textInput("endpoint", { class: "input mono", placeholder: f.auth === "emulator" ? EMULATOR_ENDPOINT.dynamodb : "Optional: a VPC endpoint or DynamoDB Local", "aria-label": "Endpoint" }), "span2",
+        f.auth === "emulator" ? "DynamoDB Local: docker run -p 8000:8000 amazon/dynamodb-local" : null));
+    }
+    function renderCosmosForm(f) {
+      authField(f, ["account-key", "emulator"]);
+      formBox.append(field("Account URI", textInput("endpoint", { class: "input mono", placeholder: f.auth === "emulator" ? EMULATOR_ENDPOINT.cosmosdb : "https://myaccount.documents.azure.com:443/", "aria-label": "Account URI" }), "span2"));
+      if (f.auth !== "emulator") formBox.append(field("Account key", secretInput("password", "savedPassword", "Account key", "PRIMARY KEY from Keys in the portal"), "span2", f.savedPassword ? "Leave empty to keep the saved key. A read-only key makes a read-only connection." : "A read-only key makes a read-only connection."));
+      else formBox.append(h("div", { class: "help span2", text: "Uses the emulator's published key. Its self-signed certificate is accepted for localhost." }));
+      formBox.append(field("Database", textInput("database", { placeholder: "Optional: opens this database first", "aria-label": "Database" }), "span2"));
+    }
+    function renderGoogleForm(f) {
+      var k = f.kind;
+      formBox.append(field("Project ID", textInput("project", { class: "input mono", placeholder: "my-project-123456", "aria-label": "Project ID" }), "span2", "The project ID, not its display name."));
+      if (k === "spanner") formBox.append(h("div", { class: "pair span2" }, field("Instance ID", textInput("instance", { class: "input mono", placeholder: "my-instance", "aria-label": "Instance ID" })), field("Database ID", textInput("database", { class: "input mono", placeholder: "Optional", "aria-label": "Database ID" }))));
+      if (k === "firestore") formBox.append(field("Database ID", textInput("database", { class: "input mono", placeholder: "(default)", "aria-label": "Database ID" }), "span2"));
+      if (k === "bigquery") {
+        formBox.append(h("div", { class: "pair span2" },
+          field("Default dataset", textInput("dataset", { class: "input mono", placeholder: "Optional", "aria-label": "Default dataset" })),
+          field("Location", selectInput("location", BQ_LOCATIONS, "Location"))));
+        formBox.append(field("Max bytes billed", selectInput("maxBytes", MAX_BYTES, "Max bytes billed"), "span2", "A query that would scan more fails instead of running. Browsing a table without filters is free either way."));
+      }
+      authField(f, ["adc", "service-account", "key-file", "emulator"]);
+      if (f.auth === "service-account") {
+        var ta = h("textarea", { class: "textarea secret-text", rows: "4", spellcheck: "false", autocomplete: "off", "data-key": "credentials", "aria-label": "Service account key",
+          placeholder: state.credentials.saved ? "Saved key (unchanged). Paste a new key to replace it." : "{ \"type\": \"service_account\", \"project_id\": …, \"private_key\": … }" });
+        ta.value = state.credentials.text;
+        ta.addEventListener("input", function () {
+          state.credentials.text = ta.value; ta.classList.remove("invalid");
+          // The key names its project: fill the project ID from it.
+          try { var j = JSON.parse(ta.value); if (j && j.project_id && !f.project) { f.project = j.project_id; renderForm(); } } catch (e) { /* still typing */ }
+          syncFromForm();
+        });
+        var showKey = iconBtn("eye", "Show key", function () { ta.classList.toggle("revealed"); });
+        formBox.append(field("Service account key", h("div", { class: "with-btn top" }, ta, showKey), "span2", "Paste the JSON key from IAM → Service accounts → Keys. It is stored in your OS keychain, never in settings."));
+      } else if (f.auth === "key-file") {
+        formBox.append(field("Key file", h("div", { class: "with-btn" }, textInput("keyFile", { class: "input mono", placeholder: "~/keys/my-project-sa.json", "aria-label": "Key file" }),
+          btn("Browse…", "folder-opened", function () { call("pickKeyFile").then(function (res) { if (res && res.path) { f.keyFile = res.path; renderForm(); syncFromForm(); } }).catch(fail); })), "span2", "Read from disk at each connect; only the path is saved."));
+      } else if (f.auth === "adc") {
+        formBox.append(h("div", { class: "help span2", text: "Uses GOOGLE_APPLICATION_CREDENTIALS, else the credentials of gcloud auth application-default login." }));
+      }
+      if (f.auth === "emulator") formBox.append(field("Emulator endpoint", textInput("endpoint", { class: "input mono", placeholder: EMULATOR_ENDPOINT[k], "aria-label": "Emulator endpoint" }), "span2"));
+    }
 
     var detectToken = 0;
+    function detectParams(value) {
+      return { connectionString: value, id: id || undefined, cloud: state.mode === "form" ? state.cloud || undefined : undefined, credentials: state.form.auth === "service-account" && state.credentials.text ? state.credentials.text : undefined };
+    }
     function detect() {
       var value = csInput.value;
       showMode();
@@ -2405,7 +2886,7 @@
         return;
       }
       var token = ++detectToken;
-      call("detect", { connectionString: value, id: id || undefined }).then(function (res) {
+      call("detect", detectParams(value)).then(function (res) {
         if (token !== detectToken) return;
         state.detected = res.ok ? res : null;
         clear(detectBox);
@@ -2419,14 +2900,25 @@
         var facts = h("div", { class: "facts" });
         function fact(label, value) { if (value !== undefined && value !== null && value !== "") facts.append(h("span", null, label + " ", h("b", { text: String(value) }))); }
         if (s.file) fact("File", s.file);
-        else {
+        else if (API_KINDS[res.kind]) {
+          fact("Project", s.project);
+          fact("Instance", s.instance);
+          fact("Region", res.kind === "dynamodb" ? s.region : undefined);
+          fact("Location", res.kind === "bigquery" ? s.region : undefined);
+          fact(res.kind === "bigquery" ? "Dataset" : "Database", res.kind === "bigquery" ? res.options.dataset : res.kind === "dynamodb" ? undefined : s.database);
+          fact("Endpoint", s.endpoint);
+          fact("Auth", S.cloud.auth[s.auth] || s.auth);
+          if (res.credentials) fact("Key", res.credentials.clientEmail || res.credentials.type);
+        } else {
           fact("Host", s.host + (s.port ? ":" + s.port : ""));
           fact(res.kind === "redis" ? "DB" : res.kind === "oracle" ? "Service" : "Database", s.database);
           fact("User", s.user);
-          fact("Password", s.hasPassword ? "set" : "none");
+          if (s.auth && s.auth !== "password") fact("Auth", S.cloud.auth[s.auth] || s.auth);
+          else fact("Password", s.hasPassword ? "set" : "none");
           fact("TLS", s.ssl ? "on" : "off");
         }
-        detectBox.append(icon("pass-filled"), h("div", { class: "grow" }, h("b", { text: res.label + (state.mode === "string" ? " detected" : "") }), facts, res.warnings.length ? h("ul", null, res.warnings.map(function (w) { return h("li", { text: w }); })) : null));
+        var title = (res.cloud && res.cloud.label !== res.label ? res.cloud.label + " · " : "") + res.label + (state.mode === "string" ? " detected" : "");
+        detectBox.append(icon("pass-filled"), h("div", { class: "grow" }, h("b", { text: title }), facts, res.warnings.length ? h("ul", null, res.warnings.map(function (w) { return h("li", { text: w }); })) : null));
         nameInput.placeholder = suggestName(res);
         showMode();
       }).catch(function () { /* detection is advisory */ });
@@ -2438,13 +2930,32 @@
     var saveBtn = btn("Save", null, function () { save(false); });
     var saveConnectBtn = btn("Save & connect", "plug", function () { save(true); }, "primary");
 
+    /** Checks the form before asking the host; marks and focuses the field at fault. */
+    function validate() {
+      if (state.mode !== "form") {
+        if (csInput.value.trim()) return true;
+        csInput.classList.add("invalid");
+        errorBox.append(formError({ message: "Enter a connection string." }));
+        return false;
+      }
+      var problem = formProblem(state.form, svc(), state.credentials);
+      if (!problem) return true;
+      errorBox.append(formError({ message: problem.message }));
+      var input = formBox.querySelector('[data-key="' + problem.key + '"]');
+      if (input) { input.classList.add("invalid"); input.focus(); }
+      return false;
+    }
+    function credentialsParam() {
+      return state.form.auth === "service-account" && state.credentials.text.trim() ? state.credentials.text : undefined;
+    }
+
     function test() {
       clear(errorBox);
-      if (!csInput.value.trim()) { errorBox.append(formError({ message: state.mode === "form" ? "Fill in the host first." : "Enter a connection string." })); return; }
+      if (!validate()) return;
       testBtn.disabled = true;
       testResult.className = "test-result";
       clear(testResult).append(icon("loading", "codicon-modifier-spin"), h("span", { text: "Testing…" }));
-      call("testConnection", { id: id || undefined, connectionString: csInput.value }).then(function (res) {
+      call("testConnection", { id: id || undefined, connectionString: csInput.value, cloud: state.cloud || undefined, credentials: credentialsParam() }).then(function (res) {
         testBtn.disabled = false;
         testResult.className = "test-result ok";
         clear(testResult).append(icon("pass-filled"), h("div", null, "Connected • " + res.version + " • " + res.latencyMs + " ms", res.warnings && res.warnings.length ? h("span", { class: "hint", text: res.warnings.join(" ") }) : null));
@@ -2457,16 +2968,12 @@
 
     function save(andConnect) {
       clear(errorBox);
-      if (!csInput.value.trim()) {
-        csInput.classList.add("invalid");
-        errorBox.append(formError({ message: state.mode === "form" ? "Fill in the connection details first." : "Enter a connection string." }));
-        return;
-      }
+      if (!validate()) return;
       // An unnamed connection takes the name suggested from what was detected, never a stale example.
       var name = nameInput.value.trim() || (state.detected ? suggestName(state.detected) : "");
       if (!name) { nameInput.classList.add("invalid"); errorBox.append(formError({ message: "Give the connection a name." })); nameInput.focus(); return; }
       saveBtn.disabled = saveConnectBtn.disabled = true;
-      call("saveConnection", { id: id || undefined, name: name, connectionString: csInput.value, readOnly: readOnlyCk.checked, color: state.color }).then(function (view) {
+      call("saveConnection", { id: id || undefined, name: name, connectionString: csInput.value, readOnly: readOnlyCk.checked, color: state.color, cloud: state.cloud || undefined, credentials: credentialsParam() }).then(function (view) {
         close();
         toast("success", editing ? "Connection updated." : "Connection saved.");
         if (view) {
@@ -2485,6 +2992,7 @@
       h("div", { class: "mhead" }, icon("database"), h("h3", { text: editing ? "Edit connection" : "New connection" }), iconBtn("close", "Close", function () { close(); })),
       h("div", { class: "mbody" },
         seg,
+        whereBox,
         formBox,
         stringBox,
         detectBox,
@@ -2492,7 +3000,7 @@
         h("div", { class: "field" }, h("label", { text: "Name" }), nameInput),
         h("div", { class: "field" }, h("span", { class: "flabel", text: "Color" }), colors),
         h("label", { class: "check" }, readOnlyCk, h("span", null, "Read-only", h("small", { text: "Block inserts, updates, deletes and writing statements on this connection." }))),
-        h("div", { class: "secure-note" }, icon("lock"), h("span", { text: "The connection string is stored in your operating system's keychain through VS Code SecretStorage. It is never written to settings, logs or error messages." })),
+        h("div", { class: "secure-note" }, icon("lock"), h("span", { text: "The connection string, passwords and keys are stored in your operating system's keychain through VS Code SecretStorage. They are never written to settings, logs or error messages." })),
         errorBox),
       h("div", { class: "mfoot" }, testBtn, h("span", { class: "spacer" }), btn("Cancel", null, function () { close(); }, "ghost"), saveBtn, saveConnectBtn));
     var overlay = h("div", { class: "overlay", onmousedown: function (e) { if (e.target === overlay) close(); } }, modal);
@@ -2501,23 +3009,27 @@
 
     function focusFirst() {
       setTimeout(function () {
-        var first = state.mode === "form" ? formBox.querySelector("input:not([type=checkbox])") : csInput;
+        var first = state.mode === "form" ? formBox.querySelector("input:not([type=checkbox]), textarea") : csInput;
         if (first) first.focus();
       }, 30);
     }
     renderSeg();
+    renderWhere();
     if (editing) {
       call("editConnection", { id: id }).then(function (data) {
         nameInput.value = data.name;
         csInput.value = data.connectionString;
         readOnlyCk.checked = !!data.readOnly;
         state.color = data.color || state.color;
+        state.credentials.saved = !!data.hasCredentials;
+        var saved = cloudSvc(data.cloud);
+        if (saved) { state.cloud = saved.id; state.provider = saved.provider; }
         renderColors();
-        return call("detect", { connectionString: data.connectionString, id: id });
+        return call("detect", { connectionString: data.connectionString, id: id, cloud: data.cloud || undefined });
       }).then(function (res) {
-        if (res && res.ok) state.form = formFromDetect(res, csInput.value);
+        if (res && res.ok) { adoptCloud(res); state.form = formFromDetect(res, csInput.value, svc()); }
         else state.mode = "string";
-        renderSeg(); renderForm(); showMode(); detect(); focusFirst();
+        renderSeg(); renderWhere(); renderForm(); showMode(); detect(); focusFirst();
       }).catch(function (err) { errorBox.append(formError(err)); });
     } else {
       renderForm();
@@ -2531,14 +3043,19 @@
   function suggestName(res) {
     var s = res.summary;
     if (s.file) return s.file.split(/[\\/]/).pop();
+    if (s.project) return s.project + (s.instance ? "/" + s.instance : "") + (s.database && s.database !== "(default)" && res.kind !== "bigquery" ? "/" + s.database : "");
+    if (res.kind === "dynamodb") return "DynamoDB " + (s.endpoint && /localhost|127\.0\.0\.1/.test(s.endpoint) ? "local" : s.region || "");
     var host = String(s.host || "").split(",")[0];
     if (/^(localhost|127\.0\.0\.1)$/.test(host)) host = "local";
+    // Cloud endpoints: the instance name is the first label (mydb.abc123.us-east-1.rds.amazonaws.com → mydb).
+    else if (res.cloud && host.indexOf(".") > 0 && !/^\d+\.\d+\.\d+\.\d+$/.test(host)) host = host.split(".")[0];
     return (host ? host : res.label) + (s.database ? "/" + s.database : "");
   }
 
   // ------------------------------------------------------------------ Boot
   call("init").then(function (data) {
     S.kinds = data.kinds || {};
+    S.cloud = data.cloud || S.cloud;
     S.filterOps = data.filterOps || [];
     S.limits = data.limits || S.limits;
     S.connections = data.connections || [];

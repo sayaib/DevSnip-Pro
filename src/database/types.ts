@@ -1,14 +1,17 @@
 /**
  * Shared contract of the Database Client: every adapter (PostgreSQL,
  * CockroachDB, MySQL, MariaDB, SQL Server, Oracle, SQLite, ClickHouse,
- * MongoDB, Redis) speaks this shape, so the panel and the webview never
+ * MongoDB, Redis, and the cloud services Redshift, DynamoDB, Cosmos DB,
+ * Spanner, Firestore and BigQuery) speaks this shape, so the panel and the webview never
  * branch on driver details - only on `kind`, `family` and `features`.
  *
  * Everything that crosses into the webview is plain JSON: driver values are
  * encoded by `encodeValue` first, and connection strings never cross at all.
  */
 
-export type DbKind = "postgres" | "cockroachdb" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "sqlite" | "clickhouse" | "mongodb" | "redis";
+export type DbKind =
+  | "postgres" | "cockroachdb" | "mysql" | "mariadb" | "sqlserver" | "oracle" | "sqlite" | "clickhouse" | "mongodb" | "redis"
+  | "redshift" | "dynamodb" | "cosmosdb" | "spanner" | "firestore" | "bigquery";
 
 /** Decides which editor, filter and query console the UI shows. */
 export type DbFamily = "sql" | "document" | "keyvalue";
@@ -37,6 +40,12 @@ export interface KindInfo {
   features: KindFeatures;
   /** Limits worth knowing before connecting. */
   notes?: string;
+  /** Document kinds with a native filter language: the placeholder of the grid's filter box. */
+  filterHint?: string;
+  /** Set when the grid's free-text search is not available, with the reason. */
+  noSearch?: string;
+  /** Only reachable through a cloud provider; listed under that provider in the UI. */
+  cloud?: "aws" | "azure" | "gcp";
 }
 
 const ALL: KindFeatures = { editRows: true, indexes: true, cancel: true, serverReadOnly: true };
@@ -61,9 +70,9 @@ export const DB_KINDS: Record<DbKind, KindInfo> = {
     notes: "Oracle Database 12.1 or later. No Oracle Client install is needed."
   },
   sqlite: {
-    label: "SQLite", family: "sql", schemas: false, driver: "node:sqlite or sql.js", features: { ...ALL, cancel: false },
+    label: "SQLite", family: "sql", schemas: false, driver: "node:sqlite (worker thread) or sql.js", features: ALL,
     example: "sqlite:///Users/me/project/dev.db",
-    notes: "Queries run inside VS Code, so a running query cannot be cancelled."
+    notes: "Queries run on a worker thread, so a long one never freezes VS Code and can be cancelled. On VS Code builds without node:sqlite, sql.js opens files up to 512 MB and cannot cancel."
   },
   clickhouse: {
     label: "ClickHouse", family: "sql", schemas: false, defaultPort: 8123, driver: "HTTP interface", features: { ...ALL, editRows: false },
@@ -75,6 +84,40 @@ export const DB_KINDS: Record<DbKind, KindInfo> = {
     label: "Redis", family: "keyvalue", schemas: false, defaultPort: 6379, driver: "ioredis", features: { editRows: true, indexes: false, cancel: false, serverReadOnly: false },
     example: "redis://:password@localhost:6379/0",
     notes: "Valkey and other Redis-compatible servers work too."
+  },
+  redshift: {
+    label: "Amazon Redshift", family: "sql", schemas: true, defaultPort: 5439, driver: "pg", cloud: "aws", features: { ...ALL, indexes: false, serverReadOnly: false },
+    example: "redshift://awsuser:password@examplecluster.abc123xyz789.us-west-2.redshift.amazonaws.com:5439/dev",
+    notes: "Redshift tables have no enforced primary keys: rows of tables without a declared key are read-only here."
+  },
+  dynamodb: {
+    label: "Amazon DynamoDB", family: "document", schemas: false, driver: "HTTPS API (SigV4)", cloud: "aws", features: { editRows: true, indexes: true, cancel: false, serverReadOnly: false },
+    example: "dynamodb://AKIAIOSFODNN7EXAMPLE:secret@us-east-1",
+    filterHint: "PartiQL WHERE: status = 'active' AND age > 21",
+    noSearch: "DynamoDB has no text search. Use Filter, or a PartiQL condition.",
+    notes: "Browsing scans the table page by page; each page costs read capacity. Sorting is not available on scans."
+  },
+  cosmosdb: {
+    label: "Azure Cosmos DB", family: "document", schemas: false, driver: "HTTPS API (NoSQL)", cloud: "azure", features: { editRows: true, indexes: true, cancel: false, serverReadOnly: false },
+    example: "AccountEndpoint=https://myaccount.documents.azure.com:443/;AccountKey=secret;",
+    filterHint: "WHERE: c.status = 'active' AND c.age > 21",
+    notes: "NoSQL API. For the MongoDB API, connect with the account's mongodb:// connection string instead."
+  },
+  spanner: {
+    label: "Cloud Spanner", family: "sql", schemas: false, driver: "REST API", cloud: "gcp", features: { editRows: true, indexes: true, cancel: false, serverReadOnly: false },
+    example: "spanner://my-project/my-instance/my-database",
+    notes: "GoogleSQL databases. Schema changes (CREATE, ALTER, DROP) run as DDL operations and can take a while."
+  },
+  firestore: {
+    label: "Firestore", family: "document", schemas: false, driver: "REST API", cloud: "gcp", features: { editRows: true, indexes: false, cancel: false, serverReadOnly: false },
+    example: "firestore://my-project",
+    noSearch: "Firestore has no text search. Use Filter: equals, starts with, or a comparison.",
+    notes: "Native-mode databases. Root collections are listed; open subcollections with a query (collection path)."
+  },
+  bigquery: {
+    label: "BigQuery", family: "sql", schemas: true, driver: "REST API", cloud: "gcp", features: { editRows: false, indexes: false, cancel: true, serverReadOnly: false },
+    example: "bigquery://my-project?location=US",
+    notes: "Browsing an unfiltered table is free. Filters, sorting and queries run as query jobs, billed by bytes scanned."
   }
 };
 
@@ -159,6 +202,10 @@ export interface PageResult {
   rows: Row[];
   /** Null when counting was skipped or failed. */
   total: number | null;
+  /** The total comes from table statistics (a large table), not COUNT(*). */
+  totalEstimated?: boolean;
+  /** The total is an estimate or was not counted; countRows gives the exact number. */
+  countable?: boolean;
   /** True when the count stopped at a cap (Redis SCAN). */
   totalCapped?: boolean;
   keyColumns: string[];
@@ -167,6 +214,10 @@ export interface PageResult {
   readOnly?: string;
   /** False when nothing can be inserted (views). Rows of tables without a key can still be inserted. */
   canInsert?: boolean;
+  /** Cursor-paged stores (DynamoDB) cannot count: whether another page exists. */
+  hasMore?: boolean;
+  /** Shown under the grid, e.g. the bytes a BigQuery page scanned. */
+  note?: string;
   elapsedMs: number;
 }
 
@@ -184,6 +235,8 @@ export interface QueryResult {
   affected?: number;
   /** Plain-text result (Redis replies, MongoDB acknowledgements). */
   message?: string;
+  /** Shown next to the result, e.g. the bytes a BigQuery job scanned. */
+  note?: string;
   truncated?: boolean;
   elapsedMs: number;
 }
@@ -270,6 +323,8 @@ export interface DbAdapter {
   invalidate(): void;
   /** Indexes of a table or collection, for the Structure view. */
   indexes?(target: DbTarget): Promise<IndexInfo[]>;
+  /** An exact count for a page request whose total was estimated. */
+  countRows?(request: PageRequest): Promise<number>;
   /** MongoDB only. */
   createCollection?(database: string, name: string): Promise<void>;
   /** Redis only. */
@@ -287,6 +342,10 @@ export interface ConnectionProfile {
   display: string;
   readOnly: boolean;
   color?: string;
+  /** Cloud service this connection belongs to (an id from CLOUD_SERVICES), when it is a cloud database. */
+  cloud?: string;
+  /** True when a credentials file (a GCP service-account key) is stored in SecretStorage next to the connection string. */
+  hasCredentials?: boolean;
   createdAt: number;
   lastConnectedAt?: number;
 }

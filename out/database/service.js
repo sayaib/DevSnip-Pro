@@ -16,10 +16,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DatabaseService = exports.withTimeout = void 0;
 const crypto_1 = require("crypto");
+const cloud_1 = require("./cloud");
+const gcp_1 = require("./cloud-auth/gcp");
+const tokens_1 = require("./cloud-auth/tokens");
 const connection_string_1 = require("./connection-string");
 const adapters_1 = require("./adapters");
 const types_1 = require("./types");
 const sql_1 = require("../toolkits/engines/sql");
+/** Reconnect token-authenticated sessions this often: RDS tokens last 15 minutes, Entra ID and Google ones an hour. */
+const TOKEN_REFRESH_MS = 10 * 60000;
 const CONNECTION_LOST = /ECONNRESET|ECONNREFUSED|EPIPE|ETIMEDOUT|ESOCKET|Connection is closed|Connection lost|Connection terminated|connection error|ConnectionClosed|MongoNetworkError|MongoTopologyClosed|Not connected|pool is draining|Cannot use a pool after calling end|ended by the other party/i;
 function withTimeout(promise, ms, what) {
     let timer;
@@ -99,8 +104,15 @@ function pageRequest(value) {
     };
 }
 const nounFor = (kind, n) => {
-    const word = kind === "mongodb" ? "document" : kind === "redis" ? "key" : "row";
+    const family = types_1.DB_KINDS[kind]?.family;
+    const word = kind === "dynamodb" ? "item" : family === "document" ? "document" : family === "keyvalue" ? "key" : "row";
     return `${n} ${word}${n === 1 ? "" : "s"}`;
+};
+const DROP_NOUN = {
+    mongodb: "collection and all its documents",
+    cosmosdb: "container and all its documents",
+    firestore: "collection's documents",
+    dynamodb: "table and all its items"
 };
 /** Option keys never echoed back to the webview, even though the password itself is masked. */
 const SECRET_OPTION = /pass|pwd|secret|token|credential|^key$/i;
@@ -119,6 +131,7 @@ class DatabaseService {
         return this.store.list().map(profile => {
             const session = this.sessions.get(profile.id);
             const meta = types_1.DB_KINDS[profile.kind];
+            const service = (0, cloud_1.cloudService)(profile.cloud ?? (0, cloud_1.inferCloudService)({ kind: profile.kind, host: "" }));
             return {
                 id: profile.id,
                 name: profile.name,
@@ -130,6 +143,9 @@ class DatabaseService {
                 display: profile.display,
                 readOnly: profile.readOnly,
                 color: profile.color,
+                cloud: service?.id,
+                provider: service?.provider,
+                cloudLabel: service?.label,
                 status: session?.status ?? "disconnected",
                 version: session?.version,
                 defaultDatabase: session?.defaultDatabase,
@@ -160,7 +176,12 @@ class DatabaseService {
         if (this.disposed)
             throw new types_1.DbError("The database client is closed.");
         const profile = this.store.require(id);
-        const session = this.session(id);
+        let session = this.session(id);
+        // A provider token is about to expire: reconnect now, with a fresh one.
+        if (session.status === "connected" && session.adapter && !force && session.tokenAt && Date.now() - session.tokenAt > TOKEN_REFRESH_MS && !session.connecting) {
+            await this.closeSession(id, false);
+            session = this.session(id);
+        }
         if (session.status === "connected" && session.adapter && !force)
             return session.adapter;
         if (session.connecting)
@@ -177,9 +198,15 @@ class DatabaseService {
             try {
                 const raw = await this.store.connectionString(id);
                 const spec = (0, connection_string_1.parseConnection)(raw, this.ui.baseDir());
+                spec.credentials = await this.store.credentials(id);
                 session.secrets = (0, connection_string_1.secretsOf)(raw, spec);
                 if (spec.kind !== profile.kind)
                     await this.store.setKind(id, spec.kind);
+                const token = await (0, tokens_1.applyTokenAuth)(spec);
+                if (token) {
+                    session.secrets = [token, ...session.secrets];
+                    session.tokenAt = Date.now();
+                }
                 if (this.disposed || this.sessions.get(id) !== session)
                     throw new types_1.DbError("The connection was closed.");
                 adapter = this.factory(spec, { readOnly: profile.readOnly });
@@ -268,34 +295,59 @@ class DatabaseService {
         const p = params ?? {};
         switch (method) {
             case "init":
-                return { connections: this.views(), kinds: types_1.DB_KINDS, limits: { maxPageSize: types_1.LIMITS.maxPageSize, maxQueryRows: types_1.LIMITS.maxQueryRows }, filterOps: types_1.FILTER_OPS };
+                return {
+                    connections: this.views(), kinds: types_1.DB_KINDS, limits: { maxPageSize: types_1.LIMITS.maxPageSize, maxQueryRows: types_1.LIMITS.maxQueryRows }, filterOps: types_1.FILTER_OPS,
+                    cloud: { providers: cloud_1.CLOUD_PROVIDERS, services: cloud_1.CLOUD_SERVICES, auth: cloud_1.AUTH_LABELS }
+                };
             case "detect": {
                 const typed = str(p.connectionString, "Connection string", 4096);
                 const id = optStr(p.id, "Connection");
                 const raw = await this.store.resolve(id && this.store.get(id) ? id : undefined, typed);
+                const typedCredentials = optStr(p.credentials, "Credentials", 32 * 1024);
                 try {
                     const spec = (0, connection_string_1.parseConnection)(raw, this.ui.baseDir());
                     const meta = types_1.DB_KINDS[spec.kind];
+                    const serviceId = (0, cloud_1.cloudService)(optStr(p.cloud, "Cloud service", 40))?.id ?? (0, cloud_1.inferCloudService)(spec);
+                    const service = (0, cloud_1.cloudService)(serviceId);
+                    let credentials;
+                    const warnings = [...(0, connection_string_1.connectionWarnings)(spec), ...(0, cloud_1.cloudWarnings)(serviceId, spec)];
+                    if (typedCredentials) {
+                        try {
+                            credentials = (0, gcp_1.inspectCredentials)(typedCredentials);
+                            if (credentials.projectId && spec.project && credentials.projectId !== spec.project && credentials.type === "service_account") {
+                                warnings.push(`The key belongs to project ${credentials.projectId}; it can still work in ${spec.project} if it was granted access there.`);
+                            }
+                        }
+                        catch (error) {
+                            warnings.push(error.message);
+                        }
+                    }
                     return {
                         ok: true,
                         kind: spec.kind,
                         label: meta.label,
                         family: meta.family,
-                        summary: { host: spec.host, port: spec.port, database: spec.database, user: spec.user, ssl: spec.ssl, file: spec.filePath, hasPassword: !!spec.password },
+                        summary: {
+                            host: spec.host, port: spec.port, database: spec.database, user: spec.user, ssl: spec.ssl, file: spec.filePath, hasPassword: !!spec.password,
+                            region: spec.region, project: spec.project, instance: spec.instance, endpoint: spec.endpoint, auth: spec.options.auth
+                        },
+                        cloud: service ? { id: service.id, provider: service.provider, label: service.label } : undefined,
+                        credentials,
                         // Lets the form view show the remaining options; anything that could hold a secret stays on the host.
                         options: Object.fromEntries(Object.entries(spec.options).filter(([k]) => !SECRET_OPTION.test(k)).slice(0, 40)),
-                        warnings: (0, connection_string_1.connectionWarnings)(spec),
+                        warnings,
                         masked: (0, connection_string_1.maskConnectionString)(raw)
                     };
                 }
                 catch (error) {
-                    const e = (0, connection_string_1.friendlyError)(error, (0, connection_string_1.secretsOf)(raw));
+                    const e = (0, connection_string_1.friendlyError)(error, [...(0, connection_string_1.secretsOf)(raw), ...(0, connection_string_1.credentialSecrets)(typedCredentials)]);
                     return { ok: false, error: { message: e.message, hint: e.hint } };
                 }
             }
             case "testConnection": {
                 const id = optStr(p.id, "Connection");
-                const raw = await this.store.resolve(id && this.store.get(id) ? id : undefined, str(p.connectionString, "Connection string", 4096));
+                const known = id && this.store.get(id) ? id : undefined;
+                const raw = await this.store.resolve(known, str(p.connectionString, "Connection string", 4096));
                 let spec;
                 try {
                     spec = (0, connection_string_1.parseConnection)(raw, this.ui.baseDir());
@@ -303,19 +355,27 @@ class DatabaseService {
                 catch (error) {
                     throw (0, connection_string_1.friendlyError)(error, (0, connection_string_1.secretsOf)(raw));
                 }
+                spec.credentials = await this.store.resolveCredentials(known, optStr(p.credentials, "Credentials", 32 * 1024));
                 const secrets = (0, connection_string_1.secretsOf)(raw, spec);
-                const adapter = this.factory(spec, { readOnly: true });
                 const start = Date.now();
+                let adapter;
                 try {
+                    if (spec.credentials && ["service-account", "gcp-iam"].includes(spec.options.auth ?? ""))
+                        (0, gcp_1.inspectCredentials)(spec.credentials);
+                    const token = await (0, tokens_1.applyTokenAuth)(spec);
+                    if (token)
+                        secrets.unshift(token);
+                    adapter = this.factory(spec, { readOnly: true });
                     const info = await withTimeout(adapter.connect(), types_1.LIMITS.connectTimeoutMs + 5000, "Connecting");
                     await withTimeout(adapter.ping(), types_1.LIMITS.connectTimeoutMs, "Ping");
-                    return { version: info.version, latencyMs: Date.now() - start, warnings: (0, connection_string_1.connectionWarnings)(spec) };
+                    const serviceId = (0, cloud_1.cloudService)(optStr(p.cloud, "Cloud service", 40))?.id ?? (0, cloud_1.inferCloudService)(spec);
+                    return { version: info.version, latencyMs: Date.now() - start, warnings: [...(0, connection_string_1.connectionWarnings)(spec), ...(0, cloud_1.cloudWarnings)(serviceId, spec)] };
                 }
                 catch (error) {
                     throw (0, connection_string_1.friendlyError)(error, secrets);
                 }
                 finally {
-                    await adapter.close().catch(() => undefined);
+                    await adapter?.close().catch(() => undefined);
                 }
             }
             case "saveConnection": {
@@ -327,18 +387,20 @@ class DatabaseService {
                     name: str(p.name, "Name", 200),
                     connectionString: str(p.connectionString, "Connection string", 4096),
                     readOnly: p.readOnly === true,
-                    color: optStr(p.color, "Color", 20)
-                }, this.ui.baseDir());
+                    color: optStr(p.color, "Color", 20),
+                    cloud: optStr(p.cloud, "Cloud service", 40),
+                    credentials: optStr(p.credentials, "Credentials", 32 * 1024)
+                }, this.ui.baseDir()).catch(error => { throw (0, connection_string_1.friendlyError)(error, (0, connection_string_1.credentialSecrets)(typeof p.credentials === "string" ? p.credentials : undefined)); });
                 const after = await this.store.connectionString(profile.id);
                 // New details (or a read-only switch) take effect on the next connect.
-                if (old && (before !== after || old.readOnly !== profile.readOnly))
+                if (old && (before !== after || old.readOnly !== profile.readOnly || typeof p.credentials === "string" && !!p.credentials))
                     await this.closeSession(old.id, false);
                 this.changed();
                 return this.views().find(v => v.id === profile.id);
             }
             case "editConnection": {
                 const profile = this.store.require(str(p.id, "Connection"));
-                return { id: profile.id, name: profile.name, connectionString: profile.display, readOnly: profile.readOnly, color: profile.color, kind: profile.kind };
+                return { id: profile.id, name: profile.name, connectionString: profile.display, readOnly: profile.readOnly, color: profile.color, kind: profile.kind, cloud: profile.cloud, hasCredentials: !!profile.hasCredentials };
             }
             case "removeConnection": {
                 const profile = this.store.require(str(p.id, "Connection"));
@@ -360,6 +422,10 @@ class DatabaseService {
                 const id = str(p.id, "Connection");
                 await this.closeSession(id);
                 return this.views().find(v => v.id === id);
+            }
+            case "pickKeyFile": {
+                const file = await this.ui.pickKeyFile?.();
+                return file ? { path: file } : null;
             }
             case "pickSqliteFile": {
                 const file = await this.ui.pickSqliteFile();
@@ -412,6 +478,12 @@ class DatabaseService {
             }
             case "fetchPage":
                 return this.op(str(p.id, "Connection"), "Loading rows", a => a.fetchPage(pageRequest(p.request)));
+            case "countRows":
+                return this.op(str(p.id, "Connection"), "Counting rows", async (a) => {
+                    if (!a.countRows)
+                        throw new types_1.DbError("Exact counts are not available for this database.");
+                    return { total: await a.countRows(pageRequest(p.request)) };
+                });
             case "readKey": {
                 const id = str(p.id, "Connection");
                 return this.op(id, "Reading the key", a => {
@@ -435,7 +507,7 @@ class DatabaseService {
                 const key = rows([p.key], "row", 1)[0];
                 const values = cellInputs(p.values);
                 const affected = await this.op(id, "Saving", a => a.update(t, key, "primary", values));
-                if (affected === 0 && this.store.require(id).kind !== "mongodb") {
+                if (affected === 0 && types_1.DB_KINDS[this.store.require(id).kind]?.family !== "document") {
                     throw new types_1.DbError("No row was updated. It may have been changed or deleted by someone else.", "Refresh and try again.");
                 }
                 return { affected };
@@ -460,8 +532,8 @@ class DatabaseService {
                 const what = profile.kind === "redis" ? `every key in database ${t.database ?? "0"}` : `${t.object}`;
                 const message = profile.kind === "redis"
                     ? `Delete ${what}? This runs FLUSHDB and cannot be undone.`
-                    : drop ? `Drop ${t.object}? The ${profile.kind === "mongodb" ? "collection and all its documents" : "table and all its rows"} will be deleted permanently.`
-                        : `Delete every ${profile.kind === "mongodb" ? "document" : "row"} in ${t.object}? The structure is kept.`;
+                    : drop ? `Drop ${t.object}? The ${DROP_NOUN[profile.kind] ?? "table and all its rows"} will be deleted permanently.`
+                        : `Delete every ${nounFor(profile.kind, 2).replace(/^2 /, "").replace(/s$/, "")} in ${t.object}? The structure is kept.`;
                 const expected = profile.kind === "redis" ? `db${t.database ?? "0"}` : t.object;
                 if (!(await this.ui.confirmByTyping(message, expected)))
                     return { cancelled: true };

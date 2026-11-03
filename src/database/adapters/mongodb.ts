@@ -3,6 +3,7 @@ import { ConnectionSpec } from "../connection-string";
 import { classifyShellCommand, parseShellCommand, parseShellObject, parseShellValue } from "../mongo-shell";
 import { CellInput, ColumnInfo, DbAdapter, DbError, DbTarget, FilterRule, FILTER_OPS, IndexInfo, KeyStrategy, LIMITS, ObjectInfo, PageRequest, PageResult, QueryResult, Row, RunControl, ServerInfo, StatementCheck, ValueCategory } from "../types";
 import { since } from "../values";
+import { CountCache } from "../count-cache";
 
 type Ejson = { serialize(value: unknown, options?: { relaxed?: boolean }): any; deserialize(value: unknown, options?: { relaxed?: boolean }): any; stringify(value: unknown, options?: { relaxed?: boolean }): string };
 
@@ -38,6 +39,8 @@ export class MongoAdapter implements DbAdapter {
   private ejson!: Ejson;
   private defaultDb = "test";
   private readonly samples = new Map<string, { at: number; columns: ColumnInfo[] }>();
+  /** countDocuments scans every match: count a filter once, not on every page. */
+  private readonly counts = new CountCache();
 
   constructor(private readonly spec: ConnectionSpec) {
     this.defaultDb = spec.database || "test";
@@ -91,6 +94,17 @@ export class MongoAdapter implements DbAdapter {
 
   invalidate(): void {
     this.samples.clear();
+    this.counts.clear();
+  }
+
+  private async count(collection: Collection<Document>, filter: Document): Promise<number | null> {
+    if (!Object.keys(filter).length) return collection.estimatedDocumentCount({ maxTimeMS: LIMITS.queryTimeoutMs });
+    const key = `${collection.dbName}\u0000${collection.collectionName}\u0000${this.ejson.stringify(filter, { relaxed: false })}`;
+    const cached = this.counts.get(key);
+    if (cached) return cached.total;
+    const total = await collection.countDocuments(filter, { maxTimeMS: LIMITS.queryTimeoutMs });
+    this.counts.set(key, { total });
+    return total;
   }
 
   async listDatabases(): Promise<string[]> {
@@ -210,7 +224,7 @@ export class MongoAdapter implements DbAdapter {
     if (request.sort && (typeof request.sort.column !== "string" || request.sort.column.startsWith("$"))) throw new DbError("Invalid sort field.");
     const [docs, total] = await Promise.all([
       collection.find(filter, { maxTimeMS: LIMITS.queryTimeoutMs }).sort(sort).skip((page - 1) * pageSize).limit(pageSize).toArray(),
-      (Object.keys(filter).length ? collection.countDocuments(filter, { maxTimeMS: LIMITS.queryTimeoutMs }) : collection.estimatedDocumentCount({ maxTimeMS: LIMITS.queryTimeoutMs })).catch(() => null)
+      this.count(collection, filter).catch(() => null)
     ]);
     return {
       columns: this.columnsFor(docs, known),
@@ -258,6 +272,7 @@ export class MongoAdapter implements DbAdapter {
     if (!Array.isArray(keys) || !keys.length) throw new DbError("Select at least one document.");
     const ids = keys.map(k => this.idOf(k));
     const result = await this.collection(target).deleteMany({ _id: { $in: ids } } as Document);
+    this.counts.clear();
     return result.deletedCount;
   }
 
@@ -284,6 +299,7 @@ export class MongoAdapter implements DbAdapter {
 
   async truncate(target: DbTarget): Promise<void> {
     await this.collection(target).deleteMany({});
+    this.counts.clear();
   }
 
   async createCollection(database: string, name: string): Promise<void> {

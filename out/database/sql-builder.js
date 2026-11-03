@@ -8,7 +8,7 @@
  * `describe`) ever reach these functions, so user text never becomes SQL.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.classifyStatements = exports.buildDelete = exports.buildUpdate = exports.buildInsert = exports.buildSelect = exports.keyStrategyFor = exports.CLICKHOUSE_READ_ONLY = exports.requireColumn = exports.escapeLike = exports.coerceInput = exports.categorize = exports.placeholder = exports.qualifiedName = exports.quoteIdent = exports.CTID_COLUMN = exports.ROWID_COLUMN = void 0;
+exports.classifyStatements = exports.buildDelete = exports.buildUpdate = exports.buildInsert = exports.buildSelect = exports.keyStrategyFor = exports.CLICKHOUSE_READ_ONLY = exports.requireColumn = exports.escapeLike = exports.googleSqlCast = exports.coerceInput = exports.categorize = exports.placeholder = exports.qualifiedName = exports.quoteIdent = exports.CTID_COLUMN = exports.ROWID_COLUMN = void 0;
 const sql_1 = require("../toolkits/engines/sql");
 const types_1 = require("./types");
 /** Hidden columns that identify rows of tables without a primary key. */
@@ -22,14 +22,15 @@ function quoteIdent(name, d) {
     if (d === "sqlserver")
         return "[" + name.replace(/]/g, "]]") + "]";
     // ClickHouse escapes inside quoted identifiers with a backslash.
-    if (d === "clickhouse")
+    if (d === "clickhouse" || d === "googlesql")
         return "`" + name.replace(/[\\`]/g, m => "\\" + m) + "`";
     return '"' + name.replace(/"/g, '""') + '"';
 }
 exports.quoteIdent = quoteIdent;
 function qualifiedName(target, d) {
     const table = quoteIdent(target.object, d);
-    if (d === "postgres" || d === "sqlserver" || d === "oracle")
+    // GoogleSQL: a Spanner named schema, or a BigQuery dataset (the project is the job's).
+    if (d === "postgres" || d === "sqlserver" || d === "oracle" || d === "googlesql")
         return target.schema ? `${quoteIdent(target.schema, d)}.${table}` : table;
     if (d === "mysql" || d === "clickhouse")
         return target.database ? `${quoteIdent(target.database, d)}.${table}` : table;
@@ -40,7 +41,7 @@ exports.qualifiedName = qualifiedName;
 function placeholder(n, d) {
     if (d === "postgres")
         return `$${n}`;
-    if (d === "sqlserver")
+    if (d === "sqlserver" || d === "googlesql")
         return `@p${n}`;
     if (d === "oracle")
         return `:${n}`;
@@ -63,7 +64,7 @@ function categorize(dataType) {
     // Oracle BINARY_FLOAT/BINARY_DOUBLE are numbers, not bytes.
     if (/^binary_(float|double)$/.test(t))
         return "number";
-    if (/bytea|blob|binary|image|rowversion|^(long )?raw\b|^bfile$/.test(t))
+    if (/bytea|blob|binary|image|rowversion|^(long )?raw\b|^bfile$|^bytes\b/.test(t))
         return "binary";
     if (/date|time|year|interval/.test(t))
         return "date";
@@ -117,18 +118,35 @@ function coerceInput(input, column, d) {
     }
 }
 exports.coerceInput = coerceInput;
+/** GoogleSQL type names a STRING parameter can be cast to; legacy BigQuery names map to their standard ones. */
+const GOOGLE_TYPE_ALIASES = { INTEGER: "INT64", FLOAT: "FLOAT64", BOOLEAN: "BOOL" };
+/** How a text parameter becomes a value of the column's GoogleSQL type. */
+function googleSqlCast(ref, column) {
+    const base = column.dataType.toUpperCase().replace(/\(\s*(\d+|MAX)\s*(,\s*\d+\s*)?\)/g, "").trim();
+    const type = GOOGLE_TYPE_ALIASES[base] ?? base;
+    if (type === "JSON")
+        return `PARSE_JSON(${ref})`;
+    if (!type || type === "STRING" || !/^[A-Z][A-Z0-9_]*$/.test(type))
+        return ref;
+    return `CAST(${ref} AS ${type})`;
+}
+exports.googleSqlCast = googleSqlCast;
 class Params {
     constructor(d) {
         this.d = d;
         this.values = [];
     }
     add(value) {
-        this.values.push(this.d === "clickhouse" && value !== null && value !== undefined ? String(value) : value);
+        // ClickHouse and GoogleSQL parameters travel as text and are cast where they meet a column.
+        const asText = (this.d === "clickhouse" || this.d === "googlesql") && value !== null && value !== undefined;
+        this.values.push(asText ? (typeof value === "object" ? JSON.stringify(value) : String(value)) : value);
         return placeholder(this.values.length, this.d);
     }
-    /** A value compared with a column: ClickHouse parameters are text, so they are cast to the column's type. */
+    /** A value compared with (or stored in) a column, cast to the column's type where parameters are text. */
     typed(value, column) {
         const ref = this.add(value);
+        if (this.d === "googlesql")
+            return googleSqlCast(ref, column);
         return this.d === "clickhouse" ? `CAST(${ref}, '${column.dataType.replace(/[\\']/g, m => "\\" + m)}')` : ref;
     }
 }
@@ -146,6 +164,8 @@ function textCast(column, d) {
         return ORACLE_LOB.test(column.dataType) ? `DBMS_LOB.SUBSTR(${q}, 4000, 1)` : `TO_CHAR(${q})`;
     if (d === "clickhouse")
         return `toString(${q})`;
+    if (d === "googlesql")
+        return `CAST(${q} AS STRING)`;
     return `CAST(${q} AS TEXT)`;
 }
 /** A case-insensitive LIKE in every dialect. */
@@ -155,6 +175,9 @@ function likeClause(column, pattern, params, d) {
         return `${textCast(column, d)} ILIKE ${p}${d === "clickhouse" ? "" : LIKE_ESCAPE}`;
     if (d === "oracle")
         return `UPPER(${textCast(column, d)}) LIKE UPPER(${p})${LIKE_ESCAPE}`;
+    // GoogleSQL has no ESCAPE clause; a backslash escapes the wildcards.
+    if (d === "googlesql")
+        return `LOWER(${textCast(column, d)}) LIKE LOWER(${p})`;
     return `${textCast(column, d)} LIKE ${p}${LIKE_ESCAPE}`;
 }
 /**
@@ -164,7 +187,7 @@ function likeClause(column, pattern, params, d) {
  */
 function escapeLike(text, d) {
     // ClickHouse has no ESCAPE clause: a backslash escapes wildcards there.
-    if (d === "clickhouse")
+    if (d === "clickhouse" || d === "googlesql")
         return text.replace(/[\\%_]/g, m => "\\" + m);
     return text.replace(d === "sqlserver" ? /[!%_[]/g : /[!%_]/g, m => "!" + m);
 }
@@ -176,7 +199,7 @@ function searchable(column, d) {
     if (d === "sqlserver" && /^(image|geography|geometry|hierarchyid|sql_variant|timestamp|rowversion)/i.test(column.dataType))
         return false;
     // Oracle: TO_CHAR fails on JSON, XMLTYPE and object types.
-    if (d === "oracle" && !["text", "number", "date"].includes(column.category))
+    if ((d === "oracle" || d === "googlesql") && !["text", "number", "date"].includes(column.category))
         return false;
     return true;
 }
@@ -239,7 +262,7 @@ exports.CLICKHOUSE_READ_ONLY = "ClickHouse rows have no unique key, so they cann
  * has a stable hidden row id: SQLite's rowid, Oracle's ROWID, or the hidden
  * rowid column CockroachDB adds to tables without a primary key.
  */
-function keyStrategyFor(columns, d, isView, hasRowid) {
+function keyStrategyFor(columns, d, isView, hasRowid, ctid = true) {
     if (isView)
         return { strategy: "none", keyColumns: [], readOnly: "Views are read-only here. Change the underlying tables, or use the Query tab." };
     if (d === "clickhouse")
@@ -249,7 +272,7 @@ function keyStrategyFor(columns, d, isView, hasRowid) {
         return { strategy: "primary", keyColumns: pk };
     if ((d === "sqlite" || d === "oracle" || d === "postgres") && hasRowid)
         return { strategy: "rowid", keyColumns: [exports.ROWID_COLUMN] };
-    if (d === "postgres")
+    if (d === "postgres" && ctid)
         return { strategy: "ctid", keyColumns: [exports.CTID_COLUMN] };
     return { strategy: "none", keyColumns: [], readOnly: "This table has no primary key, so rows cannot be identified safely for editing or deleting. Inserting works; add a primary key, or use the Query tab." };
 }
@@ -340,7 +363,7 @@ function keyClause(key, strategy, columns, params, d) {
         const value = key[c.name];
         if (value === null || value === undefined)
             return `${quoteIdent(c.name, d)} IS NULL`;
-        return `${quoteIdent(c.name, d)} = ${params.add(typeof value === "object" ? JSON.stringify(value) : value)}`;
+        return `${quoteIdent(c.name, d)} = ${d === "googlesql" ? params.typed(value, c) : params.add(typeof value === "object" ? JSON.stringify(value) : value)}`;
     }).join(" AND ");
 }
 function editableValues(values, columns) {
@@ -368,7 +391,7 @@ function buildInsert(target, columns, values, d) {
         return { sql: `INSERT INTO ${table} DEFAULT VALUES`, params: [] };
     }
     const names = set.map(([c]) => quoteIdent(c.name, d)).join(", ");
-    const placeholders = set.map(([c, input]) => params.add(coerceInput(input, c, d))).join(", ");
+    const placeholders = set.map(([c, input]) => (d === "googlesql" ? params.typed(coerceInput(input, c, d), c) : params.add(coerceInput(input, c, d)))).join(", ");
     return { sql: `INSERT INTO ${table} (${names}) VALUES (${placeholders})`, params: params.values };
 }
 exports.buildInsert = buildInsert;
@@ -384,7 +407,7 @@ function buildUpdate(target, columns, key, strategy, values, d) {
                 throw new types_1.DbError("SQLite cannot reset a column to its default in an UPDATE.");
             return `${quoteIdent(c.name, d)} = DEFAULT`;
         }
-        return `${quoteIdent(c.name, d)} = ${params.add(coerceInput(input, c, d))}`;
+        return `${quoteIdent(c.name, d)} = ${d === "googlesql" ? params.typed(coerceInput(input, c, d), c) : params.add(coerceInput(input, c, d))}`;
     }).join(", ");
     const where = keyClause(key, strategy, columns, params, d);
     return { sql: `UPDATE ${table} SET ${assignments} WHERE ${where}`, params: params.values };

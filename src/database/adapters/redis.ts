@@ -84,6 +84,48 @@ export function classifyRedis(text: string): Array<StatementCheck & { args: stri
 
 const TTL_LIMIT = 10 * 365 * 24 * 3600;
 
+/** A console command may read at most this many elements; the console shows 1,000 anyway. */
+export const MAX_REPLY_ELEMENTS = 10_000;
+
+/**
+ * How many elements a command that reads a whole collection would return,
+ * found with a cheap size command first (HLEN, SCARD...), or undefined when
+ * the command is bounded. Redis replies arrive whole, so without this
+ * HGETALL of a 5-million-field hash, or KEYS * on a large database, would
+ * be held in VS Code's memory (and KEYS blocks the server while it runs).
+ */
+export async function replySize(client: { call(...args: string[]): Promise<unknown> }, args: string[]): Promise<number | undefined> {
+  const verb = (args[0] ?? "").toLowerCase();
+  const key = args[1];
+  const upper = args.map(a => a.toUpperCase());
+  const n = async (...cmd: string[]) => Number(await client.call(...cmd)) || 0;
+  switch (verb) {
+    case "keys": return n("DBSIZE");
+    case "hgetall": case "hkeys": case "hvals": return key ? n("HLEN", key) : undefined;
+    case "smembers": case "sinter": case "sunion": case "sdiff": return key ? n("SCARD", key) : undefined;
+    case "lrange": {
+      if (!key) return undefined;
+      const length = await n("LLEN", key);
+      const norm = (i: number) => (i < 0 ? length + i : i);
+      const from = Math.max(0, norm(Number(args[2]) || 0));
+      const to = Math.min(length - 1, norm(Number(args[3] ?? -1)));
+      return Math.max(0, to - from + 1);
+    }
+    case "zrange": case "zrevrange": case "zrangebyscore": case "zrevrangebyscore": case "zrangebylex": case "zrevrangebylex": {
+      if (!key || upper.includes("LIMIT")) return undefined;
+      const card = await n("ZCARD", key);
+      if (verb === "zrange" || verb === "zrevrange") {
+        if (upper.includes("BYSCORE") || upper.includes("BYLEX")) return card;
+        const norm = (i: number) => (i < 0 ? card + i : i);
+        return Math.max(0, Math.min(card - 1, norm(Number(args[3] ?? -1))) - Math.max(0, norm(Number(args[2]) || 0)) + 1);
+      }
+      return card;
+    }
+    case "xrange": case "xrevrange": return key && !upper.includes("COUNT") ? n("XLEN", key) : undefined;
+    default: return undefined;
+  }
+}
+
 export class RedisAdapter implements DbAdapter {
   readonly kind = "redis" as const;
   private readonly clients = new Map<number, Redis>();
@@ -541,6 +583,13 @@ export class RedisAdapter implements DbAdapter {
     const replies: Array<{ verb: string; reply: unknown }> = [];
     for (const command of commands) {
       const [name, ...args] = command.args;
+      const size = await replySize(client as unknown as { call(...args: string[]): Promise<unknown> }, command.args);
+      if (size !== undefined && size > MAX_REPLY_ELEMENTS) {
+        const hint = command.verb === "keys" ? "Use SCAN 0 MATCH pattern COUNT 1000 (or the key browser) instead of KEYS: it reads the keyspace in steps without blocking the server."
+          : /^(h|s|z)/.test(command.verb) ? `Use ${command.verb.charAt(0).toUpperCase()}SCAN ${command.args[1]} 0 COUNT 1000 to read it in steps, or open the key in the key browser.`
+            : "Ask for a smaller range (LRANGE key 0 999, XRANGE key - + COUNT 1000).";
+        throw new DbError(`${command.verb.toUpperCase()} would return ${size.toLocaleString("en-US")} elements; the console reads at most ${MAX_REPLY_ELEMENTS.toLocaleString("en-US")}.`, hint);
+      }
       replies.push({ verb: command.verb, reply: await client.call(name, ...args) });
     }
     if (replies.length === 1) {

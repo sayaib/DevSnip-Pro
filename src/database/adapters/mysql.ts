@@ -1,5 +1,6 @@
 import type { FieldPacket, Pool, PoolConnection, ResultSetHeader } from "mysql2/promise";
 import { ConnectionSpec } from "../connection-string";
+import { TOKEN_AUTH } from "../cloud-auth/tokens";
 import { categorize, quoteIdent } from "../sql-builder";
 import { DbError, DbTarget, IndexInfo, LIMITS, ObjectInfo, QueryResult, Row, RunControl, ServerInfo } from "../types";
 import { ExecResult, SqlAdapter, TableMeta } from "./sql-base";
@@ -86,12 +87,22 @@ export class MysqlAdapter extends SqlAdapter {
       supportBigNumbers: true,
       bigNumberStrings: true,
       multipleStatements: false,
-      charset: "utf8mb4"
-    });
-    if (this.readOnly) {
+      charset: "utf8mb4",
+      // IAM / Entra ID tokens travel as a cleartext password, which these servers only accept over TLS.
+      ...(TOKEN_AUTH.includes(this.spec.options.auth ?? "") && this.spec.ssl ? { enableCleartextPlugin: true } : {})
+    } as never);
+    const seconds = Math.ceil(LIMITS.queryTimeoutMs / 1000);
+    this.poolInstance.on("connection", connection => {
+      const set = (sql: string) => (connection as unknown as { query(sql: string, done: (error?: unknown) => void): unknown }).query(sql, () => undefined);
+      // The client-side timeout only stops waiting; these stop the statement on the server, so an
+      // abandoned scan does not keep a pooled connection (and the server) busy. MySQL limits SELECTs
+      // (max_execution_time, ms); MariaDB every statement (max_statement_time, s). Each server rejects
+      // the other's variable, harmlessly.
+      set(`SET SESSION max_execution_time = ${seconds * 1000}`);
+      set(`SET SESSION max_statement_time = ${seconds}`);
       // Read-only connections are read-only on the server too, so a write hidden in a procedure call still fails.
-      this.poolInstance.on("connection", connection => { (connection as unknown as { query(sql: string): unknown }).query("SET SESSION TRANSACTION READ ONLY"); });
-    }
+      if (this.readOnly) set("SET SESSION TRANSACTION READ ONLY");
+    });
     return this.poolInstance;
   }
 
@@ -139,6 +150,13 @@ export class MysqlAdapter extends SqlAdapter {
       type: /VIEW/i.test(String(r.type)) ? "view" : "table",
       rows: r.row_count === null || r.row_count === undefined ? undefined : Number(r.row_count)
     }));
+  }
+
+  /** InnoDB's TABLE_ROWS estimate (from index statistics). */
+  protected override async estimateRows(target: DbTarget): Promise<number | undefined> {
+    const [rows] = await this.pool().query("SELECT TABLE_ROWS AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND TABLE_TYPE = 'BASE TABLE'", [target.database ?? this.defaultDb, target.object]);
+    const n = (rows as Row[])[0]?.n;
+    return n === null || n === undefined ? undefined : Number(n);
   }
 
   protected async introspect(target: DbTarget): Promise<TableMeta> {

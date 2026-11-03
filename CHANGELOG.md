@@ -1,5 +1,20 @@
 # Development Changelog of DevSnip Pro
 
+## 11.86.0 - Cloud databases and large-table performance (2026-11-03)
+
+- Add cloud databases to the Database Client, grouped by provider in the connection form, the explorer and the welcome page. AWS: Amazon RDS (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle), Aurora, DynamoDB and Redshift. Azure: Azure SQL Database, Cosmos DB (NoSQL and MongoDB APIs), and Azure Database for PostgreSQL and MySQL. Google Cloud: Cloud SQL, Cloud Spanner, Firestore, BigQuery and AlloyDB. See [Cloud databases](docs/DATABASE-CLIENT.md#cloud-databases).
+- Connect wire-compatible services through the existing drivers with each service's port, TLS default and endpoint hint. Add new connectors for DynamoDB (PartiQL), Cosmos DB, Spanner, Firestore and BigQuery over their REST APIs, with no SDKs and nothing loaded until you connect.
+- Sign in with passwords and keys, IAM database authentication for RDS, Aurora and Cloud SQL, Microsoft Entra ID through the Azure CLI, AWS profiles, gcloud Application Default Credentials, a service account key or a key file. Keep pasted keys in SecretStorage, mask account keys and session tokens like passwords, and redact them from errors. Point a connection at a local emulator with an endpoint.
+- Validate cloud fields before connecting (regions, project and instance IDs, endpoints, keys) and warn about common mistakes, such as an Aurora reader endpoint or Azure SQL without encryption.
+- Run SQLite queries on a worker thread, so a long scan no longer freezes VS Code. SQLite queries now stop after 30 seconds and can be cancelled. On VS Code builds without `node:sqlite`, refuse files over 512 MB instead of running out of memory.
+- Count each filter's rows once instead of on every page. Show the database's estimate for unfiltered tables of a million rows or more, with **Count rows** for the exact number. Don't count text searches on large tables, which would scan the table a second time, and run them on Enter instead of while typing.
+- Stop MySQL and MariaDB queries on the server after 30 seconds, and report them as timeouts rather than cancels.
+- Check the size of Redis console commands that read whole collections (`KEYS`, `HGETALL`, `SMEMBERS`, `LRANGE`, `ZRANGE`, `XRANGE`) and refuse them over 10,000 elements, suggesting the `SCAN` commands instead.
+- Draw only the visible rows of pages and console results over 120 rows. Select all no longer redraws the grid, and sorting results is faster.
+- Cap DynamoDB's cursor cache and the size of remembered queries, so long sessions stop accumulating memory.
+- Add `scripts/db-benchmark.js` and the [performance audit](docs/audits/DATABASE_CLIENT_PERFORMANCE_2026-11-03.md). At 10 million SQLite rows, a search now takes 292 ms instead of freezing VS Code for 6.6 s, and the next page takes 0.4 ms instead of 27 ms.
+- Add unit tests for cloud connection strings, signing, credentials and each cloud connector against local mock APIs, plus large-table stress tests. The cloud services and the server engines were not tested against live accounts or servers in this release.
+
 ## 11.85.0 - Send feedback from Milestones & Points (2026-10-31)
 
 - Add a Feedback button to the Milestones & Points header. The form offers Bug report, Feature addition and Feedback, keeps your draft if the page reloads, and saves to a write-only Supabase table only when you press Send. See [Privacy](README.md#privacy-and-analytics) for what is sent.

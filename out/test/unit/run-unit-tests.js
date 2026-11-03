@@ -50,6 +50,8 @@ async function main() {
     require("./sidebar.unit");
     require("./database.unit");
     require("./database-engines.unit");
+    require("./database-cloud.unit");
+    require("./database-performance.unit");
     require("./database-live.unit");
     require("./spreadsheet.unit");
     require("./xml-json.unit");

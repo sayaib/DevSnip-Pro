@@ -42,8 +42,10 @@ export class SqlServerAdapter extends SqlAdapter {
     return {
       server,
       port: instanceName ? undefined : this.spec.port,
-      user: this.spec.user || undefined,
-      password: this.spec.password || undefined,
+      ...(this.spec.options.auth === "azure-ad"
+        // Microsoft Entra ID: the Azure CLI token stands in for the password.
+        ? { authentication: { type: "azure-active-directory-access-token", options: { token: this.spec.password ?? "" } } }
+        : { user: this.spec.user || undefined, password: this.spec.password || undefined }),
       database: database || undefined,
       connectionTimeout: LIMITS.connectTimeoutMs,
       requestTimeout: LIMITS.queryTimeoutMs,
@@ -136,6 +138,15 @@ export class SqlServerAdapter extends SqlAdapter {
       type: String(r.type).trim() === "V" ? "view" : "table",
       rows: r.row_count === null || r.row_count === undefined ? undefined : Number(r.row_count)
     }));
+  }
+
+  /** Row counts SQL Server keeps per partition (heap or clustered index). */
+  protected override async estimateRows(target: DbTarget): Promise<number | undefined> {
+    const result = await this.request(target.database,
+      `SELECT SUM(p.rows) AS n FROM sys.partitions p JOIN sys.objects o ON o.object_id = p.object_id JOIN sys.schemas s ON s.schema_id = o.schema_id
+        WHERE s.name = @p1 AND o.name = @p2 AND o.type = 'U' AND p.index_id IN (0, 1)`, [target.schema || "dbo", target.object]);
+    const n = result.recordset[0]?.n;
+    return n === null || n === undefined ? undefined : Number(n);
   }
 
   protected async introspect(target: DbTarget): Promise<TableMeta> {

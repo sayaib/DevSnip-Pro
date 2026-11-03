@@ -4,6 +4,7 @@ exports.MongoAdapter = exports.DOCUMENT_FIELD = void 0;
 const mongo_shell_1 = require("../mongo-shell");
 const types_1 = require("../types");
 const values_1 = require("../values");
+const count_cache_1 = require("../count-cache");
 /** The editor sends a whole document under this key. */
 exports.DOCUMENT_FIELD = "$document";
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -43,6 +44,8 @@ class MongoAdapter {
         this.kind = "mongodb";
         this.defaultDb = "test";
         this.samples = new Map();
+        /** countDocuments scans every match: count a filter once, not on every page. */
+        this.counts = new count_cache_1.CountCache();
         this.defaultDb = spec.database || "test";
     }
     get mongo() {
@@ -89,6 +92,18 @@ class MongoAdapter {
     }
     invalidate() {
         this.samples.clear();
+        this.counts.clear();
+    }
+    async count(collection, filter) {
+        if (!Object.keys(filter).length)
+            return collection.estimatedDocumentCount({ maxTimeMS: types_1.LIMITS.queryTimeoutMs });
+        const key = `${collection.dbName}\u0000${collection.collectionName}\u0000${this.ejson.stringify(filter, { relaxed: false })}`;
+        const cached = this.counts.get(key);
+        if (cached)
+            return cached.total;
+        const total = await collection.countDocuments(filter, { maxTimeMS: types_1.LIMITS.queryTimeoutMs });
+        this.counts.set(key, { total });
+        return total;
     }
     async listDatabases() {
         let names = [];
@@ -215,7 +230,7 @@ class MongoAdapter {
             throw new types_1.DbError("Invalid sort field.");
         const [docs, total] = await Promise.all([
             collection.find(filter, { maxTimeMS: types_1.LIMITS.queryTimeoutMs }).sort(sort).skip((page - 1) * pageSize).limit(pageSize).toArray(),
-            (Object.keys(filter).length ? collection.countDocuments(filter, { maxTimeMS: types_1.LIMITS.queryTimeoutMs }) : collection.estimatedDocumentCount({ maxTimeMS: types_1.LIMITS.queryTimeoutMs })).catch(() => null)
+            this.count(collection, filter).catch(() => null)
         ]);
         return {
             columns: this.columnsFor(docs, known),
@@ -264,6 +279,7 @@ class MongoAdapter {
             throw new types_1.DbError("Select at least one document.");
         const ids = keys.map(k => this.idOf(k));
         const result = await this.collection(target).deleteMany({ _id: { $in: ids } });
+        this.counts.clear();
         return result.deletedCount;
     }
     async indexes(target) {
@@ -287,6 +303,7 @@ class MongoAdapter {
     }
     async truncate(target) {
         await this.collection(target).deleteMany({});
+        this.counts.clear();
     }
     async createCollection(database, name) {
         const clean = String(name ?? "").trim();

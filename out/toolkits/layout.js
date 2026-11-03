@@ -105,7 +105,7 @@ exports.FULL_NAV = [
         description: "Connect to and edit your databases, format SQL, build queries and connection strings, and translate SQL to MongoDB.",
         categories: ["Connections & data", "SQL & queries"],
         entries: [
-            e("databaseClient", "Database Client", "database", "Connect with a connection string to browse and edit Postgres, MySQL, SQL Server, SQLite, MongoDB or Redis.", { hubIcon: "database", keywords: ["database", "sql", "postgres", "mysql", "mongodb", "redis", "sqlite", "sql server", "crud", "table", "query", "db client"], category: "Connections & data" }),
+            e("databaseClient", "Database Client", "database", "Browse and edit Postgres, MySQL, SQL Server, MongoDB, Redis and AWS, Azure or Google Cloud databases.", { hubIcon: "database", keywords: ["database", "sql", "postgres", "mysql", "mongodb", "redis", "sqlite", "sql server", "crud", "table", "query", "db client", "rds", "aurora", "dynamodb", "redshift", "azure sql", "cosmos db", "cloud sql", "spanner", "firestore", "bigquery", "alloydb"], category: "Connections & data" }),
             e("connectionString", "Database Connection Strings", "plug", "Build or fix Postgres, MySQL, MongoDB and Redis URLs with driver setup.", { tool: "web.db-url", category: "Connections & data" }),
             e("sparkSqlFormatter", "SQL Formatter & Linter", "database", "Format SQL for Postgres, MySQL, SQL Server, Spark and Trino, and flag risky patterns.", { tool: "data.sql", category: "SQL & queries" }),
             e("sqlQueryHelper", "SQL Query Helper", "list-ordered", "Parameterised SELECT, INSERT, UPDATE, UPSERT, DELETE and pagination queries.", { tool: "data.sql-helper", category: "SQL & queries" }),

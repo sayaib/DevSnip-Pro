@@ -1,75 +1,124 @@
 import * as fs from "fs";
 import * as path from "path";
+import type { Worker } from "worker_threads";
 import { ConnectionSpec } from "../connection-string";
 import { categorize, quoteIdent } from "../sql-builder";
-import { DbError, DbTarget, IndexInfo, LIMITS, ObjectInfo, QueryResult, Row, ServerInfo } from "../types";
+import { DbError, DbTarget, IndexInfo, LIMITS, ObjectInfo, QueryResult, Row, RunControl, ServerInfo } from "../types";
 import { ExecResult, SqlAdapter, TableMeta } from "./sql-base";
 
-/** The few calls the adapter needs, implemented by node:sqlite or sql.js. */
+type Rows = { rows: Row[]; columns: string[] };
+
+/** The few calls the adapter needs, implemented by node:sqlite (in a worker thread) or sql.js. */
 interface SqliteBackend {
   readonly name: string;
   /** `write` marks a statement that changes data (INSERT ... RETURNING), so sql.js saves the file. */
-  all(sql: string, params: unknown[], limit?: number, write?: boolean): { rows: Row[]; columns: string[] };
-  run(sql: string, params: unknown[]): number;
+  all(sql: string, params: unknown[], limit?: number, write?: boolean): Promise<Rows>;
+  run(sql: string, params: unknown[]): Promise<number>;
   /** Runs a multi-statement script; returns the last result set, if any. */
-  script(sql: string): { rows: Row[]; columns: string[]; changes: number };
-  version(): string;
-  close(): void;
+  script(sql: string): Promise<Rows & { changes: number }>;
+  version(): Promise<string>;
+  /** Stops whatever is running (a cancelled console query). Only the worker backend can. */
+  interrupt?(): void;
+  close(): Promise<void>;
+}
+
+/**
+ * sql.js copies the whole file into WebAssembly memory, which tops out
+ * around 2 GB; refuse early with a clear message rather than crash.
+ */
+export const SQLJS_MAX_FILE_BYTES = 512 * 1024 * 1024;
+
+function cancelled(): DbError {
+  return new DbError("The query was cancelled.", "Statements that finished before the cancel are not rolled back.", "CANCELLED");
+}
+
+/**
+ * node:sqlite on a worker thread. SQLite is synchronous, so on the extension
+ * host a full scan of a large table would freeze VS Code until it finished;
+ * on a worker it runs alongside, a timeout stops it, and a cancel terminates
+ * the thread (SQLite rolls back an unfinished write on the next open).
+ */
+class WorkerBackend implements SqliteBackend {
+  readonly name = "node:sqlite";
+  private worker?: Worker;
+  private ready?: Promise<void>;
+  private seq = 0;
+  private readonly pending = new Map<number, { resolve(value: unknown): void; reject(error: unknown): void; timer: NodeJS.Timeout }>();
+
+  constructor(private readonly file: string, private readonly readOnly: boolean, private readonly timeoutMs = LIMITS.queryTimeoutMs) {}
+
+  private start(): Promise<void> {
+    if (this.ready) return this.ready;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Worker: WorkerClass } = require("worker_threads") as typeof import("worker_threads");
+    const worker = new WorkerClass(path.join(__dirname, "sqlite-worker.js"), { workerData: { file: this.file, readOnly: this.readOnly } });
+    // An idle worker never keeps the extension host alive.
+    worker.unref();
+    this.worker = worker;
+    this.ready = new Promise<void>((resolve, reject) => {
+      worker.on("message", (m: { id: number; ok: boolean; result?: unknown; error?: { message: string; code?: string; errcode?: number } }) => {
+        if (m.id === 0) { resolve(); return; }
+        const p = this.pending.get(m.id);
+        if (!p) return;
+        this.pending.delete(m.id);
+        clearTimeout(p.timer);
+        if (m.ok) p.resolve(m.result);
+        else p.reject(Object.assign(new Error(m.error?.message ?? "SQLite error"), { code: m.error?.code, errcode: m.error?.errcode }));
+      });
+      const down = (error: unknown) => {
+        if (this.worker !== worker) return;
+        this.reset(error);
+        reject(error);
+      };
+      worker.on("error", down);
+      worker.on("exit", code => down(new DbError(`The SQLite worker stopped (exit code ${code}).`, "Reconnect and try again.")));
+    });
+    return this.ready;
+  }
+
+  private reset(reason: unknown): void {
+    const worker = this.worker;
+    this.worker = undefined;
+    this.ready = undefined;
+    for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(reason); }
+    this.pending.clear();
+    void worker?.terminate().catch(() => undefined);
+  }
+
+  private async call<T>(op: string, args: unknown[]): Promise<T> {
+    await this.start();
+    const worker = this.worker!;
+    return new Promise<T>((resolve, reject) => {
+      const id = ++this.seq;
+      const timer = setTimeout(() => this.reset(new DbError(`The query took longer than ${Math.round(this.timeoutMs / 1000)} seconds and was stopped.`, "Add a filter or a LIMIT, or an index on the columns you filter and sort by.", "TIMEOUT")), this.timeoutMs);
+      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
+      worker.postMessage({ id, op, args });
+    });
+  }
+
+  all(sql: string, params: unknown[], limit?: number, write?: boolean): Promise<Rows> { return this.call("all", [sql, params, limit, write]); }
+  run(sql: string, params: unknown[]): Promise<number> { return this.call("run", [sql, params]); }
+  script(sql: string): Promise<Rows & { changes: number }> { return this.call("script", [sql]); }
+  version(): Promise<string> { return this.call("version", []); }
+  interrupt(): void { if (this.worker) this.reset(cancelled()); }
+
+  async close(): Promise<void> {
+    if (this.worker) await this.call("close", []).catch(() => undefined);
+    this.reset(new DbError("The connection was closed."));
+  }
+}
+
+/** Whether this host has node:sqlite (Node 22.5+) and worker threads. */
+function hasNodeSqlite(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return typeof (require("node:sqlite") as { DatabaseSync?: unknown }).DatabaseSync === "function" && fs.existsSync(path.join(__dirname, "sqlite-worker.js"));
+  } catch {
+    return false;
+  }
 }
 
 const toParam = (value: unknown) => (typeof value === "boolean" ? (value ? 1 : 0) : value === undefined ? null : value);
-
-/** Node's built-in SQLite (Node 22.5+): works on the file directly, with SQLite's own locking. */
-function nodeSqliteBackend(file: string, readOnly: boolean): SqliteBackend | undefined {
-  let mod: { DatabaseSync: new (file: string, options?: Record<string, unknown>) => any } | undefined;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    mod = require("node:sqlite");
-  } catch {
-    return undefined;
-  }
-  if (!mod?.DatabaseSync) return undefined;
-  const db = new mod.DatabaseSync(file, readOnly ? { readOnly: true } : {});
-  db.exec("PRAGMA busy_timeout = 5000");
-  const prepare = (sql: string) => {
-    const stmt = db.prepare(sql);
-    // Integers beyond 2^53 stay exact; encodeValue turns them back into numbers when safe.
-    stmt.setReadBigInts?.(true);
-    return stmt;
-  };
-  return {
-    name: "node:sqlite",
-    all(sql, params, limit, write) {
-      const stmt = prepare(sql);
-      const rows: Row[] = [];
-      if (limit && !write && typeof stmt.iterate === "function") {
-        for (const row of stmt.iterate(...params.map(toParam))) {
-          rows.push(row);
-          if (rows.length > limit) break;
-        }
-      } else {
-        rows.push(...stmt.all(...params.map(toParam)));
-      }
-      const columns = typeof stmt.columns === "function" ? stmt.columns().map((c: { name: string }) => c.name) : rows[0] ? Object.keys(rows[0]) : [];
-      return { rows, columns };
-    },
-    run(sql, params) {
-      return Number(prepare(sql).run(...params.map(toParam)).changes ?? 0);
-    },
-    script(sql) {
-      const before = Number(db.prepare("SELECT total_changes() AS n").get().n);
-      db.exec(sql);
-      const after = Number(db.prepare("SELECT total_changes() AS n").get().n);
-      return { rows: [], columns: [], changes: after - before };
-    },
-    version() {
-      return String(db.prepare("SELECT sqlite_version() AS v").get().v);
-    },
-    close() {
-      db.close();
-    }
-  };
-}
 
 /**
  * sql.js (WebAssembly) for hosts without node:sqlite. It works on an in-memory
@@ -79,6 +128,9 @@ function nodeSqliteBackend(file: string, readOnly: boolean): SqliteBackend | und
 async function sqlJsBackend(file: string, readOnly: boolean): Promise<SqliteBackend> {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const initSqlJs = require("sql.js") as typeof import("sql.js");
+  if (fs.statSync(file).size > SQLJS_MAX_FILE_BYTES) {
+    throw new DbError(`This SQLite file is too large to open without node:sqlite (over ${SQLJS_MAX_FILE_BYTES / 1048576} MB).`, "Update VS Code: versions with Node 22.5 or later read SQLite files of any size in place.");
+  }
   const dist = path.dirname(require.resolve("sql.js/dist/sql-wasm.js"));
   const SQL = await initSqlJs({ locateFile: (name: string) => path.join(dist, name) });
   type Database = InstanceType<typeof SQL.Database>;
@@ -104,7 +156,7 @@ async function sqlJsBackend(file: string, readOnly: boolean): Promise<SqliteBack
   const bind = (params: unknown[]) => params.map(toParam) as Array<string | number | null | Uint8Array>;
   return {
     name: "sql.js",
-    all(sql, params, limit, write) {
+    async all(sql, params, limit, write) {
       const stmt = load().prepare(sql);
       const rows: Row[] = [];
       let columns: string[];
@@ -122,14 +174,14 @@ async function sqlJsBackend(file: string, readOnly: boolean): Promise<SqliteBack
       if (write) save();
       return { rows, columns };
     },
-    run(sql, params) {
+    async run(sql, params) {
       const database = load();
       database.run(sql, bind(params));
       const changes = database.getRowsModified();
       save();
       return changes;
     },
-    script(sql) {
+    async script(sql) {
       const database = load();
       const before = Number(database.exec("SELECT total_changes()")[0]?.values[0]?.[0] ?? 0);
       const results = database.exec(sql);
@@ -139,10 +191,10 @@ async function sqlJsBackend(file: string, readOnly: boolean): Promise<SqliteBack
       const rows = (last?.values ?? []).map(values => Object.fromEntries(last!.columns.map((c, i) => [c, values[i]])));
       return { rows, columns: last?.columns ?? [], changes: after - before };
     },
-    version() {
+    async version() {
       return String(load().exec("SELECT sqlite_version()")[0]?.values[0]?.[0] ?? "");
     },
-    close() {
+    async close() {
       db?.close();
       db = undefined;
     }
@@ -153,8 +205,10 @@ export class SqliteAdapter extends SqlAdapter {
   readonly kind = "sqlite" as const;
   protected readonly dialect = "sqlite" as const;
   private backend?: SqliteBackend;
+  /** The query console's own worker, so cancelling a query never fails a page that is loading. */
+  private consoleBackend?: SqliteBackend;
 
-  constructor(private readonly spec: ConnectionSpec, private readonly readOnly: boolean, private readonly prefer: "auto" | "sql.js" = "auto") {
+  constructor(private readonly spec: ConnectionSpec, private readonly readOnly: boolean, private readonly prefer: "auto" | "sql.js" = "auto", private readonly timeoutMs = LIMITS.queryTimeoutMs) {
     super();
   }
 
@@ -176,29 +230,43 @@ export class SqliteAdapter extends SqlAdapter {
     const fd = fs.openSync(file, "r");
     try { fs.readSync(fd, header, 0, 16, 0); } finally { fs.closeSync(fd); }
     if (stat.size > 0 && header.toString("latin1") !== "SQLite format 3\u0000") throw new DbError(`${path.basename(file)} is not a SQLite database.`);
-    this.backend = (this.prefer === "auto" ? nodeSqliteBackend(file, this.readOnly) : undefined) ?? (await sqlJsBackend(file, this.readOnly));
-    return { version: `SQLite ${this.backend.version()}`, defaultDatabase: "main" };
+    const worker = this.prefer === "auto" && hasNodeSqlite();
+    this.backend = worker ? new WorkerBackend(file, this.readOnly, this.timeoutMs) : await sqlJsBackend(file, this.readOnly);
+    try {
+      return { version: `SQLite ${await this.backend.version()}`, defaultDatabase: "main" };
+    } catch (error) {
+      await this.close();
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
-    this.backend?.close();
-    this.backend = undefined;
+    const backends = [this.backend, this.consoleBackend];
+    this.backend = this.consoleBackend = undefined;
+    await Promise.allSettled(backends.map(b => b?.close()));
+  }
+
+  private console(): SqliteBackend {
+    const db = this.db;
+    if (!(db instanceof WorkerBackend)) return db;
+    this.consoleBackend ??= new WorkerBackend(this.spec.filePath!, this.readOnly, this.timeoutMs);
+    return this.consoleBackend;
   }
 
   async ping(): Promise<void> {
-    this.db.all("SELECT 1", []);
+    await this.db.all("SELECT 1", []);
   }
 
   protected async exec(_database: string | undefined, sql: string, params: unknown[]): Promise<ExecResult> {
     if (/^\s*(select|pragma|with)\b/i.test(sql)) {
-      const { rows, columns } = this.db.all(sql, params);
+      const { rows, columns } = await this.db.all(sql, params);
       return { rows, columns };
     }
-    return { rows: [], columns: [], affected: this.db.run(sql, params) };
+    return { rows: [], columns: [], affected: await this.db.run(sql, params) };
   }
 
   async listDatabases(): Promise<string[]> {
-    return this.db.all("PRAGMA database_list", []).rows.map(r => String(r.name)).filter(n => n !== "temp");
+    return (await this.db.all("PRAGMA database_list", [])).rows.map(r => String(r.name)).filter(n => n !== "temp");
   }
 
   async listSchemas(): Promise<string[]> {
@@ -206,16 +274,16 @@ export class SqliteAdapter extends SqlAdapter {
   }
 
   async listObjects(database: string): Promise<ObjectInfo[]> {
-    const rows = this.db.all(`SELECT name, type FROM ${quoteIdent(database || "main", "sqlite")}.sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name`, []).rows;
+    const rows = (await this.db.all(`SELECT name, type FROM ${quoteIdent(database || "main", "sqlite")}.sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name`, [])).rows;
     return rows.map(r => ({ name: String(r.name), type: r.type === "view" ? "view" : "table" }));
   }
 
   protected async introspect(target: DbTarget): Promise<TableMeta> {
     const schema = target.database || "main";
-    const master = this.db.all(`SELECT type, sql FROM ${quoteIdent(schema, "sqlite")}.sqlite_master WHERE name = ? AND type IN ('table', 'view')`, [target.object]).rows[0];
+    const master = (await this.db.all(`SELECT type, sql FROM ${quoteIdent(schema, "sqlite")}.sqlite_master WHERE name = ? AND type IN ('table', 'view')`, [target.object])).rows[0];
     if (!master) return { columns: [], isView: false, hasRowid: false, dropKeyword: "TABLE" };
     const isView = master.type === "view";
-    const info = this.db.all("SELECT * FROM pragma_table_xinfo(?, ?)", [target.object, schema]).rows;
+    const info = (await this.db.all("SELECT * FROM pragma_table_xinfo(?, ?)", [target.object, schema])).rows;
     const pkCount = info.filter(r => Number(r.pk) > 0).length;
     const columns = info.filter(r => Number(r.hidden ?? 0) !== 1).map(r => {
       const dataType = String(r.type || "ANY");
@@ -248,30 +316,32 @@ export class SqliteAdapter extends SqlAdapter {
     const out: IndexInfo[] = [];
     // A lone INTEGER PRIMARY KEY is the rowid itself and has no separate index.
     const pk = (await this.describe(target)).filter(c => c.primaryKey);
-    const list = this.db.all("SELECT name, \"unique\" AS uniq, origin, partial FROM pragma_index_list(?, ?)", [target.object, schema]).rows;
+    const list = (await this.db.all("SELECT name, \"unique\" AS uniq, origin, partial FROM pragma_index_list(?, ?)", [target.object, schema])).rows;
     if (pk.length === 1 && pk[0].autoIncrement && !list.some(r => r.origin === "pk")) out.push({ name: "PRIMARY KEY", columns: [pk[0].name], unique: true, primary: true, type: "rowid" });
     for (const r of list) {
-      const columns = this.db.all("SELECT name FROM pragma_index_info(?, ?) ORDER BY seqno", [String(r.name), schema]).rows.map(c => (c.name === null ? "(expression)" : String(c.name)));
+      const columns = (await this.db.all("SELECT name FROM pragma_index_info(?, ?) ORDER BY seqno", [String(r.name), schema])).rows.map(c => (c.name === null ? "(expression)" : String(c.name)));
       out.push({ name: String(r.name), columns, unique: Number(r.uniq) === 1, primary: r.origin === "pk", type: r.origin === "u" ? "unique constraint" : undefined, detail: Number(r.partial) === 1 ? "partial" : undefined });
     }
     return out.sort((a, b) => Number(b.primary) - Number(a.primary) || a.name.localeCompare(b.name));
   }
 
-  async runQuery(text: string): Promise<QueryResult> {
+  async runQuery(text: string, _context: { database?: string } = {}, control?: RunControl): Promise<QueryResult> {
     const start = Date.now();
     const statements = this.classify(text);
+    const db = this.console();
+    control?.onCancel(() => db.interrupt?.());
     try {
       if (statements.length === 1) {
         const only = statements[0];
         const returning = only.write && /\breturning\b/i.test(only.text);
         if (!only.write || returning) {
-          const { rows, columns } = this.db.all(only.text, [], LIMITS.maxQueryRows, returning);
+          const { rows, columns } = await db.all(only.text, [], LIMITS.maxQueryRows, returning);
           return this.queryResult(start, rows, columns, returning ? rows.length : undefined, LIMITS.maxQueryRows);
         }
-        const changes = this.db.run(only.text, []);
+        const changes = await db.run(only.text, []);
         return this.queryResult(start, [], [], changes, LIMITS.maxQueryRows, `${only.verb.toUpperCase()} completed, ${changes} row${changes === 1 ? "" : "s"} affected.`);
       }
-      const result = this.db.script(text);
+      const result = await db.script(text);
       return this.queryResult(start, result.rows, result.columns, result.changes || undefined, LIMITS.maxQueryRows, result.rows.length ? undefined : `${statements.length} statements completed${result.changes ? `, ${result.changes} rows affected` : ""}.`);
     } finally {
       if (statements.some(s => s.write)) this.invalidate();
