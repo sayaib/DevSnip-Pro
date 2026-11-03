@@ -43,6 +43,7 @@ const feature_access_1 = require("./premium/feature-access");
 const collections_1 = require("./services/collections");
 const premium_commands_1 = require("./premium/premium-commands");
 const tools_sidebar_1 = require("./sidebar/tools-sidebar");
+const updates_1 = require("./updates");
 const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets", "frameworkSnippets"].map(id => `sayaib.hue-console.${id}`);
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
 const DEBUG_LOG_COMMANDS = ["insertDebugLog", "removeDebugLogsInFile"].map(id => `sayaib.hue-console.${id}`);
@@ -145,6 +146,7 @@ function activate(context) {
         ["onboarding", () => (0, commands_1.registerOnboardingCommands)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],
         ["tool search", () => (0, toolSearch_1.registerUniversalToolSearch)(context)],
+        ["update notifications", () => (0, updates_1.registerUpdateNotifications)(context)],
     ];
     for (const [name, register] of registrations) {
         try {

@@ -63,6 +63,7 @@ async function main(): Promise<void> {
   require("./sca-audit.unit");
   require("./theme.unit");
   require("./onboarding.unit");
+  require("./updates.unit");
   /* eslint-enable @typescript-eslint/no-var-requires */
 
   let passed = 0;

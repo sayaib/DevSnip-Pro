@@ -17,6 +17,7 @@ import { FeatureAccessService } from "./premium/feature-access";
 import { CollectionStore } from "./services/collections";
 import { registerPremiumCommands } from "./premium/premium-commands";
 import { ToolsSidebarProvider, TOOLS_VIEW_ID } from "./sidebar/tools-sidebar";
+import { registerUpdateNotifications } from "./updates";
 
 const SNIPPET_COMMANDS = ["createCustomSnippet", "showSnippets", "frameworkSnippets"].map(id => `sayaib.hue-console.${id}`);
 const HYGIENE_COMMANDS = ["listAndRemoveConsoleLogs", "removeUnusedImports", "readmeManager"].map(id => `sayaib.hue-console.${id}`);
@@ -126,6 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
     ["onboarding", () => registerOnboardingCommands(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],
     ["tool search", () => registerUniversalToolSearch(context)],
+    ["update notifications", () => registerUpdateNotifications(context)],
   ];
 
   for (const [name, register] of registrations) {

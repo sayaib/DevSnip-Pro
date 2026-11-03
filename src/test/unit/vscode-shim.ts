@@ -43,6 +43,7 @@ const api = {
       return item;
     },
     showQuickPick() { return Promise.resolve(undefined); },
+    withProgress(_options: unknown, task: Listener) { return Promise.resolve(task({ report() {} }, { isCancellationRequested: false, onCancellationRequested: () => disposable() })); },
     get activeTextEditor() { return undefined; }
   },
   workspace: {
@@ -67,8 +68,14 @@ const api = {
     machineId: undefined as string | undefined,
     uiKind: 1,
     language: "en",
+    appName: "Visual Studio Code",
     remoteName: undefined as string | undefined,
     onDidChangeTelemetryEnabled() { return disposable(); }
+  },
+  extensions: {
+    all: [] as unknown[],
+    getExtension(): unknown { return undefined; },
+    onDidChange() { return disposable(); }
   },
   version: "1.93.0",
   UIKind: { Desktop: 1, Web: 2 },

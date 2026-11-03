@@ -59,6 +59,14 @@ const GUIDE = [
 ];
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
+    {
+        version: "11.86.0",
+        items: [
+            { title: "Database Client: AWS, Azure and Google Cloud databases, with IAM, Entra ID and gcloud sign-in", command: "databaseClient" },
+            { title: "Large tables stay responsive: SQLite runs off the main thread and row counts are cached", command: "databaseClient" },
+            { title: "A status bar item tells you when a DevSnip Pro update is available", command: "checkForUpdates" }
+        ]
+    },
     { version: "11.85.0", items: [{ title: "Send a bug report, feature idea or feedback from the Milestones & Points header", command: "milestoneTracker" }] },
     { version: "11.84.0", items: [{ title: "Tool pages now start empty, run only when you ask and show when results are out of date", command: "advancedToolsHub" }] },
     { version: "11.83.3", items: [{ title: "Hardened webview resource permissions and improved VS Code guideline alignment", command: "advancedToolsHub" }] },
@@ -171,7 +179,7 @@ exports.RELEASE_HIGHLIGHTS = [
 ];
 const STATE_KEY = "devsnip.activation";
 /** Commands that are navigation, not a tool, so they do not count as "first tool". */
-const NOT_A_TOOL = new Set(["milestoneTracker", "searchTools", "chooseTheme", "getStarted", "whatsNew", "advancedToolsHub", "premiumStatus", "resetFeatureUsage"]);
+const NOT_A_TOOL = new Set(["milestoneTracker", "searchTools", "chooseTheme", "getStarted", "whatsNew", "checkForUpdates", "updateActions", "advancedToolsHub", "premiumStatus", "resetFeatureUsage"]);
 let context;
 let discover;
 const changed = new vscode.EventEmitter();

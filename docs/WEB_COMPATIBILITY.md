@@ -18,6 +18,8 @@ The browser version provides offline formatters, converters, code/configuration 
 
 The existing REST client promises arbitrary hosts, headers, cookies, WebSockets, network tests and provider calls. CORS and browser-controlled headers/cookies prevent equivalent behavior in a browser worker, so its full command is hidden. No request proxy is added. Live LLM testing and endpoint/dependency scans likewise require unrestricted networking or local resolution. Raw database clients require TCP, drivers and/or local SQLite storage. The spreadsheet viewer currently relies on Node archive handling. Custom snippet management writes installed extension files and performs local backups. Dependency installation/README management and legacy cleanup commands depend on local filesystem/process behavior. These remain available on Desktop. Static command builders (Docker, device commands, keystores, deployment workflows) produce text and remain available on Web; they never execute the generated commands.
 
+Update notifications (`src/updates`, **DevSnip Pro: Check for Updates**) are Desktop-only. vscode.dev and github.dev load web extensions from the Marketplace and keep them current themselves, and a browser worker would need CORS access to the gallery API, so the browser entry point never imports the update module and the command is gated with `!isWeb`. On Desktop, hosts that cannot install directly fall back to opening the extension's page.
+
 JWT signing/verification, the complete hash/HMAC tool, X.509 inspection, local LAN discovery and TCP inspection remain Desktop-only; partially functional forms are not exposed.
 
 ## Validation

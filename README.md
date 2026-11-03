@@ -258,7 +258,7 @@ Generated configuration is checked by the test suite: YAML and JSON are parsed, 
 - **Marketplace:** [DevSnip Pro on the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=sayaib.hue-console)
 - **Command line:** `code --install-extension sayaib.hue-console`
 
-Requires VS Code 1.93+ on Windows, macOS or Linux. After an update, run **DevSnip Pro: What's New** for the release notes.
+Requires VS Code 1.93+ on Windows, macOS or Linux. When a newer version is out, a status bar item offers to update (VS Code's own auto-update is left to do its job); run **DevSnip Pro: Check for Updates** any time. After an update, run **DevSnip Pro: What's New** for the release notes.
 
 ![The DevSnip Pro Get started walkthrough on the VS Code Welcome page](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/get-started.jpg)
 
@@ -277,7 +277,7 @@ In the REST API Client, switch **HTTP** to **GraphQL**, set the method to `POST`
 No. Requests are built in a form and saved to collections.
 
 **Does it send my code anywhere?**
-No. Tools run locally, and network requests go only to the URLs and databases you enter. The Feedback form sends what you type, plus your version numbers and operating system, and only when you press Send. See [Privacy](#privacy-and-analytics).
+No. Tools run locally, and network requests go only to the URLs and databases you enter. The daily update check sends only the extension's id to the Marketplace. The Feedback form sends what you type, plus your version numbers and operating system, and only when you press Send. See [Privacy](#privacy-and-analytics).
 
 **Does it work offline?**
 Yes, except for things that need a network by definition: API requests, database connections, the endpoint scan, and AI provider calls.
@@ -300,6 +300,9 @@ Remote and WSL work. vscode.dev isn't supported because several tools use Node A
 | `devsnip.rewards.notifications`                 | `all`   | Progress notifications: `all`, `levelsOnly` or `off`.                      |
 | `devsnip.analytics.enabled`                     | `true`  | Send anonymous usage analytics.                                            |
 | `devsnip.analytics.debug`                       | `false` | Log every analytics event to the **DevSnip Pro: Analytics** output channel. |
+| `devsnip.updates.notifications`                 | `true`  | Show a status bar item, and one notification, when an update is available. |
+| `devsnip.updates.checkFrequency`                | `daily` | How often to check for updates: `daily`, `weekly` or `manual`.             |
+| `devsnip.updates.remindLaterHours`              | `24`    | Hours **Remind Me Later** hides the update status bar item for.            |
 
 **Keyboard shortcuts:** only **Insert Debug Log** has one by default (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>, in supported languages). Add your own, for example `{ "key": "ctrl+shift+a", "command": "sayaib.hue-console.openGUI" }`.
 
@@ -317,7 +320,7 @@ Remote and WSL work. vscode.dev isn't supported because several tools use Node A
 
 ## Privacy and analytics
 
-- **No account.** Requests go only to the URLs and databases you enter. The one exception is the **Feedback** form in Milestones & Points: when you press Send, your message, optional email, DevSnip Pro and VS Code versions and operating system are saved to the DevSnip Pro feedback database. Nothing is sent until you press Send.
+- **No account.** Requests go only to the URLs and databases you enter. There are two exceptions. The update check asks the Visual Studio Marketplace (or Open VSX) for DevSnip Pro's latest version at most once a day, sending only the extension's id; turn it off with `devsnip.updates.notifications`. And the **Feedback** form in Milestones & Points: when you press Send, your message, optional email, DevSnip Pro and VS Code versions and operating system are saved to the DevSnip Pro feedback database. Nothing is sent until you press Send.
 - **Your secrets stay put.** API keys you type aren't written to history or disk, credential-looking URL values are redacted from history, and connection strings stay in your OS keychain.
 - **Anonymous analytics only:** which DevSnip Pro tools you open and use, a once-a-day "active" ping, and the country PostHog derives from the connection. Each computer gets one anonymous ID (a salted hash, so it can't be traced back). Never code, file contents or names, paths, keystrokes, anything you type into a tool, URLs, credentials or anything that identifies you.
 - **You're in control:** nothing is sent unless VS Code's `telemetry.telemetryLevel` is `all`. Set `devsnip.analytics.enabled` to `false` to opt out, or `devsnip.analytics.debug` to see every event. Full list: [docs/ANALYTICS.md](docs/ANALYTICS.md).

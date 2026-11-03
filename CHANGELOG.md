@@ -1,6 +1,6 @@
 # Development Changelog of DevSnip Pro
 
-## 11.86.0 - Cloud databases and large-table performance (2026-11-03)
+## 11.86.0 - Cloud databases, large-table performance and update notifications (2026-11-03)
 
 - Add cloud databases to the Database Client, grouped by provider in the connection form, the explorer and the welcome page. AWS: Amazon RDS (PostgreSQL, MySQL, MariaDB, SQL Server, Oracle), Aurora, DynamoDB and Redshift. Azure: Azure SQL Database, Cosmos DB (NoSQL and MongoDB APIs), and Azure Database for PostgreSQL and MySQL. Google Cloud: Cloud SQL, Cloud Spanner, Firestore, BigQuery and AlloyDB. See [Cloud databases](docs/DATABASE-CLIENT.md#cloud-databases).
 - Connect wire-compatible services through the existing drivers with each service's port, TLS default and endpoint hint. Add new connectors for DynamoDB (PartiQL), Cosmos DB, Spanner, Firestore and BigQuery over their REST APIs, with no SDKs and nothing loaded until you connect.
@@ -14,6 +14,10 @@
 - Cap DynamoDB's cursor cache and the size of remembered queries, so long sessions stop accumulating memory.
 - Add `scripts/db-benchmark.js` and the [performance audit](docs/audits/DATABASE_CLIENT_PERFORMANCE_2026-11-03.md). At 10 million SQLite rows, a search now takes 292 ms instead of freezing VS Code for 6.6 s, and the next page takes 0.4 ms instead of 27 ms.
 - Add unit tests for cloud connection strings, signing, credentials and each cloud connector against local mock APIs, plus large-table stress tests. The cloud services and the server engines were not tested against live accounts or servers in this release.
+- Add update notifications. Once a day, some time after startup, DevSnip Pro asks the Visual Studio Marketplace (Open VSX on VSCodium and similar editors) for its latest version. Only the extension's id is sent. While a newer compatible version is available, a status bar item offers **Update Now**, **Remind Me Later**, **View Changelog** and **Skip This Version**, and you get at most one notification per version. Nothing installs until you click **Update Now**, which then offers **Reload Window**; where VS Code can't install it directly, the extension's page opens instead.
+- Leave updates to VS Code when `extensions.autoUpdate` is on: no notification, and the status bar item only if the update still isn't installed a day later. With `extensions.autoCheckUpdates` off, no automatic checks run. Network failures, rate limits and unexpected responses are logged, never shown.
+- Add the **DevSnip Pro: Check for Updates** command and the `devsnip.updates.notifications`, `devsnip.updates.checkFrequency` (`daily`, `weekly` or `manual`) and `devsnip.updates.remindLaterHours` settings. Update notifications are Desktop-only; vscode.dev keeps web extensions current itself.
+- Add release highlights for 11.86.0 to What's New, and unit tests for version comparison, the snooze and skip rules, response parsing and failure handling.
 
 ## 11.85.0 - Send feedback from Milestones & Points (2026-10-31)
 
