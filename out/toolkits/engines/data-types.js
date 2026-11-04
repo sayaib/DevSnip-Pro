@@ -396,7 +396,7 @@ function toJsonSchema(root, title) {
             case "unknown": return {};
             case "array": return { type: "array", items: schema(s.item) };
             case "object": {
-                const properties = {};
+                const properties = Object.create(null);
                 const required = [];
                 for (const [key, f] of s.fields) {
                     properties[key] = schema(f.shape);

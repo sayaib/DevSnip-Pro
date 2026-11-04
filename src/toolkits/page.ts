@@ -58,6 +58,8 @@ const UI_ICONS = {
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   chevron: '<path d="M9 6l6 6-6 6"/>',
+  wrap: '<path d="M4 6h16M4 12h12.5a3.5 3.5 0 0 1 0 7H12"/><path d="M14 16.5L11.5 19l2.5 2.5M4 18h4"/>',
+  expand: '<path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/>',
   spark: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>'
 };
 
@@ -74,6 +76,17 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   --warnc: var(--vscode-editorWarning-foreground, #cca700);
   --err: var(--vscode-errorForeground, #f14c4c);
   --infoc: var(--vscode-editorInfo-foreground, #3794ff);
+  --code-bg: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--text) 4%, var(--bg)));
+  --syn-kw: var(--vscode-debugTokenExpression-name, #c586c0);
+  --syn-str: var(--vscode-debugTokenExpression-string, #ce9178);
+  --syn-num: var(--vscode-debugTokenExpression-number, #b5cea8);
+  --syn-lit: var(--vscode-debugTokenExpression-boolean, #569cd6);
+  --syn-key: var(--vscode-charts-blue, #3794ff);
+  --syn-fn: var(--vscode-charts-yellow, #dcdcaa);
+  --syn-type: var(--vscode-charts-green, #4ec9b0);
+  --syn-attr: var(--vscode-charts-orange, #d18616);
+  --scroll: var(--vscode-scrollbarSlider-background, rgba(121,121,121,.4));
+  --scroll-hover: var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,.7));
 }
 svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .app { max-width: 1400px; margin: 0 auto; padding: 22px 26px 60px; }
@@ -123,10 +136,6 @@ input[type=text], input[type=password], input[type=number], select, textarea {
   padding: 6px 9px; min-height: 30px;
 }
 textarea { resize: vertical; line-height: 1.5; }
-.syntax-keyword { color: var(--vscode-debugTokenExpression-name, #c586c0); }
-.syntax-string { color: var(--vscode-debugTokenExpression-string, #ce9178); }
-.syntax-number { color: var(--vscode-debugTokenExpression-number, #b5cea8); }
-.syntax-comment { color: var(--vscode-descriptionForeground, #8b949e); font-style: italic; }
 textarea.code { font-family: var(--mono); font-size: 12.5px; tab-size: 2; white-space: pre; }
 select { padding-right: 24px; }
 input:focus, select:focus, textarea:focus { outline: 1px solid var(--focus); outline-offset: -1px; border-color: var(--focus); }
@@ -157,6 +166,7 @@ kbd { font-family: var(--mono); font-size: 10.5px; padding: 1px 5px; border: 1px
 
 /* Results */
 .results { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.results > * { flex-shrink: 0; }
 .results.stale > :not(.ds-execution) { opacity: .55; transition: opacity .2s; }
 .empty { padding: 36px 20px; text-align: center; color: var(--muted); border: 1px dashed var(--card-line); border-radius: 10px; }
 .empty svg.i { width: 26px; height: 26px; opacity: .7; margin-bottom: 8px; }
@@ -177,11 +187,37 @@ kbd { font-family: var(--mono); font-size: 10.5px; padding: 1px 5px; border: 1px
 .msg.info svg.i { color: var(--infoc); }
 .more { align-self: flex-start; }
 .out { overflow: hidden; }
-.out-head { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-bottom: 1px solid var(--card-line); min-height: 38px; }
+.out-head { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-bottom: 1px solid var(--card-line); min-height: 38px; flex-wrap: wrap; }
 .out-title { font-weight: 600; font-size: 12.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .out-title .sub { font-weight: 400; color: var(--muted); margin-left: 6px; font-family: var(--mono); font-size: 11.5px; }
 .out-actions { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
-pre.code { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; overflow: auto; max-height: 520px; white-space: pre; tab-size: 2; background: var(--vscode-textCodeBlock-background, transparent); }
+.out-actions .sep { width: 1px; align-self: stretch; margin: 3px 4px; background: var(--card-line); }
+.btn.ghost.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* Code viewer: one scroll area per block, sticky line numbers, optional wrap */
+.codeview { --gutter: 0px; position: relative; max-height: min(62vh, 560px); overflow: auto; background: var(--code-bg); }
+.codeview.expanded { max-height: none; }
+.codeview:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+.code-body { display: flex; min-width: 100%; width: max-content; }
+.codeview.wrap .code-body { width: auto; }
+.gutter { position: sticky; left: 0; z-index: 1; flex: none; width: var(--gutter); padding: 12px 10px 12px 0; text-align: right; white-space: pre; user-select: none; font-family: var(--mono); font-size: 11.5px; line-height: 20px; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--muted) 70%, transparent); background: var(--code-bg); border-right: 1px solid var(--card-line); }
+.codeview.wrap .gutter { display: none; }
+pre.code { flex: 1; min-width: 0; margin: 0; padding: 12px 16px 12px 14px; font-family: var(--mono); font-size: 12.5px; line-height: 20px; white-space: pre; tab-size: 2; color: var(--text); background: transparent; font-variant-ligatures: none; }
+.codeview.wrap pre.code { white-space: pre-wrap; overflow-wrap: anywhere; }
+pre.code ::selection, .gutter::selection { background: var(--vscode-editor-selectionBackground, rgba(38,79,120,.6)); }
+.tk-kw { color: var(--syn-kw); }
+.tk-str { color: var(--syn-str); }
+.tk-num { color: var(--syn-num); }
+.tk-lit { color: var(--syn-lit); }
+.tk-key, .tk-tag { color: var(--syn-key); }
+.tk-fn { color: var(--syn-fn); }
+.tk-type { color: var(--syn-type); }
+.tk-attr { color: var(--syn-attr); }
+.tk-com { color: var(--muted); font-style: italic; }
+.codeview::-webkit-scrollbar, .textout::-webkit-scrollbar, .tablewrap::-webkit-scrollbar, .results::-webkit-scrollbar { width: 10px; height: 10px; }
+.codeview::-webkit-scrollbar-thumb, .textout::-webkit-scrollbar-thumb, .tablewrap::-webkit-scrollbar-thumb, .results::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+.codeview::-webkit-scrollbar-thumb:hover, .textout::-webkit-scrollbar-thumb:hover, .tablewrap::-webkit-scrollbar-thumb:hover, .results::-webkit-scrollbar-thumb:hover { background-color: var(--scroll-hover); }
+.codeview::-webkit-scrollbar-corner, .tablewrap::-webkit-scrollbar-corner { background: transparent; }
 .textout { padding: 12px 14px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 520px; overflow: auto; }
 .truncated { padding: 6px 14px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--card-line); }
 .tablewrap { overflow: auto; max-height: 520px; }
@@ -200,7 +236,7 @@ tr:hover td { background: var(--soft); }
 .file[open] summary .chev { transform: rotate(90deg); }
 .file .path { font-family: var(--mono); font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file .meta { color: var(--muted); font-size: 11px; }
-.file pre.code { border-top: 1px solid var(--card-line); max-height: 420px; }
+.file .codeview { border-top: 1px solid var(--card-line); max-height: min(50vh, 420px); }
 .chart { padding: 10px 12px 12px; }
 .chart svg { width: 100%; height: 260px; display: block; }
 .chart .axis { stroke: var(--card-line); }

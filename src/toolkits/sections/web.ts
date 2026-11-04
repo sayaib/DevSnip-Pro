@@ -1,6 +1,6 @@
 import { reactTool } from "./react";
 import { GeneratedFile, ToolSpec, ToolInputError, ToolResult, bool, fmtBytes, num, required, str } from "../types";
-import { CURL_TARGETS, CurlTarget, curlWarnings, generateFromCurl, parseCurl, toCurl } from "../engines/web-curl";
+import { curlTool } from "./curl";
 import { ArrayFormat, AssetKind, CACHE_PRESETS, buildCookie, buildUrl, cacheConfigs, explainCacheControl, objectToQuery, parseCookieHeader, parseSetCookie, parseUrlReport, queryToObject } from "../engines/web-http";
 import { analyzeCsp, auditHeaders, buildCsp, checkCors, corsConfigs, explainCorsError, securityHeaderConfigs, securityHeaderSet } from "../engines/web-security";
 import { OAUTH_PROVIDERS, parseCallback, pkcePair, randomToken } from "../../platform/oauth";
@@ -9,7 +9,7 @@ import { TYPE_RATIOS, convertUnits, fluidClamp, htmlToJsx, metaTags, typeScale }
 import { ApiDatabase, ApiFramework, DbKind, buildConnectionUrl, connectionSnippets, connectionWarnings, parseConnectionUrl, parseFields, scaffoldResource, sqlToMongo } from "../engines/web-scaffold";
 import { BumpKind, COMMIT_TYPES, GITIGNORE, GITIGNORE_MARKERS, GIT_RECIPES, GitParams, MAX_VERSION_CODE, buildGitignore, bump, commitMessage, compareVersions, derivedVersionCode, describeRange, formatVersion, missingIgnores, parseRange, parseVersion, satisfies } from "../engines/web-git";
 import { SqlDatabase, aspnetResource, fastapiResource, springResource } from "../engines/web-scaffold-backend";
-import { inspectApiResponse } from "../engines/data-inspect";
+import { apiResponse } from "./api-response";
 import { code, f, list, opts, severityMessages, table, text } from "./helpers";
 
 type Messages = NonNullable<ToolResult["messages"]>;
@@ -18,77 +18,6 @@ type Outputs = NonNullable<ToolResult["outputs"]>;
 // ---------------------------------------------------------------------------
 // HTTP & APIs
 // ---------------------------------------------------------------------------
-
-const SAMPLE_CURL = `curl 'https://api.example.com/v1/orders?status=open' \\
-  -X POST \\
-  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.e30.x' \\
-  -H 'Content-Type: application/json' \\
-  --data-raw '{"customerId":"c_123","items":[{"sku":"A-1","qty":2}],"note":"Leave at door"}'`;
-
-const curlTool: ToolSpec = {
-  id: "web.curl",
-  command: "curlConverter",
-  title: "cURL Converter",
-  summary: "Turn a cURL command (from the browser's \"Copy as cURL\" or API docs) into fetch, Axios, Node, Python, Go, PHP, Java, Dart/Flutter, Kotlin/OkHttp, Swift or raw HTTP.",
-  guide: "Paste the command as copied: bash or Windows cmd quoting, line continuations and combined flags (-sSL, -XPOST) are understood. Headers, JSON / form / multipart bodies, basic auth, cookies, -G, --json, timeouts and redirects are converted. Nothing is sent anywhere.",
-  keywords: ["curl", "copy as curl", "fetch", "axios", "requests", "http client", "okhttp", "urlsession", "dio", "convert curl"],
-  icon: "terminal",
-  live: true,
-  fields: [
-    f.code("curl", "cURL command", "shell", { rows: 9, required: true, fromEditor: true, default: SAMPLE_CURL }),
-    f.select("target", "Convert to", CURL_TARGETS.map(t => ({ value: t.id, label: t.label }))),
-    f.toggle("all", "Show every language", false)
-  ],
-  examples: [
-    { label: "JSON POST with a bearer token", values: { curl: SAMPLE_CURL } },
-    { label: "File upload (multipart) with basic auth", values: { curl: "curl -u admin:s3cret -F 'file=@./report.pdf' -F 'title=Q3 report' https://files.example.com/upload", target: "dart-http" } },
-    { label: "Form login with redirects", values: { curl: "curl -L -X POST https://example.com/login -d 'username=ada' -d 'password=hunter2' -c cookies.txt", target: "python" } },
-    { label: "GET with query from -G", values: { curl: "curl -G https://api.example.com/search --data-urlencode 'q=coffee near me' -d limit=10 -H 'Accept: application/json'", target: "swift" } }
-  ],
-  run(values) {
-    const r = parseCurl(required(values, "curl", "cURL command"));
-    const target = str(values, "target", "fetch") as CurlTarget;
-    const targets = bool(values, "all") ? CURL_TARGETS : CURL_TARGETS.filter(t => t.id === target);
-    const bodyLabel = r.bodyKind === "none" ? "none" : r.bodyKind === "multipart" ? `multipart (${r.form.length} parts)` : `${r.bodyKind} · ${fmtBytes(Buffer.byteLength(r.body ?? ""))}`;
-    const u = new URL(r.url);
-    return {
-      stats: [{ label: "Method", value: r.method }, { label: "Host", value: u.host }, { label: "Headers", value: String(r.headers.length) }, { label: "Body", value: bodyLabel }],
-      messages: curlWarnings(r).map(t => ({ kind: "warning" as const, text: t })),
-      outputs: [
-        ...targets.map(t => code(t.label, t.language, generateFromCurl(r, t.id), t.file)),
-        table("Request", ["Part", "Value"], [["URL", r.url], ...r.headers.map(([k, v]) => [`Header: ${k}`, /^(authorization|cookie|x-api-key)$/i.test(k) ? `${v.slice(0, 12)}…` : v] as [string, string]), ...(r.basicAuth ? [["Basic auth user", r.basicAuth.user] as [string, string]] : [])]),
-        code("Normalised cURL", "shell", toCurl(r))
-      ]
-    };
-  }
-};
-
-const apiResponse: ToolSpec = {
-  id: "web.api-response",
-  command: "apiResponseInspector",
-  title: "API Response Inspector",
-  summary: "Paste a raw HTTP response (or just the body): pretty-printed body, headers, status meaning, pagination, caching and error hints, and a field list.",
-  keywords: ["http response", "headers", "status code", "rest", "curl -i", "pagination", "cache-control"],
-  icon: "api",
-  live: true,
-  fields: [f.code("raw", "Response", "http", { rows: 12, required: true, fromEditor: true, default: 'HTTP/1.1 429 Too Many Requests\nContent-Type: application/json\nRetry-After: 30\nX-RateLimit-Remaining: 0\n\n{"error": {"code": "rate_limited", "message": "Slow down"}, "requestId": "req_123"}' })],
-  run(values) {
-    const r = inspectApiResponse(str(values, "raw"));
-    return {
-      stats: [
-        ...(r.status ? [{ label: "Status", value: `${r.status}${r.statusText ? " " + r.statusText : ""}`, tone: (r.status < 300 ? "good" : r.status < 400 ? "neutral" : "bad") as "good" | "neutral" | "bad" }] : []),
-        { label: "Body", value: `${r.isJson ? "JSON" : "text"} · ${fmtBytes(r.bytes)}` },
-        { label: "Headers", value: String(r.headers.length) }
-      ],
-      messages: r.insights.map(t => ({ kind: "info" as const, text: t })),
-      outputs: [
-        code("Body", r.isJson ? "json" : "text", r.isJson ? JSON.stringify(r.body, null, 2) : r.bodyText),
-        ...(r.headers.length ? [table("Headers", ["Header", "Value"], r.headers)] : []),
-        ...(r.fields.length ? [table("Fields", ["Path", "Type", "Example"], r.fields.map(x => [x.path, x.type, x.example]))] : [])
-      ]
-    };
-  }
-};
 
 const urlTool: ToolSpec = {
   id: "web.url",

@@ -231,7 +231,9 @@ Free without points: the full REST and GraphQL workflow, history, environments, 
 
 ![Switching appearance themes: Dracula, Nord, Light, Cyberpunk and Monokai](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/themes.gif)
 
-Twelve themes restyle every DevSnip Pro panel from the **Theme** selector at the top of the sidebar. **System Default** follows your VS Code theme and is free; the others unlock with points, and you can preview any locked theme for 30 seconds first. Your VS Code window keeps its own theme.
+Seventeen themes restyle every DevSnip Pro panel at once from the **Theme** selector at the top of the sidebar: Modern Dark, GitHub Dark and Light, AMOLED Black, Midnight Blue, Ocean Blue, Cyberpunk Neon, Purple Gradient, Clean Light, High Contrast and more. **VS Code Adaptive** follows your VS Code theme and is free; the others unlock with points, and you can preview any locked theme for 30 seconds first. Your VS Code window keeps its own theme.
+
+**Theme Studio** (`DevSnip Pro: Theme Studio`, or **Customize…** in the theme selector) pairs a dark and a light DevSnip theme with VS Code's light/dark switch, and lets you choose your own accent, background, corner style, border strength, shadows and interface and code fonts. A live preview shows contrast ratios as you go, and colours you pick are adjusted when needed to keep WCAG AA contrast. Everything applies instantly and is remembered across restarts.
 
 ## All tools by section
 
@@ -345,3 +347,11 @@ Made by Sayaib Sarkar — [LinkedIn](https://www.linkedin.com/in/sayaib/) · [Gi
 ### React / Next.js Generator
 
 Generate React 19 or Next.js 15/16 components, routes, state providers, API clients, tests and complete projects. Includes both Next.js routers, configurable UI libraries, searchable templates, live previews and saved presets. See the [generator guide](docs/react-next-generator.md) for the supported matrix and integration steps.
+
+### cURL Converter
+
+Convert cURL into 17 browser, server and mobile client targets, with batch conversion, Postman/HAR exports, response options, redaction and reusable presets. See the [cURL Converter guide](docs/curl-converter.md) for supported shell syntax, fidelity notes and integration requirements.
+
+### API Response Inspector
+
+Inspect HTTP, HAR, JSON, NDJSON and SSE captures with field search, JSON Pointer selection, response comparison, header/error diagnostics and report/type/schema exports. Includes redaction and safe saved presets. See the [API Response Inspector guide](docs/api-response-inspector.md) for workflows and limits.

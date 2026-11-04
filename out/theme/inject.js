@@ -17,7 +17,7 @@ const random_1 = require("../platform/random");
 const themes_1 = require("./themes");
 /** Shared interaction and layout treatment, scoped to existing panel components. */
 const EXPERIENCE_CSS = `
-:root { --ds-control-radius: 8px; }
+:root { --ds-control-radius: var(--ds-radius-md, 8px); }
 :where(button, a, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--vscode-focusBorder, #007fd4); outline-offset: 3px;
 }
@@ -54,9 +54,9 @@ body .result-block { overflow-wrap: anywhere; word-break: normal; }
 }
 `;
 exports.THEME_MESSAGE = "devsnip:theme";
-function themeMessage(themeId, surface) {
+function themeMessage(themeId, surface, custom = {}) {
     const id = (0, themes_1.validThemeId)(themeId);
-    return { type: exports.THEME_MESSAGE, id, kind: (0, themes_1.findTheme)(id)?.palette.kind ?? null, rules: (0, themes_1.themeRules)(id, surface) };
+    return { type: exports.THEME_MESSAGE, id, kind: (0, themes_1.effectivePalette)(id, custom)?.kind ?? null, rules: (0, themes_1.themeRules)(id, surface, custom), fade: custom.motion !== false };
 }
 exports.themeMessage = themeMessage;
 /**
@@ -108,7 +108,7 @@ const RUNTIME = `(function () {
     if (!sheet) return;
     var root = document.documentElement;
     // Only a page someone is looking at fades; hidden panels switch at once instead of animating unseen.
-    var fade = !document.hidden;
+    var fade = !document.hidden && data.fade !== false && !data.instant;
     if (fade) root.classList.add("ds-theme-switching");
     while (sheet.cssRules.length) sheet.deleteRule(0);
     data.rules.forEach(function (rule) { try { sheet.insertRule(rule, sheet.cssRules.length); } catch (e) { /* skip a rule the engine rejects */ } });
@@ -141,9 +141,9 @@ function extendCsp(policy, nonceValue) {
 }
 exports.extendCsp = extendCsp;
 /** Returns `html` with the current theme applied and live theme switching wired in. */
-function injectTheme(html, themeId, surface = "panel") {
+function injectTheme(html, themeId, surface = "panel", custom = {}) {
     const n = nonce();
-    const message = themeMessage(themeId, surface);
+    const message = themeMessage(themeId, surface, custom);
     let out = html.replace(/(<meta\s+http-equiv=["']Content-Security-Policy["']\s+content=")([^"]*)(")/i, (_m, open, policy, close) => open + extendCsp(policy, n) + close);
     const state = JSON.stringify({ id: message.id, kind: message.kind }).replace(/</g, "\\u003c");
     const block = `<style id="devsnip-theme" nonce="${n}">${message.rules.join("\n")}</style>` +

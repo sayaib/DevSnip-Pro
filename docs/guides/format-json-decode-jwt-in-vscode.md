@@ -45,7 +45,7 @@ Generators for Dockerfiles, Compose files, CI pipelines, Kubernetes and Helm, Te
 
 ## Make it comfortable
 
-Pick one of twelve appearance themes for every DevSnip Pro panel from the **Theme** selector at the top of the sidebar; System Default is free and the others unlock with points you earn by using the extension. Points, streaks and milestones are optional and stay on your machine; they record what you have tried rather than asking for more clicks.
+Pick one of 17 appearance themes for every DevSnip Pro panel from the **Theme** selector at the top of the sidebar, or fine-tune accent, corners and fonts in **Theme Studio**; VS Code Adaptive is free and the other themes unlock with points you earn by using the extension. Points, streaks and milestones are optional and stay on your machine; they record what you have tried rather than asking for more clicks.
 
 ## The habit that helps most
 

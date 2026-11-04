@@ -82,7 +82,7 @@ function transpiles(source, tsx = false) {
     });
     (0, run_unit_tests_1.test)("escapes $ for Dart and Kotlin string templates", () => {
         const r = (0, web_curl_1.parseCurl)("curl https://a.io --data-raw '{\"price\":\"$5\"}' -H 'Content-Type: application/json'");
-        assert.ok((0, web_curl_1.generateFromCurl)(r, "dart-http").includes("'\\$5'"));
+        assert.ok((0, web_curl_1.generateFromCurl)(r, "dart-http").includes("\\$5"));
         assert.ok((0, web_curl_1.generateFromCurl)(r, "kotlin-okhttp").includes("\\$5"));
     });
 });

@@ -13,6 +13,11 @@
  * Pure: no vscode import, so it is unit tested directly.
  */
 
+import { alpha } from "./color";
+import { adaptiveAccentVariables, applyCustomization, customRules, ThemeCustomization } from "./custom";
+
+export { contrast, luminance } from "./color";
+
 export type ThemeKind = "dark" | "light" | "hc";
 
 export interface Palette {
@@ -51,6 +56,8 @@ export interface Palette {
   ansi: { red: string; green: string; yellow: string; blue: string; magenta: string; cyan: string; white: string };
   syntax: { string: string; number: string; boolean: string; name: string };
   shadow: string;
+  /** Optional CSS gradient layered over the page background (Purple Gradient). */
+  backdrop?: string;
 }
 
 export interface ThemeDefinition {
@@ -65,7 +72,7 @@ export const SYSTEM_THEME_ID = "system";
 export const THEMES: ThemeDefinition[] = [
   {
     id: "dark",
-    label: "Dark",
+    label: "Modern Dark",
     description: "Neutral graphite with a clear blue accent.",
     palette: {
       kind: "dark",
@@ -81,8 +88,42 @@ export const THEMES: ThemeDefinition[] = [
     }
   },
   {
+    id: "github-dark",
+    label: "GitHub Dark",
+    description: "GitHub's dimmed canvas with green actions.",
+    palette: {
+      kind: "dark",
+      bg: "#0d1117", sidebar: "#010409", surface: "#161b22", surface2: "#21262d", surface3: "#30363d",
+      border: "#21262d", borderStrong: "#3d444d",
+      fg: "#e6edf3", muted: "#9198a1", disabled: "#6e7681",
+      accent: "#238636", accentFg: "#ffffff", accentHover: "#1f7a31", link: "#4493f8", focus: "#1f6feb",
+      selection: "#1f3a5f", selectionFg: "#ffffff",
+      success: "#3fb950", warning: "#d29922", danger: "#f85149", info: "#4493f8",
+      ansi: { red: "#ff7b72", green: "#3fb950", yellow: "#d29922", blue: "#58a6ff", magenta: "#bc8cff", cyan: "#39c5cf", white: "#e6edf3" },
+      syntax: { string: "#a5d6ff", number: "#79c0ff", boolean: "#ff7b72", name: "#d2a8ff" },
+      shadow: "rgba(1, 4, 9, 0.6)"
+    }
+  },
+  {
+    id: "amoled",
+    label: "AMOLED Black",
+    description: "True black for OLED screens, with crisp blue.",
+    palette: {
+      kind: "dark",
+      bg: "#000000", sidebar: "#000000", surface: "#0b0b0c", surface2: "#151517", surface3: "#202023",
+      border: "#1c1c1f", borderStrong: "#36363b",
+      fg: "#f2f2f3", muted: "#a8a8ae", disabled: "#6b6b71",
+      accent: "#3d8bff", accentFg: "#000000", accentHover: "#63a1ff", link: "#6aa8ff", focus: "#3d8bff",
+      selection: "#10284d", selectionFg: "#ffffff",
+      success: "#3ddc84", warning: "#ffc145", danger: "#ff6b6b", info: "#6aa8ff",
+      ansi: { red: "#ff6b6b", green: "#3ddc84", yellow: "#ffd75e", blue: "#6aa8ff", magenta: "#d68cff", cyan: "#3fd8e8", white: "#f2f2f3" },
+      syntax: { string: "#ffb86b", number: "#b5e48c", boolean: "#6aa8ff", name: "#8fd4ff" },
+      shadow: "rgba(0, 0, 0, 0.8)"
+    }
+  },
+  {
     id: "midnight",
-    label: "Midnight",
+    label: "Midnight Blue",
     description: "Deep navy with soft periwinkle highlights.",
     palette: {
       kind: "dark",
@@ -95,6 +136,23 @@ export const THEMES: ThemeDefinition[] = [
       ansi: { red: "#f7768e", green: "#9ece6a", yellow: "#e0af68", blue: "#7aa2f7", magenta: "#bb9af7", cyan: "#7dcfff", white: "#c0caf5" },
       syntax: { string: "#9ece6a", number: "#ff9e64", boolean: "#ff9e64", name: "#7dcfff" },
       shadow: "rgba(0, 0, 0, 0.55)"
+    }
+  },
+  {
+    id: "ocean",
+    label: "Ocean Blue",
+    description: "Deep sea blues with teal and aqua.",
+    palette: {
+      kind: "dark",
+      bg: "#0b1e2d", sidebar: "#081824", surface: "#10283b", surface2: "#163349", surface3: "#1e4059",
+      border: "#15304a", borderStrong: "#2a5478",
+      fg: "#e3f2fb", muted: "#9cbad0", disabled: "#5d7d94",
+      accent: "#2bb3d9", accentFg: "#04131d", accentHover: "#4cc4e4", link: "#5cc8ec", focus: "#3dd6c6",
+      selection: "#1b4a6b", selectionFg: "#ffffff",
+      success: "#4fd6a8", warning: "#f2c46d", danger: "#ff7f8f", info: "#5cc8ec",
+      ansi: { red: "#ff7f8f", green: "#4fd6a8", yellow: "#f2c46d", blue: "#5ca8ff", magenta: "#c79bff", cyan: "#5cc8ec", white: "#e3f2fb" },
+      syntax: { string: "#8de3c4", number: "#f7b77a", boolean: "#5ca8ff", name: "#7fd3f7" },
+      shadow: "rgba(0, 0, 0, 0.5)"
     }
   },
   {
@@ -150,7 +208,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "cyberpunk",
-    label: "Cyberpunk",
+    label: "Cyberpunk Neon",
     description: "Neon cyan and magenta on near-black.",
     palette: {
       kind: "dark",
@@ -165,7 +223,25 @@ export const THEMES: ThemeDefinition[] = [
       shadow: "rgba(0, 0, 0, 0.6)"
     }
   },
-  // Unlockable themes (see src/services/rewards.ts). Every theme above is free.
+  {
+    id: "purple-gradient",
+    label: "Purple Gradient",
+    description: "Violet night with a soft pink-and-purple glow.",
+    palette: {
+      kind: "dark",
+      bg: "#1a1033", sidebar: "#140c29", surface: "#231642", surface2: "#2d1d54", surface3: "#392567",
+      border: "#2c1d50", borderStrong: "#4d3784",
+      fg: "#f1eaff", muted: "#b9a8de", disabled: "#7c6ca6",
+      accent: "#a970ff", accentFg: "#12081f", accentHover: "#b98aff", link: "#c4a1ff", focus: "#f472b6",
+      selection: "#432a7a", selectionFg: "#ffffff",
+      success: "#5eead4", warning: "#fcd34d", danger: "#fb7185", info: "#93c5fd",
+      ansi: { red: "#fb7185", green: "#5eead4", yellow: "#fcd34d", blue: "#93c5fd", magenta: "#e879f9", cyan: "#67e8f9", white: "#f1eaff" },
+      syntax: { string: "#f9a8d4", number: "#fcd34d", boolean: "#93c5fd", name: "#c4b5fd" },
+      shadow: "rgba(8, 2, 20, 0.6)",
+      backdrop: "radial-gradient(1200px 640px at 0% 0%, rgba(169, 112, 255, 0.20), transparent 62%), radial-gradient(900px 520px at 100% 100%, rgba(244, 114, 182, 0.13), transparent 60%)"
+    }
+  },
+  // Themes below can also be earned by rank or a milestone (see src/services/rewards.ts).
   {
     id: "solarized",
     label: "Solarized",
@@ -236,8 +312,8 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "light",
-    label: "Light",
-    description: "Crisp white with GitHub-style blue.",
+    label: "Clean Light",
+    description: "Crisp white with a calm blue accent.",
     palette: {
       kind: "light",
       bg: "#ffffff", sidebar: "#f6f8fa", surface: "#ffffff", surface2: "#eff2f5", surface3: "#e1e6ec",
@@ -248,6 +324,23 @@ export const THEMES: ThemeDefinition[] = [
       success: "#1a7f37", warning: "#9a6700", danger: "#cf222e", info: "#0969da",
       ansi: { red: "#cf222e", green: "#1a7f37", yellow: "#9a6700", blue: "#0969da", magenta: "#8250df", cyan: "#1b7c83", white: "#424a53" },
       syntax: { string: "#0a3069", number: "#0550ae", boolean: "#cf222e", name: "#116329" },
+      shadow: "rgba(31, 35, 40, 0.15)"
+    }
+  },
+  {
+    id: "github-light",
+    label: "GitHub Light",
+    description: "GitHub's familiar white with green actions.",
+    palette: {
+      kind: "light",
+      bg: "#ffffff", sidebar: "#f6f8fa", surface: "#ffffff", surface2: "#eff2f5", surface3: "#e1e6ea",
+      border: "#d8dee4", borderStrong: "#afb8c1",
+      fg: "#1f2328", muted: "#59636e", disabled: "#8c959f",
+      accent: "#1a7f37", accentFg: "#ffffff", accentHover: "#176f30", link: "#0969da", focus: "#0969da",
+      selection: "#ddf4ff", selectionFg: "#0b2350",
+      success: "#1a7f37", warning: "#9a6700", danger: "#d1242f", info: "#0969da",
+      ansi: { red: "#cf222e", green: "#116329", yellow: "#9a6700", blue: "#0969da", magenta: "#8250df", cyan: "#1b7c83", white: "#57606a" },
+      syntax: { string: "#0a3069", number: "#0550ae", boolean: "#cf222e", name: "#8250df" },
       shadow: "rgba(31, 35, 40, 0.15)"
     }
   },
@@ -284,8 +377,6 @@ export function swatches(theme: ThemeDefinition): string[] {
   const p = theme.palette;
   return [p.bg, p.surface2, p.accent, p.ansi.magenta];
 }
-
-const alpha = (hex: string, a: number) => `${hex}${Math.round(a * 255).toString(16).padStart(2, "0")}`;
 
 /**
  * The VS Code theme variables a palette overrides. These are the variables
@@ -400,17 +491,28 @@ export function themeVariables(p: Palette): Record<string, string> {
   return v;
 }
 
-/** DevSnip design tokens. Always defined, so stylesheets use them in every theme, including System Default. */
+/**
+ * DevSnip design tokens. Always defined, so stylesheets use them in every
+ * theme, including VS Code Adaptive. New pages should style themselves from
+ * these (or the VS Code variables they wrap) and never hard-code colours:
+ * then every theme and customization reaches them with no extra work.
+ */
 export const DESIGN_TOKENS = `:root {
   --ds-bg: var(--vscode-editor-background, #1e1e1e);
   --ds-sidebar: var(--vscode-sideBar-background, var(--ds-bg));
   --ds-surface: var(--vscode-editorWidget-background, var(--vscode-input-background, var(--ds-bg)));
+  --ds-surface-2: var(--vscode-list-hoverBackground, color-mix(in srgb, var(--ds-fg) 7%, var(--ds-bg)));
   --ds-fg: var(--vscode-editor-foreground, var(--vscode-foreground, #cccccc));
   --ds-muted: var(--vscode-descriptionForeground, #9d9d9d);
   --ds-border: var(--vscode-panel-border, var(--vscode-input-border, rgba(127, 127, 127, 0.35)));
+  --ds-border-strong: var(--vscode-input-border, var(--ds-border));
   --ds-accent: var(--vscode-button-background, #0e639c);
   --ds-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --ds-accent-hover: var(--vscode-button-hoverBackground, var(--ds-accent));
+  --ds-accent-gradient: linear-gradient(135deg, var(--ds-accent), color-mix(in srgb, var(--ds-accent) 55%, var(--ds-purple)));
+  --ds-link: var(--vscode-textLink-foreground, #3794ff);
   --ds-focus: var(--vscode-focusBorder, #007fd4);
+  --ds-selection: var(--vscode-list-activeSelectionBackground, #04395e);
   --ds-success: var(--vscode-testing-iconPassed, #3fb950);
   --ds-warning: var(--vscode-editorWarning-foreground, #cca700);
   --ds-danger: var(--vscode-errorForeground, #f14c4c);
@@ -419,47 +521,60 @@ export const DESIGN_TOKENS = `:root {
   /* Text on a success/danger/warning fill: status colours are chosen to contrast with the background. */
   --ds-on-status: var(--ds-bg);
   --ds-shadow: var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  --ds-shadow-sm: 0 1px 2px var(--ds-shadow);
+  --ds-shadow-md: 0 4px 14px var(--ds-shadow);
+  --ds-shadow-lg: 0 12px 36px var(--ds-shadow);
+  --ds-radius-sm: 4px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
+  --ds-radius-pill: 999px;
+  --ds-border-width: 1px;
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 24px;
+  --ds-space-6: 32px;
+  --ds-font-sans: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  --ds-font-mono: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  --ds-text-xs: 11px;
+  --ds-text-sm: 12px;
+  --ds-text-md: 13px;
+  --ds-text-lg: 15px;
+  --ds-text-xl: 20px;
+  --ds-ease: cubic-bezier(.2, .7, .2, 1);
+  --ds-duration: .2s;
 }`;
 
-/** The CSS rules for a theme. Each rule is separate so the webview can swap them through the CSSOM. */
-export function themeRules(themeId: string, surface: "panel" | "sidebar" = "panel"): string[] {
-  const rules = [DESIGN_TOKENS];
+/** The palette a theme uses with the customization applied; undefined for VS Code Adaptive. */
+export function effectivePalette(themeId: string, custom: ThemeCustomization = {}): Palette | undefined {
   const theme = findTheme(themeId);
-  if (!theme) return rules;
-  const p = theme.palette;
+  return theme ? applyCustomization(theme.palette, custom) : undefined;
+}
+
+/** The CSS rules for a theme. Each rule is separate so the webview can swap them through the CSSOM. */
+export function themeRules(themeId: string, surface: "panel" | "sidebar" = "panel", custom: ThemeCustomization = {}): string[] {
+  const rules = [DESIGN_TOKENS];
+  const p = effectivePalette(themeId, custom);
+  if (!p) {
+    // VS Code Adaptive keeps VS Code's colours; only an accent and the non-colour tweaks apply.
+    if (custom.accent) rules.push(`:root { ${Object.entries(adaptiveAccentVariables(custom.accent)).map(([name, value]) => `--vscode-${name}: ${value} !important;`).join(" ")} }`);
+    if (custom.shadows === "flat") rules.push(":root { --vscode-widget-shadow: transparent !important; }");
+    return [...rules, ...customRules(custom)];
+  }
   const vars = Object.entries(themeVariables(p)).map(([name, value]) => `--vscode-${name}: ${value} !important;`).join(" ");
   rules.push(`:root { ${vars} }`);
   // Native controls (scrollbars, selects, date pickers) follow the theme, not the OS; pages set it on body too.
   rules.push(`:root, body { color-scheme: ${p.kind === "light" ? "light" : "dark"} !important; }`);
   // The page paints its own background: VS Code's chrome around a webview keeps the VS Code theme.
   rules.push(`html, body { background-color: ${surface === "sidebar" ? p.sidebar : p.bg} !important; color: ${p.fg}; }`);
+  if (p.backdrop) rules.push(`body { background-image: ${p.backdrop} !important; background-attachment: fixed !important; }`);
   rules.push(`::selection { background-color: ${alpha(p.accent, 0.35)}; }`);
-  return rules;
+  return [...rules, ...customRules(custom)];
 }
 
 /** A short-lived class that animates colours only while the theme changes, so it costs nothing otherwise. */
 export const TRANSITION_RULES = [
   "html.ds-theme-switching, html.ds-theme-switching *, html.ds-theme-switching *::before, html.ds-theme-switching *::after { transition: background-color .22s ease, color .22s ease, border-color .22s ease, fill .22s ease, box-shadow .22s ease !important; }",
-  "@media (prefers-reduced-motion: reduce) { html.ds-theme-switching, html.ds-theme-switching * { transition: none !important; } }"
+  "@media (prefers-reduced-motion: reduce) { html.ds-theme-switching, html.ds-theme-switching * { transition: none !important; } :root { --ds-duration: 0s; } }"
 ];
-
-// ---------------------------------------------------------------------------
-// Contrast (WCAG 2.x), used by the tests and available to future theme tooling.
-// ---------------------------------------------------------------------------
-
-function channel(c: number): number {
-  const s = c / 255;
-  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-}
-
-export function luminance(hex: string): number {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m) throw new Error(`Not a #rrggbb colour: ${hex}`);
-  const n = parseInt(m[1], 16);
-  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
-}
-
-export function contrast(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
-  return (x + 0.05) / (y + 0.05);
-}

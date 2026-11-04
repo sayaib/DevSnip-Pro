@@ -325,6 +325,10 @@ class ToolsSidebarProvider {
             await (0, service_1.chooseThemeOrUnlock)(message.id);
             return;
         }
+        if (message?.type === "openThemeStudio") {
+            await vscode.commands.executeCommand(service_1.THEME_STUDIO_COMMAND);
+            return;
+        }
         if (message?.type === "previewTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
             // Try a locked theme for a short while; it switches back on its own.
             await (0, service_1.previewLockedTheme)(message.id);

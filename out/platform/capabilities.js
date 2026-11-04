@@ -15,7 +15,7 @@ exports.DESKTOP_TOOL_REASONS = {
 const browserCommands = new Set([
     ...commands_1.TOOLKIT_COMMANDS.filter(e => !exports.DESKTOP_TOOL_REASONS[e.tool]).map(e => e.command),
     "advancedToolsHub", "webDevHub", "mobileDevHub", "aiMlHub", "ragHub", "bigDataHub", "devopsGenerator",
-    "chooseTheme", "milestoneTracker", "searchTools", "getStarted", "whatsNew",
+    "chooseTheme", "themeStudio", "milestoneTracker", "searchTools", "getStarted", "whatsNew",
     "insertDebugLog", "removeDebugLogsInFile"
 ]);
 function isCommandSupported(command, web = (0, environment_1.isWebHost)()) {

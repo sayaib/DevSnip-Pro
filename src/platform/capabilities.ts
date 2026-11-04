@@ -13,7 +13,7 @@ export const DESKTOP_TOOL_REASONS: Readonly<Record<string, string>> = {
 const browserCommands = new Set([
   ...TOOLKIT_COMMANDS.filter(e => !DESKTOP_TOOL_REASONS[e.tool]).map(e => e.command),
   "advancedToolsHub", "webDevHub", "mobileDevHub", "aiMlHub", "ragHub", "bigDataHub", "devopsGenerator",
-  "chooseTheme", "milestoneTracker", "searchTools", "getStarted", "whatsNew",
+  "chooseTheme", "themeStudio", "milestoneTracker", "searchTools", "getStarted", "whatsNew",
   "insertDebugLog", "removeDebugLogsInFile"
 ]);
 export function isCommandSupported(command: string, web = isWebHost()): boolean {

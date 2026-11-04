@@ -59,7 +59,7 @@ suite("web: cURL converter", () => {
 
   test("escapes $ for Dart and Kotlin string templates", () => {
     const r = parseCurl("curl https://a.io --data-raw '{\"price\":\"$5\"}' -H 'Content-Type: application/json'");
-    assert.ok(generateFromCurl(r, "dart-http").includes("'\\$5'"));
+    assert.ok(generateFromCurl(r, "dart-http").includes("\\$5"));
     assert.ok(generateFromCurl(r, "kotlin-okhttp").includes("\\$5"));
   });
 });

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cacheConfigs = exports.CACHE_PRESETS = exports.explainCacheControl = exports.buildCookie = exports.parseCookieHeader = exports.parseSetCookie = exports.objectToQuery = exports.queryToObject = exports.buildUrl = exports.parseUrlReport = void 0;
+exports.cacheConfigs = exports.CACHE_PRESETS = exports.explainCacheControl = exports.splitHttpList = exports.buildCookie = exports.parseCookieHeader = exports.parseSetCookie = exports.objectToQuery = exports.queryToObject = exports.buildUrl = exports.parseUrlReport = void 0;
 const types_1 = require("../types");
 function safeDecode(s) {
     try {
@@ -295,12 +295,32 @@ const DIRECTIVES = {
     "no-transform": "Intermediaries must not modify the body (e.g. recompress images).",
     "must-understand": "Store only if the cache understands the status code's caching rules."
 };
+/** Split HTTP field lists without treating commas inside quoted strings as separators. */
+function splitHttpList(value) {
+    const parts = [];
+    let start = 0, quoted = false;
+    for (let i = 0; i < value.length; i++) {
+        if (quoted && value[i] === "\\") {
+            i++;
+            continue;
+        }
+        if (value[i] === '"')
+            quoted = !quoted;
+        else if (!quoted && value[i] === ",") {
+            parts.push(value.slice(start, i).trim());
+            start = i + 1;
+        }
+    }
+    parts.push(value.slice(start).trim());
+    return parts.filter(Boolean);
+}
+exports.splitHttpList = splitHttpList;
 function explainCacheControl(header) {
     const value = header.replace(/^cache-control:\s*/i, "").trim();
     if (!value)
         throw new types_1.ToolInputError("Paste a Cache-Control value, e.g. public, max-age=31536000, immutable.");
     const directives = new Map();
-    for (const part of value.split(",").map(s => s.trim()).filter(Boolean)) {
+    for (const part of splitHttpList(value)) {
         const eq = part.indexOf("=");
         directives.set((eq < 0 ? part : part.slice(0, eq)).toLowerCase(), eq < 0 ? true : part.slice(eq + 1).replace(/"/g, ""));
     }

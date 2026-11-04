@@ -1860,7 +1860,7 @@
             list.length
                 ? h('div', { className: 'grid' }, list.map(function (r) { return rewardCard(r, v); }))
                 : h('div', { className: 'card empty' }, [icon('gift'), show === 'affordable' ? 'Nothing you can afford here yet. Keep earning!' : 'Nothing to show here.']),
-            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Rewards are cosmetic: every tool works at every rank. Each item is previewed on your own rank card. Some can also be earned by climbing the ranks or finishing milestones, and a few can only be earned. System Default is always free.' })])
+            h('p', { className: 'note', style: 'margin-top:14px' }, [icon('info'), h('span', { text: 'Rewards are cosmetic: every tool works at every rank. Each item is previewed on your own rank card. Some can also be earned by climbing the ranks or finishing milestones, and a few can only be earned. VS Code Adaptive is always free.' })])
         ]);
     }
 

@@ -7,7 +7,7 @@ import { LEVELS, activitiesWaiting, effectiveUnlocked, getCurrentLevel, getNextL
 import { resolveLoadout } from "../services/rewards";
 import { profileCss } from "../services/profile-style";
 import { MILESTONE_COMMAND, SEARCH_COMMAND, SIDEBAR_GROUPS, sidebarCommands } from "./tool-groups";
-import { chooseThemeOrUnlock, currentThemeId, LOCKED_PREVIEW_SECONDS, lockedPreviewTheme, previewLockedTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
+import { chooseThemeOrUnlock, currentThemeId, THEME_STUDIO_COMMAND, LOCKED_PREVIEW_SECONDS, lockedPreviewTheme, previewLockedTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
 import { dismissGuide, dismissWhatsNew, GuideStep, guideSteps, guideVisible, onDidChangeActivation, whatsNew } from "../onboarding/activation";
 import { isKnownCommand } from "../utils/command-registry";
 
@@ -353,6 +353,10 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
     if (message?.type === "setTheme" && typeof message.id === "string" && themeIds.has(message.id)) {
       // A locked theme explains how to unlock it instead; nothing is stored unless it is unlocked.
       await chooseThemeOrUnlock(message.id);
+      return;
+    }
+    if (message?.type === "openThemeStudio") {
+      await vscode.commands.executeCommand(THEME_STUDIO_COMMAND);
       return;
     }
     if (message?.type === "previewTheme" && typeof message.id === "string" && themeIds.has(message.id)) {

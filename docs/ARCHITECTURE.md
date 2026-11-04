@@ -60,7 +60,7 @@ The Database Client loads a driver only when you connect, and analytics loads it
 
 Each panel is a webview with a strict Content-Security-Policy. Scripts load only with a per-page nonce, and data is embedded as JSON that cannot break out of its `<script type="application/json">` block.
 
-`setWebviewHtml` adds the appearance theme. Each palette in `src/theme/themes.ts` is expanded into overrides for the `--vscode-*` colour variables the pages already use, plus shared `--ds-*` tokens. A theme change is applied live through the CSSOM, so panels keep their state.
+`setWebviewHtml` adds the appearance theme. Each palette in `src/theme/themes.ts` is expanded into overrides for the `--vscode-*` colour variables the pages already use, plus shared `--ds-*` tokens. A theme change is applied live through the CSSOM, so panels keep their state. Personal tweaks from Theme Studio (`src/theme/custom.ts`: accent, background, corners, borders, shadows, fonts, motion) are applied to the palette before that expansion and re-checked for WCAG contrast, so they reach every page the same way. Under VS Code Adaptive, an optional light/dark pairing picks a DevSnip theme from VS Code's theme kind. New pages need nothing beyond `setWebviewHtml`: style them from the `--ds-*` tokens (colour, spacing, type, radius, shadows, motion) or the VS Code variables, never hard-coded colours.
 
 ## Data and secrets
 
@@ -70,7 +70,7 @@ Each panel is a webview with a strict Content-Security-Policy. Scripts load only
 | Saved requests, collections, environments | Extension global state. Credential-looking URL values are redacted from history. |
 | Snippets | The extension's `custom/` snippet files. |
 | Points, milestones, onboarding progress, sidebar favorites and recents | Extension global state, per machine. |
-| Appearance theme | Extension global state. |
+| Appearance theme, Theme Studio customizations, light/dark pairing | Extension global state. |
 
 Errors from database drivers are rewritten in `src/database/connection-string.ts`, which strips the password and other secrets before they reach the UI. Destructive SQL, Mongo and Redis statements ask for confirmation, and read-only connections refuse writes in the adapter (and, for PostgreSQL and MySQL, in the database session).
 

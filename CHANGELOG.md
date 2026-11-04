@@ -1,5 +1,25 @@
 # Development Changelog of DevSnip Pro
 
+## 11.88.0 - Theme Studio and five new themes (2026-11-04)
+
+- Add **Theme Studio** (`DevSnip Pro: Theme Studio`, or **Customize…** in the sidebar theme selector). It shows every theme with a live preview and contrast checks. You can choose an accent colour and, for DevSnip themes, a background; pick sharp to round corners, subtle or strong borders, and flat or elevated shadows; set interface and code fonts; and turn the theme fade off. Every change applies instantly to every open DevSnip Pro panel and is remembered across restarts.
+- Pair a dark and a light DevSnip theme with VS Code: under **VS Code Adaptive**, DevSnip Pro switches between them when VS Code changes between light and dark. High-contrast VS Code themes always stay in charge.
+- Add five themes: **GitHub Dark**, **GitHub Light**, **AMOLED Black**, **Ocean Blue** and **Purple Gradient**. Rename System Default to **VS Code Adaptive**, Dark to **Modern Dark**, Light to **Clean Light**, Midnight to **Midnight Blue** and Cyberpunk to **Cyberpunk Neon**. Theme ids are unchanged, so saved choices and unlocks carry over.
+- Re-check custom colours against the theme and adjust them when needed, so text, links, status colours and code tokens keep WCAG AA contrast.
+- Add design tokens for spacing, typography, radius, shadows, borders and motion alongside the colour tokens. Motion tokens drop to zero when the system asks for reduced motion.
+- Build each theme update once per panel type instead of once per open panel.
+
+## 11.87.0 - Code previews, cURL Converter and API Response Inspector (2026-11-03)
+
+- Redesign the code preview in every toolkit tool. Code blocks show line numbers in a gutter that stays put while you scroll sideways and is left out when you copy. The header shows the file name, language and line count.
+- Highlight about 40 languages, up from JavaScript, TypeScript and JSON: Python, YAML and Helm, Java, Kotlin, C#, Go, Swift, Dart, Shell, Dockerfile, Terraform, SQL, XML and HTML, CSS, Markdown, nginx, .env, TOML, HTTP and .gitignore among them. Colours follow the VS Code or DevSnip appearance theme.
+- Add **Wrap**, which wraps long lines in every code block and is remembered, and **Expand / Collapse** for outputs over 24 lines. ⌘A / Ctrl+A in a focused code block selects only that code.
+- Fix output panels collapsing to a sliver when results sit beside the form on wide panels, which cut code off with no way to scroll. Code blocks now scroll vertically and horizontally with themed scrollbars, and size to the window instead of a fixed 520 px.
+- Expand the cURL Converter to 17 targets: browser and Node.js Fetch (JavaScript and TypeScript), Axios, Python Requests and HTTPX, Go, PHP, Java, C#, Dart http and Dio, Kotlin OkHttp, Swift, raw HTTP and HTTPie. Add Bash/zsh, Windows cmd and PowerShell dialects, batch conversion, Postman v2.1 and HAR exports, credential redaction and saved redacted presets. See the [cURL Converter guide](docs/curl-converter.md).
+- Rebuild the API Response Inspector. Inspect raw HTTP, HAR, JSON, NDJSON and SSE captures; select fields with JSON Pointer; compare two responses; and get diagnostics for status, framing, caching, rate limits, pagination, cookies, CORS and Problem Details. Export JSON or Markdown reports, TypeScript types, JSON Schema and Jest/Vitest assertions, with redaction. See the [API Response Inspector guide](docs/api-response-inspector.md).
+- Keep credential-bearing cURL input and captured responses out of saved webview state. Existing commands and the `parseCurl()`, `generateFromCurl()`, `toCurl()` and `inspectApiResponse()` exports are unchanged.
+- Add release highlights for 11.87.0 to What's New, and unit tests for the cURL Converter and API Response Inspector.
+
 ## 11.86.4 - Update alert startup and debug preview (2026-11-03)
 
 - Refresh the sidebar update alert from cached update state when the update manager starts, before the network check finishes.

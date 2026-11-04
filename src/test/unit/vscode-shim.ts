@@ -44,7 +44,13 @@ const api = {
     },
     showQuickPick() { return Promise.resolve(undefined); },
     withProgress(_options: unknown, task: Listener) { return Promise.resolve(task({ report() {} }, { isCancellationRequested: false, onCancellationRequested: () => disposable() })); },
-    get activeTextEditor() { return undefined; }
+    get activeTextEditor() { return undefined; },
+    activeColorTheme: { kind: 2 },
+    colorThemeListeners: [] as Listener[],
+    onDidChangeActiveColorTheme(listener: Listener) {
+      api.window.colorThemeListeners.push(listener);
+      return { dispose() { api.window.colorThemeListeners = api.window.colorThemeListeners.filter(entry => entry !== listener); } };
+    }
   },
   workspace: {
     workspaceFolders: undefined as unknown[] | undefined,
@@ -89,6 +95,7 @@ const api = {
   },
   ViewColumn: { One: 1, Two: 2 },
   StatusBarAlignment: { Left: 1, Right: 2 },
+  ColorThemeKind: { Light: 1, Dark: 2, HighContrast: 3, HighContrastLight: 4 },
   ExtensionMode: { Production: 1, Development: 2, Test: 3 },
   EventEmitter: class {
     private listeners: Listener[] = [];

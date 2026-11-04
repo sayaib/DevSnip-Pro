@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import { injectTheme, themeMessage, ThemeSurface } from "./inject";
+import { ThemeCustomization, validCustomization } from "./custom";
 import { findTheme, swatches, SYSTEM_THEME_ID, THEMES, validThemeId } from "./themes";
 import { COMMAND_PREFIX, registerTrackedCommand } from "../utils/command-registry";
 import { noteThemeChosen } from "../onboarding/activation";
+import { openThemeStudio } from "./studio";
 
 /**
  * The selected DevSnip Pro appearance theme.
@@ -14,17 +16,72 @@ import { noteThemeChosen } from "../onboarding/activation";
  */
 
 const THEME_KEY = "devsnip.appearance.theme";
+/** Accent, background, corners, borders, shadows, fonts and motion (see custom.ts). */
+const CUSTOM_KEY = "devsnip.appearance.custom";
+/** Under VS Code Adaptive: the DevSnip themes to use while VS Code is light or dark. */
+const SYNC_KEY = "devsnip.appearance.sync";
 /** Set once the theme in use when themes became paid has been handed over for free. */
 const KEPT_KEY = "devsnip.appearance.keptThemeGranted";
 export const CHOOSE_THEME_COMMAND = `${COMMAND_PREFIX}chooseTheme`;
+export const THEME_STUDIO_COMMAND = `${COMMAND_PREFIX}themeStudio`;
 
 let context: vscode.ExtensionContext | undefined;
 let current = SYSTEM_THEME_ID;
+let custom: ThemeCustomization = {};
+let sync: ThemeSync | undefined;
 const webviews = new Map<vscode.Webview, ThemeSurface>();
 const changed = new vscode.EventEmitter<string>();
 
 /** Fires with the new theme id after a change has been stored and broadcast. */
 export const onDidChangeTheme = changed.event;
+
+const appearanceChanged = new vscode.EventEmitter<void>();
+/** Fires after the customization, the light/dark pairing or VS Code's own theme kind changed. */
+export const onDidChangeAppearance = appearanceChanged.event;
+
+/** DevSnip themes that follow VS Code's light or dark theme while VS Code Adaptive is chosen. */
+export interface ThemeSync {
+  dark: string;
+  light: string;
+}
+
+function validSync(value: unknown): ThemeSync | undefined {
+  const v = value as Partial<ThemeSync> | undefined;
+  if (!v || typeof v !== "object") return undefined;
+  const dark = findTheme(v.dark);
+  const light = findTheme(v.light);
+  return dark && light ? { dark: dark.id, light: light.id } : undefined;
+}
+
+/** "light", "dark" or "hc" for VS Code's active colour theme. */
+export function vscodeThemeKind(): "light" | "dark" | "hc" {
+  const kind = vscode.window.activeColorTheme?.kind;
+  if (kind === vscode.ColorThemeKind?.Light) return "light";
+  if (kind === vscode.ColorThemeKind?.HighContrast || kind === vscode.ColorThemeKind?.HighContrastLight) return "hc";
+  return "dark";
+}
+
+/**
+ * The palette actually drawn. It is the chosen theme, except under VS Code
+ * Adaptive with a light/dark pairing, where VS Code's theme kind picks one of
+ * the pair. High-contrast VS Code themes are always left in charge, and a
+ * paired theme that is locked again (progress reset) is ignored.
+ */
+export function effectiveThemeId(): string {
+  if (current !== SYSTEM_THEME_ID || !sync) return current;
+  const kind = vscodeThemeKind();
+  if (kind === "hc") return SYSTEM_THEME_ID;
+  const id = kind === "light" ? sync.light : sync.dark;
+  return lockOf(id) ? SYSTEM_THEME_ID : id;
+}
+
+export function currentCustomization(): ThemeCustomization {
+  return { ...custom };
+}
+
+export function currentThemeSync(): ThemeSync | undefined {
+  return sync && { ...sync };
+}
 
 /** Why a theme can't be used yet. */
 export interface ThemeLockInfo {
@@ -68,6 +125,15 @@ function lockOf(id: string): ThemeLockInfo | undefined {
 export function initThemes(ctx: vscode.ExtensionContext): void {
   context = ctx;
   current = validThemeId(ctx.globalState.get(THEME_KEY));
+  custom = validCustomization(ctx.globalState.get(CUSTOM_KEY));
+  sync = validSync(ctx.globalState.get(SYNC_KEY));
+  const colorTheme = vscode.window.onDidChangeActiveColorTheme?.(() => {
+    // Only the light/dark pairing depends on VS Code's theme; everything else already follows it through its variables.
+    if (current === SYSTEM_THEME_ID && sync) broadcast();
+    appearanceChanged.fire();
+  });
+  if (colorTheme) ctx.subscriptions.push(colorTheme);
+  ctx.subscriptions.push(appearanceChanged);
   if (access && !ctx.globalState.get(KEPT_KEY)) {
     // Themes became paid in this version. Whoever already chose one keeps it free, once.
     void ctx.globalState.update(KEPT_KEY, true);
@@ -110,15 +176,20 @@ export function trackedWebviewCount(): number {
 export function setWebviewHtml(webview: vscode.Webview, html: string, surface: ThemeSurface = "panel"): void {
   pruneDisposedWebviews();
   webviews.set(webview, surface);
-  webview.html = injectTheme(html, current, surface);
+  webview.html = injectTheme(html, effectiveThemeId(), surface, custom);
 }
 
-function broadcast(): void {
+function broadcast(options: { instant?: boolean } = {}): void {
   const previewing = Boolean(lockedPreview);
+  const id = effectiveThemeId();
+  // Built once per surface, not once per webview.
+  const messages = new Map<ThemeSurface, ReturnType<typeof themeMessage>>();
   for (const [webview, surface] of [...webviews]) {
+    if (!messages.has(surface)) messages.set(surface, themeMessage(id, surface, custom));
     try {
       // `lockedPreview` lets a page say the theme is only being tried; the theme runtime ignores it.
-      void Promise.resolve(webview.postMessage({ ...themeMessage(current, surface), lockedPreview: previewing })).then(
+      // `chosen` is the theme the user picked, which differs from `id` under a light/dark pairing.
+      void Promise.resolve(webview.postMessage({ ...messages.get(surface)!, chosen: current, instant: options.instant, lockedPreview: previewing })).then(
         delivered => { if (delivered === false) webviews.delete(webview); },
         () => webviews.delete(webview)
       );
@@ -147,6 +218,29 @@ export async function setTheme(id: string, options: { preview?: boolean } = {}):
   if (!options.preview) void noteThemeChosen();
 }
 
+/**
+ * Stores a customization and applies it to every open page. `instant` skips
+ * the fade, for a colour that is still being dragged.
+ */
+export async function setCustomization(value: unknown, options: { instant?: boolean } = {}): Promise<ThemeCustomization> {
+  custom = validCustomization(value);
+  broadcast(options);
+  appearanceChanged.fire();
+  await context?.globalState.update(CUSTOM_KEY, Object.keys(custom).length ? custom : undefined);
+  return currentCustomization();
+}
+
+/** Pairs a dark and a light DevSnip theme with VS Code's theme kind, or removes the pairing (null). */
+export async function setThemeSync(value: ThemeSync | null): Promise<void> {
+  const next = value ? validSync(value) : undefined;
+  if (value && !next) throw new Error("Choose a dark and a light theme to follow VS Code.");
+  if (next && (lockOf(next.dark) || lockOf(next.light))) throw new Error("Unlock both themes before pairing them with VS Code.");
+  sync = next;
+  await context?.globalState.update(SYNC_KEY, next);
+  broadcast();
+  appearanceChanged.fire();
+}
+
 export interface ThemeChoice {
   id: string;
   label: string;
@@ -165,7 +259,7 @@ export interface ThemeChoice {
 /** Theme choices for the sidebar picker, System Default first. */
 export function themeChoices(): ThemeChoice[] {
   return [
-    { id: SYSTEM_THEME_ID, label: "System Default", shortLabel: "System", description: "Follows your VS Code color theme, light or dark.", kind: "system", swatches: [] },
+    { id: SYSTEM_THEME_ID, label: "VS Code Adaptive", shortLabel: "VS Code", description: "Follows your VS Code color theme, light, dark or high contrast.", kind: "system", swatches: [] },
     ...THEMES.map(theme => {
       const p = theme.palette;
       const lock = lockOf(theme.id);
@@ -374,6 +468,7 @@ export function registerThemeCommand(ctx: vscode.ExtensionContext): void {
   // Internal: opened from the preview's status bar item, so not in the Command Palette and earns no points.
   ctx.subscriptions.push(vscode.commands.registerCommand(PREVIEW_MENU_COMMAND, showPreviewMenu));
   ctx.subscriptions.push({ dispose: () => { stopPreview("ended"); } });
+  ctx.subscriptions.push(registerTrackedCommand(THEME_STUDIO_COMMAND, () => openThemeStudio(ctx)));
   ctx.subscriptions.push(registerTrackedCommand(CHOOSE_THEME_COMMAND, async () => {
     // The picker previews as you browse; start it from the theme you actually chose.
     if (lockedPreview) await endLockedPreview("ended");

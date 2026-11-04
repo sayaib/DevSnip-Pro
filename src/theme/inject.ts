@@ -12,11 +12,12 @@
 
 import { EXECUTION_CSS, EXECUTION_RUNTIME } from "./execution";
 import { randomBytes } from "../platform/random";
-import { findTheme, ThemeKind, themeRules, TRANSITION_RULES, validThemeId } from "./themes";
+import { ThemeCustomization } from "./custom";
+import { effectivePalette, ThemeKind, themeRules, TRANSITION_RULES, validThemeId } from "./themes";
 
 /** Shared interaction and layout treatment, scoped to existing panel components. */
 const EXPERIENCE_CSS = `
-:root { --ds-control-radius: 8px; }
+:root { --ds-control-radius: var(--ds-radius-md, 8px); }
 :where(button, a, input, select, textarea, summary):focus-visible {
   outline: 2px solid var(--vscode-focusBorder, #007fd4); outline-offset: 3px;
 }
@@ -63,11 +64,15 @@ export interface ThemeMessage {
   /** null for System Default: VS Code's own theme kind stays in charge. */
   kind: ThemeKind | null;
   rules: string[];
+  /** False when the user turned off the fade between themes. */
+  fade: boolean;
+  /** Applied at once, without the fade: a colour being dragged in Theme Studio. */
+  instant?: boolean;
 }
 
-export function themeMessage(themeId: string, surface: ThemeSurface): ThemeMessage {
+export function themeMessage(themeId: string, surface: ThemeSurface, custom: ThemeCustomization = {}): ThemeMessage {
   const id = validThemeId(themeId);
-  return { type: THEME_MESSAGE, id, kind: findTheme(id)?.palette.kind ?? null, rules: themeRules(id, surface) };
+  return { type: THEME_MESSAGE, id, kind: effectivePalette(id, custom)?.kind ?? null, rules: themeRules(id, surface, custom), fade: custom.motion !== false };
 }
 
 /**
@@ -119,7 +124,7 @@ const RUNTIME = `(function () {
     if (!sheet) return;
     var root = document.documentElement;
     // Only a page someone is looking at fades; hidden panels switch at once instead of animating unseen.
-    var fade = !document.hidden;
+    var fade = !document.hidden && data.fade !== false && !data.instant;
     if (fade) root.classList.add("ds-theme-switching");
     while (sheet.cssRules.length) sheet.deleteRule(0);
     data.rules.forEach(function (rule) { try { sheet.insertRule(rule, sheet.cssRules.length); } catch (e) { /* skip a rule the engine rejects */ } });
@@ -153,9 +158,9 @@ export function extendCsp(policy: string, nonceValue: string): string {
 }
 
 /** Returns `html` with the current theme applied and live theme switching wired in. */
-export function injectTheme(html: string, themeId: string, surface: ThemeSurface = "panel"): string {
+export function injectTheme(html: string, themeId: string, surface: ThemeSurface = "panel", custom: ThemeCustomization = {}): string {
   const n = nonce();
-  const message = themeMessage(themeId, surface);
+  const message = themeMessage(themeId, surface, custom);
   let out = html.replace(
     /(<meta\s+http-equiv=["']Content-Security-Policy["']\s+content=")([^"]*)(")/i,
     (_m, open: string, policy: string, close: string) => open + extendCsp(policy, n) + close

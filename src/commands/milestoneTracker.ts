@@ -2385,7 +2385,7 @@ body.redeem-open { overflow: hidden; }
 .quiz-opt.right { border-color: var(--success); background: color-mix(in srgb, var(--success) 12%, var(--card-2)); }
 .quiz-opt.right .quiz-letter { background: var(--success); color: var(--ds-on-status, #fff); }
 .quiz-opt.wrong { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--card-2)); }
-.quiz-opt.wrong .quiz-letter { background: var(--danger); color: #fff; }
+.quiz-opt.wrong .quiz-letter { background: var(--danger); color: var(--ds-on-status, var(--bg)); }
 .quiz-opt.dim { opacity: .55; }
 .quiz-explain { font-size: 12.5px; line-height: 1.5; padding: 10px 12px; border-radius: 9px; border-left: 3px solid var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
 .quiz-explain.wrong { border-left-color: var(--streak); background: color-mix(in srgb, var(--streak) 8%, transparent); }

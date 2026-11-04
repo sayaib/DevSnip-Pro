@@ -32,6 +32,8 @@ export interface FieldSpec {
   options?: FieldOption[];
   /** Adds a local filter above long template selectors. */
   searchable?: boolean;
+  /** Exclude credential-bearing code inputs from persisted webview state. */
+  sensitive?: boolean;
   rows?: number;
   min?: number;
   max?: number;

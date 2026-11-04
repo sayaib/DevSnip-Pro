@@ -257,11 +257,24 @@ const DIRECTIVES: Record<string, string> = {
   "must-understand": "Store only if the cache understands the status code's caching rules."
 };
 
+/** Split HTTP field lists without treating commas inside quoted strings as separators. */
+export function splitHttpList(value: string): string[] {
+  const parts: string[] = [];
+  let start = 0, quoted = false;
+  for (let i = 0; i < value.length; i++) {
+    if (quoted && value[i] === "\\") { i++; continue; }
+    if (value[i] === '"') quoted = !quoted;
+    else if (!quoted && value[i] === ",") { parts.push(value.slice(start,i).trim()); start = i + 1; }
+  }
+  parts.push(value.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
 export function explainCacheControl(header: string): { rows: Array<[string, string, string]>; warnings: string[] } {
   const value = header.replace(/^cache-control:\s*/i, "").trim();
   if (!value) throw new ToolInputError("Paste a Cache-Control value, e.g. public, max-age=31536000, immutable.");
   const directives = new Map<string, string | true>();
-  for (const part of value.split(",").map(s => s.trim()).filter(Boolean)) {
+  for (const part of splitHttpList(value)) {
     const eq = part.indexOf("=");
     directives.set((eq < 0 ? part : part.slice(0, eq)).toLowerCase(), eq < 0 ? true : part.slice(eq + 1).replace(/"/g, ""));
   }

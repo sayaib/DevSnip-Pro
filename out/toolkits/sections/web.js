@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WEB_TOOLS = void 0;
 const react_1 = require("./react");
 const types_1 = require("../types");
-const web_curl_1 = require("../engines/web-curl");
+const curl_1 = require("./curl");
 const web_http_1 = require("../engines/web-http");
 const web_security_1 = require("../engines/web-security");
 const oauth_1 = require("../../platform/oauth");
@@ -12,79 +12,11 @@ const web_frontend_1 = require("../engines/web-frontend");
 const web_scaffold_1 = require("../engines/web-scaffold");
 const web_git_1 = require("../engines/web-git");
 const web_scaffold_backend_1 = require("../engines/web-scaffold-backend");
-const data_inspect_1 = require("../engines/data-inspect");
+const api_response_1 = require("./api-response");
 const helpers_1 = require("./helpers");
 // ---------------------------------------------------------------------------
 // HTTP & APIs
 // ---------------------------------------------------------------------------
-const SAMPLE_CURL = `curl 'https://api.example.com/v1/orders?status=open' \\
-  -X POST \\
-  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.e30.x' \\
-  -H 'Content-Type: application/json' \\
-  --data-raw '{"customerId":"c_123","items":[{"sku":"A-1","qty":2}],"note":"Leave at door"}'`;
-const curlTool = {
-    id: "web.curl",
-    command: "curlConverter",
-    title: "cURL Converter",
-    summary: "Turn a cURL command (from the browser's \"Copy as cURL\" or API docs) into fetch, Axios, Node, Python, Go, PHP, Java, Dart/Flutter, Kotlin/OkHttp, Swift or raw HTTP.",
-    guide: "Paste the command as copied: bash or Windows cmd quoting, line continuations and combined flags (-sSL, -XPOST) are understood. Headers, JSON / form / multipart bodies, basic auth, cookies, -G, --json, timeouts and redirects are converted. Nothing is sent anywhere.",
-    keywords: ["curl", "copy as curl", "fetch", "axios", "requests", "http client", "okhttp", "urlsession", "dio", "convert curl"],
-    icon: "terminal",
-    live: true,
-    fields: [
-        helpers_1.f.code("curl", "cURL command", "shell", { rows: 9, required: true, fromEditor: true, default: SAMPLE_CURL }),
-        helpers_1.f.select("target", "Convert to", web_curl_1.CURL_TARGETS.map(t => ({ value: t.id, label: t.label }))),
-        helpers_1.f.toggle("all", "Show every language", false)
-    ],
-    examples: [
-        { label: "JSON POST with a bearer token", values: { curl: SAMPLE_CURL } },
-        { label: "File upload (multipart) with basic auth", values: { curl: "curl -u admin:s3cret -F 'file=@./report.pdf' -F 'title=Q3 report' https://files.example.com/upload", target: "dart-http" } },
-        { label: "Form login with redirects", values: { curl: "curl -L -X POST https://example.com/login -d 'username=ada' -d 'password=hunter2' -c cookies.txt", target: "python" } },
-        { label: "GET with query from -G", values: { curl: "curl -G https://api.example.com/search --data-urlencode 'q=coffee near me' -d limit=10 -H 'Accept: application/json'", target: "swift" } }
-    ],
-    run(values) {
-        const r = (0, web_curl_1.parseCurl)((0, types_1.required)(values, "curl", "cURL command"));
-        const target = (0, types_1.str)(values, "target", "fetch");
-        const targets = (0, types_1.bool)(values, "all") ? web_curl_1.CURL_TARGETS : web_curl_1.CURL_TARGETS.filter(t => t.id === target);
-        const bodyLabel = r.bodyKind === "none" ? "none" : r.bodyKind === "multipart" ? `multipart (${r.form.length} parts)` : `${r.bodyKind} · ${(0, types_1.fmtBytes)(Buffer.byteLength(r.body ?? ""))}`;
-        const u = new URL(r.url);
-        return {
-            stats: [{ label: "Method", value: r.method }, { label: "Host", value: u.host }, { label: "Headers", value: String(r.headers.length) }, { label: "Body", value: bodyLabel }],
-            messages: (0, web_curl_1.curlWarnings)(r).map(t => ({ kind: "warning", text: t })),
-            outputs: [
-                ...targets.map(t => (0, helpers_1.code)(t.label, t.language, (0, web_curl_1.generateFromCurl)(r, t.id), t.file)),
-                (0, helpers_1.table)("Request", ["Part", "Value"], [["URL", r.url], ...r.headers.map(([k, v]) => [`Header: ${k}`, /^(authorization|cookie|x-api-key)$/i.test(k) ? `${v.slice(0, 12)}…` : v]), ...(r.basicAuth ? [["Basic auth user", r.basicAuth.user]] : [])]),
-                (0, helpers_1.code)("Normalised cURL", "shell", (0, web_curl_1.toCurl)(r))
-            ]
-        };
-    }
-};
-const apiResponse = {
-    id: "web.api-response",
-    command: "apiResponseInspector",
-    title: "API Response Inspector",
-    summary: "Paste a raw HTTP response (or just the body): pretty-printed body, headers, status meaning, pagination, caching and error hints, and a field list.",
-    keywords: ["http response", "headers", "status code", "rest", "curl -i", "pagination", "cache-control"],
-    icon: "api",
-    live: true,
-    fields: [helpers_1.f.code("raw", "Response", "http", { rows: 12, required: true, fromEditor: true, default: 'HTTP/1.1 429 Too Many Requests\nContent-Type: application/json\nRetry-After: 30\nX-RateLimit-Remaining: 0\n\n{"error": {"code": "rate_limited", "message": "Slow down"}, "requestId": "req_123"}' })],
-    run(values) {
-        const r = (0, data_inspect_1.inspectApiResponse)((0, types_1.str)(values, "raw"));
-        return {
-            stats: [
-                ...(r.status ? [{ label: "Status", value: `${r.status}${r.statusText ? " " + r.statusText : ""}`, tone: (r.status < 300 ? "good" : r.status < 400 ? "neutral" : "bad") }] : []),
-                { label: "Body", value: `${r.isJson ? "JSON" : "text"} · ${(0, types_1.fmtBytes)(r.bytes)}` },
-                { label: "Headers", value: String(r.headers.length) }
-            ],
-            messages: r.insights.map(t => ({ kind: "info", text: t })),
-            outputs: [
-                (0, helpers_1.code)("Body", r.isJson ? "json" : "text", r.isJson ? JSON.stringify(r.body, null, 2) : r.bodyText),
-                ...(r.headers.length ? [(0, helpers_1.table)("Headers", ["Header", "Value"], r.headers)] : []),
-                ...(r.fields.length ? [(0, helpers_1.table)("Fields", ["Path", "Type", "Example"], r.fields.map(x => [x.path, x.type, x.example]))] : [])
-            ]
-        };
-    }
-};
 const urlTool = {
     id: "web.url",
     command: "urlTools",
@@ -979,5 +911,5 @@ const semverTool = {
         };
     }
 };
-exports.WEB_TOOLS = [curlTool, apiResponse, urlTool, openApiTool, graphqlTool, oauthTool, corsTool, headersTool, cookieTool, htmlJsxTool, react_1.reactTool, metaTool, cssUnitsTool, cacheTool, scaffoldTool, dbTool, sqlMongoTool, gitTool, gitignoreTool, semverTool];
+exports.WEB_TOOLS = [curl_1.curlTool, api_response_1.apiResponse, urlTool, openApiTool, graphqlTool, oauthTool, corsTool, headersTool, cookieTool, htmlJsxTool, react_1.reactTool, metaTool, cssUnitsTool, cacheTool, scaffoldTool, dbTool, sqlMongoTool, gitTool, gitignoreTool, semverTool];
 //# sourceMappingURL=web.js.map

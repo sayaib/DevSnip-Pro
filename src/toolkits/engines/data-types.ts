@@ -358,7 +358,7 @@ export function toJsonSchema(root: Shape, title: string): Record<string, unknown
       case "unknown": return {};
       case "array": return { type: "array", items: schema(s.item) };
       case "object": {
-        const properties: Record<string, unknown> = {};
+        const properties: Record<string, unknown> = Object.create(null);
         const required: string[] = [];
         for (const [key, f] of s.fields) {
           properties[key] = schema(f.shape);

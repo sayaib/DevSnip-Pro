@@ -50,6 +50,8 @@ async function main(): Promise<void> {
   require("./toolkit.unit");
   require("./web-mobile.unit");
   require("./react-generator.unit");
+  require("./curl-converter.unit");
+  require("./api-response-inspector.unit");
   require("./sidebar.unit");
   require("./database.unit");
   require("./database-engines.unit");

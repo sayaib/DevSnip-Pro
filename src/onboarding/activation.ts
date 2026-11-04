@@ -47,6 +47,22 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
+  {
+    version: "11.88.0",
+    items: [
+      { title: "Theme Studio: your own accent, background, corners, borders, shadows and fonts on every panel", command: "themeStudio" },
+      { title: "Follow VS Code: pair a dark and a light DevSnip theme with VS Code's light/dark switch", command: "themeStudio" },
+      { title: "Five new themes: GitHub Dark, GitHub Light, AMOLED Black, Ocean Blue and Purple Gradient", command: "chooseTheme" }
+    ]
+  },
+  {
+    version: "11.87.0",
+    items: [
+      { title: "Code previews in every tool: line numbers, highlighting for 40 languages, Wrap and Expand", command: "advancedToolsHub" },
+      { title: "cURL Converter: 17 targets, batches, Postman/HAR export and redaction", command: "curlConverter" },
+      { title: "API Response Inspector: HAR, NDJSON and SSE captures, response comparison and type exports", command: "apiResponseInspector" }
+    ]
+  },
   { version: "11.86.4", items: [{ title: "The Tools sidebar refreshes cached update alerts immediately at startup", command: "checkForUpdates" }] },
   { version: "11.86.3", items: [{ title: "Available updates now appear in the Tools sidebar, with hourly checks", command: "checkForUpdates" }] },
   {

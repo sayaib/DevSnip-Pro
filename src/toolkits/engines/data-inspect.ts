@@ -77,91 +77,9 @@ export function profileRows(input: Row[]): { columns: ColumnProfile[]; duplicate
 // API responses
 // ---------------------------------------------------------------------------
 
-export interface ApiResponseReport {
-  status?: number;
-  statusText?: string;
-  headers: Array<[string, string]>;
-  body: unknown;
-  bodyText: string;
-  isJson: boolean;
-  bytes: number;
-  insights: string[];
-  fields: Array<{ path: string; type: string; example: string }>;
-}
-
-const STATUS_HINTS: Record<number, string> = {
-  400: "Bad Request - the payload or parameters are invalid; read the error body for the field.",
-  401: "Unauthorized - missing or invalid credentials.",
-  403: "Forbidden - authenticated but not allowed (scope, role, IP allow-list).",
-  404: "Not Found - wrong path, id, or API version.",
-  409: "Conflict - the resource changed or already exists; retry with fresh state.",
-  422: "Unprocessable - validation failed; the body usually lists the fields.",
-  429: "Too Many Requests - back off; honour Retry-After.",
-  500: "Server error - retry with backoff if the request is idempotent.",
-  502: "Bad Gateway - an upstream failed; usually transient.",
-  503: "Service Unavailable - overloaded or in maintenance; retry later.",
-  504: "Gateway Timeout - the upstream took too long."
-};
-
-export function inspectApiResponse(raw: string): ApiResponseReport {
-  const text = raw.replace(/\r\n/g, "\n").trim();
-  if (!text) throw new ToolInputError("Paste an API response (raw HTTP or just the body).");
-  let status: number | undefined;
-  let statusText: string | undefined;
-  const headers: Array<[string, string]> = [];
-  let bodyText = text;
-  const statusLine = /^HTTP\/[\d.]+\s+(\d{3})\s*(.*)$/m.exec(text.split("\n")[0]);
-  if (statusLine) {
-    status = Number(statusLine[1]);
-    statusText = statusLine[2];
-    const blank = text.indexOf("\n\n");
-    const headerBlock = blank >= 0 ? text.slice(text.indexOf("\n") + 1, blank) : text.slice(text.indexOf("\n") + 1);
-    for (const line of headerBlock.split("\n")) {
-      const idx = line.indexOf(":");
-      if (idx > 0) headers.push([line.slice(0, idx).trim(), line.slice(idx + 1).trim()]);
-    }
-    bodyText = blank >= 0 ? text.slice(blank + 2) : "";
-  }
-  let body: unknown = bodyText;
-  let isJson = false;
-  try {
-    if (bodyText.trim()) {
-      body = JSON.parse(bodyText);
-      isJson = true;
-    }
-  } catch {
-    /* not JSON */
-  }
-  const header = (name: string) => headers.find(([k]) => k.toLowerCase() === name)?.[1];
-  const insights: string[] = [];
-  if (status) insights.push(`${status} ${statusText || ""}`.trim() + (STATUS_HINTS[status] ? ` - ${STATUS_HINTS[status]}` : status < 300 ? " - success" : ""));
-  const contentType = header("content-type");
-  if (contentType && isJson && !/json/i.test(contentType)) insights.push(`Content-Type is "${contentType}" but the body is JSON - clients that trust the header will mis-parse it.`);
-  const retryAfter = header("retry-after");
-  if (retryAfter) insights.push(`Retry-After: ${retryAfter}`);
-  const remaining = header("x-ratelimit-remaining") ?? header("ratelimit-remaining");
-  if (remaining) insights.push(`Rate limit remaining: ${remaining}${header("x-ratelimit-limit") ? ` of ${header("x-ratelimit-limit")}` : ""}`);
-  if (header("link")?.includes("rel=\"next\"")) insights.push("Paginated via the Link header (rel=\"next\").");
-  if (isJson && body && typeof body === "object") {
-    const record = body as Row;
-    const pageKeys = ["next", "next_cursor", "nextCursor", "cursor", "page", "total", "total_count", "has_more", "hasMore", "nextPageToken"].filter(k => k in record || (record.meta && typeof record.meta === "object" && k in (record.meta as Row)) || (record.pagination && typeof record.pagination === "object" && k in (record.pagination as Row)));
-    if (pageKeys.length) insights.push(`Pagination fields: ${pageKeys.join(", ")}`);
-    const errorKey = ["error", "errors", "message", "detail", "title", "problem"].find(k => k in record);
-    if (errorKey && (status === undefined || status >= 400)) insights.push(`Error payload under "${errorKey}"${record.type && /problem/.test(String(contentType)) ? " (RFC 9457 problem details)" : ""}.`);
-    const arrays = Object.entries(record).filter(([, v]) => Array.isArray(v));
-    for (const [k, v] of arrays) insights.push(`"${k}" holds ${(v as unknown[]).length} item(s).`);
-    if (Array.isArray(body)) insights.push(`Top-level array with ${body.length} item(s).`);
-  }
-  const fields: ApiResponseReport["fields"] = [];
-  if (isJson) {
-    const sample = Array.isArray(body) ? body[0] : body;
-    const flat = flatten(sample ?? {});
-    for (const [path, value] of Object.entries(flat).slice(0, 200)) {
-      fields.push({ path: Array.isArray(body) ? `[].${path}` : path, type: value === null ? "null" : Array.isArray(value) ? "array" : typeof value, example: JSON.stringify(value)?.slice(0, 60) ?? "" });
-    }
-  }
-  return { status, statusText, headers, body, bodyText, isJson, bytes: new TextEncoder().encode(bodyText).length, insights, fields };
-}
+// Backward-compatible API; transport parsing and response analysis are isolated.
+export { inspectApiResponse } from "./api-response";
+export type { ApiResponseReport } from "./api-response";
 
 // ---------------------------------------------------------------------------
 // Diff

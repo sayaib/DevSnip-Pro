@@ -867,6 +867,11 @@
     themePanel.innerHTML = "";
     const head = el("div", "theme-head");
     head.appendChild(el("b", "", "Appearance"));
+    const studio = el("button", "link", "Customize…");
+    studio.type = "button";
+    studio.title = "Open Theme Studio: accent, background, corners, fonts and VS Code light/dark pairing";
+    studio.addEventListener("click", () => { closeThemePanel(false); vscode.postMessage({ type: "openThemeStudio" }); });
+    head.appendChild(studio);
     themePanel.appendChild(head);
     themeChoices.forEach(choice => {
       const option = el("button", "theme-opt");
@@ -1110,8 +1115,10 @@
       onboarding = message.onboarding;
       renderOnboarding();
     }
-    if (message.type === "devsnip:theme" && typeof message.id === "string" && (message.id !== currentTheme || Boolean(message.lockedPreview) !== themePreviewing)) {
-      currentTheme = message.id;
+    // `chosen` is the picked theme; `id` is the one drawn, which differs while following VS Code light/dark.
+    const chosenTheme = message.type === "devsnip:theme" ? message.chosen || message.id : "";
+    if (message.type === "devsnip:theme" && typeof chosenTheme === "string" && (chosenTheme !== currentTheme || Boolean(message.lockedPreview) !== themePreviewing)) {
+      currentTheme = chosenTheme;
       themePreviewing = Boolean(message.lockedPreview);
       renderThemeButton();
       if (!themePanel.hidden) renderThemePanel();

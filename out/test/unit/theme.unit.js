@@ -30,6 +30,10 @@ const vm = __importStar(require("vm"));
 const themes_1 = require("../../theme/themes");
 const inject_1 = require("../../theme/inject");
 const service_1 = require("../../theme/service");
+const custom_1 = require("../../theme/custom");
+const color_1 = require("../../theme/color");
+const studio_page_1 = require("../../theme/studio-page");
+const vscodeShim = __importStar(require("vscode"));
 const tools_sidebar_1 = require("../../sidebar/tools-sidebar");
 const page_1 = require("../../toolkits/page");
 const tool_hub_1 = require("../../utils/tool-hub");
@@ -72,16 +76,44 @@ function pages() {
         ["rest", (0, api_test_1.getWebviewContent)([], true)]
     ];
 }
+/** Every WCAG rule a palette must meet, built-in or customized. */
+function contrastFailures(id, palette) {
+    const rules = [
+        ["fg", "bg", 7], ["fg", "sidebar", 7], ["fg", "surface", 4.5], ["fg", "surface2", 4.5],
+        ["muted", "bg", 4.5], ["muted", "sidebar", 4.5], ["muted", "surface", 4.5],
+        ["accentFg", "accent", 4.5], ["accentFg", "accentHover", 4.5],
+        ["link", "bg", 4.5], ["link", "surface", 4.5], ["selectionFg", "selection", 4.5], ["fg", "selection", 4.5],
+        ["success", "bg", 4.5], ["warning", "bg", 4.5], ["danger", "bg", 4.5], ["info", "bg", 4.5],
+        // Text drawn on a status fill uses the background colour (--ds-on-status).
+        ["bg", "success", 4.5], ["bg", "danger", 4.5],
+        ["focus", "bg", 3], ["disabled", "bg", 2.5]
+    ];
+    const failures = [];
+    const p = palette;
+    for (const [a, b, min] of rules) {
+        const ratio = (0, themes_1.contrast)(p[a], p[b]);
+        if (ratio < min)
+            failures.push(`${id}: ${a} on ${b} is ${ratio.toFixed(2)}, needs ${min}`);
+    }
+    // Icons and category colours are non-text (3:1); code tokens are text (4.5:1).
+    for (const [name, colour] of Object.entries(p.ansi))
+        if ((0, themes_1.contrast)(colour, p.bg) < 3)
+            failures.push(`${id}: ansi.${name}`);
+    for (const [name, colour] of Object.entries(p.syntax))
+        if ((0, themes_1.contrast)(colour, p.bg) < 4.5)
+            failures.push(`${id}: syntax.${name}`);
+    return failures;
+}
 (0, run_unit_tests_1.suite)("themes: palettes", () => {
     (0, run_unit_tests_1.test)("ships the promised themes, each with a unique id and complete #rrggbb palette", () => {
-        assert.deepStrictEqual(themes_1.THEMES.map(t => t.label), ["Dark", "Midnight", "Dracula", "Monokai", "Nord", "Cyberpunk", "Solarized", "Ember", "Synthwave", "Aurora", "Light", "High Contrast"]);
+        assert.deepStrictEqual(themes_1.THEMES.map(t => t.label), ["Modern Dark", "GitHub Dark", "AMOLED Black", "Midnight Blue", "Ocean Blue", "Dracula", "Monokai", "Nord", "Cyberpunk Neon", "Purple Gradient", "Solarized", "Ember", "Synthwave", "Aurora", "Clean Light", "GitHub Light", "High Contrast"]);
         assert.strictEqual(new Set(themes_1.THEMES.map(t => t.id)).size, themes_1.THEMES.length);
         assert.ok(!(0, themes_1.findTheme)(themes_1.SYSTEM_THEME_ID), "system is not a palette");
         for (const theme of themes_1.THEMES) {
             const p = theme.palette;
             const colours = { ...p, ...Object.fromEntries(Object.entries(p.ansi).map(([k, v]) => [`ansi.${k}`, v])), ...Object.fromEntries(Object.entries(p.syntax).map(([k, v]) => [`syntax.${k}`, v])) };
             for (const [key, value] of Object.entries(colours)) {
-                if (["kind", "ansi", "syntax", "shadow"].includes(key))
+                if (["kind", "ansi", "syntax", "shadow", "backdrop"].includes(key))
                     continue;
                 assert.match(String(value), /^#[0-9a-f]{6}$/, `${theme.id}.${key}`);
             }
@@ -89,33 +121,17 @@ function pages() {
         }
     });
     (0, run_unit_tests_1.test)("every theme keeps text, controls and status colours readable (WCAG)", () => {
-        const rules = [
-            ["fg", "bg", 7], ["fg", "sidebar", 7], ["fg", "surface", 4.5], ["fg", "surface2", 4.5],
-            ["muted", "bg", 4.5], ["muted", "sidebar", 4.5], ["muted", "surface", 4.5],
-            ["accentFg", "accent", 4.5], ["accentFg", "accentHover", 4.5],
-            ["link", "bg", 4.5], ["link", "surface", 4.5], ["selectionFg", "selection", 4.5], ["fg", "selection", 4.5],
-            ["success", "bg", 4.5], ["warning", "bg", 4.5], ["danger", "bg", 4.5], ["info", "bg", 4.5],
-            // Text drawn on a status fill uses the background colour (--ds-on-status).
-            ["bg", "success", 4.5], ["bg", "danger", 4.5],
-            ["focus", "bg", 3], ["disabled", "bg", 2.5]
-        ];
-        const failures = [];
-        for (const theme of themes_1.THEMES) {
-            const p = theme.palette;
-            for (const [a, b, min] of rules) {
-                const ratio = (0, themes_1.contrast)(p[a], p[b]);
-                if (ratio < min)
-                    failures.push(`${theme.id}: ${String(a)} on ${String(b)} is ${ratio.toFixed(2)}, needs ${min}`);
-            }
-            // Icons and category colours are non-text (3:1); code tokens are text (4.5:1).
-            for (const [name, colour] of Object.entries(p.ansi))
-                if ((0, themes_1.contrast)(colour, p.bg) < 3)
-                    failures.push(`${theme.id}: ansi.${name}`);
-            for (const [name, colour] of Object.entries(p.syntax))
-                if ((0, themes_1.contrast)(colour, p.bg) < 4.5)
-                    failures.push(`${theme.id}: syntax.${name}`);
+        assert.deepStrictEqual(themes_1.THEMES.flatMap(theme => contrastFailures(theme.id, theme.palette)), []);
+    });
+    (0, run_unit_tests_1.test)("Purple Gradient layers its gradient over the background; other themes stay flat", () => {
+        assert.match((0, themes_1.themeRules)("purple-gradient").join("\n"), /body \{ background-image: radial-gradient/);
+        assert.ok(!/background-image/.test((0, themes_1.themeRules)("dark").join("\n")));
+    });
+    (0, run_unit_tests_1.test)("design tokens cover colour, spacing, type, radius, shadows and motion", () => {
+        for (const token of ["--ds-surface-2", "--ds-accent-hover", "--ds-link", "--ds-space-4", "--ds-radius-md", "--ds-font-mono", "--ds-text-md", "--ds-shadow-md", "--ds-duration"]) {
+            assert.ok(themes_1.DESIGN_TOKENS.includes(`${token}:`), token);
         }
-        assert.deepStrictEqual(failures, []);
+        assert.ok(!themes_1.DESIGN_TOKENS.includes("@media"), "one rule, so the runtime can insert it through the CSSOM");
     });
     (0, run_unit_tests_1.test)("themes every VS Code colour variable the webviews use", () => {
         const used = new Set();
@@ -218,6 +234,105 @@ function pages() {
         assert.ok(html.indexOf('id="themeBtn"') < html.indexOf('id="rank"'), "the selector sits above the rank card and tools");
         assert.match(html, /"current":"nord"/);
         assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(ROOT, "media", "tools-sidebar.js"), "utf8")));
+    });
+});
+(0, run_unit_tests_1.suite)("themes: customization", () => {
+    (0, run_unit_tests_1.test)("drops invalid values and defaults, and keeps font lists out of CSS syntax", () => {
+        assert.deepStrictEqual((0, custom_1.validCustomization)(null), {});
+        assert.deepStrictEqual((0, custom_1.validCustomization)({ accent: "#ABCDEF", background: "red", radius: "default", borders: "huge", shadows: "flat", motion: true }), { accent: "#abcdef", shadows: "flat" });
+        const font = (0, custom_1.validCustomization)({ font: `"Fira Sans"; } body { display: none } </style>` }).font;
+        assert.ok(!/[;{}<>]/.test(font), font);
+        assert.strictEqual((0, custom_1.validCustomization)({ motion: false }).motion, false);
+    });
+    (0, run_unit_tests_1.test)("any accent or background keeps every theme readable (WCAG)", () => {
+        const accents = ["#ffff00", "#000080", "#ff0000", "#00ff00", "#808080", "#ffffff", "#000000"];
+        const backgrounds = ["#ffffff", "#f0e68c", "#000000", "#123456", "#808080", "#ff00ff"];
+        const failures = [];
+        for (const theme of themes_1.THEMES) {
+            for (const accent of accents)
+                failures.push(...contrastFailures(`${theme.id}+${accent}`, (0, custom_1.applyCustomization)(theme.palette, { accent })));
+            for (const background of backgrounds)
+                failures.push(...contrastFailures(`${theme.id}+bg${background}`, (0, custom_1.applyCustomization)(theme.palette, { background, accent: "#a855f7", borders: "strong" })));
+        }
+        assert.deepStrictEqual(failures, []);
+    });
+    (0, run_unit_tests_1.test)("a light background on a dark theme switches the colour scheme", () => {
+        const rules = (0, themes_1.themeRules)("dracula", "panel", { background: "#fafafa" }).join("\n");
+        assert.match(rules, /color-scheme: light !important/);
+        assert.match(rules, /--vscode-editor-background: #fafafa !important/);
+        assert.strictEqual((0, inject_1.themeMessage)("dracula", "panel", { background: "#fafafa" }).kind, "light");
+        assert.ok(!/background-image/.test((0, themes_1.themeRules)("purple-gradient", "panel", { background: "#101010" }).join("\n")), "the gradient belongs to the theme's own background");
+    });
+    (0, run_unit_tests_1.test)("VS Code Adaptive takes only the accent and non-colour tweaks", () => {
+        assert.deepStrictEqual((0, themes_1.themeRules)("system", "panel", {}), [themes_1.DESIGN_TOKENS], "no customization adds nothing");
+        const rules = (0, themes_1.themeRules)("system", "panel", { accent: "#ffcc00", background: "#ffffff", radius: "round", font: "Inter, sans-serif" }).join("\n");
+        assert.match(rules, /--vscode-button-background: #ffcc00 !important/);
+        assert.match(rules, /--vscode-button-foreground: #0b0b0f !important/, "dark text on a yellow accent");
+        assert.ok(!/--vscode-editor-background:/.test(rules), "VS Code's own background stays");
+        assert.match(rules, /--ds-radius-md: 18px/);
+        assert.match(rules, /--vscode-font-family: Inter, sans-serif !important/);
+    });
+    (0, run_unit_tests_1.test)("shape tweaks only emit rules when changed, and messages carry the fade preference", () => {
+        assert.deepStrictEqual((0, custom_1.customRules)({}), []);
+        assert.ok((0, custom_1.customRules)({ radius: "sharp" }).some(rule => rule.includes("border-radius: var(--ds-radius-md) !important")));
+        assert.ok((0, custom_1.customRules)({ shadows: "flat" }).some(rule => rule.includes("box-shadow: none")));
+        assert.strictEqual((0, inject_1.themeMessage)("dark", "panel").fade, true);
+        assert.strictEqual((0, inject_1.themeMessage)("dark", "panel", { motion: false }).fade, false);
+        assert.strictEqual((0, color_1.readable)("#777777", ["#000000"], 7), (0, color_1.readable)("#777777", ["#000000"], 7));
+        assert.ok((0, themes_1.contrast)((0, color_1.readable)("#777777", ["#000000"], 7), "#000000") >= 7);
+    });
+});
+(0, run_unit_tests_1.suite)("themes: customization service and Theme Studio", () => {
+    (0, run_unit_tests_1.test)("stores customizations, applies them to new and open pages, and restores them on start", async () => {
+        const context = (0, vscode_stub_1.createExtensionContext)({ "devsnip.appearance.theme": "nord" });
+        (0, service_1.initThemes)(context);
+        const sent = [];
+        const live = { html: "", postMessage: async (m) => { sent.push(m); return true; } };
+        (0, service_1.setWebviewHtml)(live, "<html><head></head><body></body></html>");
+        await (0, service_1.setCustomization)({ accent: "#ef4444", radius: "rounded" }, { instant: true });
+        assert.deepStrictEqual(context.globalState.get("devsnip.appearance.custom"), { accent: "#ef4444", radius: "rounded" });
+        assert.strictEqual(sent.length, 1);
+        assert.strictEqual(sent[0].instant, true);
+        assert.match(sent[0].rules.join("\n"), /--vscode-button-background: #ef4444 !important/);
+        const fresh = { html: "", postMessage: async () => true };
+        (0, service_1.setWebviewHtml)(fresh, "<html><head></head><body></body></html>");
+        assert.match(fresh.html, /--ds-radius-md: 12px/);
+        (0, service_1.initThemes)((0, vscode_stub_1.createExtensionContext)({ "devsnip.appearance.theme": "nord", "devsnip.appearance.custom": { accent: "#14b8a6", junk: 1 } }));
+        assert.deepStrictEqual((0, service_1.currentCustomization)(), { accent: "#14b8a6" });
+        await (0, service_1.setCustomization)({});
+        assert.deepStrictEqual((0, service_1.currentCustomization)(), {});
+    });
+    (0, run_unit_tests_1.test)("VS Code Adaptive can pair a dark and a light theme with VS Code's theme kind", async () => {
+        const shim = vscodeShim;
+        const context = (0, vscode_stub_1.createExtensionContext)({ "devsnip.appearance.theme": "system", "devsnip.appearance.sync": { dark: "dracula", light: "github-light" } });
+        (0, service_1.initThemes)(context);
+        shim.window.activeColorTheme = { kind: 2 };
+        assert.strictEqual((0, service_1.effectiveThemeId)(), "dracula");
+        const sent = [];
+        (0, service_1.setWebviewHtml)({ html: "", postMessage: async (m) => { sent.push(m); return true; } }, "<html><head></head><body></body></html>");
+        shim.window.activeColorTheme = { kind: 1 };
+        shim.window.colorThemeListeners.forEach(listener => listener());
+        assert.strictEqual((0, service_1.effectiveThemeId)(), "github-light");
+        assert.deepStrictEqual({ id: sent[0].id, chosen: sent[0].chosen }, { id: "github-light", chosen: "system" }, "pages learn the drawn and the chosen theme");
+        shim.window.activeColorTheme = { kind: 3 };
+        assert.strictEqual((0, service_1.effectiveThemeId)(), "system", "high-contrast VS Code themes stay in charge");
+        await (0, service_1.setTheme)("nord");
+        assert.strictEqual((0, service_1.effectiveThemeId)(), "nord", "a chosen DevSnip theme ignores the pairing");
+        await (0, service_1.setThemeSync)(null);
+        assert.strictEqual(context.globalState.get("devsnip.appearance.sync"), undefined);
+        await assert.rejects((0, service_1.setThemeSync)({ dark: "nope", light: "light" }), /dark and a light theme/);
+        shim.window.activeColorTheme = { kind: 2 };
+    });
+    (0, run_unit_tests_1.test)("Theme Studio renders a themeable page with its state and a script that parses", () => {
+        const html = (0, studio_page_1.renderThemeStudio)({ cspSource: "x", scriptUri: "studio.js", codiconsUri: "c.css", state: { current: "system", effective: "system", vscodeKind: "dark", choices: (0, service_1.themeChoices)(), custom: {}, sync: null, previewing: null, previewSeconds: 30 } });
+        const out = (0, inject_1.injectTheme)(html, "ocean", "panel", { accent: "#ec4899" });
+        assert.match(out, /id="devsnip-theme"/);
+        assert.match(out, /--vscode-button-background: #ec4899 !important/);
+        assert.match(html, /"VS Code Adaptive"/);
+        for (const id of ["themeGrid", "syncOn", "accentSwatches", "bgInput", "fontSelect", "monoSelect", "motionOn", "resetAll", "checks"])
+            assert.ok(html.includes(`id="${id}"`), id);
+        assert.ok(!/#[0-9a-f]{6}/i.test(html.split("<style")[1].split("</style>")[0].replace(/conic-gradient\([^)]*\)/, "")), "studio styles use tokens, not hard-coded colours");
+        assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(ROOT, "media", "theme-studio.js"), "utf8")));
     });
 });
 //# sourceMappingURL=theme.unit.js.map

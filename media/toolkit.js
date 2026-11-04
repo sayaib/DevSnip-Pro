@@ -19,8 +19,10 @@
         : f.kind === "select" ? (f.options && f.options[0] ? f.options[0].value : "")
           : "";
   }
-  const secretIds = new Set(tool.fields.filter(f => f.kind === "secret").map(f => f.id));
-  let values = Object.assign({}, defaults, pickKnown(saved.values), pickKnown(data.initial));
+  const secretIds = new Set(tool.fields.filter(f => (f.kind === "secret" || f.sensitive)).map(f => f.id));
+  const restorable = pickKnown(saved.values);
+  for (const id of secretIds) delete restorable[id];
+  let values = Object.assign({}, defaults, restorable, pickKnown(data.initial));
   let examples = data.examples || [];
   let seq = 0;
   let running = false;
@@ -31,6 +33,7 @@
   let liveTimer;
   let liveEnabled = false;
   let tabTrap = true;
+  let wrapCode = saved.wrap === true;
   const controls = {};
   const rows = {};
   const groupHeadings = {};
@@ -117,7 +120,7 @@
   function persist() {
     const keep = {};
     for (const [k, v] of Object.entries(values)) if (!secretIds.has(k)) keep[k] = v;
-    vscode.setState({ values: keep });
+    vscode.setState({ values: keep, wrap: wrapCode });
   }
 
   function setValue(id, value, fromUser) {
@@ -352,26 +355,170 @@
     ];
   }
 
-  // Small bounded lexer. All source is inserted as text nodes, never HTML.
-  function codePreview(content, language) {
-    const pre = h("pre", { class: "code", tabindex: "0" });
-    const source = shown(content);
-    if (!["typescript", "javascript", "tsx", "jsx", "json"].includes(language)) { pre.textContent = source; return pre; }
-    const tokens = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/|\b(?:import|from|export|default|function|async|await|return|const|let|if|else|throw|new|type|interface|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g;
-    let offset = 0, match, count = 0;
-    while ((match = tokens.exec(source)) && count++ < 4000) {
-      pre.append(document.createTextNode(source.slice(offset, match.index)));
-      const token = match[0];
-      pre.append(h("span", { class: /^\//.test(token) ? "syntax-comment" : /^["'`]/.test(token) ? "syntax-string" : /^\d/.test(token) ? "syntax-number" : "syntax-keyword", text: token }));
-      offset = tokens.lastIndex;
+  // ---- Code viewer ----------------------------------------------------------
+
+  // Small bounded lexers, one rule list per language family. Rules are tried in
+  // order at each position; "word" tokens are classified afterwards. All source
+  // is inserted as text nodes, never HTML.
+  const END = "(?![\\s\\S])";
+  const words = s => new Set(s.split(" "));
+  const DQ = '"(?:\\\\.|[^"\\\\\\n])*"', SQ = "'(?:\\\\.|[^'\\\\\\n])*'";
+  const BT = "`(?:\\\\[\\s\\S]|[^`\\\\])*(?:`|" + END + ")";
+  const SLASH = "\\/\\/[^\\n]*", BLOCK = "\\/\\*[\\s\\S]*?(?:\\*\\/|" + END + ")", HASH = "(?<![^\\s])#[^\\n]*";
+  const NUM = "\\b(?:0[xX][\\da-fA-F_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b";
+  const WORD = "@?[A-Za-z_$][\\w$]*";
+  const C_KEYWORDS = "abstract as assert async await break case catch class const continue default defer delete do dynamic else enum export extends extension final finally for foreach from fun func function get go goto guard if implements import in init instanceof interface internal is late lateinit let mixin module namespace new object of open operator out override package private protected public readonly record required return sealed select set static struct super suspend switch synchronized this throw throws try type typealias typeof using val var void volatile when where while with yield satisfies declare keyof protocol self mut impl pub use fn match loop crate trait echo elseif endforeach";
+  const C_TYPES = "int long float double boolean bool char byte short string str number any unknown never object void uint int32 int64 float64 i32 i64 u8 u32 u64 f32 f64 usize";
+  const LIT = "true false null undefined nil None True False NaN Infinity";
+  const LIT_SET = words(LIT);
+  const LANGS = {
+    c: { rules: [[SLASH + "|" + BLOCK, "com"], [BT + "|" + DQ + "|" + SQ, "str"], ["@[A-Za-z_][\\w.]*", "attr"], [NUM, "num"], [WORD, "word"]], kw: words(C_KEYWORDS + " " + C_TYPES), calls: true, types: true },
+    json: { rules: [[SLASH + "|" + BLOCK, "com"], [DQ + "(?=\\s*:)", "key"], [DQ, "str"], ["-?" + NUM, "num"], [WORD, "word"]], kw: words("") },
+    python: { rules: [[HASH, "com"], ['[rRbBfFuU]{0,2}(?:"""[\\s\\S]*?(?:"""|' + END + ")|'''[\\s\\S]*?(?:'''|" + END + "))", "str"], ["[rRbBfFuU]{0,2}(?:" + DQ + "|" + SQ + ")", "str"], ["@[A-Za-z_][\\w.]*", "attr"], [NUM, "num"], [WORD, "word"]], kw: words("and as assert async await break class continue def del elif else except finally for from global if import in is lambda match case nonlocal not or pass raise return self cls try while with yield int str float bool list dict set tuple bytes"), calls: true, types: true },
+    yaml: { rules: [[HASH, "com"], ["\\{\\{[\\s\\S]*?(?:\\}\\}|" + END + ")", "fn"], ["(?<=^[ \\t]*(?:- )*)[^\\s:#'\"{}\\[\\],&*!|>-][^:#\\n]*?(?=:(?:[ \\t]|$))", "key"], ["(?<=^[ \\t]*(?:- )*)(?:" + DQ + "|" + SQ + ")(?=:(?:[ \\t]|$))", "key"], [DQ + "|" + SQ, "str"], ["^---$|^\\.\\.\\.$|[&*][\\w-]+|![\\w!/.-]+", "attr"], ["-?" + NUM, "num"], [WORD, "word"]], lit: words(LIT + " yes no on off ~") },
+    sh: { rules: [[HASH, "com"], [DQ + "|" + SQ, "str"], ["\\$\\{[^}\\n]*\\}|\\$[\\w@#?$!*-]", "key"], ["(?<=\\s|^)--?[\\w-]+", "attr"], [NUM, "num"], ["[A-Za-z_][\\w-]*", "word"]], kw: words("if then else elif fi for while until do done case esac in function return export local readonly set unset echo exit source alias sudo cd break continue shift trap eval exec") },
+    docker: { rules: [[HASH, "com"], [DQ + "|" + SQ, "str"], ["\\$\\{[^}\\n]*\\}|\\$\\w+", "key"], ["(?<=^[ \\t]*)[A-Za-z]+(?=[ \\t])", "kw"], ["(?<=\\s)--[\\w-]+", "attr"], [NUM, "num"]] },
+    ini: { rules: [[HASH + "|(?<=^[ \\t]*);[^\\n]*", "com"], ["(?<=^[ \\t]*)\\[[^\\]\\n]*\\]", "type"], ["(?<=^[ \\t]*(?:export[ \\t]+)?)[\\w.\\-\\/]+(?=[ \\t]*[=:])", "key"], ['"""[\\s\\S]*?(?:"""|' + END + ")", "str"], [DQ + "|" + SQ, "str"], ["\\$\\{[^}\\n]*\\}", "attr"], ["(?<=^[ \\t]*)[\\w.\\-\\[\\]]+(?=[ \\t]*(?:[=<>~!]=|[<>]|$))", "key"], [NUM, "num"], [WORD, "word"]], lit: words(LIT) },
+    hcl: { rules: [[HASH + "|" + SLASH + "|" + BLOCK, "com"], ["<<-?EO[FT][\\s\\S]*?^[ \\t]*EO[FT]$", "str"], [DQ, "str"], ["[\\w-]+(?=[ \\t]*=(?!=))", "key"], [NUM, "num"], [WORD, "word"]], kw: words("resource data variable output provider module locals terraform backend required_providers for_each count depends_on dynamic content lifecycle for in if moved import check"), calls: true },
+    sql: { rules: [["--[^\\n]*|" + BLOCK, "com"], [SQ, "str"], ['"(?:[^"\\n])*"|`[^`\\n]*`', "key"], [NUM, "num"], [WORD, "word"]], kw: words("select from where insert into values update set delete create table alter drop index primary key foreign references not null and or join left right inner outer full cross on group by order having limit offset as distinct union all case when then else end default unique constraint if exists in is like ilike between returning with view begin commit rollback grant revoke cascade asc desc count sum avg min max integer int bigint text varchar boolean timestamp serial"), ci: true, calls: true },
+    markup: { rules: [["<!--[\\s\\S]*?(?:-->|" + END + ")", "com"], ["<!\\[CDATA\\[[\\s\\S]*?(?:\\]\\]>|" + END + ")", "str"], ["<[?!][\\w-]*", "kw"], ["(?<=<\\/?)[\\w:.-]+", "tag"], ["(?<=<[^<>]*\\s)[\\w:.@-]+(?=\\s*=)", "attr"], ["(?<=<[^<>]*=\\s*)(?:" + DQ + "|" + SQ + ")", "str"], ["&#?\\w+;", "num"]] },
+    css: { rules: [[BLOCK, "com"], [DQ + "|" + SQ, "str"], ["@[\\w-]+", "kw"], ["--[\\w-]+|[\\w-]+(?=\\s*:[^;{]*[;}\\n])", "key"], ["#[\\da-fA-F]{3,8}\\b|-?\\d*\\.?\\d+(?:%|[a-z]+)?", "num"], ["[.#][\\w-]+", "type"], ["[\\w-]+(?=\\()", "fn"]] },
+    markdown: { rules: [["^```[\\s\\S]*?(?:^```|" + END + ")", "str"], ["^#{1,6}[ \\t].*", "kw"], ["`[^`\\n]+`", "str"], ["\\[[^\\]\\n]*\\]\\([^)\\n]*\\)", "fn"], ["\\*\\*[^*\\n]+\\*\\*|__[^_\\n]+__", "type"], ["^[ \\t]*(?:[-*+]|\\d+\\.)(?=[ \\t])|^>.*|^\\|.*", "attr"]] },
+    http: { rules: [["^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\b|^HTTP\\/[\\d.]+", "kw"], ["^[\\w-]+(?=:)", "key"], [DQ, "str"], [NUM, "num"]] },
+    nginx: { rules: [[HASH, "com"], [DQ + "|" + SQ, "str"], ["\\$\\w+", "key"], ["(?<=^[ \\t]*)[a-z_]+(?=[ \\t;{])", "kw"], [NUM, "num"]] },
+    ignore: { rules: [[HASH, "com"], ["^!", "kw"], ["\\*\\*?|\\?", "attr"]] }
+  };
+  const ALIASES = {
+    typescript: "c", javascript: "c", tsx: "c", jsx: "c", typescriptreact: "c", javascriptreact: "c", java: "c", kotlin: "c", csharp: "c", dart: "c", swift: "c", go: "c", groovy: "c", php: "c", prisma: "c", rust: "c", cpp: "c", c: "c", scala: "c", graphql: "c", protobuf: "c",
+    json: "json", jsonl: "json", jsonc: "json", python: "python", ruby: "python", yaml: "yaml", yml: "yaml", helm: "yaml",
+    shell: "sh", shellscript: "sh", bash: "sh", sh: "sh", zsh: "sh", powershell: "sh", makefile: "sh", dockerfile: "docker",
+    ini: "ini", properties: "ini", dotenv: "ini", toml: "ini", "pip-requirements": "ini", terraform: "hcl", hcl: "hcl",
+    sql: "sql", xml: "markup", html: "markup", svg: "markup", vue: "markup", css: "css", scss: "css", less: "css",
+    markdown: "markdown", http: "http", nginx: "nginx", ignore: "ignore"
+  };
+  const LANGUAGE_NAMES = { typescript: "TypeScript", javascript: "JavaScript", tsx: "TSX", jsx: "JSX", json: "JSON", jsonl: "JSON Lines", yaml: "YAML", xml: "XML", csharp: "C#", php: "PHP", css: "CSS", html: "HTML", sql: "SQL", http: "HTTP", toml: "TOML", hcl: "HCL", dotenv: ".env", ignore: "Ignore file", shellscript: "Shell", "pip-requirements": "Requirements", text: "Text", plaintext: "Text" };
+  const compiled = {};
+
+  function languageName(language) {
+    if (!language) return "";
+    return LANGUAGE_NAMES[language] || language.charAt(0).toUpperCase() + language.slice(1);
+  }
+
+  function lexer(language) {
+    const id = ALIASES[String(language || "").toLowerCase()];
+    if (!id) return null;
+    if (!compiled[id]) {
+      const spec = LANGS[id];
+      compiled[id] = Object.assign({}, spec, { re: new RegExp(spec.rules.map(r => "(" + r[0].replace(/(?<!\\)\((?!\?)/g, "(?:") + ")").join("|"), "gm") });
     }
-    pre.append(document.createTextNode(source.slice(offset)));
-    return pre;
+    return compiled[id];
+  }
+
+  function classify(lex, token, source, end) {
+    const key = lex.ci ? token.toLowerCase() : token;
+    if (lex.lit && lex.lit.has(token)) return "lit";
+    if (!lex.lit && LIT_SET.has(token)) return "lit";
+    if (lex.kw && lex.kw.has(key)) return "kw";
+    if (lex.calls && /^\s*\(/.test(source.slice(end, end + 40))) return "fn";
+    if (lex.types && /^[A-Z][a-z0-9]\w*$/.test(token)) return "type";
+    return "";
+  }
+
+  // Fills `pre` with highlighted source; stops highlighting after many tokens.
+  function highlight(pre, source, language) {
+    const lex = lexer(language);
+    if (!lex) { pre.textContent = source; return; }
+    const re = lex.re;
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let offset = 0, plain = "", match, count = 0;
+    const flush = () => { if (plain) { frag.append(document.createTextNode(plain)); plain = ""; } };
+    while (count++ < 40000 && (match = re.exec(source))) {
+      if (!match[0]) { re.lastIndex++; continue; }
+      plain += source.slice(offset, match.index);
+      offset = re.lastIndex;
+      let group = 1;
+      while (match[group] === undefined) group++;
+      let cls = lex.rules[group - 1][1];
+      if (cls === "word") cls = classify(lex, match[0], source, re.lastIndex);
+      if (!cls) { plain += match[0]; continue; }
+      flush();
+      const span = document.createElement("span");
+      span.className = "tk-" + cls;
+      span.textContent = match[0];
+      frag.append(span);
+    }
+    plain += source.slice(offset);
+    flush();
+    pre.append(frag);
+  }
+
+  function lineCount(text) {
+    if (!text) return 0;
+    let n = 1;
+    for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) n++;
+    return text.endsWith("\n") ? n - 1 : n;
+  }
+
+  // A scrollable code block with a sticky line-number gutter. Wrap applies to
+  // every block on the page and is remembered across reloads.
+  function codePreview(content, language) {
+    const source = shown(content);
+    const lines = lineCount(source);
+    const pre = h("pre", { class: "code" });
+    highlight(pre, source, language);
+    const gutter = lines > 1 ? h("div", { class: "gutter", "aria-hidden": "true", text: Array.from({ length: lines }, (_, i) => i + 1).join("\n") }) : null;
+    const view = h("div", { class: "codeview" + (wrapCode ? " wrap" : ""), tabindex: "0", role: "region", "aria-label": `${languageName(language) || "Code"} preview, ${lines} line${lines === 1 ? "" : "s"}` }, h("div", { class: "code-body" }, gutter, pre));
+    if (gutter) view.style.setProperty("--gutter", String(lines).length + 1.6 + "ch");
+    view.addEventListener("keydown", event => {
+      // Select-all inside a focused block selects just that code.
+      if (event.key === "a" && (event.metaKey || event.ctrlKey) && !event.altKey) {
+        event.preventDefault();
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    });
+    return view;
+  }
+
+  function setWrap(on) {
+    wrapCode = on;
+    for (const v of document.querySelectorAll(".codeview")) v.classList.toggle("wrap", on);
+    for (const b of document.querySelectorAll(".wrap-toggle")) { b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); }
+    persist();
+  }
+
+  function wrapButton() {
+    const b = button("Wrap", "wrap", () => setWrap(!wrapCode), "ghost wrap-toggle" + (wrapCode ? " on" : ""), "Wrap long lines");
+    b.setAttribute("aria-pressed", String(wrapCode));
+    return b;
+  }
+
+  function expandButton(view) {
+    const b = button("Expand", "expand", () => {
+      const on = view.classList.toggle("expanded");
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+      b.querySelector("span").textContent = on ? "Collapse" : "Expand";
+      if (!on) view.scrollTop = 0;
+    }, "ghost", "Show the whole output without an inner scroll area");
+    b.setAttribute("aria-pressed", "false");
+    return b;
+  }
+
+  function codeSub(fileName, title, language, content) {
+    const lines = lineCount(content);
+    return [fileName && fileName !== title ? fileName : "", languageName(language), lines > 1 ? `${lines.toLocaleString()} lines` : ""].filter(Boolean).join(" · ");
   }
 
   function renderOutput(o) {
     if (o.kind === "code") {
-      return h("section", { class: "panel out" }, outHead(o.title, o.fileName && o.fileName !== o.title ? o.fileName : null, codeActions(o.content, o.language, o.fileName, o.title)), codePreview(o.content, o.language), truncatedNote(o.content));
+      const view = codePreview(o.content, o.language);
+      const tall = lineCount(shown(o.content)) > 24;
+      return h("section", { class: "panel out" }, outHead(o.title, codeSub(o.fileName, o.title, o.language, o.content), [wrapButton(), tall ? expandButton(view) : null, h("span", { class: "sep", "aria-hidden": "true" }), ...codeActions(o.content, o.language, o.fileName, o.title)]), view, truncatedNote(o.content));
     }
     if (o.kind === "text") {
       return h("section", { class: "panel out" }, outHead(o.title, null, [button("Copy", "copy", () => vscode.postMessage({ type: "copy", text: o.content }), "ghost"), capabilities.saveAs ? button("", "download", () => vscode.postMessage({ type: "download", text: o.content, language: "text", fileName: o.title }), "ghost", "Save as…") : null]), h("div", { class: "textout", text: shown(o.content) }), truncatedNote(o.content));
@@ -389,7 +536,7 @@
       const list = h("div", { class: "files" }, o.files.map((file, i) => {
         const size = new Blob([file.content]).size;
         const details = h("details", { class: "file" },
-          h("summary", null, icon("chevron", "chev"), icon("file"), h("span", { class: "path", text: file.path }), h("span", { class: "meta", text: `${file.mode === "append" ? "append · " : ""}${size < 1024 ? size + " B" : (size / 1024).toFixed(1) + " KB"}` }),
+          h("summary", null, icon("chevron", "chev"), icon("file"), h("span", { class: "path", text: file.path }), h("span", { class: "meta", text: `${file.mode === "append" ? "append · " : ""}${lineCount(file.content).toLocaleString()} lines · ${size < 1024 ? size + " B" : (size / 1024).toFixed(1) + " KB"}` }),
             h("span", { class: "out-actions", onclick: e => e.preventDefault() }, codeActions(file.content, file.language, null).slice(0, 1).concat([button("", "open", () => vscode.postMessage({ type: "open", text: file.content, language: file.language }), "ghost", `Open ${file.path} in a new tab`), capabilities.writeWorkspace ? button("", "save", () => vscode.postMessage({ type: "save", files: [file] }), "ghost", `Save ${file.path} to the workspace`) : null]))),
           h("div", { class: "file-preview" }));
         details.addEventListener("toggle", () => {
@@ -399,7 +546,7 @@
         if (i === 0 && o.files.length <= 3) details.open = true;
         return details;
       }));
-      return h("section", { class: "panel out" }, outHead(o.title, `${o.files.length} file${o.files.length === 1 ? "" : "s"}`, [capabilities.writeWorkspace ? button(o.files.length > 1 ? `Write all ${o.files.length}` : "Write to workspace", "save", () => vscode.postMessage({ type: "writeAll", files: o.files }), "ghost", "Write the files into the workspace (asks before overwriting)") : null]), list);
+      return h("section", { class: "panel out" }, outHead(o.title, `${o.files.length} file${o.files.length === 1 ? "" : "s"}`, [wrapButton(), capabilities.writeWorkspace ? button(o.files.length > 1 ? `Write all ${o.files.length}` : "Write to workspace", "save", () => vscode.postMessage({ type: "writeAll", files: o.files }), "ghost", "Write the files into the workspace (asks before overwriting)") : null]), list);
     }
     if (o.kind === "chart") return h("section", { class: "panel out" }, outHead(o.title, null, []), chart(o));
     return h("div");

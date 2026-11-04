@@ -18,14 +18,19 @@ exports.pickMysteryReward = exports.mysteryBoxPool = exports.activeFrame = expor
 exports.SLOTS = ["avatar", "title", "frame", "banner", "effect"];
 exports.REWARDS = [
     // Themes
-    { id: "theme_dark", kind: "theme", name: "Dark", description: "Neutral graphite with a clear blue accent.", icon: "🌑", themeId: "dark", cost: 25 },
-    { id: "theme_light", kind: "theme", name: "Light", description: "Crisp white with GitHub-style blue.", icon: "☀️", themeId: "light", cost: 25 },
+    { id: "theme_dark", kind: "theme", name: "Modern Dark", description: "Neutral graphite with a clear blue accent.", icon: "🌑", themeId: "dark", cost: 25 },
+    { id: "theme_light", kind: "theme", name: "Clean Light", description: "Crisp white with a calm blue accent.", icon: "☀️", themeId: "light", cost: 25 },
     { id: "theme_high_contrast", kind: "theme", name: "High Contrast", description: "Pure black, bold outlines, maximum legibility.", icon: "🔲", themeId: "high-contrast", cost: 25 },
-    { id: "theme_midnight", kind: "theme", name: "Midnight", description: "Deep navy with soft periwinkle highlights.", icon: "🌃", themeId: "midnight", cost: 100 },
+    { id: "theme_amoled", kind: "theme", name: "AMOLED Black", description: "True black for OLED screens, with crisp blue.", icon: "⚫", themeId: "amoled", cost: 25 },
+    { id: "theme_github_dark", kind: "theme", name: "GitHub Dark", description: "GitHub's dimmed canvas with green actions.", icon: "🐙", themeId: "github-dark", cost: 50 },
+    { id: "theme_github_light", kind: "theme", name: "GitHub Light", description: "GitHub's familiar white with green actions.", icon: "📄", themeId: "github-light", cost: 50 },
+    { id: "theme_ocean", kind: "theme", name: "Ocean Blue", description: "Deep sea blues with teal and aqua.", icon: "🌊", themeId: "ocean", cost: 100 },
+    { id: "theme_midnight", kind: "theme", name: "Midnight Blue", description: "Deep navy with soft periwinkle highlights.", icon: "🌃", themeId: "midnight", cost: 100 },
     { id: "theme_nord", kind: "theme", name: "Nord", description: "Arctic slate with frosty blues.", icon: "🧊", themeId: "nord", cost: 100 },
     { id: "theme_monokai", kind: "theme", name: "Monokai", description: "Warm charcoal with lime, cyan and orange.", icon: "🍋", themeId: "monokai", cost: 150 },
     { id: "theme_dracula", kind: "theme", name: "Dracula", description: "The classic purple-and-pink night palette.", icon: "🧛", themeId: "dracula", cost: 150 },
-    { id: "theme_cyberpunk", kind: "theme", name: "Cyberpunk", description: "Neon cyan and magenta on near-black.", icon: "🌐", themeId: "cyberpunk", cost: 200 },
+    { id: "theme_cyberpunk", kind: "theme", name: "Cyberpunk Neon", description: "Neon cyan and magenta on near-black.", icon: "🌐", themeId: "cyberpunk", cost: 200 },
+    { id: "theme_purple_gradient", kind: "theme", name: "Purple Gradient", description: "Violet night with a soft pink-and-purple glow.", icon: "🔮", themeId: "purple-gradient", cost: 200 },
     { id: "theme_solarized", kind: "theme", name: "Solarized", description: "The calm teal-and-amber classic.", icon: "🌅", themeId: "solarized", unlock: { level: 1 }, cost: 250 },
     { id: "theme_ember", kind: "theme", name: "Ember", description: "Warm coal and glowing orange, for the streak keepers.", icon: "🔥", themeId: "ember", unlock: { milestone: "streak_14" }, cost: 400 },
     { id: "theme_synthwave", kind: "theme", name: "Synthwave", description: "Retro sunset purples with hot-pink neon.", icon: "🌆", themeId: "synthwave", unlock: { level: 2 }, cost: 500 },
