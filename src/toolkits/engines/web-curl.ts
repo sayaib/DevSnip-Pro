@@ -28,7 +28,18 @@ export interface CurlRequest {
   connectTimeoutSeconds?: number;
   warnings?: string[];
   suppressedHeaders?: string[];
+  /** Scheme for -u credentials (--digest, --ntlm, ...); absent means Basic. */
+  authScheme?: "basic" | "digest" | "ntlm" | "negotiate" | "anyauth";
+  /** --aws-sigv4 provider:region:service; signing needs an SDK, so only normalized cURL keeps it. */
+  awsSigv4?: string;
 }
+
+/** Credentials that need a challenge-response scheme rather than a precomputed Basic header. */
+export function curlNegotiatedAuth(r: CurlRequest): "digest" | "ntlm" | "negotiate" | undefined {
+  const scheme = r.authScheme;
+  return r.basicAuth && (scheme === "digest" || scheme === "ntlm" || scheme === "negotiate") && !r.headers.some(([k]) => /^authorization$/i.test(k)) ? scheme : undefined;
+}
+const AUTH_TARGETS: Record<"digest" | "ntlm" | "negotiate", CurlTarget[]> = { digest: ["python", "python-httpx", "csharp", "httpie"], ntlm: ["csharp"], negotiate: ["csharp"] };
 
 export { tokenizeShell } from "./curl-shell";
 export { parseCurl, parseCurlCommands } from "./curl-parser";
@@ -96,6 +107,9 @@ export function generateFromCurl(r: CurlRequest, target: CurlTarget, options: Cu
   if (r.bodyKind === "multipart" && target === "java") throw new ToolInputError("Java HttpClient multipart generation is unsupported. Select Kotlin/OkHttp or another upload-capable target.");
   if ((r.method === "GET" || r.method === "HEAD") && (r.body !== undefined || r.bodyFile || r.form.length) && ["fetch", "fetch-ts", "node-fetch"].includes(target)) throw new ToolInputError("Fetch forbids GET/HEAD request bodies. Use Axios (Node), Python or another compatible target.");
   if (options.reusable && !["fetch", "fetch-ts", "node-fetch"].includes(target)) throw new ToolInputError("Reusable functions are supported by Fetch targets.");
+  if (r.awsSigv4) throw new ToolInputError("AWS Signature V4 signing is not generated. Sign the request with the AWS SDK (for example @aws-sdk/signature-v4 or botocore); normalized cURL keeps --aws-sigv4.");
+  const negotiated = curlNegotiatedAuth(r);
+  if (negotiated && !AUTH_TARGETS[negotiated].includes(target)) throw new ToolInputError(`${negotiated === "ntlm" ? "NTLM" : negotiated === "negotiate" ? "Negotiate (Kerberos)" : "Digest"} authentication is not generated for this target. Use ${negotiated === "digest" ? "Python requests, HTTPX, C# or HTTPie" : "C# HttpClient"}, or normalized cURL.`);
   const repeated = (values: string[]) => new Set(values).size !== values.length;
   if (r.bodyKind === "multipart" && ["php", "dart-http"].includes(target) && repeated(r.form.map(f => f.name))) throw new ToolInputError("This target cannot preserve repeated multipart fields. Use Node.js, Python, C# or Dio.");
   if (r.bodyKind === "multipart" && target === "axios" && r.form.filter(f => f.file).length > 1) throw new ToolInputError("Browser Axios uploads currently require one file. Use browser Fetch or Node.js Axios for multiple files.");
@@ -198,7 +212,9 @@ function toPython(r: CurlRequest, httpx = false): string {
     // A list preserves duplicate names; (None, value) forces multipart for text-only forms.
     args.push(`    files=[\n${r.form.map(f => `        (${py(f.name)}, (${f.file ? `${py(f.filename || f.value.split(/[\\/]/).pop() || "upload")}, stack.enter_context(open(${py(f.value)}, "rb"))` : `None, ${py(f.value)}`}${f.contentType ? `, ${py(f.contentType)}` : ""})),`).join("\n")}\n    ],`);
   }
-  if (r.basicAuth && !r.headers.some(([k]) => /^authorization$/i.test(k))) args.push(`    auth=(${py(r.basicAuth.user)}, ${py(r.basicAuth.password)}),`);
+  const digest = curlNegotiatedAuth(r) === "digest";
+  if (r.basicAuth && !r.headers.some(([k]) => /^authorization$/i.test(k))) args.push(digest ? `    auth=${httpx ? "httpx.DigestAuth" : "HTTPDigestAuth"}(${py(r.basicAuth.user)}, ${py(r.basicAuth.password)}),` : `    auth=(${py(r.basicAuth.user)}, ${py(r.basicAuth.password)}),`);
+  if (digest && !httpx) setup.push("from requests.auth import HTTPDigestAuth");
   args.push(`    timeout=${r.timeoutSeconds === 0 ? "None" : r.timeoutSeconds ?? 30},`, `    ${httpx ? "follow_redirects" : "allow_redirects"}=${r.followRedirects ? "True" : "False"},`);
   const context = r.bodyFile || r.form.length ? "with ExitStack() as stack:\n" : "";
   if (context) setup.push("from contextlib import ExitStack");
@@ -385,7 +401,7 @@ function toHttpie(r: CurlRequest): string {
   if (r.followRedirects) parts.push("--follow");
 
   if (r.timeoutSeconds) parts.push(`--timeout=${r.timeoutSeconds}`);
-  if (r.basicAuth) parts.push(`--auth ${shq(`${r.basicAuth.user}:${r.basicAuth.password}`)}`);
+  if (r.basicAuth) parts.push(`${curlNegotiatedAuth(r) === "digest" ? "--auth-type=digest " : ""}--auth ${shq(`${r.basicAuth.user}:${r.basicAuth.password}`)}`);
   parts.push(shq(r.method), shq(r.url));
   for (const [k, v] of plainHeaders(r)) parts.push(shq(`${k}:${v}`));
   if (r.bodyKind === "form") for (const [k, v] of formPairs(r.body!)) parts.push(shq(`${k}=${v}`));
@@ -399,7 +415,8 @@ export function toCurl(r: CurlRequest): string {
   const parts = [`curl${r.followRedirects ? " -L" : ""}${r.insecure ? " -k" : ""}${r.compressed ? " --compressed" : ""} -X ${shq(r.method)} ${shq(r.url)}`];
   for (const [k, v] of r.headers) parts.push(`-H ${shq(v ? `${k}: ${v}` : `${k};`)}`);
   for (const name of r.suppressedHeaders ?? []) parts.push(`-H ${shq(name + ":")}`);
-  if (r.basicAuth) parts.push(`-u ${shq(`${r.basicAuth.user}:${r.basicAuth.password}`)}`);
+  if (r.basicAuth) parts.push(`${r.authScheme && r.authScheme !== "basic" ? `--${r.authScheme} ` : ""}-u ${shq(`${r.basicAuth.user}:${r.basicAuth.password}`)}`);
+  if (r.awsSigv4) parts.push(`--aws-sigv4 ${shq(r.awsSigv4)}`);
   if (r.bodyFile) parts.push(`--data-binary ${shq("@" + r.bodyFile)}`);
   else if (r.bodyKind === "json") parts.push(`--data-raw ${shq(r.body!)}`);
   else if (r.body !== undefined) parts.push(`--data-raw ${shq(r.body)}`);
@@ -415,6 +432,8 @@ export function curlWarnings(r: CurlRequest): string[] {
   const out: string[] = [...(r.warnings ?? [])];
   const auth = r.headers.find(([k]) => /^(authorization|x-api-key|api-key|x-auth-token)$/i.test(k));
   if (auth || r.basicAuth) out.push("The request carries credentials. Move them to environment variables or secure storage before committing the code.");
+  if (r.authScheme === "anyauth") out.push("--anyauth lets curl pick the server's strongest scheme. Generated code uses Basic; add --digest, --ntlm or --negotiate when the server needs another scheme.");
+  if (curlNegotiatedAuth(r)) out.push(`${r.authScheme === "digest" ? "Digest" : r.authScheme === "ntlm" ? "NTLM" : "Negotiate"} authentication needs a challenge-response client: only targets that support it are generated.`);
   if (r.headers.some(([k]) => k.toLowerCase() === "cookie")) out.push("A Cookie header was copied from the browser; session cookies expire, so replace it with a real login flow in code.");
   if (r.insecure) out.push("curl -k disables TLS certificate checks. Generated clients keep verification on; fix the certificate instead. Normalized cURL retains -k.");
   if (r.proxy) out.push("The request specifies a proxy. Configure it in the generated client; only normalized cURL preserves the proxy setting.");

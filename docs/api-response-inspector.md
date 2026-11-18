@@ -16,11 +16,13 @@ Base64 HAR content is decoded when it is UTF-8 text. Binary content that cannot 
 
 ## Explore and diagnose
 
-Use **JSON Pointer** to select a structured subtree, for example `/data/0/id`. Escape `/` in a property name as `~1`, and `~` as `~0`. Property lookup uses own properties and cannot traverse inherited prototype members. **Search fields / headers** is a literal case-insensitive filter; it does not alter body text or reports.
+Use **JSON Pointer** to select a structured subtree, for example `/data/0/id`. Escape `/` in a property name as `~1`, and `~` as `~0`. Property lookup uses own properties and cannot traverse inherited prototype members. **Filter field & header tables** is a literal case-insensitive filter; it does not alter body text or reports.
+
+**Interactive JSON explorer** (on by default) shows JSON, NDJSON and SSE bodies as a collapsible tree. Nodes render as you open them, 100 children at a time, so large responses stay responsive; **Expand all** opens up to 1,500 rows. **Find** searches keys and values across the whole parsed body (up to 200 matches) and reveals a match on click. Select a row to copy its JSON Pointer, JavaScript-style path or value; arrow keys move through the tree, Right/Left open and close nodes, and Enter toggles. Numbers beyond JavaScript's safe range appear rounded in the tree; the Body view keeps the source digits.
 
 Field exploration includes container types, examples and JSON Pointers, sampling up to 50 elements per array. Limits are displayed explicitly. A field absent from the displayed sample might still exist elsewhere in the source.
 
-Findings cover HTTP status meaning, missing/invalid JSON, content-type mismatches, captured Content-Length discrepancies, conflicting framing headers, Retry-After seconds/HTTP dates, rate-limit declarations, Cache-Control/validators, pagination/Location links, cookie attributes, correlation headers, conditional CORS issues, GraphQL-style errors under HTTP 200 and RFC 9457 Problem Details status mismatches. Errors and warnings appear before informational findings.
+Invalid JSON is reported with its line, column and reason (for example a trailing comma or a truncated body) without repeating body text. Findings cover HTTP status meaning, missing/invalid JSON, content-type mismatches, captured Content-Length discrepancies, conflicting framing headers, Retry-After seconds/HTTP dates, rate-limit declarations, Cache-Control/validators, pagination/Location links, cookie attributes, correlation headers, conditional CORS issues, GraphQL-style errors under HTTP 200 and RFC 9457 Problem Details status mismatches. Errors and warnings appear before informational findings.
 
 Content-Length mismatch checks are skipped for HEAD, bodyless statuses, HAR captures and encoded/transfer-coded bodies where captured bytes cannot establish wire length. Rate-limit reset fields are shown as declared because APIs use different units and conventions. Cache and cookie explanations reuse the existing HTTP toolkit. Findings describe evidence in the supplied capture; they do not establish complete server behavior or replace API documentation.
 
@@ -45,7 +47,7 @@ Exports use the workbench's copy, open and save controls:
 
 Response and baseline text are excluded from persisted webview state, including previously saved values. Known credential headers are masked in the header table. Original body and report exports preserve data by default for compatibility: enable **Redact known secrets in outputs** before sharing. Redaction masks known credential headers, cookie values, sensitive URL query keys and JSON/form fields. Non-secret JSON text and large integers remain unchanged. Opaque bodies are replaced; stream redaction can replace incomplete JSON fragments. Review custom secret names, path tokens, cookie attributes and personal data separately.
 
-Inputs are capped at 2 MiB each; HTTP chains at 50 blocks; headers at 1,000 per response; JSON at 64 levels and 50,000 lexical tokens; NDJSON/SSE at 10,000 lines; displayed fields at 1,000. Oversized field names/paths are omitted with a truncation finding. Link details are limited to 100 relationships and 64 KiB per Link field; detailed cookie parsing skips fields over 16 KiB. Total code exports are bounded to 8 MiB. Choose fewer exports, a smaller capture or a JSON Pointer subtree when limits apply.
+Inputs are capped at 2 MiB each; HTTP chains at 50 blocks; headers at 1,000 per response; JSON at 64 levels of nesting; NDJSON/SSE at 10,000 lines; displayed fields at 1,000. Oversized field names/paths are omitted with a truncation finding. Link details are limited to 100 relationships and 64 KiB per Link field; detailed cookie parsing skips fields over 16 KiB. Total code exports are bounded to 8 MiB. Choose fewer exports, a smaller capture or a JSON Pointer subtree when limits apply.
 
 ## Implementation and verification
 

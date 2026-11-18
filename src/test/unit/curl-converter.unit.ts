@@ -61,7 +61,7 @@ suite("cURL converter: parser", () => {
     assert.throws(() => parseCurlCommands("curl https://example.com; echo secret"), ToolInputError);
   });
   test("rejects invalid methods, headers, protocols, timeouts, shell operations and resource limits", () => {
-    for (const command of ["echo curl https://example.com", "curl file:///etc/passwd", "curl https://example.com -X 'BAD METHOD'", "curl https://example.com -H 'X-Test: a\nb'", "curl https://example.com -m NaN", "curl https://example.com -m -1", "curl https://example.com -m 999999999", "curl https://example.com | cat", "curl https://example.com > response.txt", "curl https://example.com https://example.org", "curl https://example.com --data-binary @-", "curl https://example.com -d @file", "curl https://example.com -d x -F y=z", "curl https://example.com -H @headers.txt"]) assert.throws(() => parse(command), ToolInputError, command);
+    for (const command of ["echo curl https://example.com", "curl file:///etc/passwd", "curl https://example.com -X 'BAD METHOD'", "curl https://example.com -H 'X-Test: a\nb'", "curl https://example.com -m NaN", "curl https://example.com -m -1", "curl https://example.com -m 999999999", "curl https://example.com | cat", "curl https://example.com > response.txt", "curl https://example.com https://example.org", "curl https://example.com --data-binary @-", "curl https://example.com -d x -F y=z", "curl https://example.com -H @headers.txt"]) assert.throws(() => parse(command), ToolInputError, command);
     assert.throws(() => parse("curl " + "a".repeat(256 * 1024)), ToolInputError);
     assert.throws(() => parseCurlCommands(Array(51).fill("curl https://example.com").join("\n")), ToolInputError);
     assert.strictEqual(parse("curl https://example.com -m 0").timeoutSeconds, 0);
@@ -189,5 +189,93 @@ suite("cURL converter: exports and workbench", () => {
   });
   test("every original client target remains available", () => {
     for (const id of ["fetch", "axios", "node-fetch", "python", "go", "php", "java", "dart-http", "dart-dio", "kotlin-okhttp", "swift", "http", "httpie"]) assert.ok(CURL_TARGETS.some(t => t.id === id));
+  });
+});
+
+suite("cURL converter: real-world commands (11.89)", () => {
+  test("value-taking transport, TLS and output options never become a second URL", () => {
+    for (const option of ["--noproxy '*'", "--cert-type PEM", "--keepalive-time 60", "--unix-socket /var/run/docker.sock", "--proto =https", "--variable a=b", "--connect-to a:443:b:443", "--dns-servers 1.1.1.1", "--expect100-timeout 2", "--max-filesize 100", "--happy-eyeballs-timeout-ms 100", "--proxy-header 'X: y'", "--trace-ascii -", "--stderr -", "-E client.pem", "-U user:pass", "--tlsv1.2 --http2"]) {
+      const r = parse(`curl ${option} https://api.example.com/users`);
+      assert.strictEqual(r.url, "https://api.example.com/users", option);
+      assert.strictEqual(r.method, "GET", option);
+    }
+    assert.ok(parse("curl -sSE client.pem https://api.example.com").url.endsWith("api.example.com"));
+  });
+  test("-d @file converts as a body file with a newline-stripping warning; stdin stays unsupported", () => {
+    const r = parse("curl -d @body.json -H 'Content-Type: application/json' https://api.example.com/items");
+    assert.strictEqual(r.bodyFile, "body.json");
+    assert.strictEqual(r.method, "POST");
+    assert.ok(r.warnings!.some(w => w.includes("removes carriage returns")));
+    assert.ok(generateFromCurl(r, "python").includes('open("body.json", "rb")'));
+    assert.throws(() => parse("curl -d @- https://api.example.com"), ToolInputError);
+  });
+  test("digest, NTLM and Negotiate generate challenge-response clients or explain the limitation", () => {
+    const r = parse("curl --digest -u admin:pw https://device.example.com/status");
+    assert.strictEqual(r.authScheme, "digest");
+    const python = generateFromCurl(r, "python");
+    assert.ok(python.includes("from requests.auth import HTTPDigestAuth") && python.includes('auth=HTTPDigestAuth("admin", "pw")'));
+    assert.ok(generateFromCurl(r, "python-httpx").includes('auth=httpx.DigestAuth("admin", "pw")'));
+    const csharp = generateFromCurl(r, "csharp");
+    assert.ok(csharp.includes('Credentials = new System.Net.NetworkCredential("admin", "pw")') && !csharp.includes('"Basic"'));
+    assert.ok(generateFromCurl(r, "httpie").includes("--auth-type=digest --auth admin:pw"));
+    for (const target of ["fetch", "go", "java", "swift", "http"] as const) assert.throws(() => generateFromCurl(r, target), /Digest authentication is not generated/);
+    assert.ok(toCurl(r).includes("--digest -u admin:pw"));
+    assert.strictEqual(parse(toCurl(r)).authScheme, "digest");
+    assert.strictEqual(JSON.parse(curlPostman([r])).item[0].request.auth.type, "digest");
+    assert.ok(!JSON.parse(curlHar([r])).log.entries[0].request.headers.some((h: { name: string }) => h.name === "Authorization"));
+    const ntlm = parse("curl --ntlm -u 'DOMAIN\\user:pw' https://intranet.example.com");
+    assert.ok(generateFromCurl(ntlm, "csharp").includes("NetworkCredential"));
+    assert.throws(() => generateFromCurl(ntlm, "python"), /NTLM/);
+    // An explicit Authorization header wins, as in curl, so every target stays available.
+    assert.doesNotThrow(() => generateFromCurl(parse("curl --digest -u a:b -H 'Authorization: Bearer t' https://x.example.com"), "go"));
+    assert.ok(generateFromCurl(parse("curl --basic -u a:b https://x.example.com"), "go").includes("SetBasicAuth"));
+  });
+  test("--aws-sigv4 is kept in normalized cURL and explained for code targets", () => {
+    const r = parse("curl --aws-sigv4 'aws:amz:us-east-1:execute-api' -u AKID:SECRET https://abc.execute-api.us-east-1.amazonaws.com/prod");
+    assert.strictEqual(r.awsSigv4, "aws:amz:us-east-1:execute-api");
+    assert.throws(() => generateFromCurl(r, "python"), /AWS Signature V4/);
+    assert.ok(toCurl(r).includes("--aws-sigv4 aws:amz:us-east-1:execute-api"));
+    assert.throws(() => parse("curl --aws-sigv4 aws:amz:us-east-1:s3 https://s3.example.com"), /ACCESS_KEY/);
+  });
+  test("Windows cmd reads backslash-escaped quotes the way curl.exe does", () => {
+    const r = parse('curl -X POST https://api.example.com -H "Content-Type: application/json" -d "{\\"name\\":\\"Ada\\"}"', "cmd");
+    assert.strictEqual(r.body, '{"name":"Ada"}');
+    assert.strictEqual(r.bodyKind, "json");
+    assert.deepStrictEqual(tokenizeShell('curl -d "a\\\\\\"b" x', "cmd").slice(-2), ['a\\"b', "x"]);
+    // Backslashes not followed by a quote stay literal; a doubled backslash before the closing quote becomes one.
+    assert.deepStrictEqual(tokenizeShell('curl -d "C:\\dir\\\\" x', "cmd").slice(-2), ["C:\\dir\\", "x"]);
+    const ps = parse("curl.exe -d '{\\\"a\\\":1}' -H 'Content-Type: application/json' https://x.example.com", "powershell");
+    assert.strictEqual(ps.bodyKind, "raw");
+    assert.ok(ps.warnings!.some(w => w.includes("backslash-escaped quotes")));
+  });
+  test("comments are skipped without breaking continued commands, fragments or batches", () => {
+    const r = parse("curl https://api.example.com/users \\\n  # the auth header\n  -H 'Authorization: Bearer t' # trailing note\n");
+    assert.deepStrictEqual(r.headers, [["Authorization", "Bearer t"]]);
+    assert.deepStrictEqual(parse("curl -H 'X-Id: #1' https://x.example.com/a#frag").headers, [["X-Id", "#1"]]);
+    assert.deepStrictEqual(parseCurlCommands("# list users\ncurl https://a.example.com\n# don't forget orders\ncurl https://b.example.com").map(x => x.url), ["https://a.example.com", "https://b.example.com"]);
+    // The shared tokenizer keeps # for other callers (docker run conversion).
+    assert.deepStrictEqual(tokenizeShell("docker run img echo #tag"), ["docker", "run", "img", "echo", "#tag"]);
+  });
+  test("cookies, URL spaces, empty passwords and other programs get accurate handling", () => {
+    assert.deepStrictEqual(parse("curl -b a=1 -b 'b=2;' https://x.example.com").headers, [["Cookie", "a=1; b=2"]]);
+    const spaced = parse("curl 'https://x.example.com/a b?q=x y'");
+    assert.strictEqual(spaced.url, "https://x.example.com/a%20b?q=x%20y");
+    assert.ok(spaced.warnings!.some(w => w.includes("percent-encoded")));
+    assert.ok(parse("curl -u admin https://x.example.com").warnings!.some(w => w.includes("no password")));
+    assert.throws(() => parse("wget https://x.example.com"), /looks like a wget command/);
+    assert.throws(() => parse("curl -H 'Accept: */*'"), /has no URL/);
+  });
+  test("invalid JSON bodies report a location, never the body text", () => {
+    const r = parse("curl -H 'Content-Type: application/json' -d '{\"token\":\"SECRET\",\n \"b\": }' https://x.example.com");
+    assert.strictEqual(r.bodyKind, "raw");
+    const warning = r.warnings!.join(" ");
+    assert.ok(warning.includes("line 2, column 7"), warning);
+    assert.ok(!warning.includes("SECRET"));
+  });
+  test("tool output leads with the request summary and groups the form", async () => {
+    const result = await curlTool.run({ curl: "curl -X PATCH https://api.example.com/v1/users/1 --json '{\"a\":1}'", target: "fetch", shell: "auto", export: "none" }, {});
+    assert.deepStrictEqual(result.stats!.slice(0, 3).map(s => s.value), ["PATCH api.example.com", "json", "2"]);
+    assert.ok(curlTool.fields.filter(f => f.group).length >= 3);
+    for (const example of curlTool.examples!) await curlTool.run({ shell: "auto", target: "fetch", export: "none", ...example.values }, {});
   });
 });

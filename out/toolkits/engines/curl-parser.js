@@ -3,11 +3,32 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseCurlCommands = exports.parseCurl = exports.CURL_MAX_REQUESTS = exports.CURL_MAX_INPUT = void 0;
 const types_1 = require("../types");
 const curl_shell_1 = require("./curl-shell");
+const json_locate_1 = require("./json-locate");
 exports.CURL_MAX_INPUT = 256 * 1024;
 exports.CURL_MAX_REQUESTS = 50;
-const takesValue = new Set(["X", "H", "d", "F", "u", "b", "A", "e", "m", "x", "o", "w", "c", "T", "r", "z", "K", "y", "Y", "D"]);
-const ignoredValues = new Set(["--output", "-o", "--write-out", "-w", "--cookie-jar", "-c", "--retry", "--retry-delay", "--retry-max-time", "--cacert", "--cert", "--key", "--resolve", "--limit-rate", "--range", "-r", "--time-cond", "-z", "--config", "-K", "--max-redirs", "--interface", "--speed-time", "-y", "--speed-limit", "-Y", "--dump-header", "-D", "--request-target", "--proxy-user", "--user-agent", "--referer"]);
-const cosmetic = new Set(["-s", "--silent", "-S", "--show-error", "-v", "--verbose", "-i", "--include", "-f", "--fail", "--fail-with-body", "-#", "--progress-bar", "-N", "--no-buffer", "-O", "--remote-name", "-J", "--remote-header-name", "--globoff", "-g"]);
+const takesValue = new Set(["X", "H", "d", "F", "u", "b", "A", "e", "m", "x", "o", "w", "c", "T", "r", "z", "K", "y", "Y", "D", "E", "P", "Q", "t", "U"]);
+/**
+ * Options that take a value but do not change the converted request (transport, TLS, output and
+ * protocol tuning). Knowing they take a value keeps that value from being read as a second URL.
+ */
+const ignoredValues = new Set([
+    "--output", "-o", "--write-out", "-w", "--cookie-jar", "-c", "--retry", "--retry-delay", "--retry-max-time", "--cacert", "--cert", "-E", "--key", "--resolve",
+    "--limit-rate", "--range", "-r", "--time-cond", "-z", "--config", "-K", "--max-redirs", "--interface", "--speed-time", "-y", "--speed-limit", "-Y", "--dump-header", "-D",
+    "--request-target", "--proxy-user", "-U", "--user-agent", "--referer", "--noproxy", "--cert-type", "--key-type", "--pass", "--capath", "--ciphers", "--tls13-ciphers",
+    "--curves", "--crlfile", "--pinnedpubkey", "--engine", "--random-file", "--egd-file", "--tls-max", "--tlsuser", "--tlspassword", "--tlsauthtype", "--keepalive-time",
+    "--keepalive-cnt", "--unix-socket", "--abstract-unix-socket", "--connect-to", "--dns-servers", "--dns-interface", "--dns-ipv4-addr", "--dns-ipv6-addr", "--doh-url",
+    "--expect100-timeout", "--happy-eyeballs-timeout-ms", "--max-filesize", "--local-port", "--proto", "--proto-default", "--proto-redir", "--preproxy", "--proxy-header",
+    "--proxy-cacert", "--proxy-capath", "--proxy-cert", "--proxy-cert-type", "--proxy-ciphers", "--proxy-crlfile", "--proxy-key", "--proxy-key-type", "--proxy-pass",
+    "--proxy-pinnedpubkey", "--proxy-service-name", "--proxy-tls13-ciphers", "--proxy-tlsauthtype", "--proxy-tlspassword", "--proxy-tlsuser", "--proxy1.0", "--socks4",
+    "--socks4a", "--socks5", "--socks5-hostname", "--socks5-gssapi-service", "--service-name", "--sasl-authzid", "--login-options", "--delegation", "--krb", "--trace",
+    "--trace-ascii", "--trace-config", "--stderr", "--libcurl", "--netrc-file", "--output-dir", "--create-file-mode", "--parallel-max", "--rate", "--alt-svc", "--hsts",
+    "--etag-save", "--etag-compare", "--ip-tos", "--vlan-priority", "--variable", "--ipfs-gateway", "--haproxy-clientip", "--hostpubmd5", "--hostpubsha256", "--pubkey",
+    "--mail-from", "--mail-rcpt", "--mail-auth", "--ftp-account", "--ftp-alternative-to-user", "--ftp-method", "--ftp-port", "-P", "--ftp-ssl-ccc-mode", "--quote", "-Q",
+    "--telnet-option", "-t", "--tftp-blksize", "--sigalgs", "--ech", "--ssl-sessions", "--retry-all-errors-max"
+]);
+const cosmetic = new Set(["-s", "--silent", "-S", "--show-error", "-v", "--verbose", "-i", "--include", "-f", "--fail", "--fail-with-body", "-#", "--progress-bar", "-N", "--no-buffer", "-O", "--remote-name", "-J", "--remote-header-name", "--globoff", "-g", "--fail-early", "--no-progress-meter", "-q", "--disable", "--styled-output", "--no-styled-output", "--remote-name-all", "--create-dirs", "--remote-time", "-R"]);
+/** HTTP authentication schemes curl can negotiate with -u credentials. */
+const AUTH_FLAGS = { "--basic": "basic", "--digest": "digest", "--ntlm": "ntlm", "--ntlm-wb": "ntlm", "--negotiate": "negotiate", "--anyauth": "anyauth" };
 const has = (r, name) => r.headers.some(([key]) => key.toLowerCase() === name.toLowerCase()) || !!r.suppressedHeaders?.some(key => key.toLowerCase() === name.toLowerCase());
 const numeric = (value, flag) => {
     const n = Number(value);
@@ -31,13 +52,14 @@ function parseCurlCommands(command, shell = "auto") {
     const chunks = splitCommands(command, shell);
     const result = [];
     for (const chunk of chunks) {
-        const tokens = (0, curl_shell_1.tokenizeShell)(chunk, shell);
+        const tokens = (0, curl_shell_1.tokenizeShell)(chunk, shell, true);
         if (!tokens.length)
             continue;
         if (tokens[0] === "$")
             tokens.shift();
-        if (!/(^|[\\/])curl(\.exe)?$/i.test(tokens.shift() ?? ""))
-            throw new types_1.ToolInputError("Every command must start with curl or curl.exe. Shell pipelines and other programs are not supported.");
+        const program = tokens.shift() ?? "";
+        if (!/(^|[\\/])curl(\.exe)?$/i.test(program))
+            throw new types_1.ToolInputError(/^(wget|http|https|xh|httpie)$/i.test(program) ? `This looks like a ${program} command. Paste a cURL command (curl …); browser DevTools can copy any request as cURL.` : "Every command must start with curl or curl.exe. Shell pipelines and other programs are not supported.");
         if (tokens.length > 20000)
             throw new types_1.ToolInputError("Too many cURL arguments.");
         // --next only separates transfers when it is an option, never when consumed as a value.
@@ -65,7 +87,8 @@ function parseCurlCommands(command, shell = "auto") {
 }
 exports.parseCurlCommands = parseCurlCommands;
 function optionNeedsValue(token) {
-    return /^(?:--(?:request|header|data|data-raw|data-binary|data-ascii|data-urlencode|json|form|form-string|user|cookie|url|url-query|max-time|connect-timeout|proxy|oauth2-bearer|upload-file)|-[XHdFubAemxTrzwcoKDyY])$/.test(token) || ignoredValues.has(token) || /^-[sSvkLiGf]*[XHdFubAemxTrzwcoKDyY]$/.test(token);
+    const name = token.replace(/^--expand-/, "--");
+    return /^(?:--(?:request|header|data|data-raw|data-binary|data-ascii|data-urlencode|json|form|form-string|user|cookie|url|url-query|max-time|connect-timeout|proxy|oauth2-bearer|upload-file|aws-sigv4)|-[XHdFubAemxTrzwcoKDyYEPQtU])$/.test(name) || ignoredValues.has(name) || /^-[sSvkLiGfq]*[XHdFubAemxTrzwcoKDyYEPQtU]$/.test(token);
 }
 /** Split only outside quoting; continued lines and newlines inside data are retained. */
 function splitCommands(input, shell) {
@@ -73,6 +96,20 @@ function splitCommands(input, shell) {
     let quote = "", start = 0, ansi = false, cmdStyle = shell === "cmd";
     for (let i = 0; i < input.length; i++) {
         const c = input[i];
+        if (!quote && c === "#" && shell !== "cmd" && (i === 0 || /\s/.test(input[i - 1]))) {
+            // Comments are skipped; a line holding only a comment is dropped so continued commands stay joined.
+            const lineStart = input.lastIndexOf("\n", i - 1) + 1, end = input.indexOf("\n", i);
+            if (/^[ \t]*$/.test(input.slice(lineStart, i)) && end >= 0 && i > start) {
+                i = end;
+                continue;
+            }
+            i = (end < 0 ? input.length : end) - 1;
+            continue;
+        }
+        if (shell === "cmd" && c === "\\" && input[i + 1] === '"') {
+            i++;
+            continue;
+        }
         if (!quote && c === "^" && input[i + 1] === '"' && (shell === "cmd" || shell === "auto")) {
             cmdStyle = true;
             i = (0, curl_shell_1.readCmdEnvelope)(input, i).end - 1;
@@ -116,7 +153,8 @@ function parseTokens(args) {
     const addData = (v, concatenate = false) => { if (data.length)
         separators.push(concatenate ? "" : "&"); data.push(v); };
     const joinedData = () => data.map((part, i) => (i ? separators[i - 1] : "") + part).join("");
-    let get = false, head = false, json = false, endOptions = false, upload = false;
+    let get = false, head = false, json = false, endOptions = false, upload = false, strippedFile = false, cookieIndex = -1;
+    const expanded = [];
     const setUrl = (url) => {
         if (r.url)
             throw new types_1.ToolInputError("Multiple URLs in one transfer are ambiguous. Separate requests with --next or separate cURL commands.");
@@ -136,6 +174,12 @@ function parseTokens(args) {
             const eq = flag.indexOf("=");
             attached = flag.slice(eq + 1);
             flag = flag.slice(0, eq);
+        }
+        // curl 8.3+ --expand-<option> substitutes --variable values; the option is converted with its text kept literally.
+        if (flag.startsWith("--expand-")) {
+            flag = "--" + flag.slice(9);
+            if (!expanded.includes(flag))
+                expanded.push(flag);
         }
         else if (/^-[^-].+/.test(flag)) {
             const chars = flag.slice(1);
@@ -228,13 +272,14 @@ function parseTokens(args) {
                 }
                 break;
             }
+            // -d @file reads the file and removes CR/LF; it is converted as a file reference with a warning.
             case "-d":
             case "--data":
             case "--data-ascii": {
                 const v = value();
-                if (v.startsWith("@"))
-                    throw new types_1.ToolInputError("--data @file strips newlines. Use --data-binary @file or paste the contents inline.");
-                payload(v, false);
+                if (v.startsWith("@") && v !== "@-")
+                    strippedFile = true;
+                payload(v, v.startsWith("@"));
                 break;
             }
             case "--data-raw":
@@ -302,18 +347,36 @@ function parseTokens(args) {
             case "--user": {
                 const v = value(), colon = v.indexOf(":");
                 r.basicAuth = { user: colon < 0 ? v : v.slice(0, colon), password: colon < 0 ? "" : v.slice(colon + 1) };
+                if (colon < 0)
+                    (r.warnings ?? (r.warnings = [])).push("-u has no password; curl would prompt for one. Generated code sends an empty password.");
                 break;
             }
+            case "--basic":
+            case "--digest":
+            case "--ntlm":
+            case "--ntlm-wb":
+            case "--negotiate":
+            case "--anyauth":
+                r.authScheme = AUTH_FLAGS[flag];
+                break;
+            case "--aws-sigv4":
+                r.awsSigv4 = value();
+                break;
             case "--oauth2-bearer":
                 r.headers.push(["Authorization", `Bearer ${value()}`]);
                 break;
+            // Repeated -b values form one Cookie header, as curl sends them.
             case "-b":
             case "--cookie": {
                 const v = value();
-                if (v.includes("="))
-                    r.headers.push(["Cookie", v]);
-                else
+                if (!v.includes("="))
                     r.ignored.push("cookie file (not loaded)");
+                else if (cookieIndex >= 0 && r.headers[cookieIndex]?.[0] === "Cookie")
+                    r.headers[cookieIndex][1] += "; " + v.replace(/;\s*$/, "");
+                else {
+                    cookieIndex = r.headers.length;
+                    r.headers.push(["Cookie", v.replace(/;\s*$/, "")]);
+                }
                 break;
             }
             case "-A":
@@ -369,7 +432,11 @@ function parseTokens(args) {
     if (/[\r\n\0]/.test(r.url))
         throw new types_1.ToolInputError("URLs cannot contain control characters.");
     if (!r.url)
-        throw new types_1.ToolInputError("The command has no URL.");
+        throw new types_1.ToolInputError("The command has no URL. Add the request URL, for example curl https://api.example.com/users.");
+    if (/[ \t]/.test(r.url)) {
+        r.url = r.url.trim().replace(/ /g, "%20").replace(/\t/g, "%09");
+        (r.warnings ?? (r.warnings = [])).push("Spaces in the URL were percent-encoded (%20).");
+    }
     if (!/^[a-z][a-z\d+.-]*:\/\//i.test(r.url))
         r.url = `http://${r.url}`;
     let url;
@@ -403,6 +470,12 @@ function parseTokens(args) {
     }
     if (r.bodyFile === "")
         throw new types_1.ToolInputError("Body file path cannot be empty.");
+    if (strippedFile)
+        (r.warnings ?? (r.warnings = [])).push("curl -d @file removes carriage returns and newlines from the file. Generated code sends the file unchanged; use --data-binary @file in cURL to match.");
+    if (expanded.length)
+        (r.warnings ?? (r.warnings = [])).push(`${expanded.map(f => "--expand-" + f.slice(2)).join(", ")}: {{variables}} are kept literally; replace them with real values.`);
+    if (r.awsSigv4 && !r.basicAuth)
+        throw new types_1.ToolInputError("--aws-sigv4 needs the access key and secret in -u ACCESS_KEY:SECRET_KEY.");
     if (r.form.length && (data.length || r.bodyFile) || r.bodyFile && data.length)
         throw new types_1.ToolInputError("Multipart, file and inline request bodies cannot be mixed.");
     if (get && r.bodyFile)
@@ -431,7 +504,16 @@ function parseTokens(args) {
             }
             catch {
                 r.bodyKind = "raw";
-                r.warnings = ["The declared JSON body is invalid JSON and is preserved as raw text."];
+                const escaped = /\\"/.test(r.body) && (() => { try {
+                    JSON.parse(r.body.replace(/\\"/g, '"'));
+                    return true;
+                }
+                catch {
+                    return false;
+                } })();
+                (r.warnings ?? (r.warnings = [])).push(escaped
+                    ? "The JSON body contains backslash-escaped quotes (\\\"), which are usually Windows quoting. Choose the Windows cmd or PowerShell dialect, or remove the backslashes. The body is kept as raw text."
+                    : `The declared JSON body is invalid JSON (${(0, json_locate_1.describeJsonError)(r.body)}) and is preserved as raw text.`);
             }
         }
         else

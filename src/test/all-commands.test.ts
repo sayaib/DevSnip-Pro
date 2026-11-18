@@ -16,7 +16,9 @@ const NO_PANEL = new Set([
   "searchTools", "chooseTheme", "premiumStatus", "createCustomSnippet", "observabilityAnalyze",
   "securityAudit", "cloudSecurityAudit", "removeUnusedImports", "listAndRemoveConsoleLogs", "readmeManager",
   "getStarted", "whatsNew", "resetFeatureUsage", "dependencyManager", "endpointSecurityScan", "dependencyAudit",
-  "insertDebugLog", "removeDebugLogsInFile", "frameworkSnippets"
+  "insertDebugLog", "removeDebugLogsInFile", "frameworkSnippets",
+  // Reports through a notification or Quick Pick, not a panel.
+  "checkForUpdates"
 ]);
 
 /** Guidance a command rightly shows when run with no editor or selection, as it is here. */

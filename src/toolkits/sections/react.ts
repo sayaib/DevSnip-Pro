@@ -1,7 +1,27 @@
 import { generateReact, REACT_TEMPLATES, ReactOptions } from "../engines/react-generator";
 import { ToolSpec, ToolExample, ToolInputError, Values, bool, required, str } from "../types";
 import { parseRange, parseVersion, satisfies } from "../engines/web-git";
-import { code, f, opts } from "./helpers";
+import { code, f, opts, text } from "./helpers";
+
+/** Indented file tree ("app/", "  page.tsx") so larger outputs are easy to scan before writing. */
+export function fileTree(paths: string[]): string {
+  const root: Record<string, unknown> = {};
+  for (const path of paths) {
+    let node = root;
+    for (const part of path.split("/")) node = (node[part] ??= {}) as Record<string, unknown>;
+  }
+  const lines: string[] = [];
+  const walk = (node: Record<string, unknown>, depth: number) => {
+    const names = Object.keys(node).sort((a, b) => Number(!Object.keys(node[a] as object).length) - Number(!Object.keys(node[b] as object).length) || a.localeCompare(b));
+    for (const name of names) {
+      const child = node[name] as Record<string, unknown>, folder = Object.keys(child).length > 0;
+      lines.push(`${"  ".repeat(depth)}${name}${folder ? "/" : ""}`);
+      if (folder) walk(child, depth + 1);
+    }
+  };
+  walk(root, 0);
+  return lines.join("\n");
+}
 
 export const reactTool: ToolSpec = {
   id: "web.react", command: "reactGenerator", title: "React / Next.js Generator", icon: "layers",
@@ -18,13 +38,13 @@ export const reactTool: ToolSpec = {
     { label: "Accessible dialog", values: { kind: "modal", framework: "react", name: "DetailsDialog", styling: "none", rendering: "auto", ui: "none" } }
   ],
   fields: [
-    f.select("kind", "Template", REACT_TEMPLATES.map(([value, label]) => ({ value, label })), { searchable: true }),
+    f.select("kind", "Template", REACT_TEMPLATES.map(([value, label]) => ({ value, label })), { searchable: true, help: "Search templates by name, e.g. form, route, hook or project." }),
     f.select("framework", "Framework", opts(["next-app", "Next.js · App Router"], ["next-pages", "Next.js · Pages Router"], ["react", "React · Vite"])),
     f.select("nextVersion", "Next.js version", opts(["16", "16 · Proxy"], ["15", "15 · Middleware"]), { showIf: { field: "framework", equals: ["next-app", "next-pages"] } }),
     f.text("name", "Name", { width: "narrow", default: "UserCard", required: true, help: "PascalCase, camelCase or kebab-case; up to 80 characters." }),
-    f.text("route", "Route", { default: "users/[id]", showIf: { field: "kind", equals: ["next-page", "next-route", "server-action", "layout"] }, help: "Supports nested routes, [id], [...slug], [[...slug]] and App Router route groups. Use / for the root." }),
-    f.toggle("typescript", "TypeScript / TSX", true),
-    f.select("styling", "Styling", opts(["css-module", "CSS module"], ["tailwind", "Tailwind CSS v4"], ["none", "None"])),
+    f.text("route", "Route", { default: "users/[id]", placeholder: "users/[id]", showIf: { field: "kind", equals: ["next-page", "next-route", "server-action", "layout"] }, help: "Supports nested routes, [id], [...slug], [[...slug]] and App Router route groups. Use / for the root." }),
+    f.toggle("typescript", "TypeScript / TSX", true, { group: "Styling & libraries" }),
+    f.select("styling", "Styling", opts(["css-module", "CSS module"], ["tailwind", "Tailwind CSS v4"], ["none", "None"]), { help: "Applied to components, layouts and UI templates; Shadcn needs Tailwind." }),
     f.select("ui", "UI library", opts(["none", "Native HTML"], ["mui", "Material UI v7"], ["shadcn", "Shadcn UI (CLI setup)"], ["chakra", "Chakra UI v3"]), { showIf: { field: "kind", equals: ["component", "layout", "form", "modal", "table", "dashboard", "navigation", "project"] } }),
     f.select("state", "State management", opts(["none", "None"], ["context", "Context API"], ["zustand", "Zustand"], ["redux", "Redux Toolkit"], ["query", "TanStack Query"]), { showIf: { field: "kind", equals: ["project"] } }),
     f.select("client", "HTTP client", opts(["fetch", "Fetch"], ["axios", "Axios"]), { showIf: { field: "kind", equals: ["api-client", "query", "project"] } }),
@@ -33,7 +53,7 @@ export const reactTool: ToolSpec = {
     f.toggle("sourceDirectory", "Use src directory", true, { showIf: { field: "kind", equals: ["project"] } }),
     f.toggle("lazy", "Lazy wrapper + Suspense", false, { showIf: { field: "kind", equals: ["component"] } }),
     f.toggle("memo", "Memoize default export", false, { showIf: { field: "kind", equals: ["component"] }, help: "Enable after profiling; props should be stable." }),
-    f.toggle("tests", "Generate tests + configuration", true, { showIf: { field: "kind", equals: ["component", "hook", "form", "modal", "table", "dashboard", "navigation", "project"] } }),
+    f.toggle("tests", "Generate tests + configuration", true, { group: "Testing & extras", showIf: { field: "kind", equals: ["component", "hook", "form", "modal", "table", "dashboard", "navigation", "project"] } }),
     f.select("testRunner", "Test runner", opts(["vitest", "Vitest + Testing Library"], ["jest", "Jest + Testing Library"]), { showIf: { field: "tests", equals: [true] } }),
     f.toggle("story", "Storybook story", false, { showIf: { field: "kind", equals: ["component"] } })
   ],
@@ -83,11 +103,12 @@ export const reactTool: ToolSpec = {
       diagnostics.push({ kind: "info", text: "Checked package.json declarations only. Verify resolved versions in your lockfile; no dependencies were installed or changed." });
     }
     const install = Object.entries(r.dependencies).map(([k, v]) => `'${k}@${v}'`);
+    const tree = fileTree(r.files.map(file => file.path));
     const dev = Object.entries(r.devDependencies).map(([k, v]) => `'${k}@${v}'`);
     return {
-      stats: [{ label: "Files", value: String(r.files.length) }, { label: "Target", value: options.kind === "rn-screen" ? "React Native" : options.framework === "react" ? "React 19" : `Next.js ${options.nextVersion}` }],
+      stats: [{ label: "Files", value: String(r.files.length) }, { label: "Target", value: options.kind === "rn-screen" ? "React Native" : options.framework === "react" ? "React 19" : `Next.js ${options.nextVersion}` }, { label: "Language", value: options.typescript ? "TypeScript" : "JavaScript" }, { label: "Packages", value: String(Object.keys(r.dependencies).length + Object.keys(r.devDependencies).length) }],
       messages: [...diagnostics, ...r.steps.map(text => ({ kind: "info" as const, text }))],
-      outputs: [{ kind: "files", title: "Generated files", files: r.files }, ...(options.kind !== "project" && (install.length || dev.length) ? [code("Install dependencies", "shell", [install.length ? `npm install ${install.join(" ")}` : "", dev.length ? `npm install -D ${dev.join(" ")}` : ""].filter(Boolean).join("\n"))] : [])]
+      outputs: [{ kind: "files", title: "Generated files", files: r.files }, ...(r.files.length > 3 ? [text("File structure", tree)] : []), ...(options.kind !== "project" && (install.length || dev.length) ? [code("Install dependencies", "shell", [install.length ? `npm install ${install.join(" ")}` : "", dev.length ? `npm install -D ${dev.join(" ")}` : ""].filter(Boolean).join("\n"))] : [])]
     };
   }
 };

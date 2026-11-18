@@ -19,15 +19,16 @@ exports.apiResponse = {
         helpers_1.f.code("raw", "Response", "http", { rows: 12, required: true, sensitive: true, fromEditor: true, default: sample }),
         helpers_1.f.code("baseline", "Baseline response", "http", { rows: 9, sensitive: true, fromEditor: true, required: true, showIf: { field: "view", equals: ["compare"] }, default: 'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"id":1,"name":"Ada"}' }),
         helpers_1.f.text("ignoreHeaders", "Ignore comparison headers", { default: "Date, Age, Server-Timing", showIf: { field: "view", equals: ["compare"] }, help: "Comma-separated names; repeated header values and array order are compared." }),
-        helpers_1.f.select("format", "Body format", (0, helpers_1.opts)(["auto", "Detect from content and headers"], ["json", "JSON"], ["ndjson", "NDJSON / JSON Lines"], ["sse", "Server-sent events"], ["text", "Plain text"])),
+        helpers_1.f.select("format", "Body format", (0, helpers_1.opts)(["auto", "Detect from content and headers"], ["json", "JSON"], ["ndjson", "NDJSON / JSON Lines"], ["sse", "Server-sent events"], ["text", "Plain text"]), { group: "Parsing" }),
         helpers_1.f.num("harIndex", "HAR entry index (starts at 0)", 0, { min: 0, max: 10000, step: 1, showIf: { field: "inputMode", equals: ["har"] } }),
         helpers_1.f.select("method", "Request method (when known)", (0, helpers_1.opts)(["unknown", "Unknown / use HAR method"], "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")),
-        helpers_1.f.select("bodyView", "Body preview", (0, helpers_1.opts)(["pretty", "Pretty JSON"], ["raw", "Original captured text"], ["compact", "Compact JSON"])),
+        helpers_1.f.select("bodyView", "Body preview", (0, helpers_1.opts)(["pretty", "Pretty JSON"], ["raw", "Original captured text"], ["compact", "Compact JSON"]), { group: "View & explore" }),
+        helpers_1.f.toggle("tree", "Interactive JSON explorer", true, { help: "Collapsible tree with Find, path copy and value copy. Nodes render as you open them." }),
         helpers_1.f.text("pointer", "JSON Pointer", { placeholder: "/data/0/id", help: "Optional structured-body selection. Use ~1 for / and ~0 for ~ in property names." }),
-        helpers_1.f.text("search", "Search fields / headers", { placeholder: "name, /data, content-type…", help: "Case-insensitive literal search; affects tables, not exported reports or body text." }),
+        helpers_1.f.text("search", "Filter field & header tables", { placeholder: "name, /data, content-type…", help: "Case-insensitive literal search; affects tables, not exported reports or body text." }),
         helpers_1.f.num("maxFields", "Maximum fields", 200, { min: 1, max: 1000, step: 1 }),
-        helpers_1.f.toggle("redact", "Redact known secrets in outputs", false, { help: "Masks credential headers, query parameters and JSON/form secrets. Opaque bodies are replaced; review custom secrets and personal data." }),
-        helpers_1.f.select("export", "Extra exports", (0, helpers_1.opts)(["none", "Inspection only"], ["json", "JSON inspection report"], ["markdown", "Markdown report"], ["http", "Reconstructed response"], ["typescript", "TypeScript type"], ["schema", "JSON Schema"], ["tests", "Response assertion helper"], ["all", "All exports"]), { searchable: true }),
+        helpers_1.f.toggle("redact", "Redact known secrets in outputs", false, { group: "Privacy & exports", help: "Masks credential headers, query parameters and JSON/form secrets. Opaque bodies are replaced; review custom secrets and personal data." }),
+        helpers_1.f.select("export", "Extra exports", (0, helpers_1.opts)(["none", "Inspection only"], ["json", "JSON inspection report"], ["markdown", "Markdown report"], ["http", "Reconstructed response"], ["typescript", "TypeScript type"], ["schema", "JSON Schema"], ["tests", "Response assertion helper"], ["all", "All exports"]), { searchable: true, placeholder: "Search exports…" }),
         helpers_1.f.text("typeName", "Type name", { default: "ApiResponse", showIf: { field: "export", equals: ["typescript", "schema", "all"] } }),
         helpers_1.f.select("testRunner", "Assertion runner", (0, helpers_1.opts)(["vitest", "Vitest"], ["jest", "Jest"]), { showIf: { field: "export", equals: ["tests", "all"] } }),
         helpers_1.f.text("presetName", "Preset name (optional)", { placeholder: "Users response" })
@@ -91,6 +92,10 @@ exports.apiResponse = {
             messages.unshift({ kind: diff.changes.length || diff.truncated ? "info" : "success", text: diff.changes.length ? `${diff.changes.length} differences${diff.truncated ? " (comparison truncated)" : ""}. Arrays are compared by index; parsed JSON ignores object key order.` : diff.truncated ? "No differences in the inspected portion; comparison was truncated by safety limits." : "No differences found under the selected comparison rules." });
             for (const d of baseline.diagnostics.filter(d => d.severity !== "info"))
                 messages.push({ kind: d.severity === "error" ? "error" : "warning", text: `Baseline · ${d.category}: ${d.message}` });
+        }
+        if (r.structured && r.format !== "form" && (0, types_1.bool)(input, "tree", true)) {
+            const imprecise = r.diagnostics.some(d => /safe numeric range/.test(d.message));
+            add({ kind: "tree", title: `Explore · ${r.format === "json" ? "JSON" : r.format === "ndjson" ? "NDJSON records" : "server-sent events"}`, value: r.body, note: imprecise ? "Some numbers exceed JavaScript's safe range and appear rounded here; the Body view keeps the source digits." : undefined });
         }
         const body = r.isJson && preview !== "raw" ? (0, api_response_json_1.formatApiJson)(r.bodyText.replace(/^\uFEFF/, ""), preview === "compact") : r.bodyText;
         const language = r.isJson ? "json" : r.format === "xml" ? "xml" : r.format === "html" ? "html" : "text";

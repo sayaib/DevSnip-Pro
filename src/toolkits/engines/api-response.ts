@@ -1,4 +1,5 @@
 import { ToolInputError } from "../types";
+import { locateJsonError } from "./json-locate";
 import { analyzeApiResponse } from "./api-response-analysis";
 import { ApiEnvelope, ApiInspectOptions, parseApiTransport } from "./api-response-parser";
 import { ApiField, apiFields, apiSecretHeader, apiSecretKey, parseApiJson, redactApiJson } from "./api-response-json";
@@ -100,10 +101,11 @@ export function inspectApiResponse(raw: string, options: ApiInspectOptions & { r
     catch (error) {
       if (error instanceof ToolInputError) throw error;
       if (format === "json" || /json/i.test(ct) || /^\s*[\[{]/.test(r.bodyText)) {
-        const position = /position (\d+)/.exec(error instanceof Error ? error.message : "");
-        const prefix = position ? r.bodyText.slice(0,Number(position[1])) : "";
-        const where = position ? ` near line ${prefix.split("\n").length}, column ${(prefix.length - prefix.lastIndexOf("\n"))}` : "";
-        note("error","JSON",`Invalid JSON${where}. The original body text is retained; check quoting, commas and truncation.`);
+        // V8 omits the position for some errors, so the location comes from a dedicated scan.
+        const location = locateJsonError(r.bodyText);
+        // The message names the location only: echoing body text could leak secrets into reports.
+        if (location) note("error","JSON",`Invalid JSON at line ${location.line}, column ${location.column}: ${location.reason}. The original body text is retained.`);
+        else note("error","JSON","Invalid JSON. The original body text is retained; check quoting, commas and truncation.");
       }
       if (format === "auto") {
         if (/html/i.test(ct) || /^\s*<!doctype html|^\s*<html[\s>]/i.test(r.bodyText)) r.format = "html";

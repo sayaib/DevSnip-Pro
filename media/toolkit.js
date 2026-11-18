@@ -154,7 +154,7 @@
       control.value = String(values[f.id]);
       control.addEventListener("change", () => onChange(f.id, control.value));
       if (f.searchable) {
-        search = h("input", { type: "search", placeholder: "Search templates…", "aria-label": `Search ${f.label.toLowerCase()}`, "aria-controls": id });
+        search = h("input", { type: "search", placeholder: f.placeholder || "Search templates…", "aria-label": `Search ${f.label.toLowerCase()}`, "aria-controls": id });
         search.addEventListener("input", () => {
           const query = search.value.trim().toLowerCase();
           for (const option of control.options) option.hidden = option.value !== control.value && !option.textContent.toLowerCase().includes(query);
@@ -549,7 +549,189 @@
       return h("section", { class: "panel out" }, outHead(o.title, `${o.files.length} file${o.files.length === 1 ? "" : "s"}`, [wrapButton(), capabilities.writeWorkspace ? button(o.files.length > 1 ? `Write all ${o.files.length}` : "Write to workspace", "save", () => vscode.postMessage({ type: "writeAll", files: o.files }), "ghost", "Write the files into the workspace (asks before overwriting)") : null]), list);
     }
     if (o.kind === "chart") return h("section", { class: "panel out" }, outHead(o.title, null, []), chart(o));
+    if (o.kind === "tree") return jsonTree(o);
     return h("div");
+  }
+
+  // ---- JSON tree explorer -------------------------------------------------
+
+  // Children render only when a node is opened, 100 at a time, so a 2 MB
+  // response costs a few dozen DOM rows until the user explores it.
+  const TREE_PAGE = 100;
+  const TREE_EXPAND_LIMIT = 1500;
+  const isBranch = v => v !== null && typeof v === "object";
+  const entriesOf = v => Array.isArray(v) ? v.map((c, i) => [i, c]) : Object.entries(v);
+  const sizeOf = v => Array.isArray(v) ? v.length : Object.keys(v).length;
+  const pointerOf = segments => segments.map(s => "/" + String(s).replace(/~/g, "~0").replace(/\//g, "~1")).join("");
+  const pathOf = segments => "$" + segments.map(s => typeof s === "number" ? `[${s}]` : /^[A-Za-z_$][\w$]*$/.test(s) ? "." + s : `[${JSON.stringify(s)}]`).join("");
+  const summaryOf = v => Array.isArray(v) ? `[${v.length.toLocaleString()} item${v.length === 1 ? "" : "s"}]` : `{${sizeOf(v).toLocaleString()} field${sizeOf(v) === 1 ? "" : "s"}}`;
+
+  function leaf(value) {
+    if (typeof value === "string") {
+      const shown = value.length > 240 ? value.slice(0, 240) + "…" : value;
+      return h("span", { class: "jt-str", title: value.length > 240 ? value.slice(0, 4000) : undefined, text: JSON.stringify(shown) });
+    }
+    return h("span", { class: typeof value === "number" ? "jt-num" : "jt-lit", text: String(value) });
+  }
+
+  function jsonTree(o) {
+    const tree = h("div", { class: "jtree", role: "tree", "aria-label": o.title });
+    let selected = null;
+    const selPath = h("code", { text: "Select a field to copy its path or value." });
+    const copyText = text => vscode.postMessage({ type: "copy", text });
+    const sel = h("div", { class: "jt-sel" }, selPath,
+      button("Pointer", "copy", () => selected && copyText(pointerOf(selected.segments)), "ghost", "Copy the JSON Pointer (/data/0/id)"),
+      button("Path", "copy", () => selected && copyText(pathOf(selected.segments)), "ghost", "Copy the JavaScript-style path ($.data[0].id)"),
+      button("Value", "copy", () => selected && copyText(typeof selected.value === "string" ? selected.value : JSON.stringify(selected.value, null, 2)), "ghost", "Copy the selected value"));
+
+    function select(node) {
+      if (selected) selected.row.setAttribute("aria-selected", "false");
+      selected = node;
+      node.row.setAttribute("aria-selected", "true");
+      selPath.textContent = pathOf(node.segments) + "  ·  " + (isBranch(node.value) ? summaryOf(node.value) : typeof node.value === "object" ? "null" : typeof node.value);
+      selPath.title = pointerOf(node.segments);
+    }
+
+    function makeNode(key, value, segments, depth) {
+      const branch = isBranch(value);
+      const row = h("div", { class: "jt-row", role: "treeitem", tabindex: "-1", "aria-level": String(depth + 1), "aria-selected": "false" });
+      row.style.setProperty("--d", String(depth));
+      row.append(h("span", { class: "jt-twisty", "aria-hidden": "true" }, branch && sizeOf(value) ? icon("chevron") : null));
+      if (key !== undefined) row.append(h("span", { class: typeof key === "number" ? "jt-idx" : "jt-key", text: typeof key === "number" ? String(key) : JSON.stringify(key) }), h("span", { text: ":" }));
+      row.append(branch ? h("span", { class: "jt-sum", text: summaryOf(value) }) : leaf(value));
+      const el = h("div", { class: "jt-node" }, row);
+      const node = { el, row, value, segments, depth, kids: null, rendered: 0, children: new Map(), more: null };
+      row._node = node;
+      if (branch && sizeOf(value)) row.setAttribute("aria-expanded", "false");
+      row.addEventListener("click", () => { select(node); if (branch) toggle(node); row.focus(); });
+      return node;
+    }
+
+    function renderPage(node) {
+      const entries = node.entries || (node.entries = entriesOf(node.value));
+      const end = Math.min(entries.length, node.rendered + TREE_PAGE);
+      const frag = document.createDocumentFragment();
+      for (let i = node.rendered; i < end; i++) {
+        const [key, child] = entries[i];
+        const childNode = makeNode(key, child, node.segments.concat(key), node.depth + 1);
+        node.children.set(key, childNode);
+        frag.append(childNode.el);
+      }
+      node.rendered = end;
+      if (node.more) { node.more.remove(); node.more = null; }
+      node.kids.append(frag);
+      if (end < entries.length) {
+        const left = entries.length - end;
+        node.more = button(`Show ${Math.min(TREE_PAGE, left)} more · ${left.toLocaleString()} left`, null, () => renderPage(node), "ghost jt-more");
+        node.more.style.setProperty("--d", String(node.depth));
+        node.kids.append(node.more);
+      }
+    }
+
+    function open(node, on) {
+      if (!isBranch(node.value) || !sizeOf(node.value)) return;
+      if (on && !node.kids) { node.kids = h("div", { role: "group" }); node.el.append(node.kids); renderPage(node); }
+      if (node.kids) node.kids.hidden = !on;
+      node.row.setAttribute("aria-expanded", String(on));
+    }
+    const toggle = node => open(node, node.row.getAttribute("aria-expanded") !== "true");
+
+    const root = makeNode(undefined, o.value, [], 0);
+    tree.append(root.el);
+    open(root, true);
+    // Small objects open one more level so the shape is visible at a glance.
+    if (isBranch(o.value) && sizeOf(o.value) <= 12) for (const child of root.children.values()) if (isBranch(child.value) && sizeOf(child.value) <= 12) open(child, true);
+
+    function reveal(segments) {
+      let node = root;
+      for (const key of segments) {
+        open(node, true);
+        const index = Array.isArray(node.value) ? key : node.entries.findIndex(e => e[0] === key);
+        while (!node.children.has(key) && node.rendered <= index && node.rendered < node.entries.length) renderPage(node);
+        node = node.children.get(key);
+        if (!node) return;
+      }
+      select(node);
+      node.row.focus();
+      node.row.scrollIntoView({ block: "nearest" });
+    }
+
+    function expandAll(on) {
+      if (!on) { for (const row of tree.querySelectorAll(".jt-row[aria-expanded=true]")) if (row._node !== root) open(row._node, false); return; }
+      const queue = [root];
+      let rows = 0;
+      while (queue.length && rows < TREE_EXPAND_LIMIT) {
+        const node = queue.shift();
+        open(node, true);
+        rows += node.children.size;
+        for (const child of node.children.values()) if (isBranch(child.value)) queue.push(child);
+      }
+      if (queue.length) toast("info", `Expanded the first ${TREE_EXPAND_LIMIT.toLocaleString()} rows; open deeper nodes one at a time or use Find.`);
+    }
+
+    // Keyboard: arrows move between visible rows, Right/Left open and close, Enter toggles.
+    tree.addEventListener("keydown", event => {
+      const row = event.target.closest && event.target.closest(".jt-row");
+      if (!row) return;
+      const visible = () => Array.from(tree.querySelectorAll(".jt-row")).filter(r => r.offsetParent !== null);
+      const move = target => { if (target) { target.focus(); select(target._node); } };
+      const node = row._node, expanded = row.getAttribute("aria-expanded") === "true";
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { const rowsNow = visible(); move(rowsNow[rowsNow.indexOf(row) + (event.key === "ArrowDown" ? 1 : -1)]); }
+      else if (event.key === "ArrowRight") { if (row.hasAttribute("aria-expanded") && !expanded) open(node, true); else if (expanded) move(node.kids.querySelector(".jt-row")); }
+      else if (event.key === "ArrowLeft") { if (expanded && node !== root) open(node, false); else move(row.parentElement.parentElement.closest(".jt-node") && row.parentElement.parentElement.closest(".jt-node").firstChild); }
+      else if (event.key === "Home") move(visible()[0]);
+      else if (event.key === "End") { const rowsNow = visible(); move(rowsNow[rowsNow.length - 1]); }
+      else if (event.key === "Enter" || event.key === " ") { if (row.hasAttribute("aria-expanded")) toggle(node); select(node); }
+      else return;
+      event.preventDefault();
+    });
+    root.row.tabIndex = 0;
+    tree.addEventListener("focusin", event => { for (const r of tree.querySelectorAll(".jt-row[tabindex='0']")) if (r !== event.target) r.tabIndex = -1; if (event.target.classList.contains("jt-row")) event.target.tabIndex = 0; });
+
+    // Find searches keys and values of the whole value (not just rendered rows) and reveals a match on click.
+    const search = h("input", { type: "search", placeholder: "Find a key or value…", "aria-label": "Find in JSON tree", spellcheck: "false" });
+    const count = h("span", { class: "jt-count", "aria-live": "polite" });
+    const matches = h("div", { class: "jt-matches", hidden: true });
+    let findTimer;
+    search.addEventListener("input", () => { clearTimeout(findTimer); findTimer = setTimeout(find, 180); });
+    search.addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); const first = matches.querySelector("button"); if (first) first.click(); } });
+    function find() {
+      const query = search.value.trim().toLowerCase();
+      matches.replaceChildren();
+      if (!query) { matches.hidden = true; count.textContent = ""; return; }
+      const found = [], stack = [[o.value, []]];
+      let visited = 0;
+      while (stack.length && found.length < 200 && visited < 300000) {
+        const [value, segments] = stack.pop();
+        visited++;
+        const key = segments.length ? String(segments[segments.length - 1]) : "";
+        const hit = key.toLowerCase().includes(query) || (!isBranch(value) && String(value).toLowerCase().includes(query));
+        if (hit && segments.length) found.push([segments, value]);
+        if (isBranch(value)) { const entries = entriesOf(value); for (let i = entries.length - 1; i >= 0; i--) stack.push([entries[i][1], segments.concat(entries[i][0])]); }
+      }
+      const capped = found.length >= 200 || stack.length;
+      count.textContent = found.length ? `${found.length}${capped ? "+" : ""} match${found.length === 1 ? "" : "es"}` : "No matches";
+      for (const [segments, value] of found) {
+        const preview = isBranch(value) ? summaryOf(value) : JSON.stringify(value);
+        matches.append(h("button", { type: "button", class: "jt-match", onclick: () => reveal(segments), title: pointerOf(segments) }, h("code", { text: pathOf(segments) }), h("span", { text: preview.length > 120 ? preview.slice(0, 120) + "…" : preview })));
+      }
+      matches.hidden = !found.length;
+    }
+
+    const expandToggle = expandButton(tree);
+    expandToggle.querySelector("span").textContent = "Full height";
+    expandToggle.addEventListener("click", () => { expandToggle.querySelector("span").textContent = tree.classList.contains("expanded") ? "Scroll area" : "Full height"; });
+    return h("section", { class: "panel out" },
+      outHead(o.title, isBranch(o.value) ? summaryOf(o.value) : "", [
+        button("Expand all", "expand", () => expandAll(true), "ghost", "Open nested nodes (up to 1,500 rows)"),
+        button("Collapse", "reset", () => expandAll(false), "ghost", "Close every nested node"),
+        expandToggle,
+        h("span", { class: "sep", "aria-hidden": "true" }),
+        button("Copy JSON", "copy", () => copyText(JSON.stringify(o.value, null, 2)), "ghost", "Copy the whole value as formatted JSON")
+      ]),
+      o.note ? h("div", { class: "jt-note", text: o.note }) : null,
+      h("div", { class: "jt-tools" }, search, count),
+      matches, tree, sel);
   }
 
   function chart(o) {

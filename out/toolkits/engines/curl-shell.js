@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.readCmdEnvelope = exports.tokenizeShell = void 0;
 const types_1 = require("../types");
 /** Bounded shell lexer shared with Docker conversion; values are never expanded or executed. */
-function tokenizeShell(input, shell = "auto") {
+function tokenizeShell(input, shell = "auto", comments = false) {
     const tokens = [];
     let value = "", active = false;
     const flush = () => { if (active)
@@ -19,6 +19,22 @@ function tokenizeShell(input, shell = "auto") {
             flush();
             i++;
             continue;
+        }
+        // A # that starts a word begins a comment in Bash and PowerShell (never inside a word, so URL fragments stay).
+        if (comments && !active && c === "#" && shell !== "cmd") {
+            while (i < input.length && input[i] !== "\n")
+                i++;
+            continue;
+        }
+        // Windows programs (including curl.exe) read \" as a literal quote: 2n backslashes + " = n backslashes and a quote toggle.
+        if (shell === "cmd" && c === "\\") {
+            const run = backslashRun(input, i);
+            if (input[run.end] === '"') {
+                active = true;
+                value += "\\".repeat(Math.floor(run.count / 2)) + (run.count % 2 ? '"' : "");
+                i = run.end + (run.count % 2);
+                continue;
+            }
         }
         active = true;
         if (c === "^" && input[i + 1] === '"' && (shell === "auto" || shell === "cmd")) {
@@ -65,6 +81,22 @@ function tokenizeShell(input, shell = "auto") {
             i++;
             let closed = false;
             while (i < input.length) {
+                if (shell === "cmd" && input[i] === "\\") {
+                    const run = backslashRun(input, i);
+                    if (input[run.end] === '"') {
+                        value += "\\".repeat(Math.floor(run.count / 2));
+                        i = run.end;
+                        if (run.count % 2) {
+                            value += '"';
+                            i++;
+                            continue;
+                        }
+                        continue;
+                    }
+                    value += input.slice(i, run.end);
+                    i = run.end;
+                    continue;
+                }
                 if (input[i] === '"') {
                     i++;
                     closed = true;
@@ -106,6 +138,12 @@ function tokenizeShell(input, shell = "auto") {
     return tokens;
 }
 exports.tokenizeShell = tokenizeShell;
+function backslashRun(input, start) {
+    let end = start;
+    while (input[end] === "\\")
+        end++;
+    return { count: end - start, end };
+}
 /** Decode the caret-wrapped argv tokens emitted by browser Copy as cURL (cmd). */
 function readCmdEnvelope(input, start) {
     let encoded = "", i = start + 2;

@@ -48,6 +48,14 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
   {
+    version: "11.89.0",
+    items: [
+      { title: "API Response Inspector: explore JSON in a searchable tree and inspect responses up to 2 MB", command: "apiResponseInspector" },
+      { title: "cURL Converter: Digest and NTLM auth, Windows cmd quoting, comments and 80 more cURL options", command: "curlConverter" },
+      { title: "React / Next.js Generator: formatted, styled UI templates and a file-structure view", command: "reactGenerator" }
+    ]
+  },
+  {
     version: "11.88.0",
     items: [
       { title: "Theme Studio: your own accent, background, corners, borders, shadows and fonts on every panel", command: "themeStudio" },

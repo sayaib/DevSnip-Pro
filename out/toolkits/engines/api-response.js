@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.inspectApiResponse = exports.redactApiEnvelope = exports.redactApiUrl = void 0;
 const types_1 = require("../types");
+const json_locate_1 = require("./json-locate");
 const api_response_analysis_1 = require("./api-response-analysis");
 const api_response_parser_1 = require("./api-response-parser");
 const api_response_json_1 = require("./api-response-json");
@@ -155,10 +156,13 @@ function inspectApiResponse(raw, options = {}) {
             if (error instanceof types_1.ToolInputError)
                 throw error;
             if (format === "json" || /json/i.test(ct) || /^\s*[\[{]/.test(r.bodyText)) {
-                const position = /position (\d+)/.exec(error instanceof Error ? error.message : "");
-                const prefix = position ? r.bodyText.slice(0, Number(position[1])) : "";
-                const where = position ? ` near line ${prefix.split("\n").length}, column ${(prefix.length - prefix.lastIndexOf("\n"))}` : "";
-                note("error", "JSON", `Invalid JSON${where}. The original body text is retained; check quoting, commas and truncation.`);
+                // V8 omits the position for some errors, so the location comes from a dedicated scan.
+                const location = (0, json_locate_1.locateJsonError)(r.bodyText);
+                // The message names the location only: echoing body text could leak secrets into reports.
+                if (location)
+                    note("error", "JSON", `Invalid JSON at line ${location.line}, column ${location.column}: ${location.reason}. The original body text is retained.`);
+                else
+                    note("error", "JSON", "Invalid JSON. The original body text is retained; check quoting, commas and truncation.");
             }
             if (format === "auto") {
                 if (/html/i.test(ct) || /^\s*<!doctype html|^\s*<html[\s>]/i.test(r.bodyText))

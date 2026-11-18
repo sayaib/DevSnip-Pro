@@ -23,7 +23,7 @@ export function compareApiResponses(before: ApiResponseReport, after: ApiRespons
     const stack: Array<{a: unknown; b: unknown; pointer: string}> = [{a: before.body,b: after.body,pointer:"body"}];
     let count = 0, bodyChanged = false;
     while (stack.length) {
-      if (++count > 50000 || changes.length >= 500) { truncated = true; break; }
+      if (++count > 1_000_000 || changes.length >= 500) { truncated = true; break; }
       const {a,b,pointer} = stack.pop()!, type = valueType(a);
       if (type !== valueType(b)) { bodyChanged = true; add({kind:"type",path:pointer,before:preview(a),after:preview(b)}); }
       else if (a && typeof a === "object" && b && typeof b === "object") {

@@ -1,5 +1,18 @@
 # Development Changelog of DevSnip Pro
 
+## 11.89.0 - JSON explorer, cURL accuracy and React templates (2026-11-18)
+
+- Add a JSON explorer to the **API Response Inspector**. Open a collapsible tree of the parsed body, find any key or value across the whole response, and copy a field's JSON Pointer, path or value. Rows render as you open them, 100 at a time, and arrow keys move through the tree. Turn it off with **Interactive JSON explorer**.
+- Fix the API Response Inspector rejecting JSON over 50,000 tokens, which included responses of about 700 KB. Responses up to the 2 MiB limit now inspect in well under a second, and **Compare** checks large bodies completely instead of stopping early.
+- Report invalid JSON with its line, column and reason (for example *line 2, column 7: a value is missing*) in the API Response Inspector and cURL Converter. Messages never repeat the body text.
+- Fix about 80 cURL options that take a value, such as `--noproxy`, `--cert-type`, `--unix-socket`, `--proto`, `-E` and `-U`, being read as a second URL.
+- Convert `--digest` to real Digest authentication for Python requests, HTTPX, C# and HTTPie, and `--ntlm`/`--negotiate` for C#. Other targets explain why they can't, instead of silently sending Basic credentials. `--aws-sigv4` is kept in normalized cURL.
+- Read Windows cmd quoting the way curl.exe does, so `-d "{\"name\":\"Ada\"}"` produces valid JSON. Hint at the right dialect when a JSON body contains backslash-escaped quotes.
+- Convert `-d @file` as a body-file reference with a note that curl strips its newlines, skip `#` comments, merge repeated `-b` cookies into one header, percent-encode spaces in URLs, and point out `wget` or `httpie` commands.
+- Format the React / Next.js form, modal, table, dashboard, navigation and layout templates over several readable lines. They follow the **Styling** option (CSS module, Tailwind or none), and Next.js templates use `Link`. The table takes `rows` and `caption` props.
+- Fix kebab-case lazy wrappers being named `user-cardLazy` instead of `user-card-lazy`, and the Vite `@` alias pointing at a missing `src` folder when **Use src directory** is off.
+- Group the three tools' forms into titled sections with more help text, show the request, body type and header count when a cURL conversion finishes, and list a file structure for multi-file React output. Style the template search boxes in every toolkit tool.
+
 ## 11.88.0 - Theme Studio and five new themes (2026-11-04)
 
 - Add **Theme Studio** (`DevSnip Pro: Theme Studio`, or **Customize…** in the sidebar theme selector). It shows every theme with a live preview and contrast checks. You can choose an accent colour and, for DevSnip themes, a background; pick sharp to round corners, subtle or strong borders, and flat or elevated shadows; set interface and code fonts; and turn the theme fade off. Every change applies instantly to every open DevSnip Pro panel and is remembered across restarts.

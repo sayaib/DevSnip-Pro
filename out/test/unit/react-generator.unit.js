@@ -165,4 +165,48 @@ function verify(options) {
         assert.ok(!r.files.some(f => f.path === ".env.local"));
     });
 });
+(0, run_unit_tests_1.suite)("React generator: formatting, styling and paths (11.89)", () => {
+    (0, run_unit_tests_1.test)("kebab-case naming renames lazy wrappers consistently", () => {
+        const r = (0, react_generator_1.generateReact)({ ...base, naming: "kebab", lazy: true, memo: true, story: true });
+        assert.ok(r.files.some(f => f.path === "src/components/user-card/user-card-lazy.tsx"), r.files.map(f => f.path).join(", "));
+        assert.ok(!r.files.some(f => /[A-Z]/.test(f.path.split("/").pop().replace(/\.module\.css$/, ""))));
+        verify({ ...base, naming: "kebab", lazy: true, memo: true, story: true });
+    });
+    (0, run_unit_tests_1.test)("Vite projects without a src directory alias @ to the project root", () => {
+        const vite = (0, react_generator_1.generateReact)({ ...base, kind: "project", framework: "react", sourceDirectory: false }).files.find(f => f.path === "vite.config.ts");
+        assert.ok(vite.content.includes('new URL("./", import.meta.url)'));
+        assert.ok((0, react_generator_1.generateReact)({ ...base, kind: "project", framework: "react" }).files.find(f => f.path === "vite.config.ts").content.includes('new URL("./src", import.meta.url)'));
+    });
+    (0, run_unit_tests_1.test)("UI templates are formatted over several lines and follow the styling option", () => {
+        for (const kind of ["form", "modal", "table", "dashboard", "navigation", "layout"]) {
+            for (const styling of ["css-module", "tailwind", "none"]) {
+                for (const framework of ["react", "next-app"]) {
+                    const options = { ...base, kind, styling, framework, tests: true };
+                    verify(options);
+                    const r = (0, react_generator_1.generateReact)(options);
+                    const component = r.files.find(f => /\.(tsx|jsx)$/.test(f.path) && !f.path.includes(".test."));
+                    assert.ok(component.content.split("\n").length > 10, `${kind} is multi-line`);
+                    assert.ok(!component.content.split("\n").some(line => line.length > 160), `${kind} has no overlong lines`);
+                    if (styling === "css-module") {
+                        assert.ok(component.content.includes("import styles from") && r.files.some(f => f.path.endsWith(".module.css")), `${kind} css module`);
+                    }
+                    if (styling === "tailwind")
+                        assert.ok(/className="[^"]+"/.test(component.content), `${kind} tailwind`);
+                    if (styling === "none")
+                        assert.ok(!component.content.includes("className"), `${kind} unstyled`);
+                    if ((kind === "navigation" || kind === "layout") && framework === "next-app")
+                        assert.ok(component.content.includes('import Link from "next/link"'));
+                }
+            }
+        }
+    });
+    (0, run_unit_tests_1.test)("the tool lists a file structure for multi-file output", async () => {
+        const result = await react_1.reactTool.run({ kind: "project", framework: "next-app", name: "Dashboard", styling: "tailwind", tests: true }, {});
+        const structure = result.outputs.find(o => o.kind === "text" && o.title === "File structure");
+        assert.ok(structure && structure.kind === "text" && structure.content.startsWith("app/\n  layout.tsx"), structure && structure.kind === "text" ? structure.content : "");
+        assert.ok(result.stats.some(s => s.label === "Packages"));
+        const single = await react_1.reactTool.run({ kind: "middleware", framework: "next-app", name: "Edge" }, {});
+        assert.ok(!single.outputs.some(o => o.title === "File structure"));
+    });
+});
 //# sourceMappingURL=react-generator.unit.js.map

@@ -22,7 +22,10 @@ export function curlAxiosNode(r: CurlRequest): string {
 }
 
 export function curlCSharp(r: CurlRequest): string {
-  const lines = ["using System;", "using System.IO;", "using System.Net.Http;", "using System.Text;", "", `using var handler = new HttpClientHandler { AllowAutoRedirect = ${r.followRedirects} };`, "using var client = new HttpClient(handler);", `client.Timeout = ${r.timeoutSeconds === 0 ? "System.Threading.Timeout.InfiniteTimeSpan" : `TimeSpan.FromSeconds(${r.timeoutSeconds ?? 30})`};`, `using var request = new HttpRequestMessage(new HttpMethod(${q(r.method)}), ${q(r.url)});`];
+  // Digest, NTLM and Negotiate answer the server's challenge, so they go through handler credentials, not a Basic header.
+  const negotiated = !!r.basicAuth && ["digest", "ntlm", "negotiate"].includes(r.authScheme ?? "") && !r.headers.some(([k]) => /^authorization$/i.test(k));
+  const credentials = negotiated && r.basicAuth ? `, Credentials = new System.Net.NetworkCredential(${q(r.basicAuth.user)}, ${q(r.basicAuth.password)})` : "";
+  const lines = ["using System;", "using System.IO;", "using System.Net.Http;", "using System.Text;", "", `using var handler = new HttpClientHandler { AllowAutoRedirect = ${r.followRedirects}${credentials} };`, "using var client = new HttpClient(handler);", `client.Timeout = ${r.timeoutSeconds === 0 ? "System.Threading.Timeout.InfiniteTimeSpan" : `TimeSpan.FromSeconds(${r.timeoutSeconds ?? 30})`};`, `using var request = new HttpRequestMessage(new HttpMethod(${q(r.method)}), ${q(r.url)});`];
   if (r.bodyFile) lines.push(`request.Content = new StreamContent(File.OpenRead(${q(r.bodyFile)}));`);
   else if (r.body !== undefined) lines.push(`request.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(${q(r.body)}));`);
   else if (r.bodyKind === "multipart") {
@@ -37,7 +40,7 @@ export function curlCSharp(r: CurlRequest): string {
     if (/^(host|content-length)$/i.test(k)) continue;
     lines.push(`if (!request.Headers.TryAddWithoutValidation(${q(k)}, ${q(v)})) {`, "    request.Content ??= new ByteArrayContent(Array.Empty<byte>());", `    request.Content.Headers.TryAddWithoutValidation(${q(k)}, ${q(v)});`, "}");
   }
-  if (r.basicAuth && !r.headers.some(([k]) => /^authorization$/i.test(k))) lines.push(`request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(${q(`${r.basicAuth.user}:${r.basicAuth.password}`)})));`);
+  if (r.basicAuth && !negotiated && !r.headers.some(([k]) => /^authorization$/i.test(k))) lines.push(`request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(${q(`${r.basicAuth.user}:${r.basicAuth.password}`)})));`);
   lines.push("using var response = await client.SendAsync(request);", "response.EnsureSuccessStatusCode();", "Console.WriteLine(await response.Content.ReadAsStringAsync());");
   return lines.join("\n") + "\n";
 }

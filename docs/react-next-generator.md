@@ -6,7 +6,7 @@ Open **DevSnip Pro: React / Next.js Generator** from the command palette or the 
 
 - React 19 with Vite, or Next.js 15/16 with the App Router or Pages Router.
 - JavaScript/JSX or TypeScript/TSX; CSS modules, Tailwind CSS v4 or native styling.
-- Reusable components, hooks, layouts, forms, native modal dialogs, tables, dashboards and navigation.
+- Reusable components, hooks, layouts, forms, native modal dialogs, tables, dashboards and navigation. UI templates are formatted over several lines and follow the **Styling** option: a CSS module with its stylesheet, Tailwind utility classes, or no classes. Next.js layouts and navigation use `Link`.
 - Nested pages, dynamic parameters, required/optional catch-all routes and App Router route groups. App pages include loading and error boundaries. Pages Router uses its own page and API conventions.
 - App Router Server Actions, Auth.js GitHub OAuth, and Next.js 15 middleware / Next.js 16 Proxy.
 - Context, Zustand, Redux Toolkit and TanStack Query; same-origin Fetch or Axios clients.
@@ -17,7 +17,7 @@ Open **DevSnip Pro: React / Next.js Generator** from the command palette or the 
 
 ## Workflow
 
-Search the template selector, configure your target, then generate. Enable **Live preview** to update results after edits. File previews expand on demand and highlight code locally. Copy or open an individual file, save selected files, or write all files using the existing workspace export controls. Existing files require overwrite confirmation.
+Search the template selector, configure your target, then generate. Enable **Live preview** to update results after edits. File previews expand on demand and highlight code locally. Outputs with more than three files also list a **File structure** tree. Copy or open an individual file, save selected files, or write all files using the existing workspace export controls. Existing files require overwrite confirmation.
 
 Use built-in presets or **Save preset** to retain the current configuration. Saved presets are local to the extension, limited to the latest 20, and replaced when the name/template match. **Clear saved presets** removes those saved configurations.
 

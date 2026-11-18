@@ -90,11 +90,14 @@ function redactCurl(request) {
     return r;
 }
 exports.redactCurl = redactCurl;
+function postmanAuth(type, credentials) {
+    return { type, [type]: [{ key: "username", value: credentials.user, type: "string" }, { key: "password", value: credentials.password, type: "string" }] };
+}
 /** Importable Postman v2.1 collection. Original body bytes and repeated fields remain intact. */
 function curlPostman(requests) {
     return JSON.stringify({ info: { name: "Converted cURL requests", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" }, item: requests.map((r, i) => ({ name: `${i + 1}. ${r.method} ${new URL(r.url).pathname}`, request: {
                 method: r.method, header: r.headers.map(([key, value]) => ({ key, value })), url: r.url,
-                ...(r.basicAuth && !r.headers.some(([k]) => /^authorization$/i.test(k)) ? { auth: { type: "basic", basic: [{ key: "username", value: r.basicAuth.user, type: "string" }, { key: "password", value: r.basicAuth.password, type: "string" }] } } : {}),
+                ...(r.basicAuth && !r.headers.some(([k]) => /^authorization$/i.test(k)) ? { auth: postmanAuth(r.authScheme === "digest" || r.authScheme === "ntlm" ? r.authScheme : "basic", r.basicAuth) } : {}),
                 ...(r.bodyFile ? { body: { mode: "file", file: { src: r.bodyFile } } } : r.body !== undefined ? { body: { mode: "raw", raw: r.body, ...(r.bodyKind === "json" ? { options: { raw: { language: "json" } } } : {}) } } : r.form.length ? { body: { mode: "formdata", formdata: r.form.map(f => ({ key: f.name, type: f.file ? "file" : "text", ...(f.file ? { src: f.value } : { value: f.value }), ...(f.contentType ? { contentType: f.contentType } : {}) })) } } : {})
             } })) }, null, 2) + "\n";
 }
@@ -102,7 +105,7 @@ exports.curlPostman = curlPostman;
 /** HAR is an interchange preview: response/timing fields are placeholders, no request is sent. */
 function curlHar(requests) {
     return JSON.stringify({ log: { version: "1.2", creator: { name: "DevSnip Pro", version: "1.0" }, entries: requests.map(r => ({ startedDateTime: "1970-01-01T00:00:00.000Z", time: 0, request: {
-                    method: r.method, url: r.url, httpVersion: "HTTP/1.1", cookies: [], headers: [...r.headers, ...(r.basicAuth && !r.headers.some(([k]) => /^authorization$/i.test(k)) ? [["Authorization", "Basic " + Buffer.from(`${r.basicAuth.user}:${r.basicAuth.password}`).toString("base64")]] : [])].map(([name, value]) => ({ name, value })), queryString: [...new URL(r.url).searchParams].map(([name, value]) => ({ name, value })), headersSize: -1, bodySize: r.body !== undefined ? Buffer.byteLength(r.body) : -1,
+                    method: r.method, url: r.url, httpVersion: "HTTP/1.1", cookies: [], headers: [...r.headers, ...(r.basicAuth && (!r.authScheme || r.authScheme === "basic" || r.authScheme === "anyauth") && !r.headers.some(([k]) => /^authorization$/i.test(k)) ? [["Authorization", "Basic " + Buffer.from(`${r.basicAuth.user}:${r.basicAuth.password}`).toString("base64")]] : [])].map(([name, value]) => ({ name, value })), queryString: [...new URL(r.url).searchParams].map(([name, value]) => ({ name, value })), headersSize: -1, bodySize: r.body !== undefined ? Buffer.byteLength(r.body) : -1,
                     ...(r.body !== undefined ? { postData: { mimeType: r.headers.find(([k]) => /^content-type$/i.test(k))?.[1] ?? "application/octet-stream", text: r.body } } : r.form.length ? { postData: { mimeType: "multipart/form-data", params: r.form.map(f => ({ name: f.name, value: f.file ? "" : f.value, ...(f.file ? { fileName: f.filename || f.value } : {}), ...(f.contentType ? { contentType: f.contentType } : {}) })) } } : {}), ...(r.bodyFile ? { comment: "Body file reference (contents not loaded): " + r.bodyFile } : {})
                 }, response: { status: 0, statusText: "Not executed", httpVersion: "HTTP/1.1", cookies: [], headers: [], content: { size: 0, mimeType: "application/octet-stream" }, redirectURL: "", headersSize: -1, bodySize: -1 }, cache: {}, timings: { send: 0, wait: 0, receive: 0 } })) } }, null, 2) + "\n";
 }

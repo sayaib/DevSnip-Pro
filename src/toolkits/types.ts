@@ -67,7 +67,9 @@ export type Output =
   | { kind: "text"; title: string; content: string }
   | { kind: "table"; title: string; columns: string[]; rows: Array<Array<string | number>> }
   | { kind: "files"; title: string; files: GeneratedFile[] }
-  | { kind: "chart"; title: string; xLabel: string; yLabel: string; series: Array<{ name: string; points: Array<[number, number]> }> };
+  | { kind: "chart"; title: string; xLabel: string; yLabel: string; series: Array<{ name: string; points: Array<[number, number]> }> }
+  /** Collapsible explorer for parsed JSON; children render on demand, so large values stay fast. */
+  | { kind: "tree"; title: string; value: unknown; note?: string };
 
 export type Tone = "good" | "warn" | "bad" | "neutral";
 

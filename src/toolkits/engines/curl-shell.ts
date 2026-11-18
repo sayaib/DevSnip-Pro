@@ -1,7 +1,7 @@
 import { ToolInputError } from "../types";
 
 /** Bounded shell lexer shared with Docker conversion; values are never expanded or executed. */
-export function tokenizeShell(input: string, shell: "auto" | "bash" | "cmd" | "powershell" = "auto"): string[] {
+export function tokenizeShell(input: string, shell: "auto" | "bash" | "cmd" | "powershell" = "auto", comments = false): string[] {
   const tokens: string[] = [];
   let value = "", active = false;
   const flush = () => { if (active) tokens.push(value); value = ""; active = false; };
@@ -10,6 +10,13 @@ export function tokenizeShell(input: string, shell: "auto" | "bash" | "cmd" | "p
     const c = input[i];
     if ((c === "\\" && shell !== "cmd" && shell !== "powershell" || c === "^" && (shell === "auto" || shell === "cmd") || c === "`" && (shell === "auto" || shell === "powershell")) && continuation(i)) { i += continuation(i); continue; }
     if (/\s/.test(c)) { flush(); i++; continue; }
+    // A # that starts a word begins a comment in Bash and PowerShell (never inside a word, so URL fragments stay).
+    if (comments && !active && c === "#" && shell !== "cmd") { while (i < input.length && input[i] !== "\n") i++; continue; }
+    // Windows programs (including curl.exe) read \" as a literal quote: 2n backslashes + " = n backslashes and a quote toggle.
+    if (shell === "cmd" && c === "\\") {
+      const run = backslashRun(input, i);
+      if (input[run.end] === '"') { active = true; value += "\\".repeat(Math.floor(run.count / 2)) + (run.count % 2 ? '"' : ""); i = run.end + (run.count % 2); continue; }
+    }
     active = true;
     if (c === "^" && input[i + 1] === '"' && (shell === "auto" || shell === "cmd")) {
       const decoded = readCmdEnvelope(input, i); value += decoded.value; i = decoded.end; continue;
@@ -35,6 +42,11 @@ export function tokenizeShell(input: string, shell: "auto" | "bash" | "cmd" | "p
     } else if (c === '"') {
       i++; let closed = false;
       while (i < input.length) {
+        if (shell === "cmd" && input[i] === "\\") {
+          const run = backslashRun(input, i);
+          if (input[run.end] === '"') { value += "\\".repeat(Math.floor(run.count / 2)); i = run.end; if (run.count % 2) { value += '"'; i++; continue; } continue; }
+          value += input.slice(i, run.end); i = run.end; continue;
+        }
         if (input[i] === '"') { i++; closed = true; break; }
         if (input[i] === "\\" && shell !== "cmd" && shell !== "powershell" && /["\\$`\r\n]/.test(input[i + 1] ?? "")) {
           if (continuation(i)) i += continuation(i); else { value += input[i + 1]; i += 2; }
@@ -48,6 +60,12 @@ export function tokenizeShell(input: string, shell: "auto" | "bash" | "cmd" | "p
   }
   flush();
   return tokens;
+}
+
+function backslashRun(input: string, start: number): { count: number; end: number } {
+  let end = start;
+  while (input[end] === "\\") end++;
+  return { count: end - start, end };
 }
 
 /** Decode the caret-wrapped argv tokens emitted by browser Copy as cURL (cmd). */

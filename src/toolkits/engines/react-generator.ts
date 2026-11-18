@@ -91,6 +91,9 @@ export function generateReact(input: ReactOptions): ReactGeneration {
   const app = `app${route ? "/" + route : ""}`;
   const childType = t('import type { ReactNode } from "react";\n');
   const children = t(": { children: ReactNode }");
+  /** className for the selected styling: Tailwind utilities, a CSS module class, or nothing. */
+  const styleAttr = (moduleClass: string, tailwind: string) => o.styling === "tailwind" ? ` className="${tailwind}"` : o.styling === "css-module" ? ` className={styles.${moduleClass}}` : "";
+  const styleModule = (stem: string, css: string) => { if (o.styling === "css-module") add(`${stem}.module.css`, css); };
 
   function uiProvider(): { imports: string; open: string; close: string } {
     if (o.ui === "mui") {
@@ -153,11 +156,11 @@ export function generateReact(input: ReactOptions): ReactGeneration {
     });
     const shape = params.map(p => `${p.name}${p.optional ? "?" : ""}: ${p.type}`).join("; ");
     if (o.framework === "next-pages") {
-      add(`pages/${route || "index"}.${x}`, `import { useRouter } from "next/router";\nimport Head from "next/head";\n\nexport default function ${N}Page() {\n  const router = useRouter();\n  if (!router.isReady) return <p role="status">Loading…</p>;\n  return <main><Head><title>${N}</title></Head><h1>${N}</h1><pre>{JSON.stringify(router.query, null, 2)}</pre></main>;\n}`);
+      add(`pages/${route || "index"}.${x}`, `import { useRouter } from "next/router";\nimport Head from "next/head";\n\nexport default function ${N}Page() {\n  const router = useRouter();\n  if (!router.isReady) return <p role="status">Loading…</p>;\n\n  return (\n    <main>\n      <Head>\n        <title>${N}</title>\n      </Head>\n      <h1>${N}</h1>\n      <pre>{JSON.stringify(router.query, null, 2)}</pre>\n    </main>\n  );\n}`);
     } else {
-      add(`${app}/page.${x}`, `${t('import type { Metadata } from "next";\n')}\nexport const metadata${t(": Metadata")} = { title: "${N}" };\n\nexport default ${params.length ? "async " : ""}function ${N}Page(${params.length ? `{ params }${t(`: { params: Promise<{ ${shape} }> }`)}` : ""}) {\n${params.length ? "  const routeParams = await params;\n" : ""}  return <main><h1>${N}</h1>${params.length ? '<pre>{JSON.stringify(routeParams, null, 2)}</pre>' : "<p>Your page is ready.</p>"}</main>;\n}`);
-      add(`${app}/loading.${x}`, 'export default function Loading() { return <p role="status" aria-busy="true">Loading…</p>; }');
-      add(`${app}/error.${x}`, `"use client";\n\nexport default function ErrorBoundary({ reset }${t(": { error: Error & { digest?: string }; reset: () => void }")}) {\n  return <div role="alert"><h2>Something went wrong</h2><button type="button" onClick={reset}>Try again</button></div>;\n}`);
+      add(`${app}/page.${x}`, `${t('import type { Metadata } from "next";\n')}\nexport const metadata${t(": Metadata")} = { title: "${N}" };\n\nexport default ${params.length ? "async " : ""}function ${N}Page(${params.length ? `{ params }${t(`: { params: Promise<{ ${shape} }> }`)}` : ""}) {\n${params.length ? "  const routeParams = await params;\n\n" : ""}  return (\n    <main>\n      <h1>${N}</h1>\n      ${params.length ? "<pre>{JSON.stringify(routeParams, null, 2)}</pre>" : "<p>Your page is ready.</p>"}\n    </main>\n  );\n}`);
+      add(`${app}/loading.${x}`, 'export default function Loading() {\n  return (\n    <p role="status" aria-busy="true">\n      Loading…\n    </p>\n  );\n}');
+      add(`${app}/error.${x}`, `"use client";\n\n// Error boundaries must be Client Components. Show a generic message; log the error digest on the server.\nexport default function ErrorBoundary({ reset }${t(": { error: Error & { digest?: string }; reset: () => void }")}) {\n  return (\n    <div role="alert">\n      <h2>Something went wrong</h2>\n      <button type="button" onClick={reset}>\n        Try again\n      </button>\n    </div>\n  );\n}`);
     }
   }
 
@@ -169,20 +172,21 @@ export function generateReact(input: ReactOptions): ReactGeneration {
     if (o.framework === "react") {
       Object.assign(devDependencies, { vite: "^6.0.0", "@vitejs/plugin-react": "^4.3.0" });
       add("index.html", `<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${N}</title></head><body><div id="root"></div><script type="module" src="/src/main.${x}"></script></body></html>`);
-      add(`src/main.${x}`, `import { StrictMode } from "react";\nimport { createRoot } from "react-dom/client";\nimport { Providers } from "./providers";\nimport App from "./App";\nimport "./styles.css";\n\nconst root = document.getElementById("root");\nif (!root) throw new Error("Missing root element");\ncreateRoot(root).render(<StrictMode><Providers><App /></Providers></StrictMode>);`);
-      add(`src/App.${x}`, `export default function App() { return <main><h1>${N}</h1><p>Ready to build.</p></main>; }`);
-      add(`vite.config.${e}`, `import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\n${o.styling === "tailwind" ? 'import tailwindcss from "@tailwindcss/vite";\n' : ""}import { fileURLToPath, URL } from "node:url";\nexport default defineConfig({ plugins: [react()${o.styling === "tailwind" ? ", tailwindcss()" : ""}], resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } } });`);
+      add(`src/main.${x}`, `import { StrictMode } from "react";\nimport { createRoot } from "react-dom/client";\nimport { Providers } from "./providers";\nimport App from "./App";\nimport "./styles.css";\n\nconst root = document.getElementById("root");\nif (!root) throw new Error("Missing root element");\n\ncreateRoot(root).render(\n  <StrictMode>\n    <Providers>\n      <App />\n    </Providers>\n  </StrictMode>,\n);`);
+      add(`src/App.${x}`, `export default function App() {\n  return (\n    <main>\n      <h1>${N}</h1>\n      <p>Ready to build.</p>\n    </main>\n  );\n}`);
+      // The @ alias points at the source root, which is the project root without a src directory.
+      add(`vite.config.${e}`, `import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\n${o.styling === "tailwind" ? 'import tailwindcss from "@tailwindcss/vite";\n' : ""}import { fileURLToPath, URL } from "node:url";\n\nexport default defineConfig({\n  plugins: [react()${o.styling === "tailwind" ? ", tailwindcss()" : ""}],\n  resolve: { alias: { "@": fileURLToPath(new URL("${o.sourceDirectory ? "./src" : "./"}", import.meta.url)) } },\n});`);
       if (o.styling === "tailwind") devDependencies["@tailwindcss/vite"] = "^4.0.0";
       if (o.typescript) add("src/vite-env.d.ts", '/// <reference types="vite/client" />');
     } else {
       dependencies.next = `^${o.nextVersion}.0.0`;
       add("next.config.mjs", "export default { poweredByHeader: false }; ");
       if (o.framework === "next-app") {
-        add(`app/layout.${x}`, `${childType}import { Providers } from "../src/providers";\nimport "../src/styles.css";\n\nexport default function RootLayout({ children }${children}) {\n  return <html lang="en"><body><Providers>{children}</Providers></body></html>;\n}`);
-        add(`app/page.${x}`, `export default function Home() { return <main><h1>${N}</h1><p>Ready to build.</p></main>; }`);
+        add(`app/layout.${x}`, `${t('import type { Metadata } from "next";\n')}${childType}import { Providers } from "../src/providers";\nimport "../src/styles.css";\n\nexport const metadata${t(": Metadata")} = { title: "${N}", description: "${N} built with Next.js" };\n\nexport default function RootLayout({ children }${children}) {\n  return (\n    <html lang="en">\n      <body>\n        <Providers>{children}</Providers>\n      </body>\n    </html>\n  );\n}`);
+        add(`app/page.${x}`, `export default function Home() {\n  return (\n    <main>\n      <h1>${N}</h1>\n      <p>Ready to build.</p>\n    </main>\n  );\n}`);
       } else {
         add(`pages/_app.${x}`, `${t('import type { AppProps } from "next/app";\n')}import { Providers } from "../src/providers";\nimport "../src/styles.css";\nexport default function App({ Component, pageProps }${t(": AppProps")}) { return <Providers><Component {...pageProps} /></Providers>; }`);
-        add(`pages/index.${x}`, `export default function Home() { return <main><h1>${N}</h1></main>; }`);
+        add(`pages/index.${x}`, `export default function Home() {\n  return (\n    <main>\n      <h1>${N}</h1>\n      <p>Ready to build.</p>\n    </main>\n  );\n}`);
         if (o.ui === "mui") {
           const appFile = files.find(f => f.path === `pages/_app.${x}`)!;
           appFile.content = `${t('import type { AppProps } from "next/app";\n')}import { AppCacheProvider } from "@mui/material-nextjs/v15-pagesRouter";\nimport { Providers } from "../src/providers";\nimport "../src/styles.css";\nexport default function App(props${t(": AppProps")}) {\n  const { Component, pageProps } = props;\n  return <AppCacheProvider {...props}><Providers><Component {...pageProps} /></Providers></AppCacheProvider>;\n}\n`;
@@ -211,23 +215,31 @@ export function generateReact(input: ReactOptions): ReactGeneration {
     const fn = o.nextVersion === "16" ? "proxy" : "middleware";
     add(`${fn}.${e}`, `import { NextResponse } from "next/server";\n${t('import type { NextRequest } from "next/server";\n')}\n// Request-level headers only. Authenticate and authorize in each protected handler/action.\nexport function ${fn}(request${t(": NextRequest")}) {\n  const response = NextResponse.next();\n  response.headers.set("X-Content-Type-Options", "nosniff");\n  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");\n  return response;\n}\nexport const config = { matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"] };`);
   } else if (o.kind === "layout") {
-    add(o.framework === "next-app" ? `${app}/layout.${x}` : `src/components/${stem}.${x}`, `${o.rendering === "client" ? client : ""}${childType}\nexport default function ${N}Layout({ children }${children}) {\n  return <div><header><a href="/">Home</a></header><main>{children}</main><footer>All rights reserved.</footer></div>;\n}`);
+    const link = o.framework === "react" ? { import: "", open: '<a href="/">', close: "</a>" } : { import: 'import Link from "next/link";\n', open: '<Link href="/">', close: "</Link>" };
+    const layoutStem = o.framework === "next-app" ? "layout" : stem;
+    add(o.framework === "next-app" ? `${app}/layout.${x}` : `src/components/${stem}.${x}`, `${o.rendering === "client" ? client : ""}${link.import}${childType}${o.styling === "css-module" ? `import styles from "./${layoutStem}.module.css";\n` : ""}\nexport default function ${N}Layout({ children }${children}) {\n  return (\n    <div${styleAttr("root", "mx-auto flex min-h-screen max-w-6xl flex-col gap-6 p-6")}>\n      <header>\n        ${link.open}Home${link.close}\n      </header>\n      <main${styleAttr("main", "flex-1")}>{children}</main>\n      <footer>© {new Date().getFullYear()} ${N}</footer>\n    </div>\n  );\n}`);
+    styleModule(o.framework === "next-app" ? `${app}/layout` : `src/components/${stem}`, ".root {\n  display: flex;\n  flex-direction: column;\n  gap: 1.5rem;\n  max-width: 72rem;\n  min-height: 100vh;\n  margin: 0 auto;\n  padding: 1.5rem;\n}\n\n.main {\n  flex: 1;\n}");
   } else if (["form", "modal", "table", "dashboard", "navigation"].includes(o.kind)) {
-    let imports = "", body = "", setup = "";
+    const stylesImport = o.styling === "css-module" ? `import styles from "./${stem}.module.css";\n` : "";
+    let source = "";
     if (o.kind === "form") {
-      imports = 'import { useId, useState } from "react";\n';
-      setup = '  const id = useId();\n  const [message, setMessage] = useState("");\n';
-      body = `<form onSubmit={event => { event.preventDefault(); setMessage("Validated. Connect your submission service."); }}><label htmlFor={id}>Email</label><input id={id} name="email" type="email" autoComplete="email" required maxLength={254} /><button type="submit">Submit</button><p role="status">{message}</p></form>`;
+      source = `import { useId, useState } from "react";\n${t('import type { FormEvent } from "react";\n')}${stylesImport}\nexport default function ${N}() {\n  const id = useId();\n  const [status, setStatus] = useState("");\n\n  function handleSubmit(event${t(": FormEvent<HTMLFormElement>")}) {\n    event.preventDefault();\n    const data = new FormData(event.currentTarget);\n    // Send data to your API route or server action here.\n    setStatus(\`Validated \${String(data.get("email"))}. Connect your submission service.\`);\n  }\n\n  return (\n    <form onSubmit={handleSubmit}${styleAttr("root", "flex max-w-sm flex-col gap-3")}>\n      <label htmlFor={id}>Email</label>\n      <input id={id} name="email" type="email" autoComplete="email" required maxLength={254} />\n      <button type="submit">Submit</button>\n      <p role="status" aria-live="polite">\n        {status}\n      </p>\n    </form>\n  );\n}`;
+      styleModule(`src/components/${stem}`, ".root {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  max-width: 24rem;\n}");
     } else if (o.kind === "modal") {
-      imports = 'import { useId, useRef } from "react";\n';
-      setup = `  const id = useId();\n  const dialog = useRef${t("<HTMLDialogElement | null>")}(null);\n`;
-      body = '<><button type="button" onClick={() => dialog.current?.showModal()}>Open dialog</button><dialog ref={dialog} aria-labelledby={id}><h2 id={id}>Details</h2><p>Dialog content</p><form method="dialog"><button>Close</button></form></dialog></>';
+      source = `import { useId, useRef } from "react";\n${stylesImport}\n/** Native <dialog>: focus trapping, Escape to close and the backdrop come from the browser. */\nexport default function ${N}() {\n  const id = useId();\n  const dialog = useRef${t("<HTMLDialogElement | null>")}(null);\n\n  return (\n    <>\n      <button type="button" onClick={() => dialog.current?.showModal()}>\n        Open dialog\n      </button>\n      <dialog ref={dialog} aria-labelledby={id}${styleAttr("root", "rounded-lg p-6 shadow-xl backdrop:bg-black/40")}>\n        <h2 id={id}>Details</h2>\n        <p>Dialog content</p>\n        <form method="dialog">\n          <button>Close</button>\n        </form>\n      </dialog>\n    </>\n  );\n}`;
+      styleModule(`src/components/${stem}`, ".root {\n  padding: 1.5rem;\n  border: 0;\n  border-radius: 0.5rem;\n}\n\n.root::backdrop {\n  background: rgb(0 0 0 / 0.4);\n}");
     } else if (o.kind === "table") {
-      setup = '  const rows = [{ id: "1", name: "Example" }];\n';
-      body = '<table><caption>Records</caption><thead><tr><th scope="col">Name</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td>{row.name}</td></tr>)}</tbody></table>';
-    } else if (o.kind === "navigation") body = '<nav aria-label="Main"><ul><li><a href="/">Home</a></li><li><a href="/about">About</a></li></ul></nav>';
-    else body = '<main><h1>Dashboard</h1><section aria-label="Overview"><h2>Activity</h2><dl><dt>Total records</dt><dd>0</dd></dl></section></main>';
-    add(`src/components/${stem}.${x}`, `${["form", "modal"].includes(o.kind) || o.rendering === "client" ? client : ""}${imports}\nexport default function ${N}() {\n${setup}  return (${body});\n}`);
+      source = `${stylesImport}\n${t(`export interface ${N}Row {\n  id: string;\n  name: string;\n}\n\n`)}const sampleRows${t(`: ${N}Row[]`)} = [{ id: "1", name: "Example" }];\n\nexport default function ${N}({ rows = sampleRows, caption = "Records" }${t(`: { rows?: ${N}Row[]; caption?: string }`)}) {\n  return (\n    <table${styleAttr("root", "w-full border-collapse text-left")}>\n      <caption>{caption}</caption>\n      <thead>\n        <tr>\n          <th scope="col">Name</th>\n        </tr>\n      </thead>\n      <tbody>\n        {rows.length ? (\n          rows.map(row => (\n            <tr key={row.id}>\n              <td>{row.name}</td>\n            </tr>\n          ))\n        ) : (\n          <tr>\n            <td>No records yet.</td>\n          </tr>\n        )}\n      </tbody>\n    </table>\n  );\n}`;
+      styleModule(`src/components/${stem}`, ".root {\n  width: 100%;\n  border-collapse: collapse;\n  text-align: left;\n}\n\n.root th,\n.root td {\n  padding: 0.5rem 0.75rem;\n  border-bottom: 1px solid #e5e7eb;\n}");
+    } else if (o.kind === "navigation") {
+      const nextLink = o.framework !== "react";
+      source = `${nextLink ? 'import Link from "next/link";\n' : ""}${stylesImport}\nconst links = [\n  { href: "/", label: "Home" },\n  { href: "/about", label: "About" },\n];\n\nexport default function ${N}() {\n  return (\n    <nav aria-label="Main"${styleAttr("root", "flex gap-4")}>\n      <ul>\n        {links.map(link => (\n          <li key={link.href}>\n            ${nextLink ? "<Link href={link.href}>{link.label}</Link>" : "<a href={link.href}>{link.label}</a>"}\n          </li>\n        ))}\n      </ul>\n    </nav>\n  );\n}`;
+      styleModule(`src/components/${stem}`, ".root ul {\n  display: flex;\n  gap: 1rem;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}");
+    } else {
+      source = `${stylesImport}\nconst stats = [\n  { label: "Total records", value: 0 },\n  { label: "Active users", value: 0 },\n];\n\nexport default function ${N}() {\n  return (\n    <main${styleAttr("root", "mx-auto max-w-6xl p-6")}>\n      <h1>Dashboard</h1>\n      <section aria-label="Overview">\n        <h2>Activity</h2>\n        <dl${styleAttr("stats", "grid grid-cols-2 gap-4")}>\n          {stats.map(stat => (\n            <div key={stat.label}>\n              <dt>{stat.label}</dt>\n              <dd>{stat.value.toLocaleString()}</dd>\n            </div>\n          ))}\n        </dl>\n      </section>\n    </main>\n  );\n}`;
+      styleModule(`src/components/${stem}`, ".root {\n  max-width: 72rem;\n  margin: 0 auto;\n  padding: 1.5rem;\n}\n\n.stats {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));\n  gap: 1rem;\n}");
+    }
+    add(`src/components/${stem}.${x}`, `${["form", "modal"].includes(o.kind) || o.rendering === "client" ? client : ""}${source.replace(/^\n/, "")}`);
   } else if (o.kind === "api-client") apiClient();
   else if (o.kind === "query") {
     providers(); apiClient();
@@ -304,7 +316,8 @@ export function generateReact(input: ReactOptions): ReactGeneration {
     steps.push(`Run ${o.testRunner === "jest" ? "npx jest" : "npx vitest run"}. Test async Server Components with end-to-end tests; unit tests target synchronous components and hooks.`);
   }
   if (o.naming === "kebab" && o.kind === "component") {
-    for (const f of files) { f.path = f.path.replace(new RegExp(N, "g"), stem); f.content = f.content.replace(new RegExp(`\\./${N}`, "g"), `./${stem}`); }
+    // UserCardLazy becomes user-card-lazy, not user-cardLazy.
+    for (const f of files) { f.path = f.path.replace(new RegExp(`${N}Lazy`, "g"), `${stem}-lazy`).replace(new RegExp(N, "g"), stem); f.content = f.content.replace(new RegExp(`\\./${N}Lazy\\b`, "g"), `./${stem}-lazy`).replace(new RegExp(`\\./${N}`, "g"), `./${stem}`); }
   }
   if (o.kind === "project") {
     const scripts: Record<string, string> = o.framework === "react" ? { dev: "vite", build: "vite build", preview: "vite preview" } : { dev: "next dev", build: "next build", start: "next start" };

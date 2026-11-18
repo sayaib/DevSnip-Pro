@@ -31,6 +31,7 @@ const api_response_1 = require("../../toolkits/engines/api-response");
 const api_response_json_1 = require("../../toolkits/engines/api-response-json");
 const api_response_tools_1 = require("../../toolkits/engines/api-response-tools");
 const api_response_2 = require("../../toolkits/sections/api-response");
+const json_locate_1 = require("../../toolkits/engines/json-locate");
 const types_1 = require("../../toolkits/types");
 const run_unit_tests_1 = require("./run-unit-tests");
 const response = (body, headers = "Content-Type: application/json", status = "200 OK") => `HTTP/1.1 ${status}\r\n${headers}\r\n\r\n${body}`;
@@ -260,6 +261,82 @@ function har(text, encoding) { return JSON.stringify({ log: { version: "1.2", en
         assert.strictEqual(result.setValues?.raw, '{"id":1}');
         context.files.pick = async () => ({ name: "binary", path: "/binary", bytes: new Uint8Array([255]) });
         await assert.rejects(async () => api_response_2.apiResponse.run({}, context, "load-file"), types_1.ToolInputError);
+    });
+});
+(0, run_unit_tests_1.suite)("API response inspector: large responses, JSON errors and the explorer (11.89)", () => {
+    const big = JSON.stringify({ data: Array.from({ length: 12000 }, (_, i) => ({ id: i, name: `user${i}`, tags: ["a", "b"], profile: { age: 20 + i % 50 } })) });
+    (0, run_unit_tests_1.test)("inspects JSON far beyond 50,000 tokens within the 2 MiB limit", async () => {
+        assert.ok(big.length > 600000);
+        const started = Date.now();
+        const result = await api_response_2.apiResponse.run({ raw: response(big), export: "all" }, { now: () => new Date(0) });
+        assert.ok(Date.now() - started < 5000, "large inspection stays fast");
+        const tree = result.outputs.find(o => o.kind === "tree");
+        assert.ok(tree && tree.kind === "tree");
+        assert.strictEqual(tree.value.data.length, 12000);
+        assert.ok(result.outputs.some(o => o.kind === "table" && o.title.startsWith("Fields")));
+        assert.ok(!result.messages.some(m => m.kind === "error"));
+    });
+    (0, run_unit_tests_1.test)("compares large bodies completely enough to find a deep change", () => {
+        const changed = big.replace('"user11000"', '"renamed"');
+        const diff = (0, api_response_tools_1.compareApiResponses)((0, api_response_1.inspectApiResponse)(response(big)), (0, api_response_1.inspectApiResponse)(response(changed)));
+        assert.ok(diff.changes.some(c => c.path === "body/data/11000/name"), JSON.stringify(diff.changes.slice(0, 3)));
+    });
+    (0, run_unit_tests_1.test)("invalid JSON names line, column and reason without echoing the body", () => {
+        const message = notes(response('{"token":"SECRET",\n "b": }'));
+        assert.ok(message.includes("Invalid JSON at line 2, column 7: unexpected '}': a value is missing"), message);
+        assert.ok(!message.includes("SECRET"));
+        assert.ok(notes(response('{"a":[1,2')).includes("missing ']' (the JSON is truncated)"));
+        assert.ok(notes(response("{'a':1}")).includes("double-quoted property name"));
+    });
+    (0, run_unit_tests_1.test)("the explorer is optional, skips non-JSON bodies and warns about rounded numbers", async () => {
+        const off = await api_response_2.apiResponse.run({ raw: response('{"a":1}'), tree: false }, {});
+        assert.ok(!off.outputs.some(o => o.kind === "tree"));
+        const text = await api_response_2.apiResponse.run({ raw: response("hello", "Content-Type: text/plain") }, {});
+        assert.ok(!text.outputs.some(o => o.kind === "tree"));
+        const ndjson = await api_response_2.apiResponse.run({ raw: response('{"id":1}\n{"id":2}\n', "Content-Type: application/x-ndjson") }, {});
+        assert.deepStrictEqual(ndjson.outputs.find(o => o.kind === "tree").title, "Explore · NDJSON records");
+        const precise = await api_response_2.apiResponse.run({ raw: response('{"id":9007199254740993}') }, {});
+        const tree = precise.outputs.find(o => o.kind === "tree");
+        assert.ok(tree && tree.kind === "tree" && tree.note?.includes("safe range"));
+    });
+});
+(0, run_unit_tests_1.suite)("JSON error locator", () => {
+    (0, run_unit_tests_1.test)("locates common mistakes with 1-based line and column", () => {
+        const cases = [
+            ['{"a":1,}', 1, 8, "trailing comma before '}'"], ["[1,2,]", 1, 6, "trailing comma before ']'"], ['{"a":[1,2', 1, 10, "missing ']'"],
+            ["{a:1}", 1, 2, "double-quoted property name"], ['{"a":\'x\'}', 1, 6, "double quotes"], ['"abc', 1, 1, "unterminated string"],
+            ['{"a":1} x', 1, 9, "after the JSON value"], ["", 1, 1, "empty input"], ["[1 2]", 1, 4, "expected ',' or ']'"], ['{"a" 1}', 1, 6, "expected ':'"],
+            ['{"a":"x\ny"}', 1, 8, "line break inside a string"], ['{"a":nul}', 1, 6, "unexpected 'n'"], ['{"a":"\\q"}', 1, 7, "invalid escape"], ["{\n  \"a\": 1\n  \"b\": 2\n}", 3, 3, "expected ',' or '}'"]
+        ];
+        for (const [source, line, column, reason] of cases) {
+            const found = (0, json_locate_1.locateJsonError)(source);
+            assert.ok(found, source);
+            assert.deepStrictEqual([found.line, found.column], [line, column], source);
+            assert.ok(found.reason.includes(reason), `${source}: ${found.reason}`);
+        }
+    });
+    (0, run_unit_tests_1.test)("agrees with JSON.parse on valid, mutated and deeply nested input", () => {
+        const samples = ['{"a":[1,2,{"b":null}],"c":"x\\u00e9","d":-1.5e+3,"e":true}', "[]", "{}", '"\\""', "0", "\uFEFF{}", " [ 1 , 2 ] "];
+        let seed = 7;
+        const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+        for (const sample of samples) {
+            assert.strictEqual((0, json_locate_1.locateJsonError)(sample), undefined, sample);
+            for (let i = 0; i < 300; i++) {
+                const at = Math.floor(random() * sample.length), insert = '{}[],:"\\ 1an'[Math.floor(random() * 13)];
+                const mutated = random() < 0.5 ? sample.slice(0, at) + insert + sample.slice(at) : sample.slice(0, at) + sample.slice(at + 1);
+                let valid = true;
+                try {
+                    JSON.parse(mutated.replace(/^\uFEFF/, ""));
+                }
+                catch {
+                    valid = false;
+                }
+                assert.strictEqual((0, json_locate_1.locateJsonError)(mutated) === undefined, valid, JSON.stringify(mutated));
+            }
+        }
+        const deep = "[".repeat(100000) + "]".repeat(100000);
+        assert.strictEqual((0, json_locate_1.locateJsonError)(deep), undefined);
+        assert.strictEqual((0, json_locate_1.locateJsonError)(deep.slice(0, -1)).reason, "unexpected end of input: missing ']' (the JSON is truncated)");
     });
 });
 //# sourceMappingURL=api-response-inspector.unit.js.map

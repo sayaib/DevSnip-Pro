@@ -17,13 +17,13 @@ export function checkApiSize(input: string): void {
 export function parseApiJson(source: string): { value: unknown; notes: string[] } {
   checkApiSize(source);
   const value = JSON.parse(source);
-  let depth = 0, nodes = 0, unsafeNumber = false, duplicate = false;
+  // One linear pass over at most 2 MiB; only nesting depth is limited, so large responses stay inspectable.
+  let depth = 0, unsafeNumber = false, duplicate = false;
   const objects: Array<Set<string> | undefined> = [];
   const tokens = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[\[\]{}:,]|true|false|null/g;
   let match: RegExpExecArray | null;
   while ((match = tokens.exec(source))) {
     const token = match[0];
-    if (++nodes > API_MAX_NODES) throw new ToolInputError("JSON exceeds the 50,000-token inspection limit.");
     if (token === "{" || token === "[") {
       if (++depth > API_MAX_DEPTH) throw new ToolInputError("JSON nesting exceeds 64 levels.");
       objects.push(token === "{" ? new Set() : undefined);

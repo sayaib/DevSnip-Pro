@@ -13,21 +13,21 @@ const storageKey = "curlConverter.presets.v1";
 exports.curlTool = {
     id: "web.curl", command: "curlConverter", title: "cURL Converter", icon: "terminal", live: true,
     summary: "Convert cURL into browser/server clients, Python, Go, PHP, Java, C#, Dart, Kotlin, Swift, HTTPie or raw HTTP, with batch conversion and Postman/HAR exports.",
-    guide: "Conversion runs locally and never sends requests, reads referenced files or executes shell commands. Select Bash, cmd or PowerShell for shell-specific quoting. Use --next, newlines or && between cURL requests in batch mode. Code preserves request body text and repeated parameters where supported. Unsupported combinations produce diagnostics. Browser headers, redirects and CORS differ from server clients. Secrets remain in generated code unless redaction is enabled. Saved presets are redacted; cURL input is excluded from persisted webview state. Exports include requests only; HAR response/timing fields are placeholders.",
+    guide: "Conversion runs locally and never sends requests, reads referenced files or executes shell commands. Select Bash, cmd or PowerShell for shell-specific quoting. Use --next, newlines or && between cURL requests in batch mode. Code preserves request body text and repeated parameters where supported. Unsupported combinations produce diagnostics. Browser headers, redirects and CORS differ from server clients. Basic auth converts everywhere; --digest converts to Python requests, HTTPX, C# and HTTPie, and --ntlm/--negotiate to C#. --aws-sigv4 signing is kept only in normalized cURL. Secrets remain in generated code unless redaction is enabled. Saved presets are redacted; cURL input is excluded from persisted webview state. Exports include requests only; HAR response/timing fields are placeholders.",
     keywords: ["curl", "copy as curl", "fetch", "axios", "requests", "httpx", "http client", "okhttp", "urlsession", "dio", "csharp", "postman", "har", "batch", "powershell"],
     runLabel: "Convert request",
     fields: [
-        helpers_1.f.code("curl", "cURL command", "shell", { rows: 9, required: true, fromEditor: true, sensitive: true, default: sample }),
-        helpers_1.f.select("shell", "Shell dialect", (0, helpers_1.opts)(["auto", "Automatic · Bash / cmd"], ["bash", "Bash / zsh"], ["cmd", "Windows cmd"], ["powershell", "PowerShell (curl.exe)"])),
-        helpers_1.f.select("target", "Convert to", web_curl_1.CURL_TARGETS.map(t => ({ value: t.id, label: t.label })), { searchable: true }),
-        helpers_1.f.toggle("all", "Show every language", false),
-        helpers_1.f.toggle("batch", "Convert multiple requests", false),
-        helpers_1.f.toggle("redact", "Redact credentials and sensitive fields", false, { help: "Redacts known credential headers, URL parameters, JSON/form fields and raw bodies. Review application-specific secrets before sharing." }),
-        helpers_1.f.toggle("cleanHeaders", "Remove browser metadata headers", false, { help: "Drops Sec-*, Priority, DNT and Upgrade-Insecure-Requests. Preserves application headers." }),
+        helpers_1.f.code("curl", "cURL command", "shell", { rows: 9, required: true, fromEditor: true, sensitive: true, default: sample, placeholder: "curl https://api.example.com/users -H 'Accept: application/json'", help: "Paste from API docs or DevTools (Copy as cURL). Line continuations, comments and Bash, cmd or PowerShell quoting are understood." }),
+        helpers_1.f.select("shell", "Shell dialect", (0, helpers_1.opts)(["auto", "Automatic · Bash / cmd"], ["bash", "Bash / zsh"], ["cmd", "Windows cmd"], ["powershell", "PowerShell (curl.exe)"]), { help: "Pick Windows cmd or PowerShell when quotes or escapes look wrong in the output." }),
+        helpers_1.f.select("target", "Convert to", web_curl_1.CURL_TARGETS.map(t => ({ value: t.id, label: t.label })), { searchable: true, placeholder: "Search languages and clients…", group: "Output" }),
+        helpers_1.f.toggle("all", "Show every language", false, { help: "One tab per target; targets that cannot represent the request explain why." }),
+        helpers_1.f.toggle("batch", "Convert multiple requests", false, { help: "Separate commands with new lines, &&, ; or --next." }),
         helpers_1.f.select("response", "Fetch response", (0, helpers_1.opts)(["auto", "Detect JSON from response Content-Type"], ["json", "JSON"], ["text", "Text"], ["bytes", "Binary (ArrayBuffer)"]), { showIf: { field: "target", equals: ["fetch", "fetch-ts", "node-fetch"] } }),
-        helpers_1.f.toggle("reusable", "Reusable Fetch function", false, { showIf: { field: "target", equals: ["fetch", "fetch-ts", "node-fetch"] } }),
-        helpers_1.f.text("presetName", "Preset name (optional)", { placeholder: "My API request", help: "Used by Save redacted preset; up to 80 characters." }),
-        helpers_1.f.select("export", "Request export", (0, helpers_1.opts)(["none", "Code + normalized cURL"], ["postman", "Postman collection v2.1"], ["har", "HAR v1.2"], ["both", "Postman + HAR"]))
+        helpers_1.f.toggle("reusable", "Reusable Fetch function", false, { showIf: { field: "target", equals: ["fetch", "fetch-ts", "node-fetch"] }, help: "Wraps the request in an exported async sendRequest() function." }),
+        helpers_1.f.toggle("redact", "Redact credentials and sensitive fields", false, { group: "Privacy & cleanup", help: "Redacts known credential headers, URL parameters, JSON/form fields and raw bodies. Review application-specific secrets before sharing." }),
+        helpers_1.f.toggle("cleanHeaders", "Remove browser metadata headers", false, { help: "Drops Sec-*, Priority, DNT and Upgrade-Insecure-Requests. Preserves application headers." }),
+        helpers_1.f.select("export", "Request export", (0, helpers_1.opts)(["none", "Code + normalized cURL"], ["postman", "Postman collection v2.1"], ["har", "HAR v1.2"], ["both", "Postman + HAR"]), { group: "Export & presets" }),
+        helpers_1.f.text("presetName", "Preset name (optional)", { placeholder: "My API request", help: "Used by Save redacted preset; up to 80 characters." })
     ],
     examples: [
         { label: "JSON POST", values: { curl: sample, batch: false } },
@@ -35,6 +35,8 @@ exports.curlTool = {
         { label: "Form login with redirects", values: { curl: "curl -L https://example.com/login -d 'username=ada' -d 'password=YOUR_PASSWORD'", target: "python", batch: false } },
         { label: "Repeated query parameters", values: { curl: "curl -G https://api.example.com/search --data-urlencode 'q=coffee near me' -d 'tag=red&tag=blue' -H 'Accept: application/json'", target: "axios-node", batch: false } },
         { label: "Batch + Postman export", values: { curl: "curl https://api.example.com/users --next https://api.example.com/orders", batch: true, export: "postman", target: "python-httpx" } },
+        { label: "Windows cmd quoting", values: { curl: 'curl -X POST https://api.example.com/items -H "Content-Type: application/json" -d "{\\"name\\":\\"Ada\\"}"', shell: "cmd", target: "fetch", batch: false } },
+        { label: "Digest auth (Python)", values: { curl: "curl --digest -u admin:YOUR_PASSWORD https://device.example.com/api/status", target: "python", batch: false } },
         { label: "Binary body file", values: { curl: "curl https://api.example.com/import --data-binary @./payload.bin", batch: false, target: "node-fetch" } }
     ],
     actions: [{ id: "save-preset", label: "Save redacted preset" }, { id: "clear-presets", label: "Clear saved presets" }],
@@ -109,7 +111,16 @@ exports.curlTool = {
             await context.storage.set(storageKey, [...saved, { label, values: preset }].slice(-20));
             messages.unshift({ kind: "success", text: "Saved a redacted preset. Replace REDACTED values before running the request." });
         }
-        return { stats: [{ label: "Requests", value: String(effective.length) }, { label: "Outputs", value: String(outputs.length) }], messages: [...new Map(messages.map(m => [m.text, m])).values()], outputs };
+        const first = effective[0], host = (() => { try {
+            return new URL(first.url).host;
+        }
+        catch {
+            return "";
+        } })();
+        const stats = effective.length === 1
+            ? [{ label: "Request", value: `${first.method} ${host}` }, { label: "Body", value: first.bodyFile ? "file" : first.bodyKind }, { label: "Headers", value: String(first.headers.length) }, { label: "Outputs", value: String(outputs.length) }]
+            : [{ label: "Requests", value: String(effective.length) }, { label: "Outputs", value: String(outputs.length) }];
+        return { stats, messages: [...new Map(messages.map(m => [m.text, m])).values()], outputs };
     }
 };
 //# sourceMappingURL=curl.js.map

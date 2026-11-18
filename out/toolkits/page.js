@@ -119,7 +119,7 @@ details.guide p { margin: 0; padding: 0 12px 12px 32px; color: var(--text); whit
 label.lbl { font-size: 12px; font-weight: 600; color: var(--text); }
 label.lbl .req { color: var(--err); margin-left: 2px; }
 .help { font-size: 11.5px; color: var(--muted); }
-input[type=text], input[type=password], input[type=number], select, textarea {
+input[type=text], input[type=password], input[type=number], input[type=search], select, textarea {
   width: 100%; font: inherit; color: var(--vscode-input-foreground, var(--text));
   background: var(--vscode-input-background, var(--panel-2));
   border: 1px solid var(--vscode-input-border, var(--card-line)); border-radius: 6px;
@@ -234,6 +234,34 @@ tr:hover td { background: var(--soft); }
 .chart text { fill: var(--muted); font-size: 10.5px; font-family: var(--font); }
 .chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
 .chart .area { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: none; }
+
+/* JSON tree explorer */
+.jt-tools { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--card-line); flex-wrap: wrap; }
+.jt-tools input[type=search] { flex: 1 1 200px; width: auto; min-height: 28px; padding: 4px 8px; }
+.jt-count { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.jt-matches { max-height: 180px; overflow: auto; border-bottom: 1px solid var(--card-line); }
+.jt-match { display: flex; gap: 10px; width: 100%; text-align: left; padding: 4px 12px; background: none; border: 0; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.jt-match:hover, .jt-match:focus-visible { background: var(--soft); outline: none; }
+.jt-match code { font-family: var(--mono); color: var(--syn-key); flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jt-match span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jtree { font-family: var(--mono); font-size: 12px; max-height: 520px; overflow: auto; padding: 4px 0; }
+.jtree.expanded { max-height: none; }
+.jt-row { display: flex; align-items: center; gap: 4px; padding: 1px 12px 1px calc(12px + var(--d, 0) * 16px); min-height: 22px; cursor: pointer; white-space: nowrap; outline: none; }
+.jt-row:hover { background: var(--soft); }
+.jt-row:focus-visible { box-shadow: inset 0 0 0 1px var(--focus); }
+.jt-row[aria-selected=true] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.jt-twisty { width: 14px; height: 14px; flex: none; display: grid; place-items: center; color: var(--muted); }
+.jt-twisty svg.i { width: 12px; height: 12px; transition: transform .12s var(--ease); }
+.jt-row[aria-expanded=true] > .jt-twisty svg.i { transform: rotate(90deg); }
+.jt-key { color: var(--syn-key); }
+.jt-idx { color: var(--muted); }
+.jt-sum { color: var(--muted); font-style: italic; }
+.jt-str { color: var(--syn-str); overflow: hidden; text-overflow: ellipsis; }
+.jt-num { color: var(--syn-num); } .jt-lit { color: var(--syn-lit); }
+.jt-more { margin: 2px 0 2px calc(30px + var(--d, 0) * 16px); }
+.jt-sel { display: flex; gap: 6px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--card-line); font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+.jt-sel code { font-family: var(--mono); color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jt-note { padding: 6px 12px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--card-line); }
 
 /* Toast */
 .toast { position: fixed; bottom: 16px; left: 50%; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; padding: 8px 14px; border-radius: 8px; font-size: 12.5px; background: var(--vscode-notifications-background, var(--panel)); color: var(--vscode-notifications-foreground, var(--text)); border: 1px solid var(--card-line); box-shadow: 0 6px 20px rgba(0,0,0,.25); transition: opacity .2s var(--ease), transform .2s var(--ease); max-width: 90vw; z-index: 10; }

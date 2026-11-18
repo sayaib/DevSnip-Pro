@@ -32,7 +32,7 @@ function compareApiResponses(before, after, ignoreHeaders = ["date", "age", "ser
         const stack = [{ a: before.body, b: after.body, pointer: "body" }];
         let count = 0, bodyChanged = false;
         while (stack.length) {
-            if (++count > 50000 || changes.length >= 500) {
+            if (++count > 1000000 || changes.length >= 500) {
                 truncated = true;
                 break;
             }
