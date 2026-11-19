@@ -5,6 +5,7 @@ import { registerHubCommands } from "./commands/hubCommands";
 import { registerToolkitCommands } from "./toolkits/runner";
 import { registerDatabaseClientCommand } from "./database/command";
 import { registerSpreadsheetViewer } from "./spreadsheet/command";
+import { registerCodeDiffCommand } from "./diff/command";
 import { initThemes, registerThemeCommand, setThemeAccess } from "./theme/service";
 import { registerMilestoneTrackerCommand, setTreeRefreshCallback, setMilestoneContext, autoRecordToolUsage, redeemPoints, refundPoints, getPointsBalance, recordDiscovery, Discovery, getUserStats, themeLockFor, buyReward, grantKeptTheme } from "./commands/milestoneTracker";
 import { registerLazyCommands, setCommandObserver, setUsageRecorder } from "./utils/command-registry";
@@ -123,6 +124,7 @@ export function activate(context: vscode.ExtensionContext) {
     })],
     ["database client", () => registerDatabaseClientCommand(context)],
     ["CSV & Excel viewer", () => registerSpreadsheetViewer(context)],
+    ["Code Diff Checker", () => registerCodeDiffCommand(context)],
     ["appearance themes", () => registerThemeCommand(context)],
     ["onboarding", () => registerOnboardingCommands(context)],
     ["milestone tracker", () => registerMilestoneTrackerCommand(context)],

@@ -35,6 +35,7 @@ const service_1 = require("../theme/service");
 const command_registry_1 = require("../utils/command-registry");
 const webview_ui_1 = require("../utils/webview-ui");
 const toolSearch_1 = require("../commands/toolSearch");
+const command_1 = require("../diff/command");
 /** Browser activation never imports the Desktop activation graph or its drivers. */
 async function activate(context) {
     (0, webview_ui_1.setToolPanelLogo)(context.extensionUri);
@@ -58,6 +59,7 @@ async function activate(context) {
     });
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(tools_sidebar_1.TOOLS_VIEW_ID, sidebar));
     (0, runner_1.registerToolkitCommands)(context);
+    (0, command_1.registerCodeDiffCommand)(context);
     (0, hubCommands_1.registerHubCommands)(context);
     (0, service_1.registerThemeCommand)(context);
     (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context);

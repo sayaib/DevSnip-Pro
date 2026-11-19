@@ -328,6 +328,20 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .tip { padding: 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--hairline); font-size: 12px; color: var(--muted); line-height: 1.5; }
 .tip b { color: var(--text); display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-weight: 600; }
 .tip .codicon { color: var(--accent); font-size: 14px; }
+.studio-card { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 22px; padding: 12px 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--hairline); }
+.studio-card .grow { flex: 1 1 260px; min-width: 0; }
+.studio-icon { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; flex: none; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.studio-icon .codicon { font-size: 18px; color: var(--accent); }
+.studio-title { font-weight: 650; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.studio-badge { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hairline); color: var(--muted); }
+.studio-text { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 2px; }
+a.studio-get { display: inline-flex; align-items: center; gap: 9px; flex: none; padding: 6px 14px 6px 10px; border-radius: 6px; background: #000; color: #fff; border: 1px solid rgba(255, 255, 255, .22); text-decoration: none; transition: background .12s; }
+a.studio-get:hover { background: #262626; }
+a.studio-get:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.store-logo { flex: none; display: block; }
+.store-label { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+.store-label small { font-size: 10px; opacity: .85; }
+.store-label b { font-size: 13.5px; font-weight: 600; letter-spacing: .01em; }
 
 /* Overlays: modal + drawer */
 .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.42); display: flex; animation: fade .12s ease-out; }

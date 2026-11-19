@@ -60,6 +60,14 @@ const GUIDE = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 exports.RELEASE_HIGHLIGHTS = [
     {
+        version: "11.90.0",
+        items: [
+            { title: "Code Diff Checker: GitHub-style split and unified diffs with word-level highlights", command: "textDiff" },
+            { title: "Code Diff Checker: syntax colours, collapsed unchanged code, change navigation and .diff export", command: "textDiff" },
+            { title: "Database Studio for Windows: install the standalone database app from the Microsoft Store", command: "databaseClient" }
+        ]
+    },
+    {
         version: "11.89.0",
         items: [
             { title: "API Response Inspector: explore JSON in a searchable tree and inspect responses up to 2 MB", command: "apiResponseInspector" },

@@ -9,6 +9,7 @@ import { initThemes, registerThemeCommand, setThemeAccess } from "../theme/servi
 import { COMMAND_PREFIX, registerLazyCommands, setUsageRecorder } from "../utils/command-registry";
 import { disposeAllToolPanels, setToolPanelLogo } from "../utils/webview-ui";
 import { registerUniversalToolSearch } from "../commands/toolSearch";
+import { registerCodeDiffCommand } from "../diff/command";
 
 /** Browser activation never imports the Desktop activation graph or its drivers. */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -33,6 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
   context.subscriptions.push(vscode.window.registerWebviewViewProvider(TOOLS_VIEW_ID, sidebar));
   registerToolkitCommands(context);
+  registerCodeDiffCommand(context);
   registerHubCommands(context);
   registerThemeCommand(context);
   registerMilestoneTrackerCommand(context);

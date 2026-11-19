@@ -133,7 +133,7 @@ export const FULL_NAV: NavSection[] = [
     entries: [
       e("jsonFormatter", "JSON / YAML / XML Formatter", "json", "Format, minify and validate JSON, YAML and XML, and convert between them.", { tool: "text.format", category: "Structured text" }),
       e("xmlToJson", "XML → JSON Converter", "arrow-swap", "Validate XML and convert it to JSON: attributes, namespaces, arrays, CDATA, comments; compact or lossless.", { tool: "text.xml-json", category: "Structured text" }),
-      e("textDiff", "Diff Checker", "diff", "Compare two texts line by line, or two JSON documents structurally.", { tool: "dev.diff", category: "Text analysis & editing" }),
+      e("textDiff", "Code Diff Checker", "diff", "Compare code side by side or unified, with word-level highlights, or two JSON documents by structure.", { hubIcon: "diff", keywords: ["diff", "diff checker", "compare", "difference", "code compare", "text compare", "json diff", "side by side", "unified diff", "patch", "changes"], category: "Text analysis & editing" }),
       e("regexLibrary", "Regex Tester & Library", "regex", "Test a regex with groups, start from tested patterns, copy code for 9 languages.", { tool: "dev.regex-library", category: "Text analysis & editing" }),
       e("caseConverter", "Case Converter & Text Tools", "case-sensitive", "camelCase, snake_case, kebab-case and more; sort, dedupe and count lines.", { tool: "dev.text", category: "Text analysis & editing" })
     ]

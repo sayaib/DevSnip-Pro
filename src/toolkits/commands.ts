@@ -47,7 +47,6 @@ export const TOOLKIT_COMMANDS: ToolkitCommand[] = [
   { command: "jsonFormatter", tool: "text.format", section: "text", title: "JSON / YAML / XML Formatter" },
   { command: "yamlJsonTool", tool: "text.format", section: "text", title: "JSON / YAML / XML Formatter", values: {"format":"auto","action":"validate"} },
   { command: "xmlToJson", tool: "text.xml-json", section: "text", title: "XML → JSON Converter" },
-  { command: "textDiff", tool: "dev.diff", section: "text", title: "Diff Checker" },
   { command: "regexLibrary", tool: "dev.regex-library", section: "text", title: "Regex Tester & Library" },
   { command: "regexBuilder", tool: "dev.regex-library", section: "text", title: "Regex Tester & Library", values: {"preset":"custom","perLine":false} },
   { command: "caseConverter", tool: "dev.text", section: "text", title: "Case Converter & Text Tools" },

@@ -2,7 +2,7 @@
   "name": "hue-console",
   "displayName": "DevSnip Pro: API & Database Client, AI & Developer Toolkit",
   "description": "Free REST API client for VS Code, no account needed: send HTTP and GraphQL requests with environments, collections and cURL import. Plus a database client for PostgreSQL, MySQL, SQL Server, Oracle, MongoDB, Redis and more, LLM token and cost tools, and a secret scanner.",
-  "version": "11.89.0",
+  "version": "11.90.0",
   "license": "MIT",
   "author": "Sayaib Sarkar",
   "publisher": "sayaib",
@@ -485,7 +485,7 @@
       },
       {
         "command": "sayaib.hue-console.textDiff",
-        "title": "📝 DevSnip Pro: Diff Checker"
+        "title": "📝 DevSnip Pro: Code Diff Checker"
       },
       {
         "command": "sayaib.hue-console.regexLibrary",

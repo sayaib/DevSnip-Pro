@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEV_TOOLS = void 0;
 const types_1 = require("../types");
 const dev_utils_1 = require("../engines/dev-utils");
-const data_inspect_1 = require("../engines/data-inspect");
 const dev_regex_1 = require("../engines/dev-regex");
 const project_detect_1 = require("../engines/project-detect");
 const dev_debug_1 = require("../engines/dev-debug");
@@ -101,53 +100,6 @@ const idTool = {
             messages.push({ kind: "warning", text: "Passwords under 12 characters are weak; use 16 or more." });
         outputs.unshift((0, helpers_1.code)(`${ids.length} generated`, "text", ids.join("\n")));
         return { messages, outputs };
-    }
-};
-const diffTool = {
-    id: "dev.diff",
-    command: "textDiff",
-    title: "Diff Checker",
-    summary: "Compare two texts line by line, or two JSON documents structurally (ignoring key order and formatting).",
-    keywords: ["diff", "compare", "difference", "json diff", "text compare", "changes"],
-    icon: "diff",
-    live: true,
-    examples: [{ label: "Text: two config versions", values: { mode: "text", left: "PORT=3000\nLOG_LEVEL=info\nCACHE_TTL=60\nFEATURE_X=false", right: "PORT=3000\nLOG_LEVEL=debug\nCACHE_TTL=60\nFEATURE_X=true\nFEATURE_Y=true" } }, { label: "JSON: API response before and after", values: { mode: "json", left: '{"id": 7, "name": "Ada", "roles": ["admin"], "plan": {"tier": "pro", "seats": 5}}', right: '{"id": 7, "name": "Ada L.", "roles": ["admin", "billing"], "plan": {"tier": "pro", "seats": "5"}, "active": true}' } }],
-    fields: [
-        helpers_1.f.select("mode", "Compare as", (0, helpers_1.opts)(["text", "Text (line by line)"], ["json", "JSON (structure)"])),
-        helpers_1.f.code("left", "Original", "text", { rows: 10, required: true, fromEditor: true }),
-        helpers_1.f.code("right", "Changed", "text", { rows: 10, required: true }),
-        helpers_1.f.toggle("ignoreWhitespace", "Ignore whitespace", false, { showIf: { field: "mode", equals: ["text"] } }),
-        helpers_1.f.toggle("ignoreArrayOrder", "Ignore array order", false, { showIf: { field: "mode", equals: ["json"] } }),
-        helpers_1.f.text("arrayKey", "Match array items by key", { width: "narrow", placeholder: "id", showIf: { field: "mode", equals: ["json"] } })
-    ],
-    run(values) {
-        const left = (0, types_1.str)(values, "left");
-        const right = (0, types_1.str)(values, "right");
-        if (!left && !right)
-            throw new types_1.ToolInputError("Paste the two versions to compare.");
-        if ((0, types_1.str)(values, "mode", "text") === "json") {
-            const parse = (t, which) => { try {
-                return JSON.parse(t);
-            }
-            catch (e) {
-                throw new types_1.ToolInputError(`${which} is not valid JSON: ${e.message}`);
-            } };
-            const entries = (0, data_inspect_1.diffValues)(parse(left, "Original"), parse(right, "Changed"), { ignoreArrayOrder: (0, types_1.bool)(values, "ignoreArrayOrder"), arrayKey: (0, types_1.str)(values, "arrayKey").trim() || undefined });
-            const show = (v) => v === undefined ? "" : JSON.stringify(v).slice(0, 200);
-            const n = (k) => entries.filter(e => e.kind === k).length;
-            return {
-                stats: [{ label: "Added", value: String(n("added")), tone: n("added") ? "good" : "neutral" }, { label: "Removed", value: String(n("removed")), tone: n("removed") ? "bad" : "neutral" }, { label: "Changed", value: String(n("changed") + n("type")), tone: n("changed") + n("type") ? "warn" : "neutral" }],
-                messages: entries.length ? entries.filter(e => e.kind === "type").map(e => ({ kind: "warning", text: `${e.path}: type changed from ${typeof e.before} to ${typeof e.after} - a common source of client bugs.` })) : [{ kind: "success", text: "The documents are equivalent." }],
-                outputs: entries.length ? [(0, helpers_1.table)("Differences", ["Change", "Path", "Before", "After"], entries.map(e => [e.kind, e.path, show(e.before), show(e.after)]))] : []
-            };
-        }
-        const norm = (t) => (0, types_1.bool)(values, "ignoreWhitespace") ? t.split(/\r?\n/).map(l => l.trim().replace(/\s+/g, " ")).join("\n") : t;
-        const d = (0, data_inspect_1.diffLines)(norm(left), norm(right));
-        return {
-            stats: [{ label: "Lines added", value: String(d.added), tone: d.added ? "good" : "neutral" }, { label: "Lines removed", value: String(d.removed), tone: d.removed ? "bad" : "neutral" }],
-            messages: d.added || d.removed ? [] : [{ kind: "success", text: "The texts are identical." }],
-            outputs: d.added || d.removed ? [(0, helpers_1.code)("Unified diff", "diff", d.text)] : []
-        };
     }
 };
 const LINE_OPS = (0, helpers_1.opts)(["none", "No line operation"], ["sort-natural", "Sort (natural: a2 before a10)"], ["sort", "Sort A→Z"], ["sort-desc", "Sort Z→A"], ["unique", "Remove duplicate lines"], ["reverse", "Reverse order"], ["remove-empty", "Remove empty lines"], ["trim", "Trim each line"], ["shuffle", "Shuffle"], ["number", "Number lines"]);
@@ -577,5 +529,5 @@ const unusedDepsTool = {
         };
     }
 };
-exports.DEV_TOOLS = [encodeTool, idTool, timestampTool, cronTool, regexTool, diffTool, textTool, debugConfigTool, unusedDepsTool];
+exports.DEV_TOOLS = [encodeTool, idTool, timestampTool, cronTool, regexTool, textTool, debugConfigTool, unusedDepsTool];
 //# sourceMappingURL=dev.js.map

@@ -55,6 +55,8 @@ Build a request, send it and inspect the response — all in one panel.
 
 Fill in a short form or paste a connection string — DevSnip Pro detects the database and shows its schemas, tables, views, collections or keys. Pick **Self-hosted**, **AWS**, **Azure** or **Google Cloud** in the connection form to get each service's defaults.
 
+> **On Windows?** Install **[DevSnip Pro: Database Studio](https://apps.microsoft.com/detail/9n1dx0bjcxdx?cid=DevShareMCLPCS)**, a free standalone database tool, from the Microsoft Store.
+
 ![DevSnip Pro Database Client in VS Code browsing a PostgreSQL table with pagination and filters](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/database.jpg)
 
 | Database          | Connection string                                         | Console        | Edit rows | Cancel queries |
@@ -157,7 +159,7 @@ Open `.csv`, `.tsv` and `.xlsx` files as a fast grid instead of raw text, and ed
 
 ![All DevSnip Pro tools in one searchable grid, grouped into 13 sections](https://raw.githubusercontent.com/sayaib/DevSnip-Pro/main/docs/images/all-tools.jpg)
 
-- **Text & data:** JSON / YAML / XML formatter, an XML → JSON converter (strict validation, namespaces, CDATA, lossless mode, large files), diff checker, regex tester, timestamps, UUIDs, and JSON to TypeScript, Zod, Pydantic, Go, Kotlin or Swift.
+- **Text & data:** JSON / YAML / XML formatter, an XML → JSON converter (strict validation, namespaces, CDATA, lossless mode, large files), a GitHub-style Code Diff Checker (split or unified, word-level highlights, large files), regex tester, timestamps, UUIDs, and JSON to TypeScript, Zod, Pydantic, Go, Kotlin or Swift.
 - **API helpers:** cURL converter, OpenAPI / Swagger toolkit, GraphQL types, CORS debugger, JWT decoder and signer, OAuth 2.0 & PKCE.
 - **DevOps & cloud:** Dockerfile, Docker Compose, Kubernetes & Helm, Terraform, CI pipeline and Nginx generators (Node.js, Python, Go, Java and .NET), plus a cron helper.
 - **Web & mobile:** React / Next.js generator, HTML → JSX, SEO meta tags, adb & simctl commands, deep links, app signing and asset sizes.
@@ -241,7 +243,7 @@ Seventeen themes restyle every DevSnip Pro panel at once from the **Theme** sele
 - **Web & Frontend** — React / Next.js Generator, HTML → JSX, CSS Units & Fluid Type, Color Converter & Palette, SEO & Social Meta Tags, Cache-Control Builder
 - **Mobile Development** — adb & simctl Commands, Deep Links & Universal Links, App Permissions, Local API from Devices, Environments & Flavors, Signing & Keystores, SDK & Build Compatibility, Mobile CI Workflow, dp / px / pt & Asset Sizes
 - **Code & Productivity** — Saved Snippets, Create Snippet, Framework Snippets, Remove Unused Imports, Dependencies & Installation, Unused Dependencies, README Viewer & Manager
-- **Text & Formatters** — JSON / YAML / XML Formatter, XML → JSON Converter, Diff Checker, Regex Tester & Library, Case Converter & Text Tools
+- **Text & Formatters** — JSON / YAML / XML Formatter, XML → JSON Converter, Code Diff Checker, Regex Tester & Library, Case Converter & Text Tools
 - **Encoders & Converters** — Encode / Decode, Timestamp Converter, UUID & ID Generator, JSON to Types, Data Converter
 - **Database** — Database Client, SQL Formatter & Linter, SQL Query Helper, Database Connection Strings, SQL → MongoDB
 - **Spreadsheets & CSV** — CSV / TSV Viewer, Excel Viewer (.xlsx)

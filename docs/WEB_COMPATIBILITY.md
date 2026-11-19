@@ -68,7 +68,7 @@ This inventory classifies the existing navigation before filtering. Web tools al
 | Code & Productivity | README Viewer & Manager | Desktop filesystem, process, driver or unrestricted networking |
 | Text & Formatters | JSON / YAML / XML Formatter | Supported |
 | Text & Formatters | XML → JSON Converter | Supported |
-| Text & Formatters | Diff Checker | Supported |
+| Text & Formatters | Code Diff Checker | Supported |
 | Text & Formatters | Regex Tester & Library | Supported |
 | Text & Formatters | Case Converter & Text Tools | Supported |
 | Encoders & Converters | Encode / Decode | Supported |

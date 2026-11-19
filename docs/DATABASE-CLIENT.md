@@ -4,6 +4,8 @@ The Database Client in DevSnip Pro connects to ten kinds of self-hosted database
 
 Open it from the **Database** section of the DevSnip Pro sidebar, or run **DevSnip Pro: Database Client** from the Command Palette.
 
+On Windows you can also install **[DevSnip Pro: Database Studio](https://apps.microsoft.com/detail/9n1dx0bjcxdx?cid=DevShareMCLPCS)**, a free standalone app from the Microsoft Store for connecting to, querying and managing databases outside VS Code. The Database Client's start page links to it.
+
 - [Supported databases](#supported-databases)
 - [Cloud databases](#cloud-databases)
 - [Prerequisites](#prerequisites)

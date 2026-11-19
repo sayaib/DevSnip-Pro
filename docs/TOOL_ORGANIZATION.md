@@ -87,7 +87,7 @@ Redundant legacy mode commands are hidden from the Command Palette; their functi
 
 ### Text analysis & editing
 
-- **Diff Checker** — Compare two texts line by line, or two JSON documents structurally.
+- **Code Diff Checker** — Compare code side by side or unified, with word-level highlights, or two JSON documents by structure.
 - **Regex Tester & Library** — Test a regex with groups, start from tested patterns, copy code for 9 languages.
 - **Case Converter & Text Tools** — camelCase, snake_case, kebab-case and more; sort, dedupe and count lines.
 

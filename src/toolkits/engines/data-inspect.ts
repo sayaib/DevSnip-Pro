@@ -145,25 +145,6 @@ export function diffValues(left: unknown, right: unknown, options: { ignoreArray
   return out;
 }
 
-/** Line diff (LCS) rendered in unified style. */
-export function diffLines(left: string, right: string): { text: string; added: number; removed: number } {
-  const a = left.replace(/\r\n/g, "\n").split("\n");
-  const b = right.replace(/\r\n/g, "\n").split("\n");
-  if (a.length * b.length > 4_000_000) throw new ToolInputError("The inputs are too large for a line diff here (over ~2,000 × 2,000 lines).");
-  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
-  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-  const lines: string[] = [];
-  let i = 0, j = 0, added = 0, removed = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { lines.push(`  ${a[i]}`); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { lines.push(`- ${a[i++]}`); removed++; }
-    else { lines.push(`+ ${b[j++]}`); added++; }
-  }
-  while (i < a.length) { lines.push(`- ${a[i++]}`); removed++; }
-  while (j < b.length) { lines.push(`+ ${b[j++]}`); added++; }
-  return { text: lines.join("\n"), added, removed };
-}
-
 // ---------------------------------------------------------------------------
 // Mock data
 // ---------------------------------------------------------------------------

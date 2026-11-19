@@ -58,6 +58,7 @@ async function main() {
     require("./database-live.unit");
     require("./spreadsheet.unit");
     require("./xml-json.unit");
+    require("./code-diff.unit");
     require("./osv.unit");
     require("./osv-maven.unit");
     require("./sca.unit");

@@ -791,12 +791,47 @@
   }
 
   // ------------------------------------------------------------------ Welcome
+  /** DevSnip Pro: Database Studio, the standalone Windows app, on the Microsoft Store. */
+  var STUDIO_STORE_URL = "https://apps.microsoft.com/detail/9n1dx0bjcxdx?cid=DevShareMCLPCS";
+
+  /** The Microsoft Store logo (bag with the four Microsoft squares), drawn inline so the page needs no images. */
+  function storeLogo() {
+    var NS = "http://www.w3.org/2000/svg";
+    function s(tag, attrs) {
+      var el = document.createElementNS(NS, tag);
+      for (var k in attrs) el.setAttribute(k, attrs[k]);
+      return el;
+    }
+    var logo = s("svg", { viewBox: "0 0 24 24", width: "22", height: "22", class: "store-logo", "aria-hidden": "true", focusable: "false" });
+    logo.append(
+      s("path", { d: "M8.25 7.5V6a3.75 3.75 0 0 1 7.5 0v1.5", fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" }),
+      s("rect", { x: "2.75", y: "7.25", width: "18.5", height: "14.5", rx: "2.25", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }),
+      s("rect", { x: "7.25", y: "10.25", width: "4.5", height: "4.5", fill: "#F25022" }),
+      s("rect", { x: "12.25", y: "10.25", width: "4.5", height: "4.5", fill: "#7FBA00" }),
+      s("rect", { x: "7.25", y: "15.25", width: "4.5", height: "4.5", fill: "#00A4EF" }),
+      s("rect", { x: "12.25", y: "15.25", width: "4.5", height: "4.5", fill: "#FFB900" }));
+    return logo;
+  }
+
+  function studioCard() {
+    var onWindows = document.body.getAttribute("data-platform") === "win32";
+    return h("div", { class: "studio-card" },
+      h("span", { class: "studio-icon" }, icon("database")),
+      h("div", { class: "grow" },
+        h("div", { class: "studio-title" }, "DevSnip Pro: Database Studio", h("span", { class: "studio-badge", text: "Windows" })),
+        h("div", { class: "studio-text", text: (onWindows ? "Prefer a desktop app? " : "On a Windows PC? ") + "Connect, query, browse data and manage schemas in a standalone database tool. Free on the Microsoft Store." })),
+      h("a", { class: "studio-get", href: STUDIO_STORE_URL, title: STUDIO_STORE_URL, "aria-label": (onWindows ? "Install" : "View") + " DevSnip Pro: Database Studio on the Microsoft Store" },
+        storeLogo(),
+        h("span", { class: "store-label" }, h("small", { text: onWindows ? "Install from" : "Available on" }), h("b", { text: "Microsoft Store" }))));
+  }
+
   function welcomeView() {
     var view = h("div", { class: "view welcome-view" });
     var inner = h("div", { class: "welcome-inner" },
       h("h1", null, icon("database"), "Database Client"),
       h("p", { class: "lead", text: "Connect with a connection string, browse databases, schemas and tables, and read, insert, edit and delete data — for SQL, document and key-value stores, self-hosted or on AWS, Azure and Google Cloud." }),
-      btn("New connection", "add", function () { openConnectionModal(null); }, "primary"));
+      btn("New connection", "add", function () { openConnectionModal(null); }, "primary"),
+      studioCard());
     inner.append(h("div", { class: "section-title kinds-title", text: "Self-hosted" }));
     var kinds = h("div", { class: "kinds" });
     Object.keys(S.kinds).forEach(function (k) {

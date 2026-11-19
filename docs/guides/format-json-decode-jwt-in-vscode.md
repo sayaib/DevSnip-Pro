@@ -17,7 +17,7 @@ Most toolkit panels end with the same four actions: **Copy**, **Insert at cursor
 | Task | Tool |
 | :--- | :--- |
 | Format, minify, validate or convert JSON, YAML and XML | **JSON / YAML / XML Formatter** |
-| Compare two texts, or two JSON documents structurally | **Diff Checker** |
+| Compare two versions of code or text, or two JSON documents structurally | **Code Diff Checker** |
 | Test a regex with groups, and copy it as code for 9 languages | **Regex Tester & Library** |
 | Convert camelCase / snake_case / kebab-case; sort and de-duplicate lines | **Case Converter & Text Tools** |
 | Base64, URL, HTML entity, hex and Unicode encoding | **Encode / Decode** |

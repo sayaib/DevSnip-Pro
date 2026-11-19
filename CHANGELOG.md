@@ -1,5 +1,20 @@
 # Development Changelog of DevSnip Pro
 
+## 11.90.0 - Code Diff Checker and Database Studio for Windows (2026-11-19)
+
+- Rebuild the Diff Checker as the **Code Diff Checker**, a GitHub-style comparison view. The command (`textDiff`), keybindings and usage history carry over.
+- Show changes **side by side** or **unified**, with removed lines in red, added lines in green, `+`/`−` markers beside the line numbers and the changed words highlighted inside each edited line. Edited lines are paired with the line they replace, so a renamed variable reads as one change instead of a removal and an addition.
+- Highlight syntax for about 30 languages, picked from the file name or the content, or chosen from the language menu. Comments and strings that span lines keep their colours.
+- Collapse unchanged code around the changes (0 to 25 lines of context), and expand any folded stretch with a click. Move between changes with **Previous / Next**, Alt+↑ / Alt+↓, or N and P; the current change is marked and announced to screen readers.
+- Summarise each comparison as additions and deletions with a diffstat, plus the number of changes and of modified, added, removed and unchanged lines.
+- Add **Ignore whitespace** and **Ignore case**, **Wrap**, tab size, and line-ending detection: CRLF and LF files compare equal, with a note when their endings differ. A missing final newline is shown, as in git.
+- Open files for either side, use the active editor or its selection, drop files onto the editors, paste, copy, clear (with Undo) and swap. Copy the result as a unified diff, download it as a `.diff` file, or open it in an editor; the patch applies with `git apply` and `patch`.
+- Compare in a background worker with a minimal line diff (Myers, with patience anchors for very large files) and a virtualised viewer, so 150,000-line files compare in well under a second and scroll smoothly. Very different files finish within a few seconds with a note instead of freezing the panel.
+- Keep **JSON structure** comparison (key order and formatting ignored, array order and match-by-key options), now with a table of changed paths and a warning for values that changed type.
+- Fix the old diff refusing inputs over about 2,000 × 2,000 lines, showing trimmed lines when whitespace was ignored, and producing output that did not follow the unified diff format.
+- Work on narrow panels (stacked inputs, unified view) and in light, dark and high-contrast themes, with keyboard access throughout and a shortcuts list (`?`).
+- Link **DevSnip Pro: Database Studio**, the free standalone database app for Windows, from the Database Client's start page, with a Microsoft Store badge that installs it.
+
 ## 11.89.0 - JSON explorer, cURL accuracy and React templates (2026-11-18)
 
 - Add a JSON explorer to the **API Response Inspector**. Open a collapsible tree of the parsed body, find any key or value across the whole response, and copy a field's JSON Pointer, path or value. Rows render as you open them, 100 at a time, and arrow keys move through the tree. Turn it off with **Interactive JSON explorer**.

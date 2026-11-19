@@ -1,6 +1,5 @@
 import { GeneratedFile, Output, ToolSpec, ToolInputError, ToolResult, Values, bool, num, str } from "../types";
 import { CASES, Codec, IdKind, LineOp, decode, describeCron, detectCodec, encode, generateIds, inspectId, nextRuns, parseCron, slugify, textStats, transformLines, words } from "../engines/dev-utils";
-import { diffLines, diffValues } from "../engines/data-inspect";
 import { REGEX_LIBRARY, RegexLang, regexCode, testRegex, validateRegex } from "../engines/dev-regex";
 import { DetectedProject, KIND_LABELS, PackageManager, ProjectKind, detectProjects } from "../engines/project-detect";
 import { EXTENSION_NAMES, mergeExtensions, mergeLaunch, mergeTasks, setupFor } from "../engines/dev-debug";
@@ -92,48 +91,6 @@ const idTool: ToolSpec = {
     if (kind === "password" && num(values, "length", 21) < 12) messages.push({ kind: "warning", text: "Passwords under 12 characters are weak; use 16 or more." });
     outputs.unshift(code(`${ids.length} generated`, "text", ids.join("\n")));
     return { messages, outputs };
-  }
-};
-
-const diffTool: ToolSpec = {
-  id: "dev.diff",
-  command: "textDiff",
-  title: "Diff Checker",
-  summary: "Compare two texts line by line, or two JSON documents structurally (ignoring key order and formatting).",
-  keywords: ["diff", "compare", "difference", "json diff", "text compare", "changes"],
-  icon: "diff",
-  live: true,
-  examples: [{ label: "Text: two config versions", values: { mode: "text", left: "PORT=3000\nLOG_LEVEL=info\nCACHE_TTL=60\nFEATURE_X=false", right: "PORT=3000\nLOG_LEVEL=debug\nCACHE_TTL=60\nFEATURE_X=true\nFEATURE_Y=true" } }, { label: "JSON: API response before and after", values: { mode: "json", left: '{"id": 7, "name": "Ada", "roles": ["admin"], "plan": {"tier": "pro", "seats": 5}}', right: '{"id": 7, "name": "Ada L.", "roles": ["admin", "billing"], "plan": {"tier": "pro", "seats": "5"}, "active": true}' } }],
-  fields: [
-    f.select("mode", "Compare as", opts(["text", "Text (line by line)"], ["json", "JSON (structure)"])),
-    f.code("left", "Original", "text", { rows: 10, required: true, fromEditor: true }),
-    f.code("right", "Changed", "text", { rows: 10, required: true }),
-    f.toggle("ignoreWhitespace", "Ignore whitespace", false, { showIf: { field: "mode", equals: ["text"] } }),
-    f.toggle("ignoreArrayOrder", "Ignore array order", false, { showIf: { field: "mode", equals: ["json"] } }),
-    f.text("arrayKey", "Match array items by key", { width: "narrow", placeholder: "id", showIf: { field: "mode", equals: ["json"] } })
-  ],
-  run(values) {
-    const left = str(values, "left");
-    const right = str(values, "right");
-    if (!left && !right) throw new ToolInputError("Paste the two versions to compare.");
-    if (str(values, "mode", "text") === "json") {
-      const parse = (t: string, which: string) => { try { return JSON.parse(t); } catch (e) { throw new ToolInputError(`${which} is not valid JSON: ${(e as Error).message}`); } };
-      const entries = diffValues(parse(left, "Original"), parse(right, "Changed"), { ignoreArrayOrder: bool(values, "ignoreArrayOrder"), arrayKey: str(values, "arrayKey").trim() || undefined });
-      const show = (v: unknown) => v === undefined ? "" : JSON.stringify(v).slice(0, 200);
-      const n = (k: string) => entries.filter(e => e.kind === k).length;
-      return {
-        stats: [{ label: "Added", value: String(n("added")), tone: n("added") ? "good" : "neutral" }, { label: "Removed", value: String(n("removed")), tone: n("removed") ? "bad" : "neutral" }, { label: "Changed", value: String(n("changed") + n("type")), tone: n("changed") + n("type") ? "warn" : "neutral" }],
-        messages: entries.length ? entries.filter(e => e.kind === "type").map(e => ({ kind: "warning" as const, text: `${e.path}: type changed from ${typeof e.before} to ${typeof e.after} - a common source of client bugs.` })) : [{ kind: "success", text: "The documents are equivalent." }],
-        outputs: entries.length ? [table("Differences", ["Change", "Path", "Before", "After"], entries.map(e => [e.kind, e.path, show(e.before), show(e.after)]))] : []
-      };
-    }
-    const norm = (t: string) => bool(values, "ignoreWhitespace") ? t.split(/\r?\n/).map(l => l.trim().replace(/\s+/g, " ")).join("\n") : t;
-    const d = diffLines(norm(left), norm(right));
-    return {
-      stats: [{ label: "Lines added", value: String(d.added), tone: d.added ? "good" : "neutral" }, { label: "Lines removed", value: String(d.removed), tone: d.removed ? "bad" : "neutral" }],
-      messages: d.added || d.removed ? [] : [{ kind: "success", text: "The texts are identical." }],
-      outputs: d.added || d.removed ? [code("Unified diff", "diff", d.text)] : []
-    };
   }
 };
 
@@ -535,4 +492,4 @@ const unusedDepsTool: ToolSpec = {
   }
 };
 
-export const DEV_TOOLS: ToolSpec[] = [encodeTool, idTool, timestampTool, cronTool, regexTool, diffTool, textTool, debugConfigTool, unusedDepsTool];
+export const DEV_TOOLS: ToolSpec[] = [encodeTool, idTool, timestampTool, cronTool, regexTool, textTool, debugConfigTool, unusedDepsTool];
