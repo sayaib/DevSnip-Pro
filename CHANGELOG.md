@@ -1,5 +1,12 @@
 # Development Changelog of DevSnip Pro
 
+## 11.91.0 - DevSnip Pro ecosystem and security update (2026-11-23)
+
+- Add **Explore DevSnip Pro Ecosystem** (`DevSnip Pro: Explore DevSnip Pro Ecosystem`). One page shows every DevSnip Pro app: the Chrome extension, the JetBrains plugin, Database Studio for Windows and this extension. Each card lists what the app does, its key features and requirements, and links to its official store page.
+- Add **Available on multiple platforms** at the foot of the Tools sidebar. It lists the other DevSnip Pro apps; click one to open its store page, or the info button to read more. While you work in a category, the app that fits it is marked as suggested, for example Database Studio in Database. The list hides during a search, can be collapsed, and never pops up.
+- Restyle the Database Studio link on the Database Client's start page as a **Get it from Microsoft** badge, black in dark themes and white in light themes.
+- Update the SQL Server driver's Azure sign-in library (`@azure/msal-node` 7.2.3, `@azure/identity` 4.14.1) to fix a high-severity advisory (GHSA-xcx6-jx8p-x3h5). Production dependencies now report no known vulnerabilities.
+
 ## 11.90.0 - Code Diff Checker and Database Studio for Windows (2026-11-19)
 
 - Rebuild the Diff Checker as the **Code Diff Checker**, a GitHub-style comparison view. The command (`textDiff`), keybindings and usage history carry over.

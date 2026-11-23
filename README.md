@@ -331,6 +331,14 @@ Remote and WSL work. vscode.dev isn't supported because several tools use Node A
 
 Of the toolbox tools, only the LLM API Tester uses the network, and it's marked "Uses network".
 
+## DevSnip Pro on other platforms
+
+Run **DevSnip Pro: Explore DevSnip Pro Ecosystem**, or open **Available on multiple platforms** at the foot of the Tools sidebar, to see every app. All are free.
+
+- **[DevSnip Pro for Chrome](https://chromewebstore.google.com/detail/bjblnmonkaddjfdnnjhjgconniffjncm):** a visual CSS debugger, website health score, network inspector and Web Vitals checks in Chrome's side panel.
+- **[DevSnip Pro for JetBrains IDEs](https://plugins.jetbrains.com/plugin/35453-devsnip-pro-api-client--developer-toolkit):** the API client and developer toolkit in IntelliJ-based IDEs.
+- **[DevSnip Pro: Database Studio](https://apps.microsoft.com/detail/9n1dx0bjcxdx?cid=DevShareMCLPCS):** the Database Client as a standalone Windows app, from the Microsoft Store.
+
 ## Support & feedback
 
 - 🐛 [Report a bug or request a feature](https://github.com/sayaib/DevSnip-Pro/issues/new/choose), or press **Feedback** in Milestones & Points

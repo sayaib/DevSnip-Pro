@@ -333,13 +333,22 @@ body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-sel
 .studio-title { font-weight: 650; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .studio-badge { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--hairline); color: var(--muted); }
 .studio-text { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 2px; }
-a.studio-get { display: inline-flex; align-items: center; gap: 9px; flex: none; padding: 6px 14px 6px 10px; border-radius: 6px; background: #000; color: #fff; border: 1px solid rgba(255, 255, 255, .22); text-decoration: none; transition: background .12s; }
-a.studio-get:hover { background: #262626; }
+/* The "Get it from Microsoft" badge: black in dark themes, white with a black outline in light ones. */
+a.studio-get {
+  display: inline-flex; align-items: center; gap: 10px; flex: none; min-height: 46px; padding: 7px 16px 7px 12px;
+  border-radius: 4px; background: #000; color: #fff; border: 1px solid rgba(255, 255, 255, .35); text-decoration: none;
+  font-family: "Segoe UI", "Segoe UI Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  transition: background-color .12s, border-color .12s, transform .12s;
+}
+a.studio-get:hover { background: #1f1f1f; border-color: rgba(255, 255, 255, .6); }
+a.studio-get:active { transform: translateY(1px); }
 a.studio-get:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+body.vscode-light a.studio-get, body.vscode-high-contrast-light a.studio-get { background: #fff; color: #000; border-color: #000; }
+body.vscode-light a.studio-get:hover, body.vscode-high-contrast-light a.studio-get:hover { background: #f3f3f3; }
 .store-logo { flex: none; display: block; }
-.store-label { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
-.store-label small { font-size: 10px; opacity: .85; }
-.store-label b { font-size: 13.5px; font-weight: 600; letter-spacing: .01em; }
+.store-label { display: flex; flex-direction: column; line-height: 1.05; text-align: left; }
+.store-label small { font-size: 11px; font-weight: 400; letter-spacing: .01em; }
+.store-label b { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
 
 /* Overlays: modal + drawer */
 .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.42); display: flex; animation: fade .12s ease-out; }

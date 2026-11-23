@@ -48,6 +48,13 @@ const GUIDE: Array<Omit<GuideStep, "done">> = [
 /** Highlights per release, newest first. Shown once to users who updated past them. */
 export const RELEASE_HIGHLIGHTS: Array<{ version: string; items: Array<{ title: string; command?: string }> }> = [
   {
+    version: "11.91.0",
+    items: [
+      { title: "Explore the DevSnip Pro ecosystem: the Chrome extension, JetBrains plugin and Database Studio", command: "ecosystem" },
+      { title: "Database Client: a Get it from Microsoft badge for Database Studio on Windows", command: "databaseClient" }
+    ]
+  },
+  {
     version: "11.90.0",
     items: [
       { title: "Code Diff Checker: GitHub-style split and unified diffs with word-level highlights", command: "textDiff" },

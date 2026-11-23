@@ -794,7 +794,7 @@
   /** DevSnip Pro: Database Studio, the standalone Windows app, on the Microsoft Store. */
   var STUDIO_STORE_URL = "https://apps.microsoft.com/detail/9n1dx0bjcxdx?cid=DevShareMCLPCS";
 
-  /** The Microsoft Store logo (bag with the four Microsoft squares), drawn inline so the page needs no images. */
+  /** The four-square Microsoft logo for the "Get it from Microsoft" badge, drawn inline so the page needs no images. */
   function storeLogo() {
     var NS = "http://www.w3.org/2000/svg";
     function s(tag, attrs) {
@@ -802,14 +802,12 @@
       for (var k in attrs) el.setAttribute(k, attrs[k]);
       return el;
     }
-    var logo = s("svg", { viewBox: "0 0 24 24", width: "22", height: "22", class: "store-logo", "aria-hidden": "true", focusable: "false" });
+    var logo = s("svg", { viewBox: "0 0 23 23", width: "26", height: "26", class: "store-logo", "aria-hidden": "true", focusable: "false" });
     logo.append(
-      s("path", { d: "M8.25 7.5V6a3.75 3.75 0 0 1 7.5 0v1.5", fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" }),
-      s("rect", { x: "2.75", y: "7.25", width: "18.5", height: "14.5", rx: "2.25", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }),
-      s("rect", { x: "7.25", y: "10.25", width: "4.5", height: "4.5", fill: "#F25022" }),
-      s("rect", { x: "12.25", y: "10.25", width: "4.5", height: "4.5", fill: "#7FBA00" }),
-      s("rect", { x: "7.25", y: "15.25", width: "4.5", height: "4.5", fill: "#00A4EF" }),
-      s("rect", { x: "12.25", y: "15.25", width: "4.5", height: "4.5", fill: "#FFB900" }));
+      s("rect", { x: "0", y: "0", width: "11", height: "11", fill: "#F25022" }),
+      s("rect", { x: "12", y: "0", width: "11", height: "11", fill: "#7FBA00" }),
+      s("rect", { x: "0", y: "12", width: "11", height: "11", fill: "#00A4EF" }),
+      s("rect", { x: "12", y: "12", width: "11", height: "11", fill: "#FFB900" }));
     return logo;
   }
 
@@ -822,7 +820,7 @@
         h("div", { class: "studio-text", text: (onWindows ? "Prefer a desktop app? " : "On a Windows PC? ") + "Connect, query, browse data and manage schemas in a standalone database tool. Free on the Microsoft Store." })),
       h("a", { class: "studio-get", href: STUDIO_STORE_URL, title: STUDIO_STORE_URL, "aria-label": (onWindows ? "Install" : "View") + " DevSnip Pro: Database Studio on the Microsoft Store" },
         storeLogo(),
-        h("span", { class: "store-label" }, h("small", { text: onWindows ? "Install from" : "Available on" }), h("b", { text: "Microsoft Store" }))));
+        h("span", { class: "store-label" }, h("small", { text: "Get it from" }), h("b", { text: "Microsoft" }))));
   }
 
   function welcomeView() {
