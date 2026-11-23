@@ -331,6 +331,10 @@
         "title": "🎨 DevSnip Pro: Theme Studio (Customize Appearance)"
       },
       {
+        "command": "sayaib.hue-console.ecosystem",
+        "title": "🌐 DevSnip Pro: Explore DevSnip Pro Ecosystem (Chrome, JetBrains, Windows)"
+      },
+      {
         "command": "sayaib.hue-console.searchTools",
         "title": "🔎 DevSnip Pro: Search All Tools (Regex)"
       },

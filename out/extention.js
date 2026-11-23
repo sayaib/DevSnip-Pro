@@ -32,6 +32,7 @@ const runner_1 = require("./toolkits/runner");
 const command_1 = require("./database/command");
 const command_2 = require("./spreadsheet/command");
 const command_3 = require("./diff/command");
+const command_4 = require("./ecosystem/command");
 const service_1 = require("./theme/service");
 const milestoneTracker_1 = require("./commands/milestoneTracker");
 const command_registry_1 = require("./utils/command-registry");
@@ -144,6 +145,7 @@ function activate(context) {
         ["database client", () => (0, command_1.registerDatabaseClientCommand)(context)],
         ["CSV & Excel viewer", () => (0, command_2.registerSpreadsheetViewer)(context)],
         ["Code Diff Checker", () => (0, command_3.registerCodeDiffCommand)(context)],
+        ["DevSnip Pro ecosystem", () => (0, command_4.registerEcosystemCommand)(context)],
         ["appearance themes", () => (0, service_1.registerThemeCommand)(context)],
         ["onboarding", () => (0, commands_1.registerOnboardingCommands)(context)],
         ["milestone tracker", () => (0, milestoneTracker_1.registerMilestoneTrackerCommand)(context)],

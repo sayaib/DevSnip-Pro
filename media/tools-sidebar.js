@@ -488,6 +488,7 @@
     renderFilterState();
     searchBox.classList.toggle("has-value", Boolean(query));
     clearSearch.hidden = !query;
+    renderEcosystem();
 
     // Keep exactly one row in the tab order, preferring the one that had it.
     const rows = visibleRows();
@@ -576,6 +577,7 @@
         expanded.delete(name);
       }
       vscode.postMessage({ type: "expanded", groups: Array.from(expanded) });
+      renderEcosystem();
     }
     if (!open) {
       const focusedInside = wrap.querySelector(".children .row.focused");
@@ -1100,6 +1102,62 @@
 
   renderOnboarding();
 
+  /* ------------------------------------------------------------ ecosystem */
+  // "Available on multiple platforms" at the foot of the list: the other
+  // DevSnip Pro apps, one marked as suggested for what the user is working on
+  // (Database Studio while in the Database category, say). It is hidden
+  // during a search and never pops up. Function declarations, because
+  // render() calls renderEcosystem before this part of the script has run.
+  function ecosystemContext() {
+    if (filter.kind === "category") return filter.category;
+    if (expanded.size === 1) return Array.from(expanded)[0];
+    // Otherwise the category the user has used most.
+    const totals = {};
+    let best = null;
+    Object.keys(usage).forEach(command => {
+      const entry = toolIndex.get(command);
+      if (!entry) return;
+      totals[entry.group.name] = (totals[entry.group.name] || 0) + usage[command].count;
+      if (!best || totals[entry.group.name] > totals[best]) best = entry.group.name;
+    });
+    return best;
+  }
+
+  function renderEcosystem() {
+    const root = $("eco");
+    if (!root) return;
+    root.hidden = Boolean(query.trim());
+    const suggest = (data.ecosystem && data.ecosystem.suggest) || {};
+    const context = ecosystemContext();
+    const pick = context ? suggest[context] || null : null;
+    root.querySelectorAll(".eco-item").forEach(item => item.classList.toggle("suggested", item.dataset.product === pick));
+  }
+
+  (function setUpEcosystem() {
+    const root = $("eco");
+    if (!root) return;
+    const toggle = $("ecoToggle");
+    let collapsed = (vscode.getState() || {}).ecoCollapsed === true;
+    function apply() {
+      root.classList.toggle("collapsed", collapsed);
+      toggle.title = collapsed ? "Expand" : "Collapse";
+      toggle.setAttribute("aria-label", toggle.title);
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+    }
+    toggle.addEventListener("click", event => {
+      event.stopPropagation();
+      collapsed = !collapsed;
+      apply();
+      vscode.setState(Object.assign({}, vscode.getState() || {}, { ecoCollapsed: collapsed }));
+    });
+    $("ecoHead").addEventListener("click", () => toggle.click());
+    root.querySelectorAll(".eco-row").forEach(row => row.addEventListener("click", () => vscode.postMessage({ type: "openProduct", id: row.dataset.product })));
+    root.querySelectorAll(".eco-info").forEach(button => button.addEventListener("click", () => vscode.postMessage({ type: "openEcosystem", focus: button.dataset.details })));
+    $("ecoMore").addEventListener("click", () => vscode.postMessage({ type: "openEcosystem" }));
+    apply();
+    renderEcosystem();
+  })();
+
   $("updateNow").addEventListener("click", () => vscode.postMessage({ type: "installUpdate" }));
   /* ------------------------------------------------------------ messages */
   window.addEventListener("message", event => {
@@ -1128,6 +1186,7 @@
       usage = message.usage;
       // Only views that show usage need to change.
       if (filter.kind === "recent" || filter.kind === "most" || (filter.kind === "all" && !query.trim())) render();
+      else renderEcosystem();
     }
   });
 

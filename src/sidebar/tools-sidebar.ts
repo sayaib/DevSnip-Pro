@@ -10,6 +10,10 @@ import { MILESTONE_COMMAND, SEARCH_COMMAND, SIDEBAR_GROUPS, sidebarCommands } fr
 import { chooseThemeOrUnlock, currentThemeId, THEME_STUDIO_COMMAND, LOCKED_PREVIEW_SECONDS, lockedPreviewTheme, previewLockedTheme, setWebviewHtml, ThemeChoice, themeChoices } from "../theme/service";
 import { dismissGuide, dismissWhatsNew, GuideStep, guideSteps, guideVisible, onDidChangeActivation, whatsNew } from "../onboarding/activation";
 import { isKnownCommand } from "../utils/command-registry";
+import { ECOSYSTEM_PRODUCTS, findProduct, productForSection } from "../ecosystem/products";
+import { platformMark } from "../ecosystem/marks";
+import { ECOSYSTEM_COMMAND, openProductPage } from "../ecosystem/command";
+import { NAV } from "../toolkits/layout";
 
 /**
  * The Tools view in the DevSnip Pro activity bar.
@@ -134,7 +138,8 @@ export function renderToolsSidebar(options: {
     usage: cleanUsage(options.usage),
     milestoneCommand: MILESTONE_COMMAND,
     theme: options.theme ?? { current: "system", choices: [] },
-    onboarding: options.onboarding ?? { guide: null, whatsNew: null }
+    onboarding: options.onboarding ?? { guide: null, whatsNew: null },
+    ecosystem: { suggest: ecosystemSuggestions() }
   };
   return `<!DOCTYPE html>
 <html lang="en">
@@ -221,6 +226,8 @@ export function renderToolsSidebar(options: {
   <div class="empty-actions" id="emptyActions"></div>
 </div>
 
+${ecosystemStrip()}
+
 <div class="hovercard" id="hovercard" role="tooltip" hidden></div>
 <p class="sr-only" id="announce" role="status" aria-live="polite"></p>
 
@@ -229,6 +236,55 @@ ${options.effectsUri ? `<script nonce="${nonce}" src="${escapeHtml(options.effec
 ` : ""}<script nonce="${nonce}" src="${escapeHtml(options.scriptUri)}"></script>
 </body>
 </html>`;
+}
+
+/** Sidebar category name -> the DevSnip Pro app suggested to people using it (Database -> Database Studio). */
+export function ecosystemSuggestions(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const section of NAV) {
+    const product = productForSection(section.id);
+    if (product) out[section.title] = product.id;
+  }
+  return out;
+}
+
+/**
+ * "Available on multiple platforms": a compact list of the other DevSnip Pro
+ * apps at the foot of the tool list. It never pops up. The page script marks
+ * one app as suggested for what the user is working on (Database Studio while
+ * in the Database category, say), hides the list during a search and
+ * remembers whether it is collapsed.
+ */
+export function ecosystemStrip(): string {
+  const others = ECOSYSTEM_PRODUCTS.filter(product => !product.current);
+  const e = escapeHtml;
+  const items = others.map(product => `<li class="eco-item" data-product="${product.id}">
+    <button type="button" class="eco-row" data-product="${product.id}" title="${e(`${product.name}\n${product.tagline}\n${product.meta}\n\nOpens ${product.store}.`)}" aria-label="${e(`${product.name}, ${product.kind}. ${product.blurb}. Opens ${product.store}.`)}">
+      <span class="eco-logo">${platformMark(product.mark, 18, "eco-mark")}</span>
+      <span class="eco-text">
+        <span class="eco-name"><span class="eco-kind">${e(product.short)}</span><span class="eco-badge">Suggested</span></span>
+        <span class="eco-sub">${e(product.blurb)}</span>
+        ${product.nudge ? `<span class="eco-nudge">${e(product.nudge)}</span>` : ""}
+      </span>
+      <span class="codicon codicon-link-external eco-ext" aria-hidden="true"></span>
+    </button>
+    <button type="button" class="icon-btn eco-info" data-details="${product.id}" title="${e(`About ${product.name}`)}" aria-label="${e(`About ${product.name}`)}"><span class="codicon codicon-info" aria-hidden="true"></span></button>
+  </li>`).join("\n  ");
+  const peek = others.map(product => platformMark(product.mark, 14, "eco-mark")).join("");
+  return `<section class="eco" id="eco" aria-labelledby="ecoTitle">
+  <div class="eco-head" id="ecoHead">
+    <span class="codicon codicon-layers eco-icon" aria-hidden="true"></span>
+    <h2 class="eco-title" id="ecoTitle">Available on multiple platforms</h2>
+    <span class="eco-peek" aria-hidden="true">${peek}</span>
+    <button type="button" class="icon-btn eco-toggle" id="ecoToggle" aria-expanded="true" aria-controls="ecoBody" title="Collapse" aria-label="Collapse"><span class="codicon codicon-chevron-down" aria-hidden="true"></span></button>
+  </div>
+  <div class="eco-body" id="ecoBody">
+  <ul class="eco-list">
+  ${items}
+  </ul>
+  <button type="button" class="link eco-more" id="ecoMore">Compare all DevSnip Pro apps<span class="codicon codicon-arrow-right" aria-hidden="true"></span></button>
+  </div>
+</section>`;
 }
 
 export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
@@ -365,6 +421,15 @@ export class ToolsSidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
     if (await this.onOnboardingMessage(message)) return;
+    if (message?.type === "openProduct") {
+      await openProductPage(message.id);
+      return;
+    }
+    if (message?.type === "openEcosystem") {
+      const focus = findProduct(message.focus);
+      await vscode.commands.executeCommand(ECOSYSTEM_COMMAND, focus && !focus.current ? focus.id : undefined);
+      return;
+    }
     if (message?.type === "run" && typeof message.command === "string" && this.known.has(message.command)) {
       // executeQueuedCommand also checks the id against this extension's commands.
       void executeQueuedCommand(message.command);
@@ -552,6 +617,59 @@ button { font: inherit; color: inherit; }
 .ob-foot { padding: 2px 10px 4px; }
 .ob-foot .link { font-size: 11.5px; }
 .ob-item .ob-dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-fg); }
+
+/* ------------------------------------------------------------- ecosystem strip */
+.eco { margin: var(--s4) var(--s2) 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.eco-head { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 var(--s2); cursor: pointer; }
+.eco-head:hover .eco-title { color: var(--fg-strong); }
+.eco-icon { color: var(--accent-fg); font-size: 14px !important; }
+.eco-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eco-peek { display: none; flex: none; gap: 3px; align-items: center; opacity: .9; }
+.eco.collapsed .eco-peek { display: inline-flex; }
+.eco-head .icon-btn { width: 22px; height: 22px; }
+.eco-head .icon-btn .codicon { font-size: 14px !important; transition: transform .15s ease; }
+.eco.collapsed .eco-toggle .codicon { transform: rotate(-90deg); }
+.eco.collapsed .eco-body { display: none; }
+.eco-body { padding: 0 4px 6px; animation: eco-in .2s var(--ease) both; }
+.eco-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.eco-item { position: relative; display: flex; align-items: center; border-radius: var(--radius-sm); transition: background-color .12s ease; }
+.eco-item:hover, .eco-item:focus-within { background: var(--hover); }
+.eco-row {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--s2); padding: 5px 30px 5px 6px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer; text-align: left; color: var(--fg);
+}
+.eco-row:focus-visible, .eco-more:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.eco-logo {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm);
+  background: var(--bg); border: 1px solid var(--border); color: var(--fg);
+  transition: transform .15s var(--ease), border-color .12s ease;
+}
+.eco-item:hover .eco-logo { transform: scale(1.06); border-color: var(--border-strong); }
+.eco-mark { flex: none; display: block; }
+.eco-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.eco-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.eco-kind { min-width: 0; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eco-sub, .eco-nudge { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eco-badge, .eco-nudge { display: none; }
+.eco-badge { flex: none; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 600; line-height: 16px; background: var(--accent); color: var(--vscode-button-foreground, #fff); }
+.eco-ext { position: absolute; right: 30px; font-size: 12px !important; color: var(--muted); opacity: 0; transition: opacity .12s ease, transform .12s ease; }
+.eco-item:hover .eco-ext, .eco-row:focus-visible .eco-ext { opacity: 1; transform: translate(1px, -1px); }
+.eco-info { position: absolute; right: 3px; opacity: 0; }
+.eco-info .codicon { font-size: 14px !important; }
+.eco-item:hover .eco-info, .eco-item:focus-within .eco-info { opacity: 1; }
+/* The suggestion leads the list with a short reason, and nothing else moves. */
+.eco-item.suggested { order: -1; background: var(--selected); box-shadow: inset 2px 0 0 var(--accent); }
+.eco-item.suggested:hover { background: var(--selected-focus); }
+.eco-item.suggested .eco-badge, .eco-item.suggested .eco-nudge { display: inline-block; }
+.eco-item.suggested .eco-nudge { display: block; color: var(--fg); white-space: normal; }
+.eco-item.suggested .eco-sub { display: none; }
+.eco-item.suggested .eco-logo { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.eco-more { display: inline-flex; align-items: center; gap: 4px; margin: 6px 6px 0; font-size: 11.5px; }
+.eco-more .codicon { font-size: 12px !important; transition: transform .12s ease; }
+.eco-more:hover .codicon { transform: translateX(2px); }
+@keyframes eco-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+@media (hover: none) { .eco-info, .eco-ext { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .eco-body, .eco-logo, .eco-ext, .eco-more .codicon { animation: none; transition: none; } }
 
 /* ------------------------------------------------------------- rank card */
 .rank {

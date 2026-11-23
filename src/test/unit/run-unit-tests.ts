@@ -53,6 +53,7 @@ async function main(): Promise<void> {
   require("./curl-converter.unit");
   require("./api-response-inspector.unit");
   require("./sidebar.unit");
+  require("./ecosystem.unit");
   require("./database.unit");
   require("./database-engines.unit");
   require("./database-cloud.unit");
